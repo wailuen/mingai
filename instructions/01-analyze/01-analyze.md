@@ -2,7 +2,17 @@
 
 ## Always be explicit about objectives and expectations
 ### Product idea for brainstorming
-1. This is a ....
+1. Disect from `/Users/wailuen/Development/aihub2`. Understand the project vision, intention, attention, logic. Use the codebase as a single source of truth 
+The current project serve only one tenant. 
+The intent is to convert into a multi-tenant setup
+Other thing i want you to take note of:
+ a. the admin in the current project is tenant level. you need to think about the platform admin that manage all the tenant provisioning
+ b. proper A2A and agentic practises
+ c. proper MCP 
+ d. Platform admin will configure all the LLM provider setup(Azure Openai, Openai, Claude, Deepseek, Alibaba, Bytedance, Google gemini). Tenant admin would select the one that they will use or BYOLLM. Kaizen has most of AI provider, if there are missing AI provider, please extend Kaizen AI provider. 
+ e. Current implementation is on Azure Stack. Make it easy to deploy AWS, GCP, AliCloud.  
+ f. Current tenant implementation use Entra SSO. Explore Auth0 so that tenant can select your form of SSO. 
+ f. take this opportunity to write the codebase in the optimal manner with kailash sdk and its framework
 2. Document in details, your work in `workspaces/<project-directory>/01-analysis/01-research`.
    - Use as many subdirectories and files as required
    - Name them sequentially as 01-, 02-, etc, for easy referencing
