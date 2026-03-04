@@ -343,18 +343,27 @@ TTL:    900 seconds (15 minutes)
 
 ### Current Role Model
 
-**6 Roles:**
-| Role | Scope | Capabilities |
-|------|-------|-------------|
-| Owner | Tenant | Full access, manage users, manage settings |
-| Admin | Tenant | Manage users, manage settings, all functions |
-| Analyst | Tenant | All analysis functions, no admin |
-| Viewer | Tenant | Read-only access to conversations and reports |
-| Restricted | Tenant | Limited to specific question categories |
-| API | Tenant | Programmatic access, rate-limited |
+Source: `app/modules/roles/schemas.py` (SystemFunction Literal), `scripts/init_system_roles.py` (role definitions)
 
-**9 System Functions:**
-chat, search, analyze, export, manage_users, manage_settings, manage_categories, view_usage, manage_integrations
+**7 System Roles:**
+| Role ID | Role Name | System Permissions |
+| ---------------- | -------------------- | --------------------------- |
+| `default` | Default | (none — kb_permissions set by admins) |
+| `role_admin` | Role Administrator | role:manage |
+| `index_admin` | Index Administrator | index:manage |
+| `user_admin` | User Administrator | user:manage |
+| `analytics_viewer` | Analytics Viewer | analytics:view |
+| `audit_viewer` | Audit Viewer | audit:view |
+| `admin` | Administrator | ALL 9 system permissions |
+
+Protected (cannot delete): `admin`, `default`
+
+**9 System Functions** (source: `SystemFunction = Literal[...]` in schemas.py):
+`role:manage`, `user:manage`, `index:manage`, `analytics:view`, `audit:view`, `integration:manage`, `glossary:manage`, `feedback:view`, `sync:manage`
+
+Note: 4 functions (`integration:manage`, `glossary:manage`, `feedback:view`, `sync:manage`) have no dedicated role — accessible only via `admin` role or custom roles.
+
+**Permissions Model**: Additive — `kb_permissions` (list of accessible KB IDs) + `system_permissions` (list of system functions); union across all assigned roles.
 
 ### Extended Role Model
 
@@ -381,7 +390,7 @@ chat, search, analyze, export, manage_users, manage_settings, manage_categories,
 
 **Rationale:**
 
-- Existing 6 roles and 9 functions remain unchanged within tenant scope
+- Existing 7 system roles and 9 functions remain unchanged within tenant scope
 - Platform roles are a new layer on top, not a replacement
 - Tenant roles cannot grant platform access (isolation preserved)
 - Platform roles grant cross-tenant read access but do not override tenant-level RBAC within a tenant

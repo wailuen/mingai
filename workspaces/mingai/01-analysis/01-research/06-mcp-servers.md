@@ -4,9 +4,10 @@
 
 MCP servers extend the system with external data source capabilities. During chat interactions, the LLM can invoke MCP tools to retrieve real-time information.
 
-**Current Status**: 9 MCP servers integrated
-**Location**: `src/mcp-servers/` (separate Docker containers)
-**Protocol**: WebSocket-based Tool calls
+**Current Status**: 9 MCP servers implemented (confirmed from `src/mcp-servers/`)
+**Location**: `src/mcp-servers/` (separate Docker containers, deployed to Azure Container Apps)
+**Protocol**: HTTP REST (FastAPI) — each server exposes `/tools`, `/tools/call`, `/health` endpoints
+**Agentic Tier**: Bloomberg, Perplexity, Oracle Fusion each have their own Azure OpenAI deployment (`mcp-bloomberg`, `mcp-perplexity`, `mcp-fusion`) for agentic orchestration within the MCP server
 
 ---
 
@@ -28,7 +29,9 @@ MCP servers extend the system with external data source capabilities. During cha
 
 ## Bloomberg MCP
 
-**Purpose**: Financial market data, company metrics, market news
+**Purpose**: Financial market data via Bloomberg Data License (DL) API — NOT Bloomberg Terminal
+**Auth**: OAuth2 client credentials via Bloomberg BSSO (`bsso.blpprofessional.com`) — requires `BLOOMBERG_CLIENT_ID`, `BLOOMBERG_CLIENT_SECRET`, `BLOOMBERG_ACCOUNT` (catalog ID)
+**Port**: 9000 | **Cache**: 5min market data, 24hr static data
 
 **Tools**:
 
@@ -84,7 +87,10 @@ get_competitor_analysis(ticker: str) -> dict
 
 ## Perplexity MCP
 
-**Purpose**: Web search, real-time internet information
+**Purpose**: Web search and real-time research via Perplexity AI API
+**Auth**: API key (`PERPLEXITY_API_KEY`)
+**Port**: 8090 | **Cache**: 5min news, 1hr research (max 500 entries) | **Rate limit**: adaptive (respects 429 Retry-After)
+**Models**: `sonar` (fast search), `sonar-pro` (deep research, 2x citations), `sonar-reasoning` (chain-of-thought analysis)
 
 **Tools**:
 
@@ -105,7 +111,9 @@ get_latest_on_topic(topic: str) -> list[dict]
 
 ## Oracle Fusion MCP
 
-**Purpose**: ERP system data (orders, customers, inventory)
+**Purpose**: Oracle Fusion Cloud ERP — Financials (AP/AR/GL), Procurement (PO/PR), Supply Chain (SCM)
+**Auth**: JWT assertion OAuth2 (`FUSION_CLIENT_ID`, `FUSION_JWT_PRIVATE_KEY`) — complex enterprise SSO with fallback to service token
+**Port**: 8070 | **Cache**: L1 in-memory (8hr) + L2 Redis (24hr) | **Modules**: `fin`, `proc`, `scm` (configurable per deployment)
 
 **Tools**:
 
@@ -294,6 +302,20 @@ Client: Receives:
 ---
 
 ## Authorization & Limits
+
+### Per-Server Auth Patterns (Source: `src/mcp-servers/*/app/config.py`)
+
+| Server        | Auth Method                      | Credentials Required                              |
+| ------------- | -------------------------------- | ------------------------------------------------- |
+| Bloomberg     | OAuth2 client credentials (BSSO) | `BLOOMBERG_CLIENT_ID`, `CLIENT_SECRET`, `ACCOUNT` |
+| Perplexity    | API key                          | `PERPLEXITY_API_KEY`                              |
+| Oracle Fusion | JWT assertion OAuth2             | `FUSION_CLIENT_ID`, `FUSION_JWT_PRIVATE_KEY`      |
+| Azure AD      | OAuth2 OBO (on-behalf-of)        | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`              |
+| CapIQ         | None (internal network)          | —                                                 |
+| iLevel        | None (internal network)          | —                                                 |
+| AlphaGeo      | None (internal network)          | —                                                 |
+| Teamworks     | None (internal network)          | —                                                 |
+| PitchBook     | None (internal network)          | —                                                 |
 
 ### Per-Tool Rate Limiting
 

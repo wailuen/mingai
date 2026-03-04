@@ -261,14 +261,33 @@ def logout(token: str) -> dict:
 
 **System Roles** (Predefined, cannot be deleted):
 
-| Role             | Permission                    | Assign Method   | Description     |
-| ---------------- | ----------------------------- | --------------- | --------------- |
-| default          | chat:query, conversation:read | Auto on signup  | All new users   |
-| role_admin       | role:manage                   | System function | Manage roles    |
-| index_admin      | index:manage, glossary:manage | System function | Manage indexes  |
-| user_admin       | user:manage                   | System function | Manage users    |
-| analytics_viewer | analytics:view                | System function | View analytics  |
-| audit_viewer     | audit:view                    | System function | View audit logs |
+Source of truth: `src/backend/api-service/scripts/init_system_roles.py` + `app/modules/roles/schemas.py`
+
+| Role ID          | Role Name           | system_permissions                                                                                                                                    | Notes                                       |
+| ---------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| default          | Default             | (none)                                                                                                                                                | Auto-assigned; kb_permissions set by admins |
+| role_admin       | Role Administrator  | `role:manage`                                                                                                                                         | Manage roles only                           |
+| index_admin      | Index Administrator | `index:manage`                                                                                                                                        | Manage indexes only                         |
+| user_admin       | User Administrator  | `user:manage`                                                                                                                                         | Manage users only                           |
+| analytics_viewer | Analytics Viewer    | `analytics:view`                                                                                                                                      | View analytics reports                      |
+| audit_viewer     | Audit Viewer        | `audit:view`                                                                                                                                          | View audit logs                             |
+| admin            | Administrator       | `role:manage`, `user:manage`, `index:manage`, `analytics:view`, `audit:view`, `integration:manage`, `glossary:manage`, `feedback:view`, `sync:manage` | All 9 system permissions                    |
+
+**All 9 system functions** (from `SystemFunction` Literal in `schemas.py`):
+
+| System Function      | Description                                     |
+| -------------------- | ----------------------------------------------- |
+| `role:manage`        | Create/update/delete roles and assignments      |
+| `user:manage`        | Manage user accounts and group sync             |
+| `index:manage`       | Create/configure Azure AI Search indexes        |
+| `analytics:view`     | View usage analytics and cost reports           |
+| `audit:view`         | View audit logs and security reports            |
+| `integration:manage` | Configure MCP servers and external integrations |
+| `glossary:manage`    | Manage glossary terms                           |
+| `feedback:view`      | View user feedback and ratings                  |
+| `sync:manage`        | Manage SharePoint sync jobs                     |
+
+Note: `integration:manage`, `glossary:manage`, `feedback:view`, `sync:manage` have no dedicated single-function system roles — only the `admin` role holds them. Tenant admins needing these must receive the `admin` role or a custom role with those permissions.
 
 **Custom Roles** (Created by role_admin):
 

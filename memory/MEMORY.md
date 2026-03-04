@@ -12,7 +12,7 @@
 - **Stack**: Next.js 14 (port 3022) + FastAPI (port 8022) + Azure Cosmos DB + Azure AI Search + Redis
 - **Auth**: Azure Entra ID SSO + local dev auth (JWT, 8h access / 7d refresh)
 - **LLM**: Azure OpenAI ONLY — 4 deployments (GPT-5.2-chat primary `aihub2-main`, GPT-5 Mini intent `intent5`, text-embedding-3-large, gpt-vision). Supports `reasoning_effort` param. Source: `config.py` descriptions + `context_window.py`.
-- **MCP Servers**: 9 servers (Bloomberg, CapIQ, Perplexity, Oracle Fusion, AlphaGeo, Teamworks, PitchBook, Azure AD, iLevel)
+- **MCP Servers**: 9 servers confirmed from `src/mcp-servers/`: Bloomberg, CapIQ, Perplexity, Oracle Fusion, AlphaGeo, Teamworks, PitchBook, Azure AD, iLevel. Bloomberg/Perplexity/Oracle Fusion have their own Azure OpenAI deployments (agentic). Auth: Bloomberg=OAuth2 BSSO, Perplexity=API key, Oracle Fusion=JWT assertion OAuth2, Azure AD=OAuth2 OBO, others=none. Protocol: HTTP REST (FastAPI), NOT WebSocket.
 - **RAG Pipeline**: Intent Detection → Parallel Search → Synthesis → Confidence Scoring (2-3s total)
 - **RBAC**: 6 system roles, 9 system functions, additive permissions model
 - **NO tenant_id**: Zero multi-tenant isolation — all partition keys use user_id
@@ -112,7 +112,14 @@ Red-team pass 2b found critical errors in `02-technical-migration-plan.md`:
 
 `01-implementation-roadmap.md` is sound — phase ordering and approach verified correct.
 
-Items 2 & 3 (fabricated RBAC) remain unfixed — must verify against aihub2 source before implementation.
+Items 2 & 3 (fabricated RBAC) fixed in `03-auth-rbac.md`. `02-technical-migration-plan.md` RBAC section still needs review.
+
+**Ground-truth RBAC** (from aihub2 source):
+
+- 7 system roles: `default`, `role_admin`, `index_admin`, `user_admin`, `analytics_viewer`, `audit_viewer`, `admin`
+- 9 system functions: `role:manage`, `user:manage`, `index:manage`, `analytics:view`, `audit:view`, `integration:manage`, `glossary:manage`, `feedback:view`, `sync:manage`
+- Protected roles (cannot delete): `admin`, `default`
+- `admin` has ALL 9 permissions; 4 functions have no dedicated role (integration, glossary, feedback, sync — only via admin)
 
 ## Red-Team Top Recommendations (before implementation)
 
