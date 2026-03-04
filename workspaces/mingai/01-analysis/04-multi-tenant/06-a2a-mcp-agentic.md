@@ -590,6 +590,8 @@ At planning time, the orchestrator queries the registry filtered by tenant + use
 
 ## External Agent Marketplace
 
+> **Phase 3+ Deferred**: The external agent marketplace (tenant-to-tenant agent sharing, MCP marketplace for cross-tenant distribution) is a deliberate architectural decision -- deferred to Phase 3 or later to maintain focus on Phase 1-2 core platform. Track B concerns (producer incentives, cross-tenant network effects, marketplace economics) will be revisited after Phase 2 GA validation.
+
 The marketplace is the long-term network effect moat. Any organization that implements Google A2A v0.3 can register their agent on the platform and serve mingai tenants.
 
 ### Onboarding Flow
@@ -664,6 +666,8 @@ Oracle AI Agent Studio (5 pillars) validates the product direction:
 ---
 
 ## Platform Model: Producers, Consumers, Partners
+
+> **Phase 3+ Deferred**: Platform model strengthening (producer incentives, knowledge contribution layer, full expert escalation with producer-consumer transactions) is deliberately deferred to Phase 3 or later. Phase 1-2 focuses on the core agent platform and tenant self-service. Track B network effect concerns (anonymized cross-tenant benchmarking, community Q&A, shared verified answers) will be revisited after Phase 2 GA validation.
 
 mingai's agent platform is a multi-sided marketplace. The network effects compound as each side grows.
 
@@ -779,35 +783,37 @@ The Platform Agent Registry is the compounding asset. Every external agent added
 
 ## 80/15/5 Applied to the Agent Platform
 
-### 80% — Platform Core (Agnostic, Reusable Across All Tenants)
+### 80% — Platform-Built, Reusable Across All Tenants
 
 - Google A2A v0.3 wire protocol implementation (Task/Artifact/AgentCard/SSE)
-- Agent template system (5 components: prompt, guardrails, MCP URL, credential schema, skills)
+- Agent template system (5 components: prompt, guardrails, MCP URL, credential schema, AgentCard)
 - DAG orchestration engine (planner LLM, execution engine, Artifact collection, synthesis)
 - Credential vault architecture (platform/tenant/user-OBO levels)
 - All 9 agent templates (pre-built, platform-maintained)
-- Tool Catalog engine (registration, routing, execution)
-- Built-in tools: Tavily, Calculator, Weather
-- Per-tenant circuit breakers
-- Agent health monitoring and AgentCard verification
-- EATP marketplace trust verification and capability probing
+- Tool Catalog engine (registration, routing, execution) -- includes Tavily, Calculator, Weather
+- Per-tenant circuit breakers and agent health monitoring
+- AgentCard verification and EATP marketplace trust probing
+- User feedback system (thumb up/down per agent response, aggregated quality signals)
+- Billing instrumentation (token tracking, markup calculation, cost attribution per tenant per agent)
 
 ### 15% — Tenant-Configurable (Self-Service, No Engineering)
 
-- Which agents are enabled per tenant (plan-gated)
 - Credential values (Bloomberg account, Oracle JWT, CapIQ API key, etc.)
-- Prompt extensions per agent instance
+- Prompt extensions per agent instance (additive only, cannot override guardrails)
+- Topic scoping per agent instance (restrict to relevant use cases)
 - User RBAC: which roles can invoke which agents
+- LLM selection from Platform LLM Library (tenant admin selects provider + model per plan tier)
+- Agent enable/disable per tenant (toggle agents on/off from the platform catalog)
 - Custom agent registration via Admin UI (Enterprise plan)
-- Topic scoping per agent instance
 - Tool catalog additions via Admin UI
 
-### 5% — Custom (Requires Engineering)
+### 5% — Custom / Extension (Requires Engineering or Enterprise Plan)
 
-- New MCP server development for a net-new data source
+- BYOMCP: custom MCP server development for a net-new data source (Enterprise plan)
+- BYOLLM: tenant provides their own LLM API key and endpoint (Enterprise plan)
+- External A2A marketplace agents (EATP-verified third-party agents)
+- Custom DAG templates for bespoke multi-agent coordination patterns
 - Novel credential type not in the standard catalog
-- Custom A2A agent for a highly proprietary internal workflow
-- Bespoke agent coordination patterns not covered by DAG
 
 ---
 

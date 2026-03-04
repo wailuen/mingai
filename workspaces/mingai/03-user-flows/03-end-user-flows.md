@@ -7,6 +7,22 @@
 
 ---
 
+## Phase Mapping
+
+| Flow | Flow Name                                | Built in Phase | Notes                                        |
+| ---- | ---------------------------------------- | -------------- | -------------------------------------------- |
+| 01   | First Login and Onboarding               | Phase 1        | SSO login, JWT session, onboarding tour      |
+| 02   | Standard Chat (Query -> RAG -> Response) | Phase 1        | Core RAG pipeline, streaming responses       |
+| 03   | Research Mode (Multi-Index Deep Search)  | Phase 1        | Multi-index parallel search, deep synthesis  |
+| 04   | Document Upload                          | Phase 1        | Personal document indexing and search        |
+| 05   | Agent Delegation (Research Agent)        | Phase 4        | Kaizen multi-agent orchestration             |
+| 06   | Internet Search Fallback                 | Phase 1        | Tavily web search when KB insufficient       |
+| 07   | Conversation History                     | Phase 1        | History, search, share, export               |
+| 08   | Failure Paths                            | Phase 1        | Timeout, rate limit, session expiry handling |
+| 09   | User Response Feedback (Thumb Up/Down)   | Phase 1        | Rating, tags, comments, admin review queue   |
+
+---
+
 ## 1. First Login and Onboarding
 
 **Trigger**: User receives invitation email or navigates to tenant URL.
@@ -598,6 +614,168 @@ These failure paths apply across all end-user flows.
 
 ---
 
+## 9. User Response Feedback (Thumb Up/Down)
+
+**Trigger**: User receives an AI response in chat and wants to rate its quality.
+**Actors**: End User, Platform, Tenant Admin
+**Phase**: Phase 1
+
+### Happy Path (Thumb Up)
+
+```
+Start
+  |
+  v
+[User receives AI response in chat]
+  |-- Response displayed with source citations
+  |-- Thumb up / thumb down icons appear below the response
+  |
+  v
+[User clicks thumb-up icon]
+  |
+  v
+[POST /api/v1/feedback]
+  |-- Payload: {
+  |     tenant_id,
+  |     conversation_id,
+  |     message_id,
+  |     user_id,
+  |     rating: +1,
+  |     timestamp
+  |   }
+  |
+  v
+[Platform records feedback]
+  |-- Stored in feedback table with tenant_id scoping (RLS)
+  |-- Icon turns filled/highlighted (visual confirmation)
+  |-- No further action required
+  |
+  v
+End
+```
+
+### Thumb Down Flow
+
+```
+Start
+  |
+  v
+[User clicks thumb-down icon]
+  |
+  v
+[Platform shows optional tag selection]
+  |-- Tags: [Inaccurate] [Incomplete] [Irrelevant] [Hallucinated] [Other]
+  |-- User selects one or more tags (optional)
+  |
+  v
+[Optional free-text comment field appears]
+  |-- Placeholder: "Tell us more..."
+  |-- Max length: 1000 characters
+  |
+  v
+[User submits feedback (or dismisses)]
+  |
+  +-- DISMISS: No feedback recorded beyond the thumb-down click
+  |     |-> Icon turns filled (thumb-down registered with rating: -1 only)
+  |
+  +-- SUBMIT: Full feedback recorded
+  |     |
+  |     v
+  |   [POST /api/v1/feedback]
+  |     |-- Payload: {
+  |     |     tenant_id,
+  |     |     conversation_id,
+  |     |     message_id,
+  |     |     user_id,
+  |     |     rating: -1,
+  |     |     tags: ["inaccurate", "hallucinated"],
+  |     |     comment: "The policy cited was from 2023, not current.",
+  |     |     timestamp
+  |     |   }
+  |     |
+  |     v
+  |   [Platform records feedback]
+  |     |-- Stored in feedback table with tenant_id scoping (RLS)
+  |     |-- Icon turns filled/highlighted (visual confirmation)
+  |
+  v
+[Flagging check]
+  |-- If 3+ users rate the SAME message_id as thumb-down:
+  |     |-> Flag message for tenant admin review queue
+  |     |-> POST /api/v1/admin/feedback/flags (internal)
+  |
+  v
+End
+```
+
+### Tenant Admin Review Queue
+
+```
+Start
+  |
+  v
+[Tenant admin navigates to Admin > Feedback]
+  |
+  v
+[Feedback Dashboard]
+  |-- Summary cards:
+  |   |-- Total feedback this month: 1,240
+  |   |-- Positive rate: 87%
+  |   |-- Top negative tags: Inaccurate (42%), Incomplete (28%), Hallucinated (18%)
+  |
+  +-- Flagged Responses tab (messages with 3+ negative ratings)
+  |   |-- Table: Message Preview | Negative Count | Top Tags | Status
+  |   |-- Sort by: negative count (descending)
+  |
+  +-- All Feedback tab
+  |   |-- Filterable by: rating, tags, date range, user, agent/index
+  |
+  v
+[Click flagged response]
+  |
+  v
+[Review Detail Panel]
+  |-- Original query and response displayed
+  |-- All feedback entries for this message:
+  |   |-- User A: thumb-down, tags: [Inaccurate], "Wrong policy version"
+  |   |-- User B: thumb-down, tags: [Hallucinated], "Made up a section"
+  |   |-- User C: thumb-down, tags: [Inaccurate]
+  |-- Source citations shown alongside
+  |
+  v
+[Admin action]
+  |-- Mark as "Reviewed" (acknowledged, no action needed)
+  |-- Mark as "Model Issue" (response quality problem)
+  |-- Mark as "Data Quality Issue" (source document outdated/incorrect)
+  |-- Add admin note
+  |
+  v
+[Aggregate analytics visible]
+  |-- % positive per agent/index combination
+  |-- Top negative tags per agent/index
+  |-- Trend chart: feedback quality over time
+  |-- Content gap detection: topics with consistently low ratings
+  |
+  v
+End
+```
+
+### Network Effect
+
+Positive ratings reinforce which agent/index combinations produce quality answers. Negative ratings with tags surface data quality issues to tenant admins. At the platform level (future), aggregated anonymized signals across tenants can inform model improvement and index routing optimization.
+
+**Phase 1 deliverable**: Record feedback (rating, tags, comment), basic tenant admin feedback review panel, flagging for messages with 3+ negative ratings.
+
+**Phase 4+ (future)**: Cross-tenant signal aggregation (anonymized, opt-in), automatic model fine-tuning based on feedback patterns, personalized response quality scoring per user.
+
+**Error Paths**:
+
+- Feedback API unreachable -> queue locally, retry on next interaction; icon shows "pending" state
+- Duplicate feedback (user clicks twice) -> idempotent: update existing record, do not create duplicate
+- Admin review queue overflows (>100 flagged) -> sort by severity (negative count), paginate
+
+---
+
 ## Flow Summary
 
 | Flow                 | Trigger         | Primary API                    | Key Failure Mode              |
@@ -610,8 +788,9 @@ These failure paths apply across all end-user flows.
 | Internet fallback    | Auto-trigger    | Tavily API                     | API unavailable, low quality  |
 | Conversation history | Sidebar click   | GET /conversations             | Retention expired, RBAC limit |
 | Failure recovery     | Various         | Various                        | Timeout, rate limit, session  |
+| Response feedback    | User action     | POST /feedback                 | API unreachable, duplicates   |
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 1.1
 **Last Updated**: March 4, 2026

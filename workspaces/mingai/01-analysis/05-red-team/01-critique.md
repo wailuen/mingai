@@ -1271,3 +1271,59 @@ These are the most damaging for investor/buyer credibility because they explicit
 ---
 
 **Pass 4 Review Complete**
+
+---
+
+## Resolution Status Summary (Updated March 4, 2026)
+
+This section tracks the resolution status of all red team findings across all 4 passes, updated after the current documentation compliance session.
+
+### Findings Addressed in This Session
+
+| Finding         | Description                                                | Resolution                                                                                                            |
+| --------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Pass 1 #1       | GPT-4 model name inconsistency across docs                 | FIXED -- all 12 files corrected to GPT-5.2-chat / GPT-5 Mini                                                          |
+| Pass 1 #2       | No plans or implementation roadmap                         | FIXED -- 01-implementation-roadmap.md and 02-technical-migration-plan.md created                                      |
+| Pass 1 #9       | User flows cover only 2 of 6+ personas                     | FIXED -- 4 user flow docs now cover platform admin, tenant admin, end user, platform model                            |
+| Pass 2b P1      | Migration plan covers only 9 of 21 containers              | BEING ADDRESSED -- migration-fixer agent is expanding table list to all PostgreSQL tables                             |
+| Pass 2b P2-P3   | Wrong partition keys + fabricated RBAC names               | BEING ADDRESSED -- migration-fixer agent is correcting Section 1 and Section 4                                        |
+| Pass 2b P7      | `permissions` container does not exist                     | BEING ADDRESSED -- migration-fixer agent is removing references                                                       |
+| Pass 3 D1       | DB cost comparison overstates savings (3x vs ~1.4-2x)      | BEING ADDRESSED -- product-doc-fixer agent is correcting fabricated claims                                            |
+| Pass 4 4.5      | Migration plan table list mismatch (9 vs 19)               | BEING ADDRESSED -- migration-fixer agent is aligning table lists                                                      |
+| 80/15/5 audit   | Miscategorized items in USP and architecture docs          | FIXED -- 80/15/5 sections updated in 06-a2a-mcp-agentic.md, 06-multi-tenant-product.md, 04-llm-provider-management.md |
+| Network effects | User feedback (thumb up/down) missing from network effects | BEING ADDRESSED -- product-doc-fixer agent adding feedback loops                                                      |
+
+### Findings Deferred (Track B -- Phase 3+)
+
+| Finding           | Description                                                     | Deferral Rationale                                                                               |
+| ----------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Pass 1 #6         | MCP "differentiator" fragile (custom protocol vs open standard) | PARTIALLY RESOLVED -- A2A doc adopts Google A2A v0.3. Full MCP marketplace deferred to Phase 3+  |
+| Pass 2 N7         | Agentic RAG cost multiplication (3-8x) unpriced                 | DEFERRED -- pricing model requires real tenant usage data; Phase 3+ after GA validation          |
+| Pass 2 N8         | A2A protocol naming implies Google compatibility                | RESOLVED -- doc now explicitly states "Google A2A v0.3" with protocol abstraction layer as hedge |
+| Platform model    | Producer incentives, knowledge contribution layer               | DEFERRED -- Track B. Phase 3+ after Phase 2 GA validation                                        |
+| Cross-tenant      | Anonymized benchmarking, network effects                        | DEFERRED -- Track B. Phase 3+ after Phase 2 GA validation                                        |
+| MCP marketplace   | Tenant-to-tenant agent sharing                                  | DEFERRED -- Track B. Phase 3+ after Phase 2 GA validation                                        |
+| Expert escalation | Producer-consumer transactions                                  | DEFERRED -- Track B. Phase 3+ after Phase 2 GA validation                                        |
+| Community Q&A     | Shared verified answers                                         | DEFERRED -- Track B. Phase 3+ after Phase 2 GA validation                                        |
+
+### Findings Still Open (Require Action Before Phase 1)
+
+| Finding      | Description                                                              | Severity | Blocking?   |
+| ------------ | ------------------------------------------------------------------------ | -------- | ----------- |
+| Pass 1 #3    | Auth0 migration -- riskiest decision, no fallback plan                   | CRITICAL | Phase 3     |
+| Pass 1 #8    | No disaster recovery or failover strategy                                | HIGH     | Phase 1     |
+| Pass 1 #10   | PMF 2.7/5, no pricing model or go-to-market                              | HIGH     | Pre-launch  |
+| Pass 2 N1    | Anthropic provider cannot do embeddings; mixed-provider config undefined | MEDIUM   | Phase 2     |
+| Pass 2 N2-N5 | Cloud-agnostic DynamoDB/Firestore/GCS implementation gaps                | HIGH     | Phase 5     |
+| Pass 2 N6    | In-memory provider cache won't invalidate across replicas                | MEDIUM   | Phase 2     |
+| Pass 2 N9    | No cost visibility for users before agent delegation                     | MEDIUM   | Phase 4     |
+| Pass 3 D2    | Cross-database transactions (PostgreSQL + Cosmos DB) not addressed       | HIGH     | Phase 1     |
+| Pass 3 D9    | Phase 1 duration conflict (DB analysis: 14 weeks vs roadmap: 6 weeks)    | HIGH     | Phase 1     |
+| Pass 4 4.2   | 5 files still have Cosmos DB as target (U) references                    | HIGH     | Pre-Phase 1 |
+| Pass 4 4.7   | Azure-committed buyer framing in competitive analysis + value props      | MEDIUM   | Pre-launch  |
+
+### Compliance Checks Verified
+
+- [x] Every major feature in architecture docs is categorized as 80%, 15%, or 5%
+- [x] Track B items have explicit Phase 3+ deferral notes
+- [x] No orphaned red team recommendations without a resolution status

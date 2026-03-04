@@ -101,13 +101,13 @@ The distinction matters: a tool that works brilliantly for one enterprise is not
 
 ### Important Gaps
 
-| Gap                              | Impact                                                                                                    | Priority                   |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Expert escalation incomplete** | Designed but SME identification not implemented. Weakens the "knowledge amplification" value prop.        | P2                         |
-| **No MS Teams integration**      | Designed but not built. Missing the "meet users where they work" opportunity.                             | P2                         |
-| **Phase 1 AWS-only adapters**    | Azure and GCP adapters deferred to Phase 5. Abstraction layer ready from day 1.                           | P2 -- Strategic decision   |
-| **No mobile app**                | Web-responsive only. Mobile experience is secondary for knowledge workers (desktop-first use case).       | P3                         |
-| **Weak network effects**         | No cross-user learning, no social features, no content recommendations. Product is a tool, not a network. | P3 -- Strategic investment |
+| Gap                              | Impact                                                                                                                                                                                                                                                                               | Priority                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| **Expert escalation incomplete** | Designed but SME identification not implemented. Weakens the "knowledge amplification" value prop.                                                                                                                                                                                   | P2                         |
+| **No MS Teams integration**      | Designed but not built. Missing the "meet users where they work" opportunity.                                                                                                                                                                                                        | P2                         |
+| **Phase 1 AWS-only adapters**    | Azure and GCP adapters deferred to Phase 5. Abstraction layer ready from day 1.                                                                                                                                                                                                      | P2 -- Strategic decision   |
+| **No mobile app**                | Web-responsive only. Mobile experience is secondary for knowledge workers (desktop-first use case).                                                                                                                                                                                  | P3                         |
+| **Weak network effects**         | Thumb up/down feedback provides a basic consumer-to-platform signal loop (quality improvement via aggregate feedback). Still no social features, content recommendations, or peer-to-peer collaboration. Product is primarily a tool, with an emerging feedback-driven quality loop. | P3 -- Strategic investment |
 
 ---
 

@@ -7,6 +7,20 @@
 
 ---
 
+## Phase Mapping
+
+| Flow | Flow Name                         | Built in Phase | Notes                                               |
+| ---- | --------------------------------- | -------------- | --------------------------------------------------- |
+| 01   | Tenant Onboarding (First Login)   | Phase 1        | Workspace setup wizard, part of tenant provisioning |
+| 02   | SSO Configuration                 | Phase 3        | Auth0 integration, multi-provider SSO               |
+| 03   | BYOLLM (Bring Your Own LLM)       | Phase 2        | Tenant LLM Setup, Enterprise BYOLLM                 |
+| 04   | User Management                   | Phase 1        | Invite users, role assignment, deactivation         |
+| 05   | Knowledge Base Setup              | Phase 1        | Index registration, SharePoint sync, MCP enablement |
+| 06   | Cost Analytics                    | Phase 2        | Per-tenant cost tracking, budget alerts             |
+| 07   | Role and Permission Customization | Phase 1        | Custom roles with index and MCP access control      |
+
+---
+
 ## 1. Tenant Onboarding (First Login)
 
 **Trigger**: Tenant admin receives welcome email after platform admin provisions tenant.

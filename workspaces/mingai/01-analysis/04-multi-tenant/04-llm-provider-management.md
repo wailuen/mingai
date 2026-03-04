@@ -1146,5 +1146,35 @@ From `01-admin-hierarchy.md:447-459`:
 
 ---
 
-**Document Version**: 1.0
+## 80/15/5 Applied to LLM Provider Management
+
+### 80% — Platform-Built (Reusable Across All Tenants)
+
+- LLM provider abstraction layer (unified interface across 7 providers)
+- Platform LLM Library: curated, approved providers and models per plan tier
+- Provider health monitoring, failover, and circuit breaker logic
+- Token tracking and cost attribution engine
+- Embedding provider strategy (platform-managed embedding models)
+- Reasoning effort routing per provider
+- LLM Client Manager with per-request tenant resolution
+- `@lru_cache` replacement with Redis-cached tenant config
+
+### 15% — Tenant-Configurable (Self-Service via Admin UI)
+
+- LLM selection from Platform LLM Library (tenant admin picks provider + model)
+- Custom reasoning effort per use case (chat, intent, embedding)
+- Provider fallback preferences (automatic or custom priority order)
+- Usage analytics by provider (view token consumption, cost breakdown)
+- Per-use-case model assignment (reasoning-class for complex queries, standard for simple)
+
+### 5% — Custom / Extension (Enterprise Plan)
+
+- BYOLLM: tenant provides own API key and endpoint for any supported provider
+- Custom provider integration for providers not in the platform library
+- Custom embedding models or fine-tuned model endpoints
+- Custom cost attribution rules for BYOLLM tenants (observability-only billing)
+
+---
+
+**Document Version**: 1.1
 **Last Updated**: March 4, 2026

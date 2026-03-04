@@ -16,6 +16,7 @@
 - **RAG Pipeline**: Intent Detection → Parallel Search → Synthesis → Confidence Scoring (2-3s total)
 - **RBAC**: 6 system roles, 9 system functions, additive permissions model
 - **NO tenant_id**: Zero multi-tenant isolation — all partition keys use user_id
+- **Cosmos DB containers**: 23 total (2 deprecated: audit_logs, usage_events). 20 migrate to PostgreSQL, 1 goes to Redis (group_membership_cache), 2 dropped. New tables: tenants, tenant_configs, user_feedback = 23 PostgreSQL tables total.
 
 ## Critical Gaps for Multi-Tenancy
 

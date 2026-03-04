@@ -10,12 +10,12 @@ These features are **necessary but not differentiating**. They do not justify ch
 
 | Feature                               | Why it is table stakes                             |
 | ------------------------------------- | -------------------------------------------------- |
-| AI-powered chat with LLM              | Every competitor has this. GPT-4 is not unique.    |
+| AI-powered chat with LLM              | Every competitor has this. LLM chat is not unique. |
 | Enterprise search                     | This is literally the category definition          |
 | Enterprise SSO (Entra ID, Okta, etc.) | Standard enterprise auth. Copilot has it natively. |
 | Source attribution                    | Glean, Guru, Notion AI all do this                 |
 | Conversation history                  | Basic chat functionality                           |
-| Multi-language support                | GPT-4 handles this for everyone                    |
+| Multi-language support                | Any modern LLM handles this for everyone           |
 | Feedback (thumbs up/down)             | Standard UX pattern                                |
 | Basic analytics                       | All enterprise SaaS includes usage dashboards      |
 | HTTPS/TLS encryption                  | Baseline security expectation                      |

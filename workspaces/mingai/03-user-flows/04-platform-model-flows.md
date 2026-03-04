@@ -5,6 +5,18 @@
 
 ---
 
+## Phase Mapping
+
+| Flow | Flow Name                                      | Built in Phase | Notes                                                                        |
+| ---- | ---------------------------------------------- | -------------- | ---------------------------------------------------------------------------- |
+| 01   | Platform Model: Producers, Consumers, Partners | Phase 4-6      | Marketplace dynamics emerge as platform scales                               |
+| 02   | AAA Framework Analysis                         | Phase 1-6      | Automation grows with each phase; augment/amplify from Phase 4+              |
+| 03   | Network Effects Analysis                       | Phase 4-6      | Cross-tenant effects require multi-tenant scale                              |
+| 04   | Platform Value Creation and Capture            | Phase 6        | Billing integration, revenue model active at GA                              |
+| 05   | Competitive Moat Analysis                      | Phase 4-6      | Moat layers build across phases: data (P1), MCP ecosystem (P4), pricing (P6) |
+
+---
+
 ## 1. Platform Model: Producers, Consumers, Partners
 
 ### Core Transaction

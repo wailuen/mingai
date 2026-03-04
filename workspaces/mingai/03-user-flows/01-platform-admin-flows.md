@@ -7,6 +7,21 @@
 
 ---
 
+## Phase Mapping
+
+| Flow | Flow Name                            | Built in Phase | Notes                                                        |
+| ---- | ------------------------------------ | -------------- | ------------------------------------------------------------ |
+| 01   | Platform Admin Bootstrapping         | Phase 1        | Core platform setup, part of tenant provisioning workflow    |
+| 02   | Tenant Provisioning Wizard           | Phase 1        | Key Phase 1 deliverable: tenant CRUD + provisioning workflow |
+| 03   | LLM Provider Configuration           | Phase 2        | Platform LLM Library management                              |
+| 04   | Global MCP Server Management         | Phase 4        | MCP server registry and per-tenant routing                   |
+| 05   | Billing and Quota Management         | Phase 6        | Billing integration with Stripe, usage-based pricing         |
+| 06   | Platform Monitoring                  | Phase 6        | Per-tenant dashboards, SLA monitoring                        |
+| 07   | Tenant Suspension and Deprovisioning | Phase 1        | Tenant lifecycle management, part of tenant CRUD             |
+| 08   | Platform Admin Onboarding            | Phase 1        | Platform team management                                     |
+
+---
+
 ## 1. Platform Admin Bootstrapping (First Admin)
 
 **Trigger**: Initial platform deployment completes.

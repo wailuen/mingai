@@ -37,7 +37,7 @@
 
 ### Network Effects Analysis
 
-**Current network effects are WEAK.** The platform operates primarily as a tool (single-user value) rather than a network (multi-user value). This is the single biggest strategic gap.
+**Current network effects are WEAK but improving.** The platform operates primarily as a tool (single-user value) rather than a network (multi-user value). This remains the single biggest strategic gap, though the user feedback mechanism (below) partially closes the consumer-to-platform loop.
 
 Potential network effects that could be activated:
 
@@ -48,6 +48,8 @@ Potential network effects that could be activated:
 3. **Cross-functional learning**: Multi-index queries reveal connections between data silos that no individual employee would discover. The analytics dashboard surfaces these patterns, but they are passive -- not actively pushed to users.
 
 4. **Glossary/terminology network effect**: As more glossary terms are added, search quality improves for all users. Each term added by one admin benefits every searcher.
+
+5. **User feedback network effect (implemented)**: Every AI response includes a thumb up / thumb down feedback mechanism. Thumb-down opens an optional tag selection (inaccurate / incomplete / irrelevant / hallucinated) to categorize the issue. Aggregate feedback signals surface poor-quality responses to the tenant admin for review, while positive feedback signals can reinforce effective answer patterns. This creates a **consumer-to-platform feedback loop** (Platform Model Principle 3): end users generate quality signals, the platform aggregates and surfaces them, and admins act on them to improve content and configuration. This feature is 80% reusable (every tenant gets it out of the box) and 0% custom -- it is a core engagement mechanism.
 
 **Critical gap**: In a single-tenant deployment, network effects are limited to within one organization. A multi-tenant platform would enable cross-tenant learning (anonymized query patterns, shared index configurations, MCP server marketplace), which would create much stronger defensibility.
 
@@ -120,7 +122,7 @@ Potential network effects that could be activated:
 - Conversation history preserves context for follow-up questions
 - User profiling means the system gets better with each interaction
 - Confidence scoring signals when answers may be uncertain
-- Feedback mechanism (thumbs up/down) closes the quality loop
+- **Feedback mechanism (thumbs up/down)** closes the quality loop -- thumb-down includes optional tag selection (inaccurate / incomplete / irrelevant / hallucinated), aggregate signals surface to tenant admin for review, and positive signals reinforce answer patterns
 - Internet fallback ensures users always get some answer
 
 **Improvement opportunities**:
@@ -161,7 +163,7 @@ Potential network effects that could be activated:
 
 ### Collaboration: How can producers and consumers work together?
 
-**Current state: WEAK**
+**Current state: WEAK (partially mitigated by feedback mechanism)**
 
 - Expert escalation designed but not fully implemented
 - No collaborative annotation of search results
@@ -169,6 +171,7 @@ Potential network effects that could be activated:
 - No shared conversation feature (all conversations are private)
 - No community Q&A or knowledge forum
 - Email triage exists but is primarily agent-to-user, not user-to-user
+- **Partial mitigation**: The thumb up/down feedback mechanism provides a lightweight consumer-to-platform signal loop. Users flag poor responses, admins review aggregate feedback. This is not full collaboration (no peer-to-peer interaction, no expert escalation flow) but it closes the most basic gap: consumers can now influence platform quality. Full expert escalation remains future work.
 
 **This is the weakest dimension and the biggest opportunity for differentiation in a multi-tenant scenario.**
 

@@ -34,7 +34,7 @@
 
 ### Key Deliverables
 
-1. **PostgreSQL schema setup** — Alembic migrations: add `tenant_id` columns to all 19 tables, create `tenants` and `tenant_configs` tables, enable Row-Level Security (RLS) policies (full table list in `12-database-architecture-analysis.md` Section 2)
+1. **PostgreSQL schema setup** — Alembic migrations: add `tenant_id` columns to all 21 tables, create `tenants` and `tenant_configs` tables, enable Row-Level Security (RLS) policies (full table list in `12-database-architecture-analysis.md` Section 2)
 2. **Tenant middleware** — FastAPI middleware that extracts `tenant_id` from JWT and sets `app.tenant_id` on every database connection via `SET app.tenant_id`
 3. **RLS policies** — PostgreSQL Row-Level Security on all tenant-scoped tables: `USING (tenant_id = current_setting('app.tenant_id'))`
 4. **Redis namespace migration** — Key pattern changed from `mingai:{key}` to `mingai:{tenant_id}:{key}`
@@ -43,6 +43,7 @@
 7. **Tenant provisioning workflow** — Kailash workflow that creates database records, Redis namespace, search indexes, and default admin user for a new tenant
 8. **JWT v2** — Token now includes `tenant_id`, `scope` (tenant|platform), and `plan` (starter|professional|enterprise)
 9. **AWS RDS Aurora PostgreSQL deployment** — Production database on AWS RDS Aurora PostgreSQL; DATABASE_URL-driven connection abstraction
+10. **Response feedback system** — Thumb up/down on every AI response. Feedback stored with tenant_id, message_id, rating, tags, comment. Tenant admin feedback review panel with flagging for messages with 3+ negative ratings. Records used for future model improvement signals.
 
 ### Kailash SDK Components
 
@@ -68,11 +69,13 @@
 
 ### Success Metrics
 
-- All 9 PostgreSQL tables have `tenant_id` on 100% of rows with RLS enabled
+- All 21 PostgreSQL tables have `tenant_id` on 100% of rows with RLS enabled
 - Redis keys follow new namespace pattern; old keys cleaned up
 - Platform admin can create a tenant and the provisioning workflow completes in <30s
 - Existing single-tenant functionality unchanged (regression test suite green)
 - Zero cross-tenant data leakage (verified by RLS isolation test suite)
+
+**User Flows**: Platform Admin: 01-Bootstrapping, 02-Tenant Provisioning, 07-Suspension/Deprovisioning, 08-Admin Onboarding | Tenant Admin: 01-Onboarding, 04-User Management, 05-Knowledge Base Setup, 07-Role Customization | End User: 01-First Login, 02-Standard Chat, 03-Research Mode, 04-Document Upload, 06-Internet Fallback, 07-Conversation History, 08-Failure Paths, 09-Response Feedback
 
 ### Timeline Note
 
@@ -134,6 +137,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - Cost tracking accurate to within 1% of provider invoices
 - Config cache miss rate <5% after warm-up
 
+**User Flows**: Platform Admin: 03-LLM Provider Configuration | Tenant Admin: 03-BYOLLM, 06-Cost Analytics
+
 ### Red-Team Recommendation Applied
 
 - Start Azure-only for Phase 1 (done — Phase 2 is first time we add a second provider)
@@ -187,6 +192,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - Auth latency P95 <500ms (including SSO redirect)
 - Platform admin can enable/disable SSO providers per tenant
 
+**User Flows**: Tenant Admin: 02-SSO Configuration
+
 ---
 
 ## Phase 4: Agentic Upgrade (Weeks 16-20)
@@ -239,6 +246,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - All 9 MCP servers accessible with tenant-scoped credentials
 - 7 LLM providers in LLM Library pass integration test suite; tenant LLM Setup supports all 7
 - Per-tenant cost tracking accurate; no tenant exceeds budget without alert
+
+**User Flows**: Platform Admin: 04-Global MCP Server Management | End User: 05-Agent Delegation | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
 
 ### Red-Team Recommendation Applied
 
@@ -298,6 +307,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - Terraform can stand up full environment in <30 minutes on any of the three clouds
 - No AWS-specific imports outside of provider adapter modules
 
+**User Flows**: No new user flows — infrastructure certification phase. Existing flows validated on Azure and GCP deployments.
+
 ### Red-Team Recommendation Applied
 
 - AWS deployed in Phase 1 as the primary cloud — production-proven before this phase begins
@@ -352,6 +363,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - SLA monitoring detects outages within 60 seconds
 - System handles 50 concurrent tenants with P95 latency <2s
 - Zero data leakage across tenants (final isolation audit)
+
+**User Flows**: Platform Admin: 05-Billing/Quota Management, 06-Platform Monitoring | Platform Model: 04-Value Creation/Capture, 05-Competitive Moat
 
 ---
 

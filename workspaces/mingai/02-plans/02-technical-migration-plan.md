@@ -12,24 +12,70 @@ This document provides the concrete migration steps for converting AIHub2 from a
 
 Every row in every table must receive a `tenant_id` column. Existing data is backfilled as `tenant_id = 'default'`. Row-Level Security (RLS) policies enforce tenant isolation at the database level.
 
-| Table                 | Source (Cosmos DB)    | Migration Strategy                                                                       | Notes                                                                        |
-| --------------------- | --------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `users`               | `users` container     | Add `tenant_id` column (NOT NULL); backfill existing rows; add RLS policy                | User uniqueness scoped to tenant (same email can exist in different tenants) |
-| `conversations`       | `conversations`       | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Conversations are tenant-scoped; user_id queries use composite index         |
-| `messages`            | `messages`            | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Foreign key to conversations; tenant_id denormalized for RLS enforcement     |
-| `knowledge_sources`   | `indexes`             | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Maps to search indexes (Azure AI Search, OpenSearch, etc.)                   |
-| `roles`               | `roles`               | Add `tenant_id` column (NOT NULL); backfill; platform roles use `tenant_id = 'platform'` | Seed default roles per tenant on provisioning                                |
-| `rbac`                | `permissions`         | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Platform permissions have cross-tenant scope                                 |
-| `usage_events`        | `usage_events`        | Add `tenant_id` column (NOT NULL); backfill; add RLS policy; partition by month          | High-volume table; partitioned for aggregation efficiency                    |
-| `usage_daily`         | `usage_daily`         | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Pre-aggregated daily stats per tenant                                        |
-| `question_categories` | `question_categories` | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Seed default categories from platform template                               |
+| Table                     | Source (Cosmos DB Container) | Migration Strategy                                                                       | Notes                                                                                   |
+| ------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `users`                   | `users`                      | Add `tenant_id` column (NOT NULL); backfill existing rows; add RLS policy                | User uniqueness scoped to tenant (same email can exist in different tenants)            |
+| `roles`                   | `roles`                      | Add `tenant_id` column (NOT NULL); backfill; platform roles use `tenant_id = 'platform'` | Seed 7 default system roles per tenant on provisioning; `admin` and `default` protected |
+| `user_roles`              | `user_roles`                 | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | FK to users + roles; UNIQUE(tenant_id, user_id, role_id)                                |
+| `group_roles`             | `group_roles`                | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | FK to roles; UNIQUE(tenant_id, group_id, role_id)                                       |
+| `indexes`                 | `indexes`                    | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Maps to search indexes (Azure AI Search, OpenSearch, etc.); UNIQUE(tenant_id, name)     |
+| `conversations`           | `conversations`              | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Conversations are tenant-scoped; composite index (tenant_id, user_id, created_at DESC)  |
+| `messages`                | `messages`                   | Add `tenant_id` column (NOT NULL); backfill; add RLS policy; partition by month          | FK to conversations; BRIN on created_at; tenant_id denormalized for RLS enforcement     |
+| `user_preferences`        | `user_preferences`           | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | UNIQUE(tenant_id, user_id); stores per-user UI and notification settings                |
+| `glossary_terms`          | `glossary_terms`             | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | HNSW on embedding; GIN on search_vector; scoped by (tenant_id, scope, category)         |
+| `user_profiles`           | `user_profiles`              | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | UNIQUE(tenant_id, user_id); adaptive learning profile per user                          |
+| `profile_learning_events` | `profile_learning_events`    | Add `tenant_id` column (NOT NULL); backfill; add RLS policy; partition by month          | 30-day retention; BRIN on created_at; pg_cron cleanup of expired partitions             |
+| `consent_events`          | `consent_events`             | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Index on (tenant_id, user_id, timestamp DESC); immutable audit trail                    |
+| `feedback`                | `feedback`                   | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Index on (tenant_id, message_id) and (tenant_id, status, created_at)                    |
+| `conversation_documents`  | `conversation_documents`     | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | FK to conversations; personal document uploads scoped per tenant                        |
+| `document_chunks`         | `document_chunks`            | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | FK to conversation_documents; HNSW on embedding for vector search                       |
+| `usage_daily`             | `usage_daily`                | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Pre-aggregated daily stats per tenant; index on (tenant_id, date, service)              |
+| `events`                  | `events`                     | Add `tenant_id` column (NOT NULL); backfill; add RLS policy; partition by month          | Unified event store (replaces deprecated audit_logs + usage_events); BRIN on timestamp  |
+| `question_categories`     | `question_categories`        | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | Seed default categories from platform template; index on (tenant_id, date)              |
+| `mcp_servers`             | `mcp_servers`                | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | UNIQUE(tenant_id, name); MCP server configuration per tenant                            |
+| `notifications`           | `notifications`              | Add `tenant_id` column (NOT NULL); backfill; add RLS policy                              | 30-day retention via pg_cron; index on (tenant_id, user_id, status, created_at DESC)    |
 
-### New Tables
+**Not migrated to PostgreSQL:**
+
+| Cosmos DB Container         | Disposition                                                        |
+| --------------------------- | ------------------------------------------------------------------ |
+| `group_membership_cache`    | Maps to Redis (pure TTL cache, not a PostgreSQL table)             |
+| `audit_logs` (deprecated)   | Historical data merged into `events` table, then container dropped |
+| `usage_events` (deprecated) | Historical data merged into `events` table, then container dropped |
+
+### New Tables (no Cosmos DB source)
 
 | Table            | Purpose                                                                  |
 | ---------------- | ------------------------------------------------------------------------ |
 | `tenants`        | Tenant metadata: name, plan, status, created_at, owner_id                |
 | `tenant_configs` | Per-tenant configuration: LLM provider, model, feature flags, MCP access |
+| `user_feedback`  | Thumb up/down ratings on AI responses with optional tags and comments    |
+
+**`user_feedback` schema:**
+
+```sql
+CREATE TABLE user_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  conversation_id UUID NOT NULL REFERENCES conversations(id),
+  message_id UUID NOT NULL REFERENCES messages(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  rating SMALLINT NOT NULL CHECK (rating IN (1, -1)),  -- 1 = thumbs up, -1 = thumbs down
+  tags TEXT[],                                          -- optional: 'inaccurate', 'incomplete', 'irrelevant', 'hallucinated'
+  comment TEXT,                                         -- optional free-text
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS policy (same pattern as all tenant-scoped tables)
+ALTER TABLE user_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_feedback FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON user_feedback
+  USING (tenant_id = current_setting('app.tenant_id')::UUID);
+
+-- Indexes
+CREATE INDEX idx_user_feedback_message ON user_feedback (tenant_id, message_id);
+CREATE INDEX idx_user_feedback_user ON user_feedback (tenant_id, user_id, created_at DESC);
+```
 
 ### Connection Abstraction
 
@@ -94,7 +140,7 @@ CREATE POLICY platform_admin_bypass ON users
   WITH CHECK (current_setting('app.scope', true) = 'platform');
 ```
 
-Applied to all 19 PostgreSQL tables: `users`, `roles`, `user_roles`, `group_roles`, `indexes`, `conversations`, `messages`, `user_preferences`, `glossary_terms`, `user_profiles`, `profile_learning_events`, `consent_events`, `feedback`, `conversation_documents`, `document_chunks`, `usage_daily`, `events`, `question_categories`, `mcp_servers`, `notifications`.
+Applied to all 22 PostgreSQL tables (19 migrated + 3 new): `users`, `roles`, `user_roles`, `group_roles`, `indexes`, `conversations`, `messages`, `user_preferences`, `glossary_terms`, `user_profiles`, `profile_learning_events`, `consent_events`, `feedback`, `conversation_documents`, `document_chunks`, `usage_daily`, `events`, `question_categories`, `mcp_servers`, `notifications`, `tenants`, `tenant_configs`, `user_feedback`.
 
 > Note: `group_membership_cache` maps to Redis (not PostgreSQL). `audit_logs` and `usage_events` are deprecated containers to be dropped after historical data is merged into `events`. Full mapping in `12-database-architecture-analysis.md` Section 2.
 
@@ -419,7 +465,7 @@ Note: 4 functions (`integration:manage`, `glossary:manage`, `feedback:view`, `sy
 
 1. Add `scope` column to `roles` table via Alembic migration: existing roles get `scope = 'tenant'`
 2. Create platform roles: PlatformAdmin, PlatformSupport with `scope = 'platform'`
-3. Create platform functions in `rbac` table
+3. Create platform functions as `system_permissions` entries in the `roles` table
 4. Update permission middleware to check scope before role resolution
 5. Designate initial PlatformAdmin users (current system owners)
 6. Verify existing tenant RBAC unchanged (regression tests)
@@ -438,9 +484,10 @@ All existing single-tenant data becomes the "default" tenant. This is a non-dest
 
 ```
 alembic upgrade head
-  - Adds tenant_id column (VARCHAR, NOT NULL, DEFAULT 'default') to all 19 tables
-  - Creates tenants and tenant_configs tables
+  - Adds tenant_id column (VARCHAR, NOT NULL, DEFAULT 'default') to all 19 migrated tables
+  - Creates new tables: tenants, tenant_configs, user_feedback
   - Creates indexes on tenant_id columns
+  - Enables RLS on all 22 PostgreSQL tables
 ```
 
 **Step 2: Backfill tenant_id**

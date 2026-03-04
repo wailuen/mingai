@@ -92,7 +92,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 | Cross-tenant analytics         | Aggregated (anonymized) usage patterns, common queries, feature adoption            | P1       |
 | Feature flag management        | Enable/disable features per tenant (MCP, notifications, agent channels)             | P1       |
 | Tenant billing                 | Usage-based billing with invoicing and payment tracking                             | P1       |
-| MCP marketplace management     | Publish, review, and manage shared MCP servers                                      | P2       |
+| MCP marketplace management     | Publish, review, and manage shared MCP servers (Phase 3+ deferred -- see below)     | P2       |
 | Platform upgrade orchestration | Rolling upgrades across tenants with rollback capability                            | P2       |
 
 ### Tenant Admin Self-Service
@@ -115,7 +115,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 
 ## The 80/15/5 Rule Applied to Multi-Tenant Features
 
-### 80% Reusable (Same for every tenant)
+### 80% Reusable (Platform-built, same for every tenant)
 
 - Core chat interface and AI pipeline
 - Authentication framework (the flow, not the tenant-specific config)
@@ -123,16 +123,19 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 - Search pipeline (index routing, multi-index search, result aggregation)
 - Conversation management
 - User profiling engine
-- Feedback system
+- Feedback system (thumb up/down, aggregated quality signals)
 - Analytics computation engine
 - Audit logging framework
 - Cache management and invalidation
 - Notification delivery engine
-- Agent communication channel framework
+- Agent template system (prompt, guardrails, MCP URL, credential schema, AgentCard)
+- DAG orchestration engine (multi-agent parallel execution)
+- Tool Catalog (Tavily, Calculator, Weather, extensible)
+- Billing instrumentation (token tracking, cost attribution)
 
-### 15% Configurable (Tenant sets via admin UI)
+### 15% Configurable (Tenant sets via admin UI, self-service)
 
-- Azure AD tenant connection (OIDC/SAML endpoints)
+- Azure AD / Auth0 tenant connection (OIDC/SAML endpoints)
 - Role hierarchy and permission matrix
 - Index registrations and metadata
 - MCP server connections and credentials
@@ -143,16 +146,36 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 - Retention policies
 - Rate limits (within platform-set maximums)
 - Branding (logo, colors)
-- LLM parameters (system prompts, model selection if multiple models offered)
+- LLM selection from Platform LLM Library (provider + model per plan tier)
+- Agent enable/disable (toggle platform agents on/off per org)
+- Prompt extensions per agent instance (additive, cannot override guardrails)
+- Topic scoping per agent
+- RBAC per agent (which roles can invoke which agents)
 
-### 5% Custom (Requires development or platform team involvement)
+### 5% Custom (Requires development, engineering, or Enterprise plan)
 
-- Custom MCP server implementations for unique data sources
+- BYOMCP: custom MCP server implementations for unique data sources
+- BYOLLM: tenant provides own LLM API key and endpoint
 - Custom authentication flows (non-Azure AD identity providers)
 - Custom compliance integrations (specific regulatory reporting)
 - Data migration from existing knowledge platforms
 - Custom embedding models or search strategies
-- Enterprise API integrations not covered by standard MCP servers
+- External A2A marketplace agents (EATP-verified third-party)
+- Custom DAG templates for bespoke agent coordination
+
+---
+
+### Track B Deferred Items (Phase 3+)
+
+> **Phase 3+ Deferred**: The following capabilities are deliberately deferred to Phase 3 or later to maintain focus on Phase 1-2 core platform. This is an architectural decision, not a gap:
+>
+> - **MCP marketplace** (tenant-to-tenant agent sharing, external agent publisher onboarding)
+> - **Cross-tenant network effects / anonymized benchmarking** (aggregated usage patterns across tenants)
+> - **Platform model strengthening** (producer incentives, knowledge contribution layer)
+> - **Full expert escalation with producer-consumer transactions**
+> - **Community Q&A / shared verified answers**
+>
+> Track B concerns will be revisited after Phase 2 GA validation with real tenant usage data.
 
 ---
 
@@ -194,15 +217,15 @@ This prices below Copilot ($30) at Professional tier while offering more data so
 
 ### Key Success Metrics for Multi-Tenant Launch
 
-| Metric                                  | Target            | Timeframe   |
-| --------------------------------------- | ----------------- | ----------- |
-| Tenants onboarded                       | 5 design partners | Month 0-6   |
-| Self-service onboarding completion rate | >80%              | Month 6-12  |
-| Time to first query (new tenant)        | <2 hours          | Month 6-12  |
-| Tenant retention (12-month)             | >90%              | Month 12-24 |
-| MCP marketplace servers available       | 10+               | Month 12-18 |
-| Revenue per tenant (ARR)                | $50K-$200K        | Month 12-24 |
-| Platform uptime                         | 99.9%             | Ongoing     |
+| Metric                                  | Target            | Timeframe                       |
+| --------------------------------------- | ----------------- | ------------------------------- |
+| Tenants onboarded                       | 5 design partners | Month 0-6                       |
+| Self-service onboarding completion rate | >80%              | Month 6-12                      |
+| Time to first query (new tenant)        | <2 hours          | Month 6-12                      |
+| Tenant retention (12-month)             | >90%              | Month 12-24                     |
+| MCP marketplace servers available       | 10+               | Month 12-18 (Phase 3+ deferred) |
+| Revenue per tenant (ARR)                | $50K-$200K        | Month 12-24                     |
+| Platform uptime                         | 99.9%             | Ongoing                         |
 
 ---
 
