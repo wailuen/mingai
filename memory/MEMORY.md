@@ -25,6 +25,50 @@
 4. Azure AD configured globally in .env — single org only
 5. Search indexes not partitioned per tenant
 
+## Agent Platform Architecture (doc 06 v2.0 — confirmed)
+
+### All 9 MCP Servers = A2A Agents (NOT tool/agent split)
+
+- All 9: natural language Task in → internal LLM → internal MCP tools → Artifact out
+- Bloomberg/Perplexity/Oracle Fusion: confirmed own Azure OpenAI deployments (from configs)
+- CapIQ/iLevel/AlphaGeo/Teamworks/PitchBook/Azure AD: also A2A agents (LLM reasons about tool calls)
+- Previous error: classifying 6 as "MCP Tools" — WRONG, all 9 = A2A Agents
+
+### Tool Catalog (separate from agents — deterministic, no LLM, direct calls)
+
+- Only Tavily exists in aihub2: `INTERNET_SEARCH_TOOL` / `search_internet`
+- mingai elevates to governed Tool Catalog + adds Calculator, Weather + extensible
+
+### Credential Model
+
+- Platform defines: credential SCHEMA (type: OBO | JWT assertion | OAuth2 BSSO | API key)
+- Tenant provides: credential VALUES (Bloomberg account, Oracle JWT, CapIQ key, etc.)
+- User provides at runtime: OBO token (Azure AD only — user's identity auto-delegates)
+- Azure AD: OBO means agent acts AS the user in MS Graph (not service account)
+- Oracle Fusion: JWT assertion OAuth2 (RFC 7523) — tenant provides JWT private key
+
+### LLM Configuration Model
+
+- **Tenant-level, not per-agent**: LLM selection in Tenant Admin → Settings → LLM Configuration
+- **Platform LLM Library**: Platform admin curates approved providers + models per plan tier
+- **Tenant picks**: Option A = select from LLM Library (billed at markup); Option B = BYOLLM (Enterprise, tracking only)
+- **All agents in tenant share** this single LLM configuration (no per-agent override)
+- **Billing**: library LLM → token markup; BYOLLM → observability tracking only
+- **Agent template `preferred_tier`**: "reasoning" | "standard" — hints which model tier to use; actual model resolved from tenant's LLM setup at runtime
+
+### Agent Template (5 components — platform builds, tenant configures)
+
+1. prompt (identity, expertise) + 2. guardrails (tenant CANNOT override)
+2. mcp_url + 4. credential_schema (VALUES come from tenant) + 5. skills (AgentCard)
+
+### DAG Orchestration
+
+- Orchestrator owns full DAG; agents are task-blind (never see the plan)
+- Each agent receives ONE atomic A2A Task (natural language only)
+- Independent DAG nodes execute in parallel; artifacts feed synthesis
+
+### Prompt Library = Designed Gap (required before production)
+
 ## Architecture Decisions (DB + RAG Analysis — docs 12 + 13)
 
 ### Database: Hybrid PostgreSQL + Cosmos DB (adopted Phase 1)

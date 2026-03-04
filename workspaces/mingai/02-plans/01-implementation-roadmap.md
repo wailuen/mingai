@@ -2,14 +2,14 @@
 
 ## Summary Table
 
-| Phase | Name             | Duration | Key Deliverable                                   | Kailash SDK                                      | Risk                               |
-| ----- | ---------------- | -------- | ------------------------------------------------- | ------------------------------------------------ | ---------------------------------- |
-| 1     | Foundation       | 8 weeks  | tenant_id isolation across all data stores        | DataFlow (PostgreSQL models, Alembic migrations) | HIGH — touches every query path    |
-| 2     | LLM Marketplace  | 4 weeks  | Multi-provider LLM with tenant selection          | Kaizen (LLMProvider), DataFlow (tenant_config)   | MEDIUM — cost modeling uncertainty |
-| 3     | Auth Flexibility | 3 weeks  | Tenant-selectable SSO (Entra, Google, Okta, SAML) | Nexus (auth middleware)                          | MEDIUM — token migration window    |
-| 4     | Agentic Upgrade  | 5 weeks  | Kaizen multi-agent + A2A + per-tenant MCP routing | Kaizen (orchestration, A2A), MCP (registry)      | HIGH — 9 MCP servers to isolate    |
-| 5     | Cloud Agnostic   | 4 weeks  | Azure + GCP certification, CLOUD_PROVIDER config  | Core SDK (workflow nodes), Nexus (deployment)    | MEDIUM — abstraction leakage       |
-| 6     | GA               | 3 weeks  | Billing, self-service onboarding, SLA monitoring  | Nexus (billing API), DataFlow (usage tracking)   | LOW — polish phase                 |
+| Phase | Name             | Duration | Key Deliverable                                             | Kailash SDK                                                                      | Risk                               |
+| ----- | ---------------- | -------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| 1     | Foundation       | 8 weeks  | tenant_id isolation across all data stores                  | DataFlow (PostgreSQL models, Alembic migrations)                                 | HIGH — touches every query path    |
+| 2     | LLM Library      | 4 weeks  | Platform LLM Library + Tenant LLM Setup (Library or BYOLLM) | Kaizen (LLMProvider, instrumented client), DataFlow (tenant_config, llm_library) | MEDIUM — cost modeling uncertainty |
+| 3     | Auth Flexibility | 3 weeks  | Tenant-selectable SSO (Entra, Google, Okta, SAML)           | Nexus (auth middleware)                                                          | MEDIUM — token migration window    |
+| 4     | Agentic Upgrade  | 5 weeks  | Kaizen multi-agent + A2A + per-tenant MCP routing           | Kaizen (orchestration, A2A), MCP (registry)                                      | HIGH — 9 MCP servers to isolate    |
+| 5     | Cloud Agnostic   | 4 weeks  | Azure + GCP certification, CLOUD_PROVIDER config            | Core SDK (workflow nodes), Nexus (deployment)                                    | MEDIUM — abstraction leakage       |
+| 6     | GA               | 3 weeks  | Billing, self-service onboarding, SLA monitoring            | Nexus (billing API), DataFlow (usage tracking)                                   | LOW — polish phase                 |
 
 **Total estimated duration: 27 weeks (~7 months)**
 
@@ -80,15 +80,15 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 
 ---
 
-## Phase 2: LLM Marketplace (Weeks 9-12)
+## Phase 2: LLM Library & Tenant Setup (Weeks 9-12)
 
 ### Goals
 
-- Abstract LLM provider selection behind a clean interface
-- Launch with 2 providers: Azure OpenAI and OpenAI Direct
-- Enable platform admin to configure available providers per plan tier
-- Enable tenant admin to select provider for their tenant
-- Support BYOLLM (Bring Your Own LLM key) for Enterprise tier
+- Build Platform LLM Library: curated set of approved providers and models, managed by platform admin, available per plan tier
+- Build Tenant LLM Setup: tenant admin selects from the LLM Library OR brings their own API key (BYOLLM — Enterprise only)
+- All agents in a tenant use the tenant's single LLM configuration — no per-agent model selection
+- Abstract LLM provider behind a clean interface; launch with 2 providers: Azure OpenAI and OpenAI Direct
+- Support BYOLLM for Enterprise tier
 - Replace `@lru_cache` Settings singleton with tenant-scoped, Redis-cached config
 
 ### Key Deliverables
@@ -96,16 +96,21 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 1. **LLMProvider abstraction interface** — Common interface: `complete(messages, model, **kwargs) -> CompletionResponse` with provider-specific adapters
 2. **Azure OpenAI adapter** — Wraps existing Azure OpenAI integration
 3. **OpenAI Direct adapter** — New adapter for direct OpenAI API access
-4. **Provider configuration UI** — Platform admin: enable/disable providers, set default models per tier. Tenant admin: select from enabled providers
-5. **BYOLLM support** — Enterprise tenants can supply their own API keys stored encrypted in `tenant_config`
-6. **Tenant config migration** — `@lru_cache` Settings replaced with PostgreSQL `tenant_configs` table, Redis-cached with 15-min TTL
-7. **Cost tracking per tenant** — Token usage logged to `usage_events` with `tenant_id`, `provider`, `model`, `tokens_in`, `tokens_out`
+4. **Platform LLM Library** — Platform admin UI: add/remove providers, configure available models per plan tier (Starter/Professional/Enterprise), set recommended models. Library is the single source of truth for which LLMs tenants can select.
+5. **Tenant LLM Setup UI** — Tenant Admin → Settings → LLM Configuration:
+   - Option A: Select provider + model from Platform LLM Library (tokens billed at markup)
+   - Option B: BYOLLM — provide own API key + endpoint (Enterprise only; tokens tracked, billing skipped)
+   - One active LLM config per tenant; changing it takes effect for all subsequent agent calls
+6. **BYOLLM support** — Enterprise tenants supply their own API keys, stored encrypted in `tenant_config`
+7. **Tenant config migration** — `@lru_cache` Settings replaced with PostgreSQL `tenant_configs` table, Redis-cached with 15-min TTL
+8. **Instrumented LLM client** — Platform wrapper around provider SDKs that reads tenant's `model_source` flag at request time; routes billing vs. observability-only tracking accordingly
+9. **Cost tracking per tenant** — Token usage logged to `usage_events` with `tenant_id`, `provider`, `model`, `tokens_in`, `tokens_out`, `model_source` (library | byollm)
 
 ### Kailash SDK Components
 
-- **Kaizen**: LLMProvider interface and adapter pattern; model registry
-- **DataFlow**: `tenant_configs` and `usage_events` PostgreSQL models; cost aggregation queries
-- **Nexus**: Provider management API endpoints; tenant config API
+- **Kaizen**: LLMProvider interface and adapter pattern; model registry; instrumented client wrapper
+- **DataFlow**: `tenant_configs` and `usage_events` PostgreSQL models; cost aggregation queries; `llm_library` table for platform-managed model catalog
+- **Nexus**: Platform LLM Library admin API; Tenant LLM Setup API; provider management endpoints
 
 ### Dependencies
 
@@ -200,7 +205,7 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 2. **A2A protocol** — Standardized inter-agent communication; agents can delegate sub-tasks
 3. **MCP server registry** — Central registry of all 9 MCP servers (Bloomberg, CapIQ, Perplexity, Oracle Fusion, AlphaGeo, Teamworks, PitchBook, Azure AD, iLevel)
 4. **Per-tenant MCP routing** — Tenant admin configures which MCP servers are available; access control enforced at registry level
-5. **5 additional LLM providers** — Anthropic, Deepseek, DashScope, Doubao, Gemini adapters added to LLMProvider abstraction
+5. **5 additional LLM providers added to LLM Library** — Anthropic, Deepseek, DashScope (Qwen), Bytedance Ark (Doubao), Google Gemini adapters added to LLMProvider abstraction and published in Platform LLM Library per plan tier
 6. **Agent memory isolation** — Conversation context and agent state scoped to tenant_id
 7. **Cost controls for agentic RAG** — Per-tenant budget limits, circuit breakers for runaway agent loops
 
@@ -232,7 +237,7 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - Multi-agent conversations produce higher-quality answers than single-agent (measured by user feedback)
 - Agent loop circuit breaker triggers <1% of conversations
 - All 9 MCP servers accessible with tenant-scoped credentials
-- 7 LLM providers pass integration test suite
+- 7 LLM providers in LLM Library pass integration test suite; tenant LLM Setup supports all 7
 - Per-tenant cost tracking accurate; no tenant exceeds budget without alert
 
 ### Red-Team Recommendation Applied

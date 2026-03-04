@@ -1,974 +1,947 @@
-# A2A, MCP, and Agentic Architecture
+# A2A Agent Platform: Architecture & Product Design
 
 **Date**: March 4, 2026
-**Status**: Architecture Design
-**Scope**: Agent-to-Agent protocol, MCP server management, and agentic RAG for multi-tenant
+**Status**: Architecture Design v2.0
+**Scope**: A2A agent platform, agent template system, DAG orchestration, tool catalog, credential management, marketplace
 
 ---
 
-## Overview
+## Executive Summary
 
-The current system has 9 MCP (Model Context Protocol) servers providing external data access (Bloomberg, CapIQ, Perplexity, etc.) with a flat access model. Multi-tenancy requires tenant-scoped MCP server routing, a platform-level MCP server registry, and an evolved agentic architecture where specialized agents coordinate to answer complex queries. This document designs the A2A (Agent-to-Agent) protocol, tenant-level MCP access control, and the migration from classic RAG to agentic RAG.
+mingai's agent platform is built on three architectural principles that differentiate it from classical RAG and from every enterprise AI competitor:
 
----
+1. **All 9 data integrations are autonomous A2A agents** — each agent takes a natural language task, reasons internally with its own LLM, calls its assigned MCP server, and returns a structured Artifact. The orchestrator delegates tasks; it never micromanages tool calls.
 
-## Current MCP Architecture
+2. **The orchestrator owns the DAG, not the agents** — complex queries decompose into a dependency graph of agent tasks. Each agent receives only its atomic assignment. Parallel DAG execution collapses multi-source financial research from minutes to seconds.
 
-### Evidence from Source Code
-
-**9 MCP servers** in `/Users/wailuen/Development/aihub2/src/mcp-servers/`:
-
-| MCP Server        | Directory            | External API          | Purpose                           |
-| ----------------- | -------------------- | --------------------- | --------------------------------- |
-| **Azure AD**      | `azure-ad-mcp/`      | MS Graph API          | Calendar, email, directory, Teams |
-| **Bloomberg**     | `bloomberg-mcp/`     | Bloomberg DL API      | Market data, fundamentals, FX     |
-| **CapIQ**         | `capiq-mcp/`         | S&P Capital IQ        | Company financials, comparables   |
-| **Perplexity**    | `perplexity-mcp/`    | Perplexity API        | Internet search, research         |
-| **Oracle Fusion** | `oracle-fusion-mcp/` | Oracle Cloud REST     | ERP data, financials              |
-| **AlphaGeo**      | `alphageo-mcp/`      | AlphaGeo API          | Geographic/location data          |
-| **Teamworks**     | `teamworks-mcp/`     | Teamworks API         | Collaboration platform            |
-| **PitchBook**     | `pitchbook-mcp/`     | PitchBook/Morningstar | PE/VC deal data                   |
-| **iLevel**        | `ilevel-mcp/`        | iLevel API            | Enterprise data                   |
-
-### MCP Service Layer (app/modules/mcp/service.py:47-100)
-
-```python
-# service.py:47-68 -- MCPService class
-class MCPService:
-    """
-    Orchestration service for MCP agent invocations.
-
-    This service provides:
-    - RBAC-based filtering of available MCP sources for users
-    - Agent invocation with circuit breaker protection
-    - SSE event emission for real-time progress updates
-    """
-
-    def __init__(self) -> None:
-        self._agent_registry = get_agent_registry()
-
-    async def _ensure_agents_loaded(self) -> None:
-        """
-        Sync MCP agents with database configs.
-        1. Adds new agents for enabled configs not in registry
-        2. Removes stale agents that are no longer in enabled configs
-        """
-        from app.modules.mcp.models import MCPServerModel
-        from app.modules.mcp.generic_agent import GenericMCPAgent
-        from app.modules.mcp.cache import MCPCacheService
-
-        configs_data = await MCPCacheService.get_enabled_configs()
-        # ... sync logic
-```
-
-### Current MCP Invocation Flow (app/modules/chat/operations/mcp.py:51-80)
-
-```python
-# operations/mcp.py:51-63 -- search_mcp function
-async def search_mcp(
-    message: str,
-    user_id: str,
-    conversation_id: str,
-    message_id: str,
-    user_token: Optional[str],         # OBO token for delegated auth
-    format_event: Callable,
-    mcp_ids: Optional[List[str]] = None,
-    conversation_history: Optional[List[Dict]] = None,
-    user_roles: Optional[List[str]] = None,
-    timezone: Optional[str] = None,
-    user_context: Optional["UserContext"] = None,
-) -> AsyncGenerator[Union[str, "MCPResult"], None]:
-    """Invoke MCP agents and yield SSE events in real-time."""
-```
-
-### Current Access Control
-
-MCP access is controlled through the same RBAC system as knowledge bases (service.py:9):
-
-```python
-# service.py:7-9
-# MCP servers are unified with KB indexes as "knowledge sources":
-# - Access controlled by role's index_permissions (same as KB indexes)
-# - Each MCP has its own circuit breaker for fault isolation
-```
-
-### Current Credential Management (10-kaizen-extension-analysis.md:450-479)
-
-Each MCP server independently loads credentials from its own `.env` file:
-
-```python
-# Pattern from each MCP server's config.py
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
-
-    PROVIDER_API_KEY: str        # Bloomberg, CapIQ, etc.
-    PROVIDER_CLIENT_ID: str      # If OAuth
-    PROVIDER_CLIENT_SECRET: str  # If OAuth
-
-    # Optional Azure OpenAI for agentic orchestration
-    AZURE_OPENAI_ENDPOINT: str = ""
-    AZURE_OPENAI_KEY: str = ""
-    AZURE_OPENAI_DEPLOYMENT: str = "mcp-<server-name>"
-```
-
-### Current Limitations
-
-1. **Flat access model**: All users with MCP access can see all enabled MCP servers
-2. **No tenant scoping**: MCP server enable/disable is global, not per-tenant
-3. **Independent credentials**: Each server manages its own API keys, no centralized credential store
-4. **No A2A coordination**: MCP servers operate independently, no cross-agent communication
-5. **Single-step invocation**: One query maps to one MCP server, no multi-agent orchestration
-6. **Global circuit breakers**: Breaker state is shared across all tenants
+3. **Platform builds templates; tenants bring credentials** — Bloomberg agent template ships with the platform (prompt, guardrails, MCP config, AgentCard skills). Tenant provides their Bloomberg account credentials. Zero engineering to deploy enterprise-grade agents.
 
 ---
 
-## Target Architecture: Tenant-Scoped MCP with A2A
+## The Problem This Solves
 
-### Architecture Overview
+### Current aihub2 Limitations (What We Leave Behind)
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                     Platform Admin Layer                              │
-│  Manages global MCP server catalog                                   │
-│  POST /v1/platform/mcp-servers                                       │
-│  ├─ bloomberg-mcp   ✅ active  (platform credentials)               │
-│  ├─ capiq-mcp       ✅ active  (platform credentials)               │
-│  ├─ perplexity-mcp  ✅ active  (platform credentials)               │
-│  ├─ azure-ad-mcp    ✅ active  (per-user OBO token)                 │
-│  ├─ pitchbook-mcp   ✅ active  (platform credentials)               │
-│  ├─ custom-mcp-1    ✅ active  (enterprise tenant custom)           │
-│  └─ 4 more...                                                        │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                     Tenant Admin Layer                                │
-│  Selects which MCP servers are available to their organization       │
-│                                                                      │
-│  Tenant "Acme Corp" (Professional plan):                             │
-│  ├─ ✅ bloomberg-mcp  (platform key)                                │
-│  ├─ ✅ perplexity-mcp (platform key)                                │
-│  ├─ ✅ azure-ad-mcp   (per-user OBO)                               │
-│  ├─ ❌ capiq-mcp      (not enabled)                                 │
-│  └─ ❌ pitchbook-mcp  (not enabled)                                 │
-│                                                                      │
-│  Tenant "BigCorp" (Enterprise plan):                                 │
-│  ├─ ✅ All standard MCP servers                                     │
-│  ├─ ✅ custom-erp-mcp (BigCorp's own MCP server)                   │
-│  └─ ✅ custom-crm-mcp (BigCorp's own MCP server)                   │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│            Agentic Orchestrator (Per-Request)                         │
-│                                                                      │
-│  User query: "Compare Bloomberg's view of AAPL with CapIQ data      │
-│               and summarize recent news from Perplexity"             │
-│                                                                      │
-│  ┌─────────────┐                                                     │
-│  │ Intent Agent │ ← Classifies query, identifies required agents     │
-│  └──────┬──────┘                                                     │
-│         │ A2A dispatch                                               │
-│         ├──────────────────┬──────────────────┐                      │
-│         ▼                  ▼                  ▼                      │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │ Bloomberg   │  │ CapIQ        │  │ Perplexity   │               │
-│  │ Agent       │  │ Agent        │  │ Agent        │               │
-│  │ (market)    │  │ (financial)  │  │ (news)       │               │
-│  └──────┬──────┘  └──────┬───────┘  └──────┬───────┘               │
-│         │                │                  │                        │
-│         └────────────────┼──────────────────┘                        │
-│                          ▼                                           │
-│                  ┌──────────────┐                                     │
-│                  │ Synthesis    │ ← Combines results from all agents │
-│                  │ Agent        │                                     │
-│                  └──────┬───────┘                                     │
-│                         │                                            │
-│                         ▼                                            │
-│                  ┌──────────────┐                                     │
-│                  │ Validation   │ ← Fact-checks, deduplicates       │
-│                  │ Agent        │                                     │
-│                  └──────────────┘                                     │
-└──────────────────────────────────────────────────────────────────────┘
-```
+In aihub2's `ResearchAgentHandler`, the orchestrator acts as a god object:
+
+- `ToolPlanner` (LLM) selects which tools to call and constructs the query
+- `ToolExecutor` calls MCP servers directly as dumb data endpoints
+- The orchestrator sends a flat tool call list per iteration — MCP servers have no autonomy
+- Credentials live in per-server `.env` files, not tenant-scoped
+- One Bloomberg account serves all users — no tenant isolation
+- `INTERNET_SEARCH_TOOL` (Tavily) is baked in as a one-off, not a governed catalog entry
+- No multi-agent coordination; no parallel agent execution
+- Custom `A2AMessage` dataclass — not compatible with the emerging Google A2A standard
+
+This works for a single-tenant internal system. It cannot scale to multi-tenant SaaS.
+
+### What mingai Fixes
+
+| aihub2 Problem                    | mingai Solution                               |
+| --------------------------------- | --------------------------------------------- |
+| Orchestrator selects tool queries | Agent reasons about its own tool calls        |
+| MCP servers = dumb data endpoints | All 9 = autonomous A2A agents                 |
+| Global `.env` credentials         | Platform template + tenant credential vault   |
+| Flat tool iteration (sequential)  | DAG with parallel agent execution             |
+| Custom A2AMessage protocol        | Google A2A v0.3 (Linux Foundation standard)   |
+| Tavily baked in as a one-off      | Extensible Tool Catalog (Tavily is entry #1)  |
+| No external agent support         | Open marketplace via EATP-verified AgentCards |
 
 ---
 
-## MCP Server Registry: Platform Level
+## Architecture Principles
 
-### Global MCP Server Data Model
+### Principle 1: Agents Are Autonomous
 
-Stored in PostgreSQL `mcp_servers` table with RLS (extends current model from `app/modules/mcp/models.py`):
+An agent is autonomous when it can receive a natural language task and decide — without orchestrator intervention — which of its MCP tools to call and how to synthesize the result.
 
-```python
-# mcp_servers container (PK: /id)
+**aihub2**: Orchestrator decides tool → calls MCP → gets raw data
+**mingai**: Orchestrator delegates task → Agent decides tools → Agent synthesizes → returns Artifact
+
+CapIQ example: Query is "What are the comparable companies for Emerson Electric?" The CapIQ agent must reason: call `get_company_profile`? `search_deals`? `get_competitor_analysis`? All three? This is reasoning. Pushing that decision into the orchestrator requires the orchestrator to know every possible query pattern for every agent — which doesn't scale to 9 agents, let alone a marketplace of hundreds.
+
+### Principle 2: Orchestrator Owns the DAG — Not the Agents
+
+The DAG (Directed Acyclic Graph of agent tasks) is the orchestrator's private state machine. Agents are task-blind by design.
+
+**What an agent receives**: "Get AAPL current P/E ratio and earnings news for the last 7 days"
+**What an agent never receives**: "You are step 2 of 5. Step 1 was internet search. After you complete, step 4 will calculate ratios. Here is the full execution plan."
+
+Sending the full plan to an agent is an anti-pattern from aihub2. It creates coupling, leaks orchestration logic into agents, and makes agents non-reusable across different orchestration contexts.
+
+### Principle 3: Industry Standards, Not Custom Protocols
+
+- Agent communication: **Google A2A v0.3** (Task/Artifact/AgentCard, HTTP+SSE+JSON-RPC 2.0, Linux Foundation July 2025)
+- Agent capability declaration: **AgentCard** at `/.well-known/agent.json`
+- Internal tool protocol (per agent): **Anthropic MCP** for each agent's data layer
+- External agent trust: **EATP** (Enterprise Agent Trust Protocol) for marketplace verification
+
+---
+
+## Three-Layer Capability Model
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  LAYER 1: A2A AGENTS (all 9 data integrations — autonomous, LLM-powered) │
+│                                                                          │
+│  Each agent: natural language Task in → internal LLM reasoning           │
+│              → internal MCP tool calls → LLM synthesis → Artifact out    │
+│                                                                          │
+│  Bloomberg   CapIQ    Perplexity   Oracle Fusion   AlphaGeo              │
+│  Teamworks   PitchBook   Azure AD   iLevel                               │
+│                                                                          │
+│  + Tenant custom agents (Enterprise plan, BYOMCP)                        │
+│  + External A2A-compliant marketplace agents (EATP-verified)             │
+├──────────────────────────────────────────────────────────────────────────┤
+│  LAYER 2: TOOL CATALOG (deterministic, direct calls — no A2A, no LLM)   │
+│                                                                          │
+│  Tavily (internet search)  ·  Calculator  ·  Weather                     │
+│  + extensible: currency converter, OCR, code execution, ...             │
+│                                                                          │
+│  Platform Admin registers tools. Tenant Admin enables per org.           │
+├──────────────────────────────────────────────────────────────────────────┤
+│  LAYER 3: ORCHESTRATOR (owns DAG, dispatches atomic tasks)               │
+│                                                                          │
+│  Plans execution graph → dispatches A2A Tasks to Layer 1 agents          │
+│  → calls Layer 2 tools directly → collects Artifacts → synthesizes       │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Tool vs Agent: The Decision Rule
+
+| Characteristic     | Tool (Layer 2)                                            | Agent (Layer 1)                                                    |
+| ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------ |
+| Response type      | Deterministic, structured                                 | Reasoned, synthesized                                              |
+| Internal reasoning | None                                                      | LLM decides which tools to call                                    |
+| Response time      | < 1 second                                                | 2–30 seconds                                                       |
+| Protocol           | Direct HTTP / function call                               | Google A2A Task/Artifact                                           |
+| Example            | Tavily: `search("AAPL news")` → `[{title, url, snippet}]` | Bloomberg: "Analyze AAPL for earnings risk" → synthesized analysis |
+
+**Why all 9 are agents**: Even CapIQ, iLevel, and AlphaGeo require an internal LLM to reason about which of their MCP tools to call based on the user's natural language task. Deterministic routing is only possible for tools with a single, well-defined input-output schema.
+
+---
+
+## Agent Inventory and Credential Model
+
+All 9 agents follow the same internal architecture:
+
+```
+receive A2A Task (natural language)
+  → internal LLM: which of MY MCP tools do I need?
+  → call MY MCP tools (with MY credentials, injected at runtime)
+  → LLM: synthesize results into coherent answer
+  → return A2A Artifact
+```
+
+| Agent             | Internal MCP                     | Credential Type                                       | Credential Owner            |
+| ----------------- | -------------------------------- | ----------------------------------------------------- | --------------------------- |
+| **Bloomberg**     | Bloomberg DL API                 | OAuth2 BSSO (`client_id`, `client_secret`, `account`) | Tenant                      |
+| **Perplexity**    | Perplexity API                   | API key                                               | Platform (shared) or Tenant |
+| **Oracle Fusion** | Oracle Cloud REST (fin/proc/scm) | JWT assertion OAuth2 (`client_id`, `jwt_private_key`) | Tenant                      |
+| **CapIQ**         | S&P Capital IQ                   | API key                                               | Tenant                      |
+| **iLevel**        | iLevel API                       | API key                                               | Tenant                      |
+| **AlphaGeo**      | AlphaGeo API                     | API key                                               | Tenant                      |
+| **Teamworks**     | Teamworks API                    | API key                                               | Tenant                      |
+| **PitchBook**     | PitchBook/Morningstar            | API key                                               | Tenant                      |
+| **Azure AD**      | MS Graph API                     | OBO (user's delegated token)                          | User (auto at runtime)      |
+
+### Credential Architecture
+
+```
+PLATFORM defines:   Agent template → credential SCHEMA (type + required fields)
+TENANT provides:    Credential VALUES (Bloomberg account, Oracle JWT, CapIQ key...)
+USER provides:      OBO token for Azure AD (auto-delegated at runtime, nothing stored)
+EXTERNAL CALLER:    Provides their own MCP credentials in A2A Task metadata per call
+```
+
+### Supported Credential Types
+
+| Type            | Description                                  | Operational Risk                                                          | Example                      |
+| --------------- | -------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------- |
+| `api_key`       | Single secret string                         | Low — long-lived, tenant rotates when needed                              | CapIQ, PitchBook, Perplexity |
+| `oauth2_bsso`   | OAuth2 client credentials via Bloomberg BSSO | Medium — session expiry, Bloomberg contract governs                       | Bloomberg                    |
+| `jwt_assertion` | JWT private key assertion (RFC 7523)         | High — key rotation required every 90 days, vault must track expiry       | Oracle Fusion                |
+| `obo`           | OAuth2 On-Behalf-Of (RFC 8693)               | Medium — requires admin consent per tenant, platform AAD app registration | Azure AD                     |
+| `basic_auth`    | Username + password                          | High — password expires frequently, stored reversibly, rotate on schedule | Legacy/internal systems      |
+
+`basic_auth` is accepted for home-grown and legacy systems but flagged in the UI as "legacy credential type — recommend API key or OAuth2 where available." The credential vault must track password expiry and notify the tenant.
+
+### Credential Injection Pattern (Shared Docker Architecture)
+
+Each agent Docker container is **shared across all tenants** (cost efficiency). Credentials are **never stored in the container**. The injection pattern:
+
+```
+Orchestrator:
+  1. Resolves tenant credential from vault
+  2. Generates a short-lived vault token (TTL = request timeout)
+  3. Injects into A2A Task request as encrypted header:
+     X-Agent-Credential: <vault-token>
+
+Agent container (at request time):
+  1. Extracts vault token from request header
+  2. Exchanges for actual credential via vault sidecar (in-memory, not persisted)
+  3. Calls MCP server with credential
+  4. Credential is never written to disk or logged
+  5. Vault token expires after request completes
+```
+
+This ensures a compromised container cannot exfiltrate tenant credentials — it only ever holds credentials for the duration of a single request.
+
+### Self-Describing Agent Configuration
+
+For home-grown and custom agents, the agent declares its own configuration schema in the AgentCard. Platform Admin UI renders the form dynamically — no hardcoded field definitions:
+
+```json
+"configuration_schema": {
+  "required": [
+    {"name": "api_key", "type": "secret", "label": "API Key"},
+    {"name": "base_url", "type": "url", "label": "Service Base URL"}
+  ],
+  "optional": [
+    {"name": "timeout_seconds", "type": "int", "label": "Request Timeout", "default": 30}
+  ]
+}
+```
+
+Platform Admin adds the agent URL → platform fetches AgentCard → renders configuration form. Tenant Admin fills in values. On every agent version update, the platform validates that existing tenant configurations satisfy the new schema — alerts for missing required fields before activating the update.
+
+**Azure AD OBO — full prerequisites (corrected)**:
+
+OBO (OAuth2 RFC 8693) is not "zero friction, nothing stored." The correct picture:
+
+1. mingai must register as an Azure AD application in Microsoft Entra with appropriate MS Graph API permissions (`User.Read`, `Directory.Read.All`, `Group.Read.All`, etc.)
+2. **Each tenant's Azure AD Global Administrator must grant admin consent** to mingai's registered app — this is a one-time tenant onboarding step, not runtime auto-delegation
+3. mingai's platform stores its own `client_id` and `client_secret` for the AAD app registration (platform-level credentials, not tenant-level)
+4. At runtime: user's access token → mingai exchanges it for a Graph token using its platform credentials → Graph API is called with the user's delegated permissions
+
+**What this means for onboarding**: "Admin consent required" is a procurement-stage event, not a UI click. Many enterprise security teams require a formal approval workflow. This must appear in the tenant onboarding checklist and sales cycle. Describing it as transparent and frictionless is inaccurate.
+
+**Why OBO still matters**: Once granted, the agent acts with the user's own Graph permissions — not a privileged service account. A restricted user cannot access HR data even if the agent has the capability. Enterprise security audits pass this; static API keys fail it.
+
+**Why JWT assertion matters for Oracle Fusion**: Oracle Fusion enterprise SSO uses JWT private key assertion (OAuth2 RFC 7523). The tenant owns their Oracle Fusion instance and provides their JWT private key. The platform stores it encrypted in the tenant-scoped vault and injects it at agent invocation time — transparent to the user.
+
+---
+
+## Agent Template System
+
+Platform Admin builds **templates**. Tenant Admin instantiates **instances** from templates. This is the core of the 80/15/5 model applied to agents.
+
+### Template Components (Platform-Defined — 80%)
+
+```
+Agent Template:
+├── identity
+│   ├── id: "bloomberg"
+│   ├── name: "Bloomberg Intelligence Agent"
+│   ├── description: "Real-time financial market data via Bloomberg Data License API"
+│   └── version: "1.0.0"
+│
+├── prompt                        ← Agent identity, expertise, reasoning style
+│   └── "You are a Bloomberg financial intelligence specialist with access to
+│          the Bloomberg Data License API. Your role is to provide accurate,
+│          real-time financial market data and analysis..."
+│
+├── guardrails                    ← Behavioral constraints tenants CANNOT override
+│   ├── "Only answer finance and market data questions"
+│   ├── "Always cite Bloomberg Data License as data source"
+│   ├── "Never speculate on forward-looking metrics without explicit disclaimer"
+│   └── "Do not provide investment advice — provide data only"
+│
+│   ⚠️  ENFORCEMENT REQUIRED — strings alone are not enforceable:
+│   Option A (recommended): Inject guardrails AFTER tenant extension in the
+│              final system prompt so they take positional precedence.
+│              Format: [base_prompt] + [tenant_extension] + [GUARDRAILS_BLOCK]
+│   Option B: Run a lightweight LLM guardrail-audit pass on tenant extensions
+│              at registration time (not at inference time — one-time check).
+│   Option C: Output filter on all agent responses before returning Artifact.
+│   All three should be layered. Design required before production.
+│
+├── mcp_url: "http://bloomberg-mcp:9000"    ← MCP server this agent uses
+│
+├── credential_schema             ← Defines WHAT tenant must provide
+│   ├── type: "oauth2_bsso"
+│   └── required_fields: [bloomberg_client_id, bloomberg_client_secret, bloomberg_account]
+│
+├── skills                        ← AgentCard skills array (A2A discovery)
+│   ├── {id: "financial-data", tags: ["finance", "bloomberg", "market-data", "equity"]}
+│   └── {id: "market-news", tags: ["news", "earnings", "bloomberg"]}
+│
+├── llm_config                    ← Agent inherits tenant's LLM selection (from Tenant Setup)
+│   ├── use_case: "mcp_agent"
+│   ├── temperature: 0.1
+│   └── preferred_tier: "reasoning" | "standard"
+│         reasoning → use tenant's reasoning-class model (for complex multi-tool orchestration)
+│         standard  → use tenant's standard model (for straightforward single-tool agents)
+│         Actual model resolved at runtime from Tenant LLM Setup — NOT specified per agent.
+│
+│   ─────────────────────────────────────────────────────────────────────────
+│   Tenant LLM Setup (Tenant Admin → Settings → LLM Configuration):
+│   ─────────────────────────────────────────────────────────────────────────
+│   Platform maintains an LLM Library: curated set of approved providers and
+│   models available per plan tier. Tenant admin selects ONE of:
+│
+│     Option A — Platform LLM Library (Starter / Professional / Enterprise):
+│       Select provider + model from platform-approved list
+│       Providers: Azure OpenAI, OpenAI, Anthropic, Google Gemini, Deepseek,
+│                  Alibaba DashScope (Qwen), Bytedance Ark (Doubao)
+│       Token usage tracked → billed at platform markup rate
+│
+│     Option B — BYOLLM (Enterprise only):
+│       Tenant provides own API key + endpoint
+│       Token usage tracked for observability only — billing SKIPPED
+│       (tenant pays their provider directly; platform takes no cut)
+│
+│   All agents in the tenant use this single LLM configuration.
+│   Platform admin curates which providers/models appear in the Library per tier.
+│
+└── plan_tier: "professional"     ← Minimum plan to access this agent
+```
+
+### Tenant Instance (15% Configurable)
+
+```
+Tenant Instance (Acme Corp → Bloomberg):
+├── base_template: "bloomberg"
+├── enabled: true
+├── credential_values (encrypted, tenant-scoped vault)
+│   ├── bloomberg_client_id: "acme-bloomberg-001"
+│   ├── bloomberg_client_secret: "..."
+│   └── bloomberg_account: "acme-catalog-id"
+│
+├── prompt_extension (optional — additive, cannot override guardrails)
+│   └── "Our portfolio companies include: AAPL, MSFT, JPM, GS.
+│          Prioritize analysis relevant to equity long/short strategies."
+│
+├── topic_scope (optional)
+│   └── ["equity", "fixed-income", "fx"]   ← Tenant restricts to their use cases
+│
+└── user_rbac
+    └── [role_ids permitted to invoke this agent]
+```
+
+### AgentCard (`/.well-known/agent.json`)
+
+Each agent instance publishes its capabilities for A2A discovery:
+
+```json
 {
-    "id": "bloomberg-mcp",
-    "display_name": "Bloomberg Market Data",
-    "description": "Real-time and historical market data from Bloomberg DL API",
-    "category": "financial_data",          # financial_data | research | productivity | custom
-    "is_platform_managed": True,           # Platform admin manages credentials
-    "is_enabled": True,                    # Globally enabled
-    "endpoint": "http://bloomberg-mcp:8010",
-    "health_check_url": "http://bloomberg-mcp:8010/health",
-    "capabilities": {
-        "streaming_events": True,          # Supports real-time SSE
-        "requires_user_token": False,      # Uses platform credentials, not OBO
-        "supports_conversation_history": False,
-        "tools": [
-            "get_market_data",
-            "get_fundamentals",
-            "get_historical_prices",
-            "get_fx_rates",
-            "get_company_comparables",
-        ],
+  "name": "Bloomberg Intelligence Agent",
+  "description": "Real-time financial market data and analysis via Bloomberg Data License API",
+  "version": "1.0.0",
+  "url": "https://bloomberg-agent.{tenant}.mingai.io",
+  "provider": { "organization": "mingai", "url": "https://mingai.io" },
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "authentication": { "schemes": ["Bearer"] },
+  "skills": [
+    {
+      "id": "financial-data",
+      "name": "Financial Data Retrieval",
+      "description": "Price, PE ratio, market cap, dividend yield, financial statements for any ticker",
+      "tags": ["finance", "bloomberg", "market-data", "stocks", "equity"],
+      "examples": [
+        "What is Apple's current P/E ratio?",
+        "Compare TSLA and RIVN on market cap and revenue TTM"
+      ],
+      "inputModes": ["text"],
+      "outputModes": ["text", "data"]
     },
-    "credential_config": {
-        "type": "platform",                # platform | per_user_obo | tenant_byokey
-        "vault_ref": "vault://aihub/bloomberg-credentials",
-    },
-    "rate_limits": {
-        "requests_per_minute": 100,
-        "window_seconds": 60,
-    },
-    "system_prompt": "You are a financial data specialist...",
-    "icon_url": "/assets/mcp/bloomberg.svg",
-    "plan_requirement": "professional",    # starter | professional | enterprise
-    "created_at": "2026-03-04T00:00:00Z",
-    "updated_at": "2026-03-04T00:00:00Z",
+    {
+      "id": "market-news",
+      "name": "Market News",
+      "description": "Latest news, earnings reports, analyst coverage via Bloomberg",
+      "tags": ["news", "earnings", "bloomberg"],
+      "examples": ["Latest news about Microsoft", "AAPL earnings risk factors"]
+    }
+  ]
 }
-```
-
-### MCP Credential Types
-
-| Type            | Description                       | Example                     | Stored Where              |
-| --------------- | --------------------------------- | --------------------------- | ------------------------- |
-| `platform`      | Platform admin provides API key   | Bloomberg, CapIQ, PitchBook | Key Vault (platform)      |
-| `per_user_obo`  | Each user's delegated token       | Azure AD (calendar, email)  | Redis (session-scoped)    |
-| `tenant_byokey` | Tenant provides their own API key | Custom/enterprise MCP       | Key Vault (tenant-scoped) |
-
-### Platform Admin API (from `01-admin-hierarchy.md:147`)
-
-```python
-@router.get("/api/v1/platform/mcp-servers")
-async def list_global_mcp_servers(
-    admin: PlatformAdmin = Depends(require_platform_admin),
-):
-    """List all registered MCP servers with health status."""
-    servers = await MCPServerModel.get_all()
-    health = await check_mcp_health_batch([s.health_check_url for s in servers])
-
-    return [
-        {
-            "id": s.id,
-            "display_name": s.display_name,
-            "category": s.category,
-            "is_enabled": s.is_enabled,
-            "plan_requirement": s.plan_requirement,
-            "health": health.get(s.id, "unknown"),
-            "tenant_count": await count_tenants_using_mcp(s.id),
-        }
-        for s in servers
-    ]
-
-
-@router.post("/api/v1/platform/mcp-servers")
-async def register_mcp_server(
-    request: MCPServerRegisterRequest,
-    admin: PlatformAdmin = Depends(require_platform_admin),
-):
-    """
-    Register a new MCP server globally.
-
-    Steps:
-    1. Validate endpoint is reachable
-    2. Discover capabilities via MCP protocol
-    3. Store credentials in vault
-    4. Create server record
-    5. Make available for tenant selection
-    """
-    # Health check
-    is_healthy = await check_mcp_endpoint(request.endpoint)
-    if not is_healthy:
-        raise HTTPException(400, "MCP server endpoint not reachable")
-
-    # Discover capabilities
-    capabilities = await discover_mcp_capabilities(request.endpoint)
-
-    # Store credentials
-    vault_ref = None
-    if request.api_key:
-        vault_ref = await vault_service.store_secret(
-            name=f"mcp-{request.id}",
-            value=request.api_key,
-        )
-
-    server = await MCPServerModel.create({
-        "id": request.id,
-        "display_name": request.display_name,
-        "endpoint": request.endpoint,
-        "capabilities": capabilities,
-        "credential_config": {
-            "type": request.credential_type,
-            "vault_ref": vault_ref,
-        },
-        "is_enabled": True,
-        "plan_requirement": request.plan_requirement,
-    })
-
-    return server
 ```
 
 ---
 
-## Tenant-Level MCP Access Control
+## Google A2A v0.3 Wire Protocol
 
-### Tenant MCP Configuration
+mingai implements the Google A2A v0.3 specification for all agent communication. A2A was open-sourced by Google in April 2025 and submitted to the Linux Foundation for incubation — it is an **emerging specification, not yet a ratified standard**.
 
-Stored in the tenant record:
+**Protocol risk — mitigation required**: The DAG orchestration engine MUST sit behind a protocol abstraction layer. The `AgentDispatcher` interface is the only component that knows the wire format. Planner, DAG engine, Tool Catalog, and synthesis layer are all wire-protocol-agnostic. If A2A is superseded (by OpenAI Agent Protocol, Anthropic's own agent protocol, or a future IETF standard), only the dispatcher is re-implemented.
 
-```python
-# tenants container -- mcp_config field
+Building on A2A v0.3 today is still the right call: it has the broadest emerging adoption and Google's organizational weight behind it. The abstraction layer is the hedge.
+
+### Task Dispatch (Orchestrator → Agent)
+
+```http
+POST https://bloomberg-agent.{tenant}.mingai.internal/tasks
+Authorization: Bearer {tenant_scoped_jwt}
+Content-Type: application/json
+
 {
-    "id": "tenant-uuid",
-    "name": "Acme Corporation",
-    # ... other tenant fields ...
-    "mcp_config": {
-        "enabled_servers": [
-            {
-                "mcp_id": "bloomberg-mcp",
-                "credential_type": "platform",     # Uses platform credentials
-                "custom_config": None,
-            },
-            {
-                "mcp_id": "perplexity-mcp",
-                "credential_type": "platform",
-                "custom_config": {
-                    "max_searches_per_day": 500,   # Tenant-specific limit
-                },
-            },
-            {
-                "mcp_id": "azure-ad-mcp",
-                "credential_type": "per_user_obo",
-                "custom_config": None,
-            },
-        ],
-        "custom_servers": [                        # Enterprise only
-            {
-                "mcp_id": "custom-erp-mcp",
-                "display_name": "Internal ERP",
-                "endpoint": "https://erp-mcp.acme.internal:8090",
-                "credential_type": "tenant_byokey",
-                "vault_ref": "vault://aihub/tenant-acme/custom-erp-key",
-            },
-        ],
-        "max_concurrent_mcp_calls": 3,
-        "mcp_timeout_seconds": 30,
-    },
+  "id": "task-{uuid}",
+  "sessionId": "sess-{conversation_id}",
+  "message": {
+    "role": "user",
+    "parts": [{
+      "type": "text",
+      "text": "Get AAPL and MSFT: current price, PE ratio, market cap, and revenue TTM"
+    }]
+  },
+  "metadata": {
+    "tenant_id": "tenant-abc123",
+    "dag_node_id": "node-A",
+    "parent_run_id": "run-xyz789"
+  }
 }
 ```
 
-### Tenant Admin API (from `01-admin-hierarchy.md:259-261`)
+`dag_node_id` and `parent_run_id` are orchestrator-internal tracing metadata returned as-is in the response. The agent ignores them for execution purposes.
 
-```python
-@router.get("/api/v1/admin/mcp-servers")
-async def list_tenant_mcp_servers(
-    admin: TenantAdmin = Depends(require_tenant_admin),
-    tenant_id: str = Depends(get_tenant_id),
-):
-    """List MCP servers available to and enabled for this tenant."""
-    tenant = await TenantService.get(tenant_id)
+**Critical invariant**: The agent receives only its message content. It does not receive the full DAG, the execution plan, or what other agents are doing. Task-blind by design.
 
-    # Get platform servers available for this plan
-    all_servers = await MCPServerModel.get_enabled()
-    plan_servers = [
-        s for s in all_servers
-        if plan_allows_mcp(tenant.plan, s.plan_requirement)
-    ]
+### Task Response (Agent → Orchestrator, SSE Stream)
 
-    # Get tenant's enabled list
-    enabled_ids = {s["mcp_id"] for s in tenant.mcp_config.get("enabled_servers", [])}
+```
+data: {"id":"task-{uuid}","status":{"state":"submitted","timestamp":"..."},"final":false}
 
-    return {
-        "available_servers": [
-            {
-                "id": s.id,
-                "display_name": s.display_name,
-                "category": s.category,
-                "description": s.description,
-                "is_enabled": s.id in enabled_ids,
-                "credential_type": s.credential_config["type"],
-                "tools": s.capabilities.get("tools", []),
-            }
-            for s in plan_servers
-        ],
-        "custom_servers": tenant.mcp_config.get("custom_servers", []),
-        "can_add_custom": tenant.plan == "enterprise",
-    }
+data: {"id":"task-{uuid}","status":{"state":"working"},"artifact":{"parts":[{"type":"text","text":"Querying Bloomberg for AAPL and MSFT..."}]},"final":false}
 
-
-@router.post("/api/v1/admin/mcp-servers/{mcp_id}/enable")
-async def enable_mcp_server(
-    mcp_id: str,
-    admin: TenantAdmin = Depends(require_tenant_admin),
-    tenant_id: str = Depends(get_tenant_id),
-):
-    """Enable a platform MCP server for this tenant."""
-    tenant = await TenantService.get(tenant_id)
-
-    # Validate plan access
-    server = await MCPServerModel.get(mcp_id)
-    if not server or not server.is_enabled:
-        raise HTTPException(404, "MCP server not available")
-    if not plan_allows_mcp(tenant.plan, server.plan_requirement):
-        raise HTTPException(403, f"MCP server requires {server.plan_requirement} plan")
-
-    # Check tenant quota
-    current_count = len(tenant.mcp_config.get("enabled_servers", []))
-    max_mcp = get_mcp_limit(tenant.plan)  # starter:3, professional:all, enterprise:all
-    if current_count >= max_mcp:
-        raise HTTPException(403, f"Maximum {max_mcp} MCP servers on {tenant.plan} plan")
-
-    # Add to tenant's enabled list
-    await TenantService.enable_mcp(tenant_id, mcp_id, server.credential_config["type"])
-
-    # Invalidate tenant's MCP cache
-    await invalidate_tenant_mcp_cache(tenant_id)
+data: {"id":"task-{uuid}","status":{"state":"completed","timestamp":"..."},"artifact":{"name":"bloomberg-financials","parts":[{"type":"data","data":{"AAPL":{"price":192.30,"pe_ratio":28.5,"market_cap":"2.9T","revenue_ttm":"385B"},"MSFT":{"price":415.20,"pe_ratio":36.1,"market_cap":"3.1T","revenue_ttm":"245B"}}}]},"final":true}
 ```
 
-### Per-Request MCP Filtering
+The `Artifact` carries **typed structured data** alongside natural language. The orchestrator extracts `artifact.parts[0].data` and stores it against `node-A` in the DAG state for downstream synthesis.
 
-The current `MCPService._ensure_agents_loaded()` loads all enabled MCP servers globally. This must be scoped by tenant:
+### A2A Task Lifecycle
 
-```python
-class TenantMCPService:
-    """Tenant-scoped MCP service."""
+```
+submitted → working → completed
+                   ↘ failed        (agent internal error, e.g., Bloomberg API down)
+                   ↘ canceled      (orchestrator timeout or upstream dep failed)
+```
 
-    async def get_available_agents(self, tenant_id: str, user_id: str) -> List[str]:
-        """
-        Get MCP servers available for this tenant + user combination.
+Each agent implements the full lifecycle and streams state transitions via SSE.
 
-        Filters:
-        1. Tenant has enabled the MCP server
-        2. User's role has permission for this MCP
-        3. MCP server is healthy (circuit breaker not open)
-        """
-        # Get tenant's enabled MCP servers
-        tenant = await TenantService.get(tenant_id)
-        enabled_mcps = tenant.mcp_config.get("enabled_servers", [])
-        custom_mcps = tenant.mcp_config.get("custom_servers", [])
-        all_enabled_ids = [m["mcp_id"] for m in enabled_mcps + custom_mcps]
+---
 
-        # Filter by user's RBAC permissions
-        from app.modules.auth.permission_service import get_permission_service
-        permission_service = get_permission_service()
-        user_permissions = await permission_service.get_user_permissions_by_id(user_id, tenant_id)
-        user_mcp_access = user_permissions.kb_sources  # MCPs are in kb_sources
+## DAG Orchestration: Orchestrator-Owned Execution
 
-        # Intersection: tenant-enabled AND user-permitted
-        available = [
-            mcp_id for mcp_id in all_enabled_ids
-            if mcp_id in user_mcp_access
-        ]
+### How the DAG Is Built
 
-        # Filter by circuit breaker health
-        healthy = []
-        for mcp_id in available:
-            breaker = get_mcp_circuit_breaker(f"{tenant_id}:{mcp_id}")  # Per-tenant breaker
-            if not breaker.is_open:
-                healthy.append(mcp_id)
+When a user query arrives, the orchestrator's planning LLM produces an internal DAG. No agent ever sees this DAG.
 
-        return healthy
+**DAG planner — validation layer required**: The planning LLM output is non-deterministic. Before any node is dispatched, the generated DAG MUST be validated:
+
+1. **Schema validation**: Planner must output strict JSON (`{nodes: [{id, type, agent_or_tool, task_text, deps: []}], ...}`). Reject malformed output, retry with error feedback.
+2. **Cycle detection**: Run topological sort before execution. Cyclic dependencies cause infinite waits.
+3. **Agent ID verification**: Every `agent_id` in the DAG is looked up in the registry with exact match. No partial matches, no LLM hallucination of agent names.
+4. **Deterministic routing**: Agent selection at plan time is deterministic (registry lookup), not at dispatch time.
+5. **Context budget**: Planner model context window must accommodate the query + registry summary + history. Use a lighter model (intent/planning tier) with a capped output schema to avoid runaway planning costs.
+
+```
+User: "Compare Apple vs Microsoft: financials, latest news, analyst sentiment,
+       and check if our head of research Sarah Chen holds shares in either"
+
+Orchestrator DAG:
+─────────────────────────────────────────────────
+Node A [AGENT:bloomberg]     → "Get AAPL and MSFT: price, PE ratio, market cap, revenue TTM"
+                               deps: []
+
+Node B [AGENT:perplexity]    → "Find analyst sentiment for AAPL and MSFT, last 30 days"
+                               deps: []
+
+Node C [TOOL:search_internet] → query: "AAPL MSFT stock news last 7 days"
+                                deps: []
+
+Node D [TOOL:azure_ad_mcp]   → get_user_info("sarah.chen@company.com")
+                               deps: []
+
+Node E [AGENT:capiq]         → "Get credit metrics and peer comparables for AAPL and MSFT"
+                               deps: []
+
+Node F [SYNTHESIZE]          → deps: [A, B, C, D, E]
+```
+
+### DAG Execution
+
+```
+Round 1 — All nodes with no deps dispatch in parallel:
+  Orchestrator → POST bloomberg-agent/tasks    {"text": "Get AAPL and MSFT: price, PE..."}
+  Orchestrator → POST perplexity-agent/tasks  {"text": "Find analyst sentiment..."}
+  Orchestrator → call Tavily("AAPL MSFT news last 7 days")          [direct tool call]
+  Orchestrator → call azure-ad-mcp → get_user_info("sarah.chen...")  [direct MCP call]
+  Orchestrator → POST capiq-agent/tasks       {"text": "Get credit metrics..."}
+
+  [All five execute independently and simultaneously]
+  [SSE streams from A2A agents arrive as they complete]
+  [Tool calls return synchronously]
+
+Round 2 — Node F (all deps satisfied):
+  Orchestrator collects all 5 Artifacts
+  → synthesis LLM call with all artifacts as context
+  → stream final answer to user
+```
+
+### What the DAG Enables vs aihub2
+
+| Capability               | aihub2 (flat tool list, sequential)     | mingai (DAG, parallel)                       |
+| ------------------------ | --------------------------------------- | -------------------------------------------- |
+| Parallel agent execution | No — one tool call per iteration        | Yes — all independent nodes simultaneously   |
+| Dependency tracking      | No                                      | Yes — downstream waits on upstream artifacts |
+| Agent autonomy           | None — orchestrator decides every query | Full — agents decide their own tool calls    |
+| Partial failure handling | Skip iteration, retry whole loop        | Retry failed node only; others continue      |
+| Execution transparency   | Tool call logs                          | Full DAG state machine, auditable per run    |
+| External agent support   | Not applicable                          | First-class — any A2A-compliant agent        |
+
+---
+
+## Tool Catalog
+
+Tools are the orchestrator's direct-call capabilities. No A2A, no LLM reasoning, no delegation — deterministic input → output.
+
+### Built-in Tools (Platform-Managed)
+
+| Tool              | Source in aihub2                | Description                     | Credential       |
+| ----------------- | ------------------------------- | ------------------------------- | ---------------- |
+| `search_internet` | `INTERNET_SEARCH_TOOL` (Tavily) | Web search via Tavily REST API  | Platform API key |
+| `calculate`       | None (new)                      | Safe math expression evaluation | None             |
+| `get_weather`     | None (new)                      | Location weather via REST API   | Platform API key |
+
+`search_internet` is the direct migration of aihub2's Tavily integration — elevated from a baked-in tool call to a first-class governed catalog entry.
+
+### Extensible Registry
+
+Platform Admin registers new tools via Admin UI:
+
+```
+Tool Registration:
+  id:              "convert_currency"
+  description:     "Convert between currencies using live exchange rates"
+  endpoint:        "https://currency-api.internal/convert"
+  input_schema:    {amount: number, from_currency: string, to_currency: string}
+  output_schema:   {result: number, rate: number, timestamp: string}
+  credential_type: api_key
+  credential_ref:  vault://platform/currency-api-key
+  plan_tier:       starter
+```
+
+New tools are immediately available to the orchestrator's DAG planner once registered.
+
+---
+
+## Platform Agent Registry
+
+The registry is the central catalog of all agents available on the platform.
+
+```
+Platform Agent Registry
+├── Platform Agents (built-in templates — platform-managed)
+│   ├── bloomberg      (financial data — Professional+)
+│   ├── perplexity     (web search — Starter+)
+│   ├── oracle-fusion  (ERP data — Enterprise)
+│   ├── capiq          (credit/deals — Professional+)
+│   ├── ilevel         (investment analytics — Professional+)
+│   ├── alphageo       (geospatial intelligence — Professional+)
+│   ├── teamworks      (project management — Starter+)
+│   ├── pitchbook      (M&A intelligence — Professional+)
+│   └── azure-ad       (directory lookup — Starter+)
+│
+├── Tenant Agents (Enterprise plan — BYOMCP, tenant-built)
+│   └── {tenant-id}-{agent-id}  (registered by Tenant Admin)
+│
+└── Marketplace Agents (external — EATP-verified, Google A2A compliant)
+    ├── reuters-agent    (verified, signed AgentCard)
+    └── refinitiv-agent  (verified, signed AgentCard)
+```
+
+### Orchestrator Agent Discovery
+
+At planning time, the orchestrator queries the registry filtered by tenant + user context:
+
+```
+1. Registry query: get_available_agents(tenant_id, user_id)
+   Returns: [{
+     agent_id,
+     skills,
+     plan_tier_ok,
+     credentials_configured,
+     health: {
+       state: "healthy" | "degraded" | "unavailable",
+       reason: "ok" | "infra_failure" | "auth_failure" | "rate_limited",
+       last_checked_ms: int
+     }
+   }]
+
+2. Planner LLM: matches query requirements to agent skills
+   Method: semantic similarity on skill descriptions + tag matching on AgentCard
+   (Kaizen's select_worker_for_task() is used here)
+
+3. Builds DAG using only: available + credentialed + healthy agents
+
+4. Fallback if required agent unavailable:
+   → "auth_failure": surface explicit error ("Bloomberg credentials expired") — no substitution
+   → "infra_failure": retry once; if still unavailable, surface gap to user — no substitution for financial data
+   → "rate_limited": queue and retry after Retry-After header; inform user of delay
+   ⚠️  Domain-aware fallback: Bloomberg (market data) CANNOT be substituted with Perplexity
+       (web search). Fallback substitution is only valid for generic research tasks.
+   → Surface explicit gap to user if no valid alternative exists
 ```
 
 ---
 
-## Multi-Agent Coordination: A2A Protocol
+## External Agent Marketplace
 
-### Agent Roles
+The marketplace is the long-term network effect moat. Any organization that implements Google A2A v0.3 can register their agent on the platform and serve mingai tenants.
 
-| Agent                | Role                                         | When Invoked               |
-| -------------------- | -------------------------------------------- | -------------------------- |
-| **Intent Agent**     | Classifies query, selects agents             | Every query                |
-| **Search Agent(s)**  | Execute KB search, MCP calls                 | When data retrieval needed |
-| **Synthesis Agent**  | Combines results from multiple sources       | Multi-source queries       |
-| **Validation Agent** | Fact-checks, deduplicates, scores confidence | Before final response      |
-| **Planner Agent**    | Plans multi-step research                    | Complex/research queries   |
-
-### Current vs Agentic Flow
-
-**Current (Single-Step RAG)** from `app/modules/chat/service.py`:
+### Onboarding Flow
 
 ```
-User Query
-    ↓
-Intent Detection (single LLM call)
-    ↓
-Router selects ONE handler:
-    ├─ AutoHandler: KB search → LLM generate
-    ├─ ManualHandler: specific index → LLM generate
-    ├─ PureLLMHandler: direct LLM (no RAG)
-    └─ ResearchAgentHandler: multi-step tool calling
-    ↓
-Single LLM Response (streaming)
+External Agent Publisher:
+1. Implement Google A2A v0.3 spec (Task/Artifact/AgentCard/SSE)
+2. Publish AgentCard at /.well-known/agent.json with EATP signature
+3. Submit registration to mingai marketplace
+
+Platform Admin:
+4. Register agent URL in Platform Agent Registry
+5. Platform fetches and verifies AgentCard + EATP signature
+6. Run capability probe (test Task → verify Artifact format)
+7. Classify: {tier: "marketplace", verified: true, publisher: "Reuters News"}
+8. Set plan_tier: "enterprise" (marketplace agents are Enterprise only)
+
+Tenant Admin:
+9. Browse marketplace, select Reuters agent
+10. Configure required credentials (Reuters subscription key) if needed
+11. Enable for org users per RBAC
+
+Users:
+12. Query platform → orchestrator discovers Reuters agent via registry
+    → dispatches A2A Task automatically → Reuters agent answers
 ```
 
-**New (Multi-Agent Agentic RAG)**:
+### EATP Trust Verification
 
-```
-User Query
-    ↓
-Intent Agent (classifies complexity + required sources)
-    ├─ Simple query → Single agent path (backward compatible)
-    └─ Complex query → Multi-agent orchestration:
-        ↓
-    Planner Agent (generates execution plan)
-        ↓
-    Parallel Dispatch:
-        ├─ KB Search Agent(s) → search tenant's indexes
-        ├─ MCP Agent(s) → invoke relevant MCP servers
-        └─ Internet Agent → Tavily/Perplexity search
-        ↓
-    Synthesis Agent (combines, cross-references)
-        ↓
-    Validation Agent (fact-check, confidence scoring)
-        ↓
-    Streaming Response to User
-```
+External agents must present a signed AgentCard per EATP (Enterprise Agent Trust Protocol). Platform verifies:
 
-### A2A Message Protocol
-
-```python
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-from enum import Enum
-
-class AgentRole(Enum):
-    INTENT = "intent"
-    PLANNER = "planner"
-    KB_SEARCH = "kb_search"
-    MCP_SEARCH = "mcp_search"
-    INTERNET_SEARCH = "internet_search"
-    SYNTHESIS = "synthesis"
-    VALIDATION = "validation"
-
-class MessageType(Enum):
-    TASK_REQUEST = "task_request"       # Orchestrator -> Agent
-    TASK_RESULT = "task_result"         # Agent -> Orchestrator
-    PROGRESS_EVENT = "progress_event"   # Agent -> Frontend (via SSE)
-    ERROR = "error"                     # Agent -> Orchestrator
-
-@dataclass
-class A2AMessage:
-    """Inter-agent message format."""
-    id: str                             # Unique message ID
-    type: MessageType
-    source_agent: AgentRole
-    target_agent: AgentRole
-    tenant_id: str                      # Tenant context for isolation
-    user_id: str                        # User context for permissions
-    conversation_id: str                # Conversation for tracking
-
-    # Task-specific payload
-    query: str                          # Original user query
-    context: Dict[str, Any] = field(default_factory=dict)
-    results: Optional[List[Dict]] = None
-    error: Optional[str] = None
-
-    # Metadata
-    timestamp: str = ""
-    latency_ms: Optional[int] = None
-    token_usage: Optional[Dict[str, int]] = None
-
-
-@dataclass
-class ExecutionPlan:
-    """Plan generated by Planner Agent."""
-    steps: List["PlanStep"]
-    estimated_agents: List[AgentRole]
-    parallel_groups: List[List[int]]    # Groups of step indices to run in parallel
-    timeout_seconds: int = 30
-
-@dataclass
-class PlanStep:
-    """Single step in execution plan."""
-    step_id: int
-    agent: AgentRole
-    action: str                         # "search_kb", "invoke_mcp", "search_internet"
-    parameters: Dict[str, Any]
-    depends_on: List[int] = field(default_factory=list)  # Step IDs this depends on
-```
-
-### Orchestrator Implementation
-
-```python
-class AgenticOrchestrator:
-    """
-    Multi-agent orchestrator for complex queries.
-
-    Coordinates multiple specialized agents to handle queries
-    that require data from multiple sources.
-    """
-
-    def __init__(
-        self,
-        tenant_id: str,
-        user_id: str,
-        llm_manager: "LLMClientManager",
-        mcp_service: "TenantMCPService",
-    ):
-        self.tenant_id = tenant_id
-        self.user_id = user_id
-        self.llm_manager = llm_manager
-        self.mcp_service = mcp_service
-
-    async def execute(
-        self,
-        query: str,
-        conversation_history: List[dict],
-        available_mcp_ids: List[str],
-        available_kb_ids: List[str],
-        sse_callback: Optional[Callable] = None,
-    ) -> AsyncGenerator[str, None]:
-        """
-        Execute multi-agent query processing.
-
-        Steps:
-        1. Intent classification (complexity + required agents)
-        2. If simple → delegate to single agent (backward compatible)
-        3. If complex → plan → parallel dispatch → synthesis → validate
-        """
-        # Step 1: Intent classification
-        intent = await self._classify_intent(query, conversation_history)
-
-        if intent.complexity == "simple":
-            # Backward compatible: single agent handles it
-            async for chunk in self._execute_simple(
-                query, intent, conversation_history, sse_callback
-            ):
-                yield chunk
-            return
-
-        # Step 2: Plan
-        plan = await self._create_plan(
-            query, intent, available_mcp_ids, available_kb_ids
-        )
-
-        if sse_callback:
-            await sse_callback({
-                "type": "agent_plan",
-                "plan": {
-                    "steps": len(plan.steps),
-                    "agents": [a.value for a in plan.estimated_agents],
-                },
-            })
-
-        # Step 3: Execute plan steps (parallel where possible)
-        all_results = []
-        for group in plan.parallel_groups:
-            steps = [plan.steps[i] for i in group]
-            group_results = await asyncio.gather(*[
-                self._execute_step(step, query, all_results, sse_callback)
-                for step in steps
-            ], return_exceptions=True)
-
-            for result in group_results:
-                if isinstance(result, Exception):
-                    logger.warning(f"Agent step failed: {result}")
-                else:
-                    all_results.append(result)
-
-        # Step 4: Synthesis
-        if sse_callback:
-            await sse_callback({"type": "agent_synthesis", "status": "started"})
-
-        async for chunk in self._synthesize(query, all_results, conversation_history):
-            yield chunk
-
-    async def _classify_intent(self, query, history) -> "IntentResult":
-        """Use intent agent to classify query complexity."""
-        provider, model = await self.llm_manager.get_provider(
-            self.tenant_id, use_case="intent_detection"
-        )
-        # Classification prompt
-        messages = [
-            {"role": "system", "content": INTENT_CLASSIFICATION_PROMPT},
-            {"role": "user", "content": query},
-        ]
-        response_text = ""
-        async for chunk in provider.chat_completion(messages, model, temperature=0):
-            response_text += chunk
-        return parse_intent_result(response_text)
-
-    async def _execute_step(self, step, query, prior_results, sse_callback):
-        """Execute a single plan step."""
-        if step.agent == AgentRole.KB_SEARCH:
-            return await self._search_kb(step.parameters, query)
-        elif step.agent == AgentRole.MCP_SEARCH:
-            return await self._invoke_mcp(step.parameters, query, sse_callback)
-        elif step.agent == AgentRole.INTERNET_SEARCH:
-            return await self._search_internet(step.parameters, query)
-
-    async def _synthesize(self, query, results, history) -> AsyncGenerator[str, None]:
-        """Synthesis agent combines results from all sources."""
-        provider, model = await self.llm_manager.get_provider(
-            self.tenant_id, use_case="chat_response"
-        )
-
-        context_parts = []
-        for i, result in enumerate(results, 1):
-            source_type = result.get("source_type", "unknown")
-            data = result.get("data", "")
-            context_parts.append(f"[Source {i} - {source_type}]\n{data}\n")
-
-        context = "\n".join(context_parts)
-        messages = [
-            {"role": "system", "content": SYNTHESIS_PROMPT},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
-        ]
-        if history:
-            messages = [messages[0]] + history[-6:] + [messages[-1]]
-
-        async for chunk in provider.chat_completion(messages, model, stream=True):
-            yield chunk
-```
+- Publisher signature on AgentCard (cryptographic, not just claimed)
+- Capability claims match actual implementation (live capability probe)
+- No undisclosed write capabilities (read-only agents declared as such)
+- Tenant data does not flow to publisher without explicit consent disclosure
 
 ---
 
-## Agentic RAG vs Classic RAG Pipeline
+## Prompt Library (Designed Gap)
 
-### Classic RAG (Current)
+The current design does not include a prompt management system. This is a **required component** before production, identified here as a scoped gap.
 
-```
-Query → Embed → Search Indexes → Retrieve Top-K → Build Prompt → LLM → Response
-```
+**What it must cover:**
 
-Limitations:
+| Component                | Description                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| Base prompt versioning   | Platform-defined prompt per agent template, version-controlled and auditable              |
+| Tenant prompt extensions | Additive only — tenants extend the base prompt but cannot override safety guardrails      |
+| Prompt lifecycle         | draft → review → active → deprecated                                                      |
+| Topic scoping            | Operator-defined topic boundaries (Bloomberg agent = finance topics only)                 |
+| Safety guardrails        | Non-overridable constraints (content policy, citation requirements, no investment advice) |
+| Evaluation hooks         | Automated prompt quality scoring against golden test sets                                 |
 
-- Single-pass retrieval (no iterative refinement)
-- No cross-source verification
-- No query decomposition for complex questions
-- Fixed top-K, no adaptive retrieval
-
-### Agentic RAG (New)
-
-```
-Query
-  ↓
-Intent Agent: "This requires market data + KB search + fact-checking"
-  ↓
-Planner Agent: {
-  step 1: Decompose into sub-queries
-  step 2: [parallel] Search KB for company policy, Invoke Bloomberg for market data
-  step 3: [parallel] Verify numbers with CapIQ, Search Perplexity for recent news
-  step 4: Synthesize all results
-  step 5: Validate and score confidence
-}
-  ↓
-Execution Engine: runs plan, collects results
-  ↓
-Synthesis Agent: produces coherent response from all sources
-  ↓
-Validation Agent: checks for contradictions, assigns confidence
-  ↓
-Streaming Response with source attribution
-```
-
-### Key Differences
-
-| Aspect         | Classic RAG              | Agentic RAG                  |
-| -------------- | ------------------------ | ---------------------------- |
-| Retrieval      | Single-pass, fixed top-K | Iterative, adaptive          |
-| Query handling | Literal query to search  | Decomposed sub-queries       |
-| Sources        | One type per query       | Multiple sources in parallel |
-| Verification   | None                     | Cross-source fact-checking   |
-| Confidence     | Search score only        | Multi-factor confidence      |
-| Fallback       | No results = no answer   | Try alternative sources      |
-| Cost           | 1 LLM call + 1 search    | 3-8 LLM calls + N searches   |
-
-### When to Use Agentic RAG
-
-| Scenario                     | Classic RAG | Agentic RAG   |
-| ---------------------------- | ----------- | ------------- |
-| Simple factual question      | Yes         | No (overkill) |
-| Multi-source comparison      | No          | Yes           |
-| Data verification needed     | No          | Yes           |
-| Complex research query       | No          | Yes           |
-| Time-sensitive + KB combined | No          | Yes           |
-| Single KB, clear answer      | Yes         | No            |
-
-The Intent Agent decides which pipeline to use based on query complexity classification.
+This maps to the **"Topics and prompts"** pillar in Oracle AI Agent Studio. Design scheduled for the Admin UI implementation phase.
 
 ---
 
-## Tenant-Scoped Circuit Breakers
+## Oracle AI Agent Studio Mapping
 
-### Current: Global Circuit Breakers (services/circuit_breaker.py)
+Oracle AI Agent Studio (5 pillars) validates the product direction:
 
-Circuit breaker state is shared across all requests. If one tenant triggers a breaker, all tenants lose access.
+| Oracle Pillar                 | Oracle Items                                                                    | mingai Equivalent                                                                                          | Gap?                         |
+| ----------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **Agent and agent teams**     | Templates, Custom agents, Agent teams, Workflow agents, Agent builder assistant | Platform Agent Registry: 9 templates + tenant custom + DAG teams                                           | None                         |
+| **Tools**                     | Calculator, REST API, MCP, A2A, Deep link, Document                             | Tool Catalog (Tavily, Calculator, Weather + extensible). **Note: our 9 MCP servers are Agents, not tools** | None                         |
+| **Topics and prompts**        | Agent instructions, Prompt libraries, Topics management                         | Prompt Library                                                                                             | **Designed gap — see above** |
+| **Credentials**               | LLM providers, BYO LLM, 3rd party integrations                                  | Credential vault: OBO / JWT assertion / API key. BYOLLM.                                                   | None                         |
+| **Monitoring and evaluation** | Tracing, Observability, HiTL, Evaluation                                        | Platform Analytics + per-tenant dashboards + A2A task tracing                                              | Partially designed           |
 
-### New: Per-Tenant Circuit Breakers
+**Key divergence from Oracle**: Oracle lists MCP and A2A together as "Tools" in their UX. In mingai's architecture, MCP is the internal data layer each agent uses, and A2A is the communication protocol between orchestrator and agent. They are layered, not equivalent. The agent abstraction hides this from users — they see agents and tools, not protocols.
 
-```python
-class TenantCircuitBreaker:
-    """
-    Per-tenant circuit breaker for MCP servers.
+---
 
-    Each tenant has independent circuit breaker state so that
-    one tenant's issues don't affect others.
-    """
+## Platform Model: Producers, Consumers, Partners
 
-    def __init__(self, tenant_id: str, mcp_id: str, redis_client):
-        self.key = f"aihub:{tenant_id}:breaker:{mcp_id}"
-        self.redis = redis_client
-        self.failure_threshold = 5     # Failures before opening
-        self.recovery_timeout = 60     # Seconds before half-open
-        self.success_threshold = 2     # Successes to close
+mingai's agent platform is a multi-sided marketplace. The network effects compound as each side grows.
 
-    async def is_open(self) -> bool:
-        state = await self.redis.hgetall(self.key)
-        if not state:
-            return False
-        if state.get("state") == "open":
-            opened_at = float(state.get("opened_at", 0))
-            if time.time() - opened_at > self.recovery_timeout:
-                return False  # Half-open, allow trial
-            return True
-        return False
+### Three Sides
 
-    async def record_success(self):
-        await self.redis.hincrby(self.key, "successes", 1)
-        state = await self.redis.hgetall(self.key)
-        if int(state.get("successes", 0)) >= self.success_threshold:
-            await self.redis.delete(self.key)  # Close breaker
+**Producers** (supply the intelligence):
 
-    async def record_failure(self):
-        await self.redis.hincrby(self.key, "failures", 1)
-        state = await self.redis.hgetall(self.key)
-        if int(state.get("failures", 0)) >= self.failure_threshold:
-            await self.redis.hset(self.key, mapping={
-                "state": "open",
-                "opened_at": str(time.time()),
-            })
-            await self.redis.expire(self.key, self.recovery_timeout * 2)
+- mingai platform team: builds and maintains the 9 agent templates and tool catalog
+- Enterprise data vendors: Bloomberg, Oracle, CapIQ (their data surfaces through agents)
+- Tenant engineering teams: build custom agents for proprietary data sources (Enterprise plan)
+- External developers: build A2A-compliant agents for marketplace distribution
+
+**Consumers** (demand the intelligence):
+
+- Enterprise knowledge workers: analysts, researchers, operations staff querying via chat
+- Tenant Admins: configure which agents serve their organization
+- Orchestrator: consumes agent Artifacts to synthesize answers
+
+**Partners** (facilitate the transaction):
+
+- LLM providers: Azure OpenAI, Anthropic, Google Gemini (reasoning layer for agents + orchestrator)
+- Auth providers: Auth0, Azure AD (credential delegation, OBO flows)
+- Data platform vendors: Bloomberg DL, Oracle Cloud, CapIQ, PitchBook (the underlying data)
+
+### Network Effect Compounding
+
+```
+More agents registered
+    → richer query coverage
+        → more user value per query
+            → more enterprise tenants
+                → larger tenant base = more attractive to marketplace publishers
+                    → more marketplace agents register
+                        → richer query coverage (loop compounds)
 ```
 
+The Platform Agent Registry is the compounding asset. Every external agent added makes the platform more valuable to every existing tenant.
+
 ---
 
-## Custom MCP Servers (Enterprise Tier)
+## AAA Framework Analysis
 
-Enterprise tenants can register their own MCP servers:
+### Automate (Reduce Operational Costs)
 
-### Registration Flow
+- Orchestrator auto-selects agents from AgentCard skills — no user needs to know which agent to use
+- Parallel DAG execution replaces sequential, manual multi-source research workflows
+- Per-tenant circuit breakers auto-isolate failures — no ops intervention required
+- Credential injection at runtime — no user manages API keys for Bloomberg/Oracle/CapIQ
 
-```python
-@router.post("/api/v1/admin/mcp-servers/custom")
-async def register_custom_mcp(
-    request: CustomMCPRequest,
-    admin: TenantAdmin = Depends(require_tenant_admin),
-    tenant_id: str = Depends(get_tenant_id),
-):
-    """
-    Register a tenant-owned custom MCP server.
+### Augment (Reduce Decision-Making Costs)
 
-    Enterprise plan only. The MCP server must:
-    1. Be accessible from the platform network
-    2. Implement standard MCP protocol
-    3. Pass health check
-    """
-    tenant = await TenantService.get(tenant_id)
-    if not tenant.features.get("custom_mcp_servers"):
-        raise HTTPException(403, "Custom MCP servers require Enterprise plan")
+- Bloomberg-grade financial analysis accessible without a Bloomberg Terminal or operator training
+- Oracle Fusion ERP data surfaced in natural language — no ERP UI knowledge required
+- Azure AD org chart and directory lookups embedded in conversational context
+- Cross-source synthesis (Bloomberg + CapIQ + Perplexity + KB) that takes an analyst 45 minutes — produced in one parallel DAG execution
 
-    # Validate endpoint reachability
-    is_reachable = await check_mcp_endpoint(request.endpoint)
-    if not is_reachable:
-        raise HTTPException(400, "MCP server not reachable from platform")
+### Amplify (Reduce Expertise Costs for Scaling)
 
-    # Discover capabilities
-    capabilities = await discover_mcp_capabilities(request.endpoint)
+- One Bloomberg agent template deployed once → available to all tenants with valid credentials
+- Custom agent built once by enterprise engineering team → accessible to all eligible users in the org
+- Marketplace agents allow specialized expertise (Reuters, Refinitiv, domain-specific data) to scale beyond platform team capacity
+- A new analyst at any tenant gets the same data access as a 10-year veteran on day one
 
-    # Store credentials in tenant-scoped vault
-    vault_ref = None
-    if request.api_key:
-        vault_ref = await vault_service.store_secret(
-            name=f"custom-mcp-{tenant_id}-{request.id}",
-            value=request.api_key,
-        )
+---
 
-    # Add to tenant's custom servers list
-    custom_server = {
-        "mcp_id": f"custom-{tenant_id}-{request.id}",
-        "display_name": request.display_name,
-        "endpoint": request.endpoint,
-        "capabilities": capabilities,
-        "credential_type": "tenant_byokey",
-        "vault_ref": vault_ref,
-    }
+## Unique Selling Points
 
-    await TenantService.add_custom_mcp(tenant_id, custom_server)
+### USP 1: Template-Driven Enterprise Agent Deployment
+
+**What**: Platform ships Bloomberg/Oracle Fusion/CapIQ/etc. agent templates. Tenant provides their enterprise credentials. Zero engineering to deploy enterprise-grade data agents.
+
+**Why it's unique**: Competitors require custom engineering to integrate enterprise data sources, or offer generic "bring your own tool" with no pre-built templates. The combination of pre-built enterprise agent templates + tenant credential injection is not available on any comparable platform.
+
+**Moat depth**: Each agent template requires deep understanding of the external API (Bloomberg BSSO auth, Oracle Fusion JWT assertion, CapIQ rate limits) plus prompt engineering for that domain. The platform absorbs all this complexity once.
+
+### USP 2: Credential-Aware Enterprise Authentication
+
+**What**: The platform natively handles three enterprise auth patterns: OBO (Azure AD — user's own permissions), JWT assertion OAuth2 (Oracle Fusion), OAuth2 BSSO (Bloomberg). Not just API keys.
+
+**Why it's unique**: Generic agent platforms treat all credentials as API keys. Enterprise deployments require auth flows that respect user identity and enterprise security policy. OBO means Azure AD agent acts as the user — not a service account — which passes enterprise security audits that static API keys fail.
+
+**Moat depth**: Implementing Oracle Fusion JWT assertion OAuth2 correctly (RFC 7523, with proper key rotation) is non-trivial. Most platforms don't do it.
+
+### USP 3: Open A2A Marketplace with EATP Trust Verification
+
+**What**: External agents implementing Google A2A v0.3 plug into the platform. Trust verified via EATP-signed AgentCards before any tenant data flows to the external agent.
+
+**Why it's unique**: Proprietary agent platforms lock tenants into their curated catalog. Our A2A-native + EATP architecture is the first enterprise RAG platform built around an open agent standard with verifiable trust.
+
+**Moat depth**: First-mover on the A2A standard in the enterprise RAG space. External agent publishers prefer open-standard platforms over proprietary lock-in.
+
+### USP 4: DAG-Native Parallel Multi-Agent Orchestration
+
+**What**: The orchestrator decomposes queries into dependency graphs. Independent nodes execute in parallel. Multi-source research that would require sequential tool calls collapses to a single parallel round.
+
+**Why it's unique**: LangGraph (LangChain) and CrewAI also support parallel DAG execution — the pattern alone is not the moat. The moat is the combination: **DAG orchestration over pre-built, enterprise-credentialed agents with complex auth flows (OBO, JWT assertion, OAuth2 BSSO)**. The orchestration pattern is the table stakes; the credentialed agent ecosystem is the moat.
+
+**Performance implication**: A 5-agent parallel DAG where each agent takes 5 seconds completes in 5 seconds. Sequential: 25 seconds. At 3–8x LLM cost for agentic RAG (confirmed in doc 13), cutting latency is the primary lever for making agentic RAG feel responsive to enterprise users.
+
+---
+
+## Network Effects Coverage
+
+| Network Behavior    | How mingai Achieves It                                                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Accessibility**   | A2A standard = any compliant agent plugs in with zero integration code. Admin UI = no-code agent configuration. OBO = zero-friction Azure AD auth — user never touches credentials                     |
+| **Engagement**      | AgentCard skills expose capabilities in natural language. Orchestrator auto-selects agents based on query context. Users get the right expert agent without knowing it exists                          |
+| **Personalization** | Tenant prompt extensions customize agent personality and focus. Tenant agent roster reflects their specific data subscriptions. User RBAC controls which agents each role can access                   |
+| **Connection**      | MCP protocol connects each agent to any enterprise data source. A2A connects orchestrator to any compliant agent. EATP enables trusted external agent connections at marketplace scale                 |
+| **Collaboration**   | DAG execution enables multi-agent joint research — artifacts flow between agents via dependency graph. Bloomberg Artifact feeds into synthesis alongside CapIQ and Perplexity Artifacts simultaneously |
+
+---
+
+## 80/15/5 Applied to the Agent Platform
+
+### 80% — Platform Core (Agnostic, Reusable Across All Tenants)
+
+- Google A2A v0.3 wire protocol implementation (Task/Artifact/AgentCard/SSE)
+- Agent template system (5 components: prompt, guardrails, MCP URL, credential schema, skills)
+- DAG orchestration engine (planner LLM, execution engine, Artifact collection, synthesis)
+- Credential vault architecture (platform/tenant/user-OBO levels)
+- All 9 agent templates (pre-built, platform-maintained)
+- Tool Catalog engine (registration, routing, execution)
+- Built-in tools: Tavily, Calculator, Weather
+- Per-tenant circuit breakers
+- Agent health monitoring and AgentCard verification
+- EATP marketplace trust verification and capability probing
+
+### 15% — Tenant-Configurable (Self-Service, No Engineering)
+
+- Which agents are enabled per tenant (plan-gated)
+- Credential values (Bloomberg account, Oracle JWT, CapIQ API key, etc.)
+- Prompt extensions per agent instance
+- User RBAC: which roles can invoke which agents
+- Custom agent registration via Admin UI (Enterprise plan)
+- Topic scoping per agent instance
+- Tool catalog additions via Admin UI
+
+### 5% — Custom (Requires Engineering)
+
+- New MCP server development for a net-new data source
+- Novel credential type not in the standard catalog
+- Custom A2A agent for a highly proprietary internal workflow
+- Bespoke agent coordination patterns not covered by DAG
+
+---
+
+## Plan Tier Feature Matrix
+
+| Feature                           | Starter | Professional             | Enterprise               |
+| --------------------------------- | ------- | ------------------------ | ------------------------ |
+| Platform agents                   | 3 max   | All available            | All available            |
+| Bloomberg / Oracle Fusion         | No      | Yes (tenant credentials) | Yes (tenant credentials) |
+| CapIQ / PitchBook / iLevel        | No      | Yes (tenant credentials) | Yes (tenant credentials) |
+| Azure AD / Perplexity / Teamworks | Yes     | Yes                      | Yes                      |
+| Custom agents (BYOMCP)            | No      | No                       | Yes                      |
+| Marketplace agents (external A2A) | No      | No                       | Yes                      |
+| Multi-agent DAG execution         | No      | Yes (full DAG)           | Yes (full DAG)           |
+| Concurrent DAG sessions           | 1       | 3                        | Unlimited                |
+| Tenant prompt extensions          | No      | Yes                      | Yes                      |
+| External A2A agent integration    | No      | No                       | Yes                      |
+| Agent analytics                   | Basic   | Detailed                 | Detailed + export        |
+| Per-tenant circuit breakers       | Yes     | Yes                      | Yes                      |
+
+---
+
+## Billing Model
+
+### Core Principle: Token Markup Covers All Platform Costs
+
+The platform does **not** own or pay for tenants' MCP data credentials (Bloomberg DL, CapIQ, Oracle Fusion, etc.). Tenants bring their own contracts and API keys. The platform's costs are:
+
+- LLM inference (agent reasoning + orchestrator planning + synthesis)
+- Docker hosting (agent containers, shared across tenants)
+- Platform infrastructure (vault, registry, routing)
+
+All these costs are recovered via **percentage markup on token usage**. No separate hosting line items — this keeps pricing simple and encourages usage.
+
+### Billing by Scenario
+
+| Scenario                            | LLM Billing                                                                  | MCP/Data Cost                                            | Hosting Recovery               |
+| ----------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------ |
+| In-house agent + platform LLM       | Track tokens → tenant billed at marked-up rate                               | Tenant's credential, tenant's contract                   | Bundled in token markup        |
+| In-house agent + tenant BYOLLM      | Token tracking for observability only — billing skipped                      | Tenant's credential, tenant's contract                   | Bundled in base plan tier      |
+| Orchestrator (planning + synthesis) | Always platform LLM → always tracked + billed                                | N/A                                                      | Bundled in token markup        |
+| External caller → in-house agent    | Tracked → billed at **external API rate** (higher markup = hosting + profit) | External caller provides own MCP credentials per request | Bundled in external markup     |
+| Tenant → external A2A agent         | Orchestrator tokens billed (planning + synthesis)                            | External agent's own cost, not platform's concern        | Bundled in orchestrator markup |
+
+### External Caller Model (A2A as a Service)
+
+External platforms that call mingai agents:
+
+1. Register as an API caller on the platform (get API credentials)
+2. Send A2A Tasks with their own MCP credentials in request metadata
+3. Are billed at the **external API rate**: token cost × (1 + external_markup) where external_markup > tenant_markup
+4. The external markup covers: Docker hosting amortization + profit margin for API-as-a-service usage
+5. External callers pay for the platform LLM reasoning; their MCP API costs are their own
+
+### Markup Rate Structure
+
+```
+Token rates (illustrative):
+  actual_cost = LLM provider's cost per token (model-dependent)
+
+  tenant_rate    = actual_cost × 1.3   (30% markup — hosting + margin)
+  external_rate  = actual_cost × 1.6   (60% markup — higher margin for API service tier)
+
+  BYOLLM tenants pay base plan tier only (no per-token billing from platform)
 ```
 
----
+Markup rate is percentage-based, not flat-per-token — this correctly handles the wide cost spread between LLM models (GPT-4o at ~$5/M tokens vs. Gemini Flash at ~$0.075/M tokens).
 
-## Plan Tier MCP Access
+### Instrumented LLM Client (Engineering Requirement)
 
-From `01-admin-hierarchy.md:447-459`:
+Every platform-built agent must use a **platform-instrumented LLM client wrapper** — not raw provider SDKs. The wrapper:
 
-| Feature                   | Starter | Professional     | Enterprise        |
-| ------------------------- | ------- | ---------------- | ----------------- |
-| Standard MCP servers      | 3 max   | All enabled      | All enabled       |
-| Custom MCP servers        | No      | No               | Yes (unlimited)   |
-| Multi-agent orchestration | No      | Basic (2 agents) | Full (unlimited)  |
-| A2A coordination          | No      | No               | Yes               |
-| Custom MCP credentials    | No      | No               | Yes (BYOKEY)      |
-| MCP usage analytics       | Basic   | Detailed         | Detailed + export |
+- Always records: `{tenant_id, agent_id, model, input_tokens, output_tokens, latency_ms}`
+- Emits to billing service only when tenant LLM source is platform LLM Library (skips billing for BYOLLM)
+- Emits to observability pipeline always (for debugging, SLA monitoring, runaway usage detection)
 
----
+Without this, the platform has no visibility into agent-level token consumption.
 
-## MCP Server Health Dashboard
+**LLM Source Resolution**:
 
-### Platform Admin View
-
-```python
-@router.get("/api/v1/platform/mcp-servers/health")
-async def get_mcp_health_dashboard(
-    admin: PlatformAdmin = Depends(require_platform_admin),
-):
-    """
-    Real-time MCP server health dashboard.
-
-    Returns health status, latency, error rates for all MCP servers
-    across all tenants.
-    """
-    servers = await MCPServerModel.get_all()
-    health_data = []
-
-    for server in servers:
-        # Aggregate circuit breaker state across all tenants
-        breaker_states = await get_all_tenant_breaker_states(server.id)
-        open_count = sum(1 for s in breaker_states if s == "open")
-
-        # Recent latency from usage tracking
-        latency = await get_mcp_latency_p95(server.id, window_minutes=15)
-
-        # Error rate
-        error_rate = await get_mcp_error_rate(server.id, window_minutes=15)
-
-        health_data.append({
-            "id": server.id,
-            "display_name": server.display_name,
-            "status": "healthy" if error_rate < 0.05 else "degraded" if error_rate < 0.2 else "unhealthy",
-            "p95_latency_ms": latency,
-            "error_rate": error_rate,
-            "tenants_affected": open_count,
-            "total_tenants": len(breaker_states),
-        })
-
-    return health_data
+```
+Tenant LLM Setup → model_source flag
+  "library" → tenant selected a model from Platform LLM Library
+               → tokens tracked and billed at tenant markup rate
+  "byollm"  → tenant brought their own API key/endpoint
+               → tokens tracked for observability only (billing skipped)
 ```
 
+The instrumented client reads the tenant's `model_source` flag from tenant config at request time — no agent-level configuration needed.
+
 ---
 
-**Document Version**: 1.0
+## Migration from aihub2
+
+| aihub2 Component                     | Action    | mingai Target                                                      |
+| ------------------------------------ | --------- | ------------------------------------------------------------------ |
+| `research_agent.py` ToolPlanner      | Replace   | Orchestrator DAG planner (LLM builds dependency graph)             |
+| `research_agent.py` ToolExecutor     | Replace   | DAG execution engine (dispatches A2A Tasks + tool calls)           |
+| `research_tools.py` `query_mcp:{id}` | Replace   | A2A Task dispatch to the appropriate agent                         |
+| `INTERNET_SEARCH_TOOL` (Tavily)      | Migrate   | Tool Catalog entry: `search_internet`                              |
+| Per-server `.env` credentials        | Migrate   | Tenant credential vault per agent instance                         |
+| Global circuit breakers              | Replace   | Per-tenant, per-agent circuit breakers                             |
+| `MCPService._ensure_agents_loaded()` | Replace   | Platform Agent Registry (lazy load, tenant-scoped)                 |
+| Custom `A2AMessage` dataclass        | Replace   | Google A2A v0.3 wire protocol                                      |
+| `ExecutionPlan` sent to agents       | Eliminate | Orchestrator keeps plan internal; agents receive only atomic Tasks |
+
+---
+
+## Open Questions Before Implementation
+
+Items marked **DECISION REQUIRED** block architecture finalization.
+
+1. **Prompt Library design** — Required before any agent template is deployed. Guardrail enforcement mechanism (system prompt positional ordering + output filter) must be specified. See guardrails section for options.
+
+2. **Cross-agent artifact dependencies (architecture clarification)** — Dependent nodes are NOT parallel. When Node E (CapIQ) needs data from Node A (Bloomberg), Node E has `deps: [A]` and dispatches only after Node A's Artifact arrives. The orchestrator injects the upstream data into Node E's Task message. The DAG examples in this document show `deps: []` for illustration; real DAG planning must model data dependencies explicitly. True parallel execution only applies to genuinely independent tasks.
+
+3. **Agent LLM cost model — RESOLVED**: LLM selection is a **tenant-level setting** (Tenant Admin → Settings → LLM Configuration), not per-agent. Platform maintains an LLM Library (curated approved providers per plan tier). Tenant selects from Library or brings their own (BYOLLM). All agents in the tenant use this single LLM configuration. Token billing: library LLM → tracked + billed at markup; BYOLLM → tracking only. See Billing Model section.
+
+4. **Bloomberg technical/legal review — OPEN**: Bloomberg DL API access from a SaaS intermediary may violate Bloomberg's data redistribution terms. The credential model shown (OAuth2 BSSO) requires validation against actual Bloomberg B-PIPE SDK or BEAP access patterns. A Bloomberg technical and legal review must occur before committing any Bloomberg agent implementation. Do not begin Bloomberg agent engineering without this.
+
+5. **External marketplace trust — RESOLVED**: Drop EATP for marketplace. Use Google A2A v0.3 AgentCard mechanisms only — consistent with open marketplace commitment and bidirectional agent deployment. Platform trust verification is: domain verification + capability probe + admin approval workflow + UI disclosure of verification status.
+
+6. **Data residency for marketplace agents** — When a user query is sent as an A2A Task to an externally-hosted agent, the Task message content leaves platform infrastructure. Required before any marketplace agent goes live: (a) explicit tenant admin consent at agent-enable time, (b) data egress logging, (c) GDPR/data sovereignty legal review per agent publisher. European tenants may be blocked from using US-hosted marketplace agents.
+
+7. **Agent versioning** — Tenant instances pin to a template version. Platform notifies of available updates; Tenant Admin explicitly approves migration. Breaking template changes (new guardrails, new credential schema fields) require explicit tenant migration, not silent auto-update.
+
+8. **JWT key rotation lifecycle (Oracle Fusion)** — The credential vault must track Oracle JWT key expiry, send tenant notifications at 30/15/7 days before expiry, gracefully queue in-flight calls during rotation, and return a clear error on expiry (not silent failure). This is an operational requirement, not optional.
+
+9. **Synthesis context window** — For 5+ agent DAGs, the synthesis LLM call may receive Artifacts that collectively exceed its context window. A structured-extraction pass per Artifact (extract only the relevant answer fields, not full raw data) must run before synthesis. Define the extraction schema per agent Artifact type before the synthesis step is implemented.
+
+---
+
+**Document Version**: 2.3
+**Replaces**: 06-a2a-mcp-agentic.md v1.0, v2.0, v2.1, v2.2
 **Last Updated**: March 4, 2026
+**Red-Team Pass**: v2.0 → v2.1 (25 findings addressed, 3 decisions flagged) → v2.2 (decisions resolved) → v2.3 (LLM selection clarified: tenant-level LLM Library)
+**Status**: Architecture Design — 1 OPEN ITEM (Bloomberg legal/technical review required before agent implementation)
