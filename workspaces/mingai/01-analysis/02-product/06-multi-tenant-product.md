@@ -12,7 +12,7 @@ Moving from single-tenant to multi-tenant is not a technical migration -- it is 
 | **Authentication**   | One Azure AD tenant                         | Federated identity -- each customer's Azure AD tenant                                      |
 | **RBAC**             | One role hierarchy                          | Per-tenant role hierarchy + platform-level roles                                           |
 | **Search indexes**   | All indexes in one Azure AI Search service  | Per-tenant index isolation or namespace-scoped indexes                                     |
-| **MCP servers**      | Global registration                         | Per-tenant MCP server registrations with tenant-scoped credentials                         |
+| **A2A agents**       | Global agent registry                       | Per-tenant A2A agent enablement with tenant-scoped credential injection                    |
 | **Configuration**    | Single .env / config                        | Per-tenant configuration with inheritance from platform defaults                           |
 | **Billing**          | N/A                                         | Per-tenant usage tracking and billing                                                      |
 | **Admin experience** | One admin panel                             | Platform admin + tenant admin (separate scopes)                                            |
@@ -34,7 +34,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 - Provision and deprovision tenants
 - Monitor platform health across all tenants
 - Set platform-wide policies (rate limits, storage quotas, feature flags)
-- Manage platform-level MCP server marketplace
+- Manage platform-level A2A agent catalog
 - Handle tenant billing and usage reports
 - Manage platform infrastructure (scaling, upgrades, incidents)
 - Enforce platform security policies (minimum RBAC requirements, audit retention)
@@ -55,7 +55,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 
 - Configure their organization's RBAC (roles, permissions, groups)
 - Register and manage their Azure AI Search indexes
-- Configure MCP server connections for their data sources
+- Enable A2A agents for their organization's data sources
 - Manage their organization's users and groups
 - View tenant-scoped analytics and audit logs
 - Manage billing and usage within their allocation
@@ -92,7 +92,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 | Cross-tenant analytics         | Aggregated (anonymized) usage patterns, common queries, feature adoption            | P1       |
 | Feature flag management        | Enable/disable features per tenant (MCP, notifications, agent channels)             | P1       |
 | Tenant billing                 | Usage-based billing with invoicing and payment tracking                             | P1       |
-| MCP marketplace management     | Publish, review, and manage shared MCP servers (Phase 3+ deferred -- see below)     | P2       |
+| A2A agent marketplace mgmt     | Publish, review, and manage third-party A2A agents (Phase 3+ deferred -- see below) | P2       |
 | Platform upgrade orchestration | Rolling upgrades across tenants with rollback capability                            | P2       |
 
 ### Tenant Admin Self-Service
@@ -104,7 +104,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 | Index registration     | Register Azure AI Search indexes with validation and metadata                 | P0       |
 | Role management        | Create/edit/delete roles with index permissions and system functions          | P0       |
 | User management        | Assign roles to users/groups, view activity, manage access                    | P0       |
-| MCP server connection  | Connect to platform MCP marketplace servers or register custom servers        | P1       |
+| A2A agent enablement   | Enable platform A2A agents (Bloomberg, Oracle, etc.) with tenant credentials  | P1       |
 | Analytics dashboard    | Tenant-scoped query analytics, usage, costs, and content gaps                 | P1       |
 | Audit log viewer       | Tenant-scoped audit logs with search and export                               | P1       |
 | Glossary management    | Manage domain-specific terminology                                            | P2       |
@@ -138,7 +138,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 - Azure AD / Auth0 tenant connection (OIDC/SAML endpoints)
 - Role hierarchy and permission matrix
 - Index registrations and metadata
-- MCP server connections and credentials
+- A2A agent enablement and credential configuration per agent
 - Glossary terms
 - SharePoint library connections
 - Sync worker schedules
@@ -154,7 +154,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 
 ### 5% Custom (Requires development, engineering, or Enterprise plan)
 
-- BYOMCP: custom MCP server implementations for unique data sources
+- BYOMCP: custom MCP server development for a net-new data source, wrapped and deployed as an A2A agent (Enterprise plan only)
 - BYOLLM: tenant provides own LLM API key and endpoint
 - Custom authentication flows (non-Azure AD identity providers)
 - Custom compliance integrations (specific regulatory reporting)
@@ -169,7 +169,7 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 
 > **Phase 3+ Deferred**: The following capabilities are deliberately deferred to Phase 3 or later to maintain focus on Phase 1-2 core platform. This is an architectural decision, not a gap:
 >
-> - **MCP marketplace** (tenant-to-tenant agent sharing, external agent publisher onboarding)
+> - **A2A agent marketplace** (third-party agent publisher onboarding, EATP-verified external agents)
 > - **Cross-tenant network effects / anonymized benchmarking** (aggregated usage patterns across tenants)
 > - **Platform model strengthening** (producer incentives, knowledge contribution layer)
 > - **Full expert escalation with producer-consumer transactions**
@@ -193,25 +193,25 @@ Multi-tenancy introduces personas that do not exist in single-tenant:
 
 **Recommended model**: **Tier-based with usage-based overage**
 
-- **Starter** ($15/user/month, max 5 indexes, max 2 MCP servers, basic analytics)
-- **Professional** ($25/user/month, unlimited indexes, 10 MCP servers, full analytics, audit logs)
+- **Starter** ($15/user/month, max 5 indexes, max 2 A2A agents, basic analytics)
+- **Professional** ($25/user/month, unlimited indexes, all standard A2A agents, full analytics, audit logs)
 - **Enterprise** (Custom pricing, dedicated infrastructure option, unlimited everything, SLA, priority support)
 
 This prices below Copilot ($30) at Professional tier while offering more data source flexibility, creating a compelling comparison.
 
 ### Competitive Positioning for Multi-Tenant
 
-**Against Copilot**: "AI search that reaches beyond Microsoft 365. Connect Bloomberg, Oracle, SAP, and any proprietary data source via MCP -- with the enterprise RBAC your compliance team requires."
+**Against Copilot**: "AI search that reaches beyond Microsoft 365. Connect Bloomberg Intelligence, Oracle Fusion, CapIQ, and any proprietary data source via A2A agents -- with the enterprise RBAC your compliance team requires."
 
 **Against Glean**: "Enterprise AI search you control. Deploy on your Azure, use your LLM, integrate your data sources -- at a fraction of Glean's cost and without vendor lock-in to their infrastructure."
 
-**Against Custom RAG**: "Stop building. mingai gives you everything a custom RAG solution would -- RBAC, analytics, audit, MCP protocol -- in weeks instead of months, with ongoing updates instead of maintenance burden."
+**Against Custom RAG**: "Stop building. mingai gives you everything a custom RAG solution would -- RBAC, analytics, audit, A2A agent integrations -- in weeks instead of months, with ongoing updates instead of maintenance burden."
 
 ### Sales Motion
 
-**Land**: Financial services firm (Segment 1) deploys for one business unit (100-200 users) with 3-5 Azure AI Search indexes and 1-2 MCP servers.
+**Land**: Financial services firm (Segment 1) deploys for one business unit (100-200 users) with 3-5 Azure AI Search indexes and 1-2 A2A agents (e.g., Bloomberg Intelligence, CapIQ Intelligence).
 
-**Expand**: Success drives adoption to other business units. More indexes connected, more MCP servers, more users.
+**Expand**: Success drives adoption to other business units. More indexes connected, more A2A agents enabled, more users.
 
 **Platform**: Multi-tenant deployment enables serving multiple enterprises from shared infrastructure, reducing per-customer cost.
 
@@ -239,7 +239,7 @@ The multi-tenant transformation requires changes across every layer:
 
 3. **Search layer**: Tenant-scoped index isolation in Azure AI Search. Per-tenant search quotas. Tenant-aware index routing.
 
-4. **MCP layer**: Tenant-scoped MCP server registrations. Shared marketplace servers with per-tenant credentials. Circuit breakers per tenant.
+4. **A2A agent layer**: Platform-registered A2A agent catalog. Per-tenant agent enablement with vault-injected credentials (agents internally use MCP — not user-facing). Circuit breakers per tenant per agent.
 
 5. **Cache layer**: Tenant-scoped Redis keys. Cache invalidation must be tenant-aware. No cross-tenant cache leakage.
 

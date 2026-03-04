@@ -2,14 +2,14 @@
 
 ## Summary Table
 
-| Phase | Name             | Duration | Key Deliverable                                             | Kailash SDK                                                                      | Risk                               |
-| ----- | ---------------- | -------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
-| 1     | Foundation       | 8 weeks  | tenant_id isolation across all data stores                  | DataFlow (PostgreSQL models, Alembic migrations)                                 | HIGH — touches every query path    |
-| 2     | LLM Library      | 4 weeks  | Platform LLM Library + Tenant LLM Setup (Library or BYOLLM) | Kaizen (LLMProvider, instrumented client), DataFlow (tenant_config, llm_library) | MEDIUM — cost modeling uncertainty |
-| 3     | Auth Flexibility | 3 weeks  | Tenant-selectable SSO (Entra, Google, Okta, SAML)           | Nexus (auth middleware)                                                          | MEDIUM — token migration window    |
-| 4     | Agentic Upgrade  | 5 weeks  | Kaizen multi-agent + A2A + per-tenant MCP routing           | Kaizen (orchestration, A2A), MCP (registry)                                      | HIGH — 9 MCP servers to isolate    |
-| 5     | Cloud Agnostic   | 4 weeks  | Azure + GCP certification, CLOUD_PROVIDER config            | Core SDK (workflow nodes), Nexus (deployment)                                    | MEDIUM — abstraction leakage       |
-| 6     | GA               | 3 weeks  | Billing, self-service onboarding, SLA monitoring            | Nexus (billing API), DataFlow (usage tracking)                                   | LOW — polish phase                 |
+| Phase | Name             | Duration | Key Deliverable                                                                        | Kailash SDK                                                                      | Risk                               |
+| ----- | ---------------- | -------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| 1     | Foundation       | 8 weeks  | tenant_id isolation, platform RBAC, glossary v1                                        | DataFlow (PostgreSQL models, Alembic migrations)                                 | HIGH — touches every query path    |
+| 2     | LLM Library      | 4 weeks  | Platform LLM Library + Tenant LLM Setup (Library or BYOLLM)                            | Kaizen (LLMProvider, instrumented client), DataFlow (tenant_config, llm_library) | MEDIUM — cost modeling uncertainty |
+| 3     | Auth Flexibility | 3 weeks  | Tenant-selectable SSO (Entra, Google, Okta, SAML) + Google Drive credential groundwork | Nexus (auth middleware)                                                          | MEDIUM — token migration window    |
+| 4     | Agentic Upgrade  | 5 weeks  | Kaizen multi-agent + A2A + Google Drive full sync + glossary RAG integration           | Kaizen (orchestration, A2A), MCP (internal agent protocol)                       | HIGH — 9 A2A agents to isolate     |
+| 5     | Cloud Agnostic   | 4 weeks  | Azure + GCP certification, CloudStorageConnector abstraction (SharePoint + GDrive)     | Core SDK (workflow nodes), Nexus (deployment)                                    | MEDIUM — abstraction leakage       |
+| 6     | GA               | 3 weeks  | Billing, self-service onboarding, SLA monitoring, DR runbooks                          | Nexus (billing API), DataFlow (usage tracking)                                   | LOW — polish phase                 |
 
 **Total estimated duration: 27 weeks (~7 months)**
 
@@ -44,6 +44,8 @@
 8. **JWT v2** — Token now includes `tenant_id`, `scope` (tenant|platform), and `plan` (starter|professional|enterprise)
 9. **AWS RDS Aurora PostgreSQL deployment** — Production database on AWS RDS Aurora PostgreSQL; DATABASE_URL-driven connection abstraction
 10. **Response feedback system** — Thumb up/down on every AI response. Feedback stored with tenant_id, message_id, rating, tags, comment. Tenant admin feedback review panel with flagging for messages with 3+ negative ratings. Records used for future model improvement signals.
+11. **Platform RBAC** — Platform admin roles (`platform_admin`, `platform_operator`, `platform_support`, `platform_security`) with full permission matrix, separate `platform_members` table (no tenant_id), platform JWT with `scope: platform`, and impersonation flow for cross-tenant support. See `01-analysis/01-research/24-platform-rbac-specification.md`.
+12. **Glossary v1** — Tenant-level glossary with CRUD API, CSV import/export, Redis cache, and RAG pipeline integration (query enrichment + LLM prompt injection). Full schema in `01-analysis/01-research/23-glossary-management-architecture.md`.
 
 ### Kailash SDK Components
 
@@ -202,19 +204,21 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 
 - Replace single-agent RAG with Kaizen multi-agent orchestration
 - Implement A2A (Agent-to-Agent) protocol for inter-agent communication
-- Build per-tenant MCP server routing with registry and access control
+- Build per-tenant A2A agent registry with access control and credential management
 - Add remaining 5 LLM providers: Anthropic, Deepseek, DashScope, Doubao, Gemini
-- Implement tenant-scoped agent memory and tool access
+- Implement tenant-scoped agent memory and access control
 
 ### Key Deliverables
 
 1. **Kaizen multi-agent orchestration** — Supervisor agent delegates to specialist agents (research, analysis, synthesis) per conversation
-2. **A2A protocol** — Standardized inter-agent communication; agents can delegate sub-tasks
-3. **MCP server registry** — Central registry of all 9 MCP servers (Bloomberg, CapIQ, Perplexity, Oracle Fusion, AlphaGeo, Teamworks, PitchBook, Azure AD, iLevel)
-4. **Per-tenant MCP routing** — Tenant admin configures which MCP servers are available; access control enforced at registry level
+2. **A2A protocol** — Standardized inter-agent communication using Google A2A v0.3; agents publish AgentCards at `/.well-known/agent.json`
+3. **A2A agent registry** — Central registry of all 9 A2A agents (Bloomberg Intelligence, CapIQ Intelligence, Perplexity Web Search, Oracle Fusion, AlphaGeo, Teamworks, PitchBook Intelligence, Azure AD Directory, iLevel Portfolio); agents internally use MCP — not user-facing
+4. **Per-tenant A2A agent routing** — Tenant admin configures which agents are enabled; tenant provides credentials; platform enforces agent guardrails and credential isolation
 5. **5 additional LLM providers added to LLM Library** — Anthropic, Deepseek, DashScope (Qwen), Bytedance Ark (Doubao), Google Gemini adapters added to LLMProvider abstraction and published in Platform LLM Library per plan tier
 6. **Agent memory isolation** — Conversation context and agent state scoped to tenant_id
 7. **Cost controls for agentic RAG** — Per-tenant budget limits, circuit breakers for runaway agent loops
+8. **Google Drive sync worker** — Full sync worker with folder browser API, incremental sync via `changes.list`, push notification channels, OAuth2 and Service Account auth, admin UI for setup and schedule. See `01-analysis/01-research/22-google-drive-sync-architecture.md`.
+9. **Glossary RAG integration** — Wire approved glossary terms into the RAG pipeline: query enrichment (GlossaryEnricher), LLM prompt injection (system prompt glossary section), and source attribution tooltips. Analytics tracking for term match rates.
 
 ### Kailash SDK Components
 
@@ -227,27 +231,27 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 
 - Phase 2 complete (LLM abstraction in place)
 - Phase 3 complete (auth handles agent-to-service tokens)
-- MCP server access credentials for all 9 servers
+- A2A agent credentials (Bloomberg, CapIQ, etc.) available for integration testing
 - Cost modeling validated from Phase 2 usage data
 
 ### Risks
 
-| Risk                                       | Likelihood | Impact   | Mitigation                                                                      |
-| ------------------------------------------ | ---------- | -------- | ------------------------------------------------------------------------------- |
-| Agentic RAG costs blow budget              | High       | High     | Hard per-tenant token limits; circuit breakers; cost dashboard with alerts      |
-| Agent loops (infinite delegation)          | Medium     | High     | Max depth limit on A2A delegation (default: 5); timeout per agent turn          |
-| MCP server isolation failure               | Low        | Critical | Each tenant gets isolated MCP client instances; no shared state between tenants |
-| 9 MCP servers have different auth patterns | High       | Medium   | Normalize auth at registry level; credential vault per tenant                   |
+| Risk                                      | Likelihood | Impact   | Mitigation                                                                             |
+| ----------------------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------- |
+| Agentic RAG costs blow budget             | High       | High     | Hard per-tenant token limits; circuit breakers; cost dashboard with alerts             |
+| Agent loops (infinite delegation)         | Medium     | High     | Max depth limit on A2A delegation (default: 5); timeout per agent turn                 |
+| A2A agent isolation failure               | Low        | Critical | Each tenant gets isolated agent instances with credential vault; no shared state       |
+| 9 A2A agents have different auth patterns | High       | Medium   | Normalize credential injection at registry level; short-lived vault tokens per request |
 
 ### Success Metrics
 
 - Multi-agent conversations produce higher-quality answers than single-agent (measured by user feedback)
 - Agent loop circuit breaker triggers <1% of conversations
-- All 9 MCP servers accessible with tenant-scoped credentials
+- All 9 A2A agents accessible with tenant-scoped credentials injected via vault tokens
 - 7 LLM providers in LLM Library pass integration test suite; tenant LLM Setup supports all 7
 - Per-tenant cost tracking accurate; no tenant exceeds budget without alert
 
-**User Flows**: Platform Admin: 04-Global MCP Server Management | End User: 05-Agent Delegation | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
+**User Flows**: Platform Admin: 04-Global A2A Agent Management | End User: 05-Agent Delegation | Tenant Admin: 07-Google Drive Setup, 08-Glossary Approval Workflow | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
 
 ### Red-Team Recommendation Applied
 
@@ -275,6 +279,7 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 6. **Azure deployment** — Full stack deployed on Azure (Azure Database for PostgreSQL, Azure AI Search, Azure Blob Storage); integration tests passing
 7. **GCP deployment** — Full stack deployed on GCP (Cloud SQL for PostgreSQL, Vertex AI Search, GCS); integration tests passing
 8. **Terraform IaC** — Infrastructure as code for AWS, Azure, and GCP; shared module structure
+9. **CloudStorageConnector abstraction** — Abstract interface covering SharePoint and Google Drive connectors; sync worker becomes connector-agnostic. Non-Microsoft enterprises can use Google Drive as their primary knowledge source without SharePoint. See `01-analysis/01-research/22-google-drive-sync-architecture.md` Section 9.
 
 **Note:** PostgreSQL is the database on all clouds — no DocumentStore abstraction needed. The `DATABASE_URL` connection string handles cloud-specific PostgreSQL endpoints (RDS Aurora, Azure Database for PostgreSQL, Cloud SQL).
 
@@ -329,12 +334,14 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 
 ### Key Deliverables
 
-1. **Observability stack** — Per-tenant dashboards: API latency, error rates, LLM usage, agent performance, MCP server health
-2. **Billing integration** — Usage-based billing: token consumption, API calls, storage, MCP server usage; Stripe integration for payment
+1. **Observability stack** — Per-tenant dashboards: API latency, error rates, LLM usage, agent performance, A2A agent health
+2. **Billing integration** — Usage-based billing: token consumption, API calls, storage, A2A agent invocation costs; Stripe integration for payment
 3. **Self-service onboarding** — Starter tier: sign up, provision, start using in <5 minutes with no human intervention
 4. **SLA monitoring** — Uptime tracking per tenant; automated alerts for SLA breaches; incident response runbooks
 5. **Operations runbooks** — Tenant provisioning, deprovisioning, data export, incident response, scaling procedures
 6. **Load testing** — Simulate 50 concurrent tenants with realistic workloads; identify bottlenecks
+7. **DR runbooks** — Document and test disaster recovery procedures per component: database failover, LLM provider failover, search outage, Redis failover. SLA tiers per plan enforced. See `01-analysis/08-red-team-v2/01-remediation-plan.md` §7 for DR architecture.
+8. **Demo environment** — Production-quality tenant with seeded data, realistic glossary, 3 search indexes, and 2 A2A agents enabled; used for design partner onboarding and sales demos
 
 ### Kailash SDK Components
 

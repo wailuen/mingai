@@ -7,13 +7,13 @@
 
 ## Phase Mapping
 
-| Flow | Flow Name                                      | Built in Phase | Notes                                                                        |
-| ---- | ---------------------------------------------- | -------------- | ---------------------------------------------------------------------------- |
-| 01   | Platform Model: Producers, Consumers, Partners | Phase 4-6      | Marketplace dynamics emerge as platform scales                               |
-| 02   | AAA Framework Analysis                         | Phase 1-6      | Automation grows with each phase; augment/amplify from Phase 4+              |
-| 03   | Network Effects Analysis                       | Phase 4-6      | Cross-tenant effects require multi-tenant scale                              |
-| 04   | Platform Value Creation and Capture            | Phase 6        | Billing integration, revenue model active at GA                              |
-| 05   | Competitive Moat Analysis                      | Phase 4-6      | Moat layers build across phases: data (P1), MCP ecosystem (P4), pricing (P6) |
+| Flow | Flow Name                                      | Built in Phase | Notes                                                                              |
+| ---- | ---------------------------------------------- | -------------- | ---------------------------------------------------------------------------------- |
+| 01   | Platform Model: Producers, Consumers, Partners | Phase 4-6      | Marketplace dynamics emerge as platform scales                                     |
+| 02   | AAA Framework Analysis                         | Phase 1-6      | Automation grows with each phase; augment/amplify from Phase 4+                    |
+| 03   | Network Effects Analysis                       | Phase 4-6      | Cross-tenant effects require multi-tenant scale                                    |
+| 04   | Platform Value Creation and Capture            | Phase 6        | Billing integration, revenue model active at GA                                    |
+| 05   | Competitive Moat Analysis                      | Phase 4-6      | Moat layers build across phases: data (P1), A2A agent ecosystem (P4), pricing (P6) |
 
 ---
 
@@ -77,7 +77,7 @@ Raw Enterprise Data
 [Producer: Configure data source]
   |-- Register Azure AI Search index
   |-- Connect SharePoint library
-  |-- Enable MCP server (Bloomberg, Oracle, etc.)
+  |-- Enable A2A agent (Bloomberg, Oracle, etc.)
   |-- Upload and index documents
   |
   v
@@ -99,7 +99,7 @@ Searchable Knowledge Asset
 | -------------------- | -------------------------------------------------- | ---------------------------- |
 | Index registration   | Connect -> test -> map fields -> set RBAC          | Searchable index             |
 | SharePoint sync      | Authorize -> select library -> schedule sync       | Auto-updated index           |
-| MCP enablement       | Enable server -> configure access -> test          | Real-time data tool          |
+| A2A agent enablement | Enable agent -> configure credentials -> test      | Real-time data tool          |
 | Glossary maintenance | Add terms -> associate with indexes                | Improved query understanding |
 | Role configuration   | Create role -> assign index access -> assign users | Access-controlled knowledge  |
 
@@ -159,19 +159,19 @@ Cited, Trustworthy Answer
 
 ### Partners: Data Providers and Infrastructure Providers
 
-**Data Partners** (MCP server providers):
+**Data Partners** (A2A agent providers):
 
-| Partner       | Data Type           | Integration     | Value to Platform          |
-| ------------- | ------------------- | --------------- | -------------------------- |
-| Bloomberg     | Financial markets   | MCP server      | Real-time market data      |
-| CapIQ         | Credit intelligence | MCP server      | Company and deal analytics |
-| PitchBook     | M&A intelligence    | MCP server      | Transaction and valuation  |
-| Oracle Fusion | ERP data            | MCP server      | Operational data access    |
-| iLevel        | Investment data     | MCP server      | Portfolio analytics        |
-| AlphaGeo      | Geospatial          | MCP server      | Location intelligence      |
-| Teamworks     | Project management  | MCP server      | Project and resource data  |
-| Tavily        | Web search          | API integration | Internet fallback          |
-| Perplexity    | Advanced web search | MCP server      | Deep web research          |
+| Partner       | Data Type           | Integration                        | Value to Platform          |
+| ------------- | ------------------- | ---------------------------------- | -------------------------- |
+| Bloomberg     | Financial markets   | A2A agent (Bloomberg Intelligence) | Real-time market data      |
+| CapIQ         | Credit intelligence | A2A agent (CapIQ Intelligence)     | Company and deal analytics |
+| PitchBook     | M&A intelligence    | A2A agent (PitchBook Intelligence) | Transaction and valuation  |
+| Oracle Fusion | ERP data            | A2A agent (Oracle Fusion Agent)    | Operational data access    |
+| iLevel        | Investment data     | A2A agent (iLevel Portfolio Agent) | Portfolio analytics        |
+| AlphaGeo      | Geospatial          | A2A agent (AlphaGeo Agent)         | Location intelligence      |
+| Teamworks     | Project management  | A2A agent (Teamworks Agent)        | Project and resource data  |
+| Tavily        | Web search          | Tool Catalog (direct API)          | Internet fallback          |
+| Perplexity    | Advanced web search | A2A agent (Perplexity Web Search)  | Deep web research          |
 
 **Infrastructure Partners**:
 
@@ -190,7 +190,7 @@ Cited, Trustworthy Answer
 Partner provides data/service
   |
   v
-Platform integrates via MCP / API
+Platform integrates via A2A / API
   |
   v
 Consumers access through unified interface
@@ -221,7 +221,7 @@ Search file share -> partial answer        v
   |                                      Platform auto-routes to relevant indexes
 Email colleague -> wait for response       |
   |                                        v
-Check Bloomberg terminal manually        MCP tools called automatically
+Check Bloomberg terminal manually        A2A agents called automatically
   |                                        |
 Cross-reference multiple sources           v
   |                                      Synthesized answer with citations
@@ -237,7 +237,7 @@ Write summary for manager
 | ----------------------------------- | --------------------------------- | ---------------- |
 | Identify correct data source        | Intent detection + index routing  | 5-15 min/query   |
 | Search each source individually     | Multi-index parallel search       | 10-30 min/query  |
-| Switch to Bloomberg/Oracle terminal | MCP tool invocation               | 5-10 min/query   |
+| Switch to Bloomberg/Oracle terminal | A2A agent invocation              | 5-10 min/query   |
 | Cross-reference and deduplicate     | RAG re-ranking + deduplication    | 15-30 min/query  |
 | Synthesize findings into answer     | LLM synthesis with citations      | 20-60 min/query  |
 | Translate between languages         | Auto-detect + respond in language | 5-15 min/query   |
@@ -363,14 +363,14 @@ BEFORE: Expertise concentrated            AFTER: Expertise distributed
 
 **Amplification by persona**:
 
-| Expertise Previously Held By | Now Available To         | Through                           |
-| ---------------------------- | ------------------------ | --------------------------------- |
-| Financial analysts           | All authorized employees | Bloomberg + CapIQ MCP integration |
-| HR specialists               | All employees            | HR knowledge base + RAG           |
-| IT administrators            | Managers (self-service)  | Admin dashboard + analytics       |
-| Research analysts            | All knowledge workers    | Research mode + agent delegation  |
-| Cross-domain experts         | Anyone in organization   | Multi-index search + synthesis    |
-| Legal/compliance team        | Managers                 | Legal knowledge base + citations  |
+| Expertise Previously Held By | Now Available To         | Through                                 |
+| ---------------------------- | ------------------------ | --------------------------------------- |
+| Financial analysts           | All authorized employees | Bloomberg + CapIQ A2A agent integration |
+| HR specialists               | All employees            | HR knowledge base + RAG                 |
+| IT administrators            | Managers (self-service)  | Admin dashboard + analytics             |
+| Research analysts            | All knowledge workers    | Research mode + agent delegation        |
+| Cross-domain experts         | Anyone in organization   | Multi-index search + synthesis          |
+| Legal/compliance team        | Managers                 | Legal knowledge base + citations        |
 
 ---
 
@@ -383,25 +383,25 @@ More Tenants
   |
   +-> More revenue -> More R&D investment -> Better platform
   |
-  +-> Shared MCP server costs spread across tenants -> Lower per-tenant cost
+  +-> Shared A2A agent costs spread across tenants -> Lower per-tenant cost
   |
   +-> More usage data (anonymized) -> Better index routing algorithms
   |
   +-> Platform becomes industry standard -> Easier vendor approval for new tenants
 ```
 
-### MCP Provider Network Effects
+### A2A Agent Network Effects
 
 ```
-More MCP Providers on Platform
+More A2A Agent Providers on Platform
   |
   +-> More data sources per tenant -> More value per query
   |
-  +-> Each new MCP server benefits ALL tenants on eligible plans
+  +-> Each new A2A agent benefits ALL tenants on eligible plans
   |
-  +-> Platform becomes distribution channel -> Attracts more MCP providers
+  +-> Platform becomes distribution channel -> Attracts more A2A agent providers
   |
-  +-> Indirect network effect: MCP providers compete on quality
+  +-> Indirect network effect: A2A agent providers compete on quality
 ```
 
 ### Within-Tenant Network Effects
@@ -509,7 +509,7 @@ Tenant pays subscription
   +-> Usage-based overage (secondary revenue)
   |     |-- LLM tokens above plan budget
   |     |-- Storage above plan allocation
-  |     |-- MCP calls above plan limits
+  |     |-- A2A agent invocations above plan limits
   |
   +-> Platform captures margin between:
         |-- Revenue: subscription + overage fees
@@ -520,7 +520,7 @@ Tenant pays subscription
 ### Flywheel Effect
 
 ```
-Better Platform (more MCP servers, better RAG, faster responses)
+Better Platform (more A2A agents, better RAG, faster responses)
   |
   +-> More Tenants adopt
   |     |
@@ -538,7 +538,7 @@ Better Platform (more MCP servers, better RAG, faster responses)
   |           |
   |           +-> Better Platform (cycle repeats)
   |
-  +-> More MCP Providers want distribution
+  +-> More A2A Agent Providers want distribution
         |
         +-> More Data Sources Available
         |
@@ -558,9 +558,9 @@ Layer 1: Data Network Effects
   Enterprise data stays in platform -> queries improve routing
   -> more accurate answers -> more usage -> stronger data advantage
 
-Layer 2: MCP Ecosystem
-  9 MCP servers today -> platform becomes distribution hub
-  -> MCP providers prefer platform listing -> more servers
+Layer 2: A2A Agent Ecosystem
+  9 A2A agents today -> platform becomes distribution hub
+  -> A2A agent providers prefer platform listing -> more agents
   -> harder for competitors to replicate ecosystem
 
 Layer 3: Switching Costs
@@ -571,7 +571,7 @@ Layer 3: Switching Costs
 Layer 4: Pricing Below Copilot
   $25/user vs Copilot $30/user with MORE data source flexibility
   -> price competition advantage
-  -> value competition advantage (MCP servers Copilot doesn't have)
+  -> value competition advantage (A2A agent integrations Copilot doesn't have)
 ```
 
 ---
@@ -582,7 +582,7 @@ Layer 4: Pricing Below Copilot
 | --------------- | ------------------------- | -------------------------------- | -------------------- |
 | Producers       | IT admins (single org)    | Per-tenant IT teams              | Configuration depth  |
 | Consumers       | <50 concurrent            | 1000s across tenants             | Usage data           |
-| Partners        | 9 MCP servers             | 20+ MCP marketplace              | Ecosystem lock-in    |
+| Partners        | 9 A2A agents              | 20+ A2A agent marketplace        | Ecosystem lock-in    |
 | Automate        | Search + synthesis        | + provisioning, billing, scaling | Operational leverage |
 | Augment         | Source scoring, citations | + personalization, team insights | Decision quality     |
 | Amplify         | Expert knowledge to all   | Cross-tenant best practices      | Expertise reach      |

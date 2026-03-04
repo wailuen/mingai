@@ -9,15 +9,15 @@
 
 ## Phase Mapping
 
-| Flow | Flow Name                         | Built in Phase | Notes                                               |
-| ---- | --------------------------------- | -------------- | --------------------------------------------------- |
-| 01   | Tenant Onboarding (First Login)   | Phase 1        | Workspace setup wizard, part of tenant provisioning |
-| 02   | SSO Configuration                 | Phase 3        | Auth0 integration, multi-provider SSO               |
-| 03   | BYOLLM (Bring Your Own LLM)       | Phase 2        | Tenant LLM Setup, Enterprise BYOLLM                 |
-| 04   | User Management                   | Phase 1        | Invite users, role assignment, deactivation         |
-| 05   | Knowledge Base Setup              | Phase 1        | Index registration, SharePoint sync, MCP enablement |
-| 06   | Cost Analytics                    | Phase 2        | Per-tenant cost tracking, budget alerts             |
-| 07   | Role and Permission Customization | Phase 1        | Custom roles with index and MCP access control      |
+| Flow | Flow Name                         | Built in Phase | Notes                                                     |
+| ---- | --------------------------------- | -------------- | --------------------------------------------------------- |
+| 01   | Tenant Onboarding (First Login)   | Phase 1        | Workspace setup wizard, part of tenant provisioning       |
+| 02   | SSO Configuration                 | Phase 3        | Auth0 integration, multi-provider SSO                     |
+| 03   | BYOLLM (Bring Your Own LLM)       | Phase 2        | Tenant LLM Setup, Enterprise BYOLLM                       |
+| 04   | User Management                   | Phase 1        | Invite users, role assignment, deactivation               |
+| 05   | Knowledge Base Setup              | Phase 1        | Index registration, SharePoint sync, A2A agent enablement |
+| 06   | Cost Analytics                    | Phase 2        | Per-tenant cost tracking, budget alerts                   |
+| 07   | Role and Permission Customization | Phase 1        | Custom roles with index and A2A agent access control      |
 
 ---
 
@@ -147,7 +147,7 @@ Start
 [Step 3: Configure Scopes]
   |-- Default scopes: openid, profile, email
   |-- Optional: Group.Read.All (for group-based role sync)
-  |-- Optional: User.Read.All (for org chart in Azure AD MCP)
+  |-- Optional: User.Read.All (for org chart via Azure AD Directory Agent)
   |
   v
 [Step 4: Group Mapping (Optional)]
@@ -528,33 +528,44 @@ Start
 End
 ```
 
-### Enable MCP Servers
+### Enable A2A Agents
 
 ```
 Start
   |
   v
-[Navigate to Admin > Knowledge Base > External Sources]
+[Navigate to Admin > Agent Catalog]
   |
   v
-[View available MCP servers]
-  |-- Servers available on plan: Bloomberg, CapIQ, Perplexity, ...
-  |-- Status: Enabled/Disabled per server
+[View available A2A agents]
+  |-- Agents available on plan: Bloomberg Intelligence, CapIQ Intelligence,
+  |   Perplexity Web Search, Oracle Fusion, AlphaGeo, Teamworks, PitchBook,
+  |   Azure AD Directory, iLevel Portfolio
+  |-- Status: Enabled/Disabled per agent
   |
   v
-[Toggle "Enable" on Bloomberg MCP]
+[Toggle "Enable" on Bloomberg Intelligence Agent]
   |
-  +-- Platform credentials: auto-configured
-  +-- Tenant credentials required: prompt for API key
+  +-- Platform credentials: auto-configured (if platform-managed)
+  +-- Tenant credentials required: prompt for credentials
+  |     |-- Bloomberg: "Enter your Bloomberg OAuth2 BSSO client credentials"
+  |     |-- CapIQ: "Enter your S&P Capital IQ API key"
+  |     |-- Oracle Fusion: "Enter your Oracle Cloud JWT assertion details"
+  |
+  v
+[Validate credentials]
+  +-- SUCCESS: "Bloomberg Intelligence Agent connected"
+  +-- FAILURE: "Invalid credentials. Verify Bloomberg BSSO setup."
   |
   v
 [Configure tenant-specific settings]
-  |-- Access control: which roles can trigger Bloomberg tools?
+  |-- Access control: which roles can invoke this agent?
   |-- Rate limits: override default? (within platform maximums)
   |
   v
-[POST /api/v1/admin/mcp-servers/{id}/enable]
-  |-- MCP tools available in chat for authorized users
+[POST /api/v1/admin/a2a-agents/{id}/enable]
+  |-- Agent available in chat for authorized users
+  |-- Platform enforces agent guardrails and credential isolation
   |
   v
 End
@@ -579,7 +590,7 @@ Start
   |   |-- This month total: $2,340
   |   |-- LLM costs: $1,890 (81%)
   |   |-- Search costs: $320 (14%)
-  |   |-- MCP costs: $130 (5%)
+  |   |-- Agent costs: $130 (5%)
   |   |-- Budget remaining: $2,660 of $5,000
   |
   +-- Per-User Breakdown
@@ -636,9 +647,9 @@ Start
   |   |-- Analytics Viewer
   |
   |-- Custom roles:
-  |   |-- Finance Team (3 indexes, 2 MCP servers)
-  |   |-- Engineering (2 indexes, 0 MCP servers)
-  |   |-- Executive (all indexes, all MCP servers)
+  |   |-- Finance Team (3 indexes, 2 A2A agents)
+  |   |-- Engineering (2 indexes, 0 A2A agents)
+  |   |-- Executive (all indexes, all A2A agents)
   |
   v
 [Click "Create Custom Role"]
@@ -654,10 +665,10 @@ Start
   |   |-- [ ] Engineering Docs
   |   |-- [ ] Legal Contracts
   |
-  +-- MCP Server Access (checkboxes)
-  |   |-- [x] Bloomberg
-  |   |-- [ ] Oracle Fusion
-  |   |-- [x] Perplexity (web search)
+  +-- A2A Agent Access (checkboxes)
+  |   |-- [x] Bloomberg Intelligence Agent
+  |   |-- [ ] Oracle Fusion Agent
+  |   |-- [x] Perplexity Web Search Agent
   |
   +-- System Functions (checkboxes, plan-limited)
   |   |-- [ ] user:manage (User Management)
@@ -666,7 +677,7 @@ Start
   |   |-- [ ] analytics:view_all (Analytics)
   |   |-- [ ] audit:view (Audit Logs)
   |   |-- [ ] kb:manage (Knowledge Base)
-  |   |-- [ ] mcp:configure (MCP Configuration)
+  |   |-- [ ] agent:configure (Agent Configuration)
   |   |-- [ ] sso:configure (SSO Setup)
   |   |-- [ ] billing:view (Billing)
   |

@@ -14,7 +14,7 @@
 | 01   | Platform Admin Bootstrapping         | Phase 1        | Core platform setup, part of tenant provisioning workflow    |
 | 02   | Tenant Provisioning Wizard           | Phase 1        | Key Phase 1 deliverable: tenant CRUD + provisioning workflow |
 | 03   | LLM Provider Configuration           | Phase 2        | Platform LLM Library management                              |
-| 04   | Global MCP Server Management         | Phase 4        | MCP server registry and per-tenant routing                   |
+| 04   | Global A2A Agent Management          | Phase 4        | A2A agent registry and per-tenant routing                    |
 | 05   | Billing and Quota Management         | Phase 6        | Billing integration with Stripe, usage-based pricing         |
 | 06   | Platform Monitoring                  | Phase 6        | Per-tenant dashboards, SLA monitoring                        |
 | 07   | Tenant Suspension and Deprovisioning | Phase 1        | Tenant lifecycle management, part of tenant CRUD             |
@@ -64,7 +64,7 @@ Start
 [Guided setup wizard]
   |-- Step 1: Configure platform name, logo, domain
   |-- Step 2: Add LLM providers (at least one required)
-  |-- Step 3: Register global MCP servers (optional)
+  |-- Step 3: Register global A2A agents (optional)
   |-- Step 4: Create first tenant (optional, can skip)
   |
   v
@@ -106,8 +106,8 @@ Start
   |
   v
 [Step 2: Plan Selection]
-  |-- Starter: $15/user/mo, 25 users, 5 indexes, 3 MCP
-  |-- Professional: $25/user/mo, 500 users, 50 indexes, all standard MCP
+  |-- Starter: $15/user/mo, 25 users, 5 indexes, 3 A2A agents
+  |-- Professional: $25/user/mo, 500 users, 50 indexes, all standard A2A agents
   |-- Enterprise: Custom, unlimited, dedicated DB option
   |
   v
@@ -256,94 +256,100 @@ End
 
 ---
 
-## 4. Global MCP Server Management
+## 4. Global A2A Agent Management
 
-**Trigger**: Platform admin navigates to MCP Servers.
+**Trigger**: Platform admin navigates to A2A Agents.
+
+**Architecture note**: The 9 data integrations (Bloomberg, CapIQ, etc.) are **A2A agents** — autonomous LLM-powered agents. Each agent internally uses MCP to call its data source, but users never configure MCP directly. Platform admin registers agent templates; tenants configure credentials.
 
 ```
 Start
   |
   v
-[Navigate to Platform > MCP Servers]
+[Navigate to Platform > A2A Agents]
   |
   v
-[View MCP server registry]
-  |-- Bloomberg MCP: Active | v2.1 | 8 tenants using
-  |-- CapIQ MCP: Active | v1.4 | 5 tenants using
-  |-- Perplexity MCP: Active | v3.0 | 12 tenants using
-  |-- Oracle Fusion MCP: Active | v1.2 | 3 tenants using
-  |-- PitchBook MCP: Beta | v0.9 | 1 tenant using
-  |-- ... (9 servers total)
+[View A2A agent registry]
+  |-- Bloomberg Intelligence Agent: Active | v2.1 | 8 tenants using
+  |-- CapIQ Intelligence Agent: Active | v1.4 | 5 tenants using
+  |-- Perplexity Web Search Agent: Active | v3.0 | 12 tenants using
+  |-- Oracle Fusion Agent: Active | v1.2 | 3 tenants using
+  |-- PitchBook Intelligence Agent: Beta | v0.9 | 1 tenant using
+  |-- ... (9 agents total)
   |
   v
-[Action: Deploy New MCP Server]
+[Action: Register New A2A Agent Template]
   |
   v
-[Step 1: Server Registration]
-  |-- Server name
-  |-- Server URL (WebSocket endpoint)
+[Step 1: Agent Registration]
+  |-- Agent name (display name for tenants)
+  |-- AgentCard URL (auto-discovers capabilities from /.well-known/agent.json)
   |-- Description
-  |-- Category (Financial, HR, Project, Search)
+  |-- Category (Financial Data, HR, Project Management, Web Search)
   |-- Version
   |
   v
-[Step 2: Tool Discovery]
-  |-- System connects to MCP server
-  |-- Auto-discovers available tools
-  |-- Displays tool list with descriptions and parameters
+[Step 2: Agent Capabilities Discovery (from AgentCard)]
+  |-- System fetches agent's AgentCard
+  |-- Displays published skills (e.g., get_company_data, get_financials)
+  |-- Verifies EATP trust attestation (for marketplace agents)
   |
-  +-- ERROR: Cannot connect to MCP server
-  |     |-> Check URL, network, firewall rules
-  |     |-> Verify MCP server is running
+  +-- ERROR: Cannot reach AgentCard endpoint
+  |     |-> Verify agent URL and network access
+  |     |-> Check EATP certificate validity
   |
   v
 [Step 3: Access Control]
   |-- Plan tier availability (Starter / Pro / Enterprise)
-  |-- Per-tool permission requirements
-  |   |-- e.g., create_sales_order requires "order:create" permission
-  |-- Rate limits per tool (calls/min, calls/day)
+  |-- Which roles can invoke this agent (platform-level default)
+  |-- Rate limits per agent (invocations/min, invocations/day)
   |
   v
-[Step 4: Credential Configuration]
-  |-- Platform-level credentials (shared across tenants)
-  |-- OR: per-tenant credential template (tenant provides own keys)
+[Step 4: Credential Schema]
+  |-- Define what credentials tenants must provide
+  |   |-- Bloomberg: OAuth2 BSSO credentials (tenant-owned)
+  |   |-- CapIQ: API key (tenant-owned)
+  |   |-- Perplexity: API key (platform-managed shared OR tenant-owned)
+  |-- OR: platform-level credentials (shared across tenants — e.g., Perplexity)
+  |-- Credential validation rule (format, required fields)
   |
   v
 [Step 5: Health Check Setup]
-  |-- Health check interval (default: 60s)
-  |-- Timeout threshold (default: 5s)
+  |-- Health check interval (default: 60s — ping agent's health endpoint)
+  |-- Timeout threshold (default: 10s — A2A task timeout)
   |-- Failure threshold before circuit break (default: 3)
   |
   v
-[Deploy and Enable]
-  |-- POST /api/v1/platform/mcp-servers
+[Register and Enable]
+  |-- POST /api/v1/platform/a2a-agents
   |-- Health check begins immediately
   |-- Status: Active (or Degraded if health check marginal)
+  |-- Agent appears in tenant agent catalog for eligible plan tiers
   |
   v
 End
 ```
 
-**Additional MCP Flows**:
+**Additional A2A Agent Management Flows**:
 
 ```
-[Version Update]
-  Platform admin uploads new version
-  -> System performs rolling update
+[Agent Version Update]
+  Platform admin registers new agent version
+  -> System performs rolling update (new AgentCard published)
   -> Old version remains available for 24h rollback window
-  -> Tenant connections automatically migrate
+  -> Tenant invocations automatically route to new version
   -> ERROR: New version incompatible -> auto-rollback, alert admin
 
 [Access Control Change]
   Platform admin modifies plan tier access
-  -> Tenants on removed tiers lose access at next session
-  -> Active sessions: graceful degradation (tool calls return "unavailable")
+  -> Tenants on removed tiers lose agent access at next session
+  -> Active sessions: graceful degradation (agent returns "unavailable")
   -> Notification sent to affected tenant admins
 
-[Server Decommission]
-  Platform admin marks server for removal
+[Agent Decommission]
+  Platform admin marks agent for removal
   -> 30-day deprecation notice to all tenant admins using it
-  -> Server enters read-only mode at day 15
+  -> Agent enters read-only mode at day 15
   -> Full removal at day 30
   -> ERROR: Tenant still actively using -> block removal, escalate
 ```
@@ -379,7 +385,7 @@ Start
   |-- LLM usage: $1,240 of $5,000 budget
   |-- Search queries: 4,200 of 10,000/day limit
   |-- Storage: 42 GB of 100 GB
-  |-- MCP calls: 12,400 this month
+  |-- A2A agent invocations: 12,400 this month
   |
   v
 [Quota Management]
@@ -440,7 +446,7 @@ Start
   |   |-- PostgreSQL: Healthy (connections: 42/200, RLS active)
   |   |-- Redis: Healthy (2.1 GB of 6 GB)
   |   |-- Azure AI Search: Healthy (23 indexes)
-  |   |-- MCP Servers: 8/9 healthy (PitchBook: circuit open)
+  |   |-- A2A Agents: 8/9 healthy (PitchBook Intelligence: circuit open)
   |   |-- Auth0: Healthy
   |
   v
@@ -474,7 +480,7 @@ End
   |-- Sum LLM token usage (input + output) by provider
   |-- Multiply by per-token cost rates
   |-- Sum search query costs
-  |-- Sum MCP call costs
+  |-- Sum A2A agent invocation costs
   |-- Sum storage costs
   |
   v
@@ -649,17 +655,17 @@ End
 
 ## Flow Summary
 
-| Flow                  | Trigger              | Primary API                         | Failure Mode                  |
-| --------------------- | -------------------- | ----------------------------------- | ----------------------------- |
-| Bootstrapping         | Deployment           | CLI + platform API                  | DB not ready, email failure   |
-| Tenant provisioning   | Admin action         | POST /platform/tenants              | DB creation fail, email fail  |
-| LLM provider config   | Admin action         | PUT /platform/providers/{id}        | Bad credentials, unreachable  |
-| MCP server management | Admin action         | POST /platform/mcp-servers          | Connection fail, incompatible |
-| Billing & quotas      | Admin action / alert | PUT /platform/tenants/{id}/quotas   | Payment failure, overage      |
-| Platform monitoring   | Continuous / alert   | GET /platform/health, /metrics      | Infrastructure degradation    |
-| Suspension            | Admin action         | POST /platform/tenants/{id}/suspend | Active session disruption     |
-| Deprovisioning        | Admin action         | DELETE /platform/tenants/{id}       | Partial deletion, disputes    |
-| Admin onboarding      | Admin action         | POST /platform/team/invite          | Email failure, link expiry    |
+| Flow                 | Trigger              | Primary API                         | Failure Mode                  |
+| -------------------- | -------------------- | ----------------------------------- | ----------------------------- |
+| Bootstrapping        | Deployment           | CLI + platform API                  | DB not ready, email failure   |
+| Tenant provisioning  | Admin action         | POST /platform/tenants              | DB creation fail, email fail  |
+| LLM provider config  | Admin action         | PUT /platform/providers/{id}        | Bad credentials, unreachable  |
+| A2A agent management | Admin action         | POST /platform/a2a-agents           | Connection fail, incompatible |
+| Billing & quotas     | Admin action / alert | PUT /platform/tenants/{id}/quotas   | Payment failure, overage      |
+| Platform monitoring  | Continuous / alert   | GET /platform/health, /metrics      | Infrastructure degradation    |
+| Suspension           | Admin action         | POST /platform/tenants/{id}/suspend | Active session disruption     |
+| Deprovisioning       | Admin action         | DELETE /platform/tenants/{id}       | Partial deletion, disputes    |
+| Admin onboarding     | Admin action         | POST /platform/team/invite          | Email failure, link expiry    |
 
 ---
 

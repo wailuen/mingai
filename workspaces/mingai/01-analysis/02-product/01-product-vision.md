@@ -55,8 +55,8 @@ The core problems are:
 
 **Integration Admin (integration_admin)**
 
-- Manages MCP server registrations (Bloomberg, Oracle Fusion, BIPO, etc.)
-- Monitors MCP server health and tool availability
+- Manages A2A agent catalog (Bloomberg Intelligence, Oracle Fusion, iLevel Portfolio, etc.)
+- Monitors A2A agent health and availability
 
 **Sync Admin (sync_admin)**
 
@@ -84,40 +84,40 @@ As implemented (based on codebase analysis), the product includes:
 
 ### Fully Implemented
 
-| Capability                   | Description                                                                       |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| Azure AD SSO                 | Enterprise authentication with group-based role sync                              |
-| RBAC with 9 system functions | Fine-grained admin access via synthetic role IDs in JWT                           |
-| AI Chat with SSE streaming   | Real-time conversational AI with GPT-5.2-chat via Azure OpenAI                    |
-| Multi-index search           | Parallel search across multiple Azure AI Search indexes                           |
-| Intelligent index routing    | LLM-driven index selection based on query analysis                                |
-| Internet fallback (Tavily)   | Automatic web search when enterprise content is insufficient                      |
-| Source attribution           | Every response shows sources with relevance scores                                |
-| Multi-language support       | Auto-detect query language, respond in same language                              |
-| Conversation management      | Persistent history, context window management, retention policies                 |
-| User profiling               | LLM learns user preferences and organizational context                            |
-| Personal document upload     | Upload to user's OneDrive with vector indexing and private search                 |
-| Admin UI                     | Role management, user management, index management, analytics                     |
-| MCP server integration       | Pluggable external data sources via Model Context Protocol                        |
-| SharePoint indexing          | Background sync workers for SharePoint library content                            |
-| Glossary management          | Enterprise glossary for domain-specific terminology                               |
-| Feedback system              | Thumbs up/down on AI responses with admin review                                  |
-| Analytics & cost tracking    | Query analytics, LLM/search/Tavily usage tracking, cost allocation                |
-| Audit logging                | Comprehensive audit trail with 3-year retention                                   |
-| Notification system          | Real-time SSE notifications and email triage                                      |
-| Agent communication channels | Email channel for AI-initiated communications (meeting confirmations, follow-ups) |
-| Unsolicited email triage     | Multi-layer routing for inbound emails to shared agent mailbox                    |
-| Unified KB management        | Consolidated knowledge base management across sources                             |
-| Background job scheduling    | Group sync, retention cleanup, SharePoint sync, question categorization           |
-| Circuit breaker pattern      | Fault tolerance for external service calls                                        |
-| Cache warming & invalidation | Redis pub/sub for cross-instance cache consistency                                |
+| Capability                   | Description                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Azure AD SSO                 | Enterprise authentication with group-based role sync                                                   |
+| RBAC with 9 system functions | Fine-grained admin access via synthetic role IDs in JWT                                                |
+| AI Chat with SSE streaming   | Real-time conversational AI with GPT-5.2-chat via Azure OpenAI                                         |
+| Multi-index search           | Parallel search across multiple Azure AI Search indexes                                                |
+| Intelligent index routing    | LLM-driven index selection based on query analysis                                                     |
+| Internet fallback (Tavily)   | Automatic web search when enterprise content is insufficient                                           |
+| Source attribution           | Every response shows sources with relevance scores                                                     |
+| Multi-language support       | Auto-detect query language, respond in same language                                                   |
+| Conversation management      | Persistent history, context window management, retention policies                                      |
+| User profiling               | LLM learns user preferences and organizational context                                                 |
+| Personal document upload     | Upload to user's OneDrive with vector indexing and private search                                      |
+| Admin UI                     | Role management, user management, index management, analytics                                          |
+| A2A agent integration        | 9 autonomous A2A agents (Bloomberg Intelligence, Oracle Fusion, CapIQ, etc.) each internally using MCP |
+| SharePoint indexing          | Background sync workers for SharePoint library content                                                 |
+| Glossary management          | Enterprise glossary for domain-specific terminology                                                    |
+| Feedback system              | Thumbs up/down on AI responses with admin review                                                       |
+| Analytics & cost tracking    | Query analytics, LLM/search/Tavily usage tracking, cost allocation                                     |
+| Audit logging                | Comprehensive audit trail with 3-year retention                                                        |
+| Notification system          | Real-time SSE notifications and email triage                                                           |
+| Agent communication channels | Email channel for AI-initiated communications (meeting confirmations, follow-ups)                      |
+| Unsolicited email triage     | Multi-layer routing for inbound emails to shared agent mailbox                                         |
+| Unified KB management        | Consolidated knowledge base management across sources                                                  |
+| Background job scheduling    | Group sync, retention cleanup, SharePoint sync, question categorization                                |
+| Circuit breaker pattern      | Fault tolerance for external service calls                                                             |
+| Cache warming & invalidation | Redis pub/sub for cross-instance cache consistency                                                     |
 
 ### Planned / In Research
 
 | Capability                    | Status                                              |
 | ----------------------------- | --------------------------------------------------- |
 | MS Teams bot integration      | Phase 2, designed but not built                     |
-| Oracle Fusion MCP server      | Research phase (detailed API analysis complete)     |
+| Oracle Fusion A2A agent       | Research phase (detailed API analysis complete)     |
 | Bloomberg data integration    | Research phase (SDK and API exploration)            |
 | BIPO HRMS integration         | Research phase (SAML SSO and API documented)        |
 | Expert escalation (full flow) | Partially designed, SME identification not complete |

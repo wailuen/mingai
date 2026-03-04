@@ -51,7 +51,7 @@ PLATFORM_ROLES = {
             "tenant:read_all",           # View all tenant data
             "provider:manage",           # Manage LLM providers globally
             "provider:credentials",      # Set/rotate provider API keys
-            "mcp:manage_global",         # Register global MCP servers
+            "agent:manage_global",        # Register global A2A agents
             "billing:manage",            # Platform billing and quotas
             "compliance:audit",          # Cross-tenant audit access
             "system:health",             # System monitoring
@@ -83,8 +83,8 @@ TENANT_ROLES = {
             "sso:configure",             # Set up SSO connection
             "provider:select",           # Select from platform-approved LLMs
             "provider:byollm",           # Configure BYOLLM keys
-            "mcp:select",               # Enable/disable MCP servers
-            "mcp:configure",             # Configure MCP settings
+            "agent:select",              # Enable/disable A2A agents
+            "agent:configure",           # Configure agent credentials and access
             "index:manage",              # Create/configure search indexes
             "kb:manage",                 # Manage knowledge bases
             "analytics:view_all",        # View all tenant analytics
@@ -144,7 +144,7 @@ TENANT_ROLES = {
 | List providers     | `GET /api/v1/platform/providers`                      | LLM providers list           |
 | Configure provider | `PUT /api/v1/platform/providers/{id}`                 | Set credentials/endpoints    |
 | Enable provider    | `POST /api/v1/platform/providers/{id}/enable`         | Make available to tenants    |
-| Global MCP servers | `GET/POST /api/v1/platform/mcp-servers`               | Register global MCP          |
+| Global A2A agents  | `GET/POST /api/v1/platform/a2a-agents`                | Register global A2A agents   |
 | Platform health    | `GET /api/v1/platform/health`                         | System-wide health           |
 | Platform metrics   | `GET /api/v1/platform/metrics`                        | Cross-tenant metrics         |
 | Billing overview   | `GET /api/v1/platform/billing`                        | Platform-wide billing        |
@@ -161,7 +161,7 @@ Platform Admins can see:
 - Cross-tenant billing and cost breakdown
 - Global LLM provider usage and quotas
 - Platform-wide health and error rates
-- All MCP server registrations
+- All A2A agent registrations
 - Compliance audit trail
 
 Platform Admins **cannot** see:
@@ -230,7 +230,7 @@ async def configure_provider(
 2. **Tenant Management**: Table of tenants with status, plan, user count, last active
 3. **Tenant Detail**: Individual tenant config, usage, quotas, billing
 4. **Provider Management**: LLM provider list, credentials status, model catalog
-5. **Global MCP Servers**: Registered servers, health, tenant access matrix
+5. **Global A2A Agents**: Registered agents, health, tenant access matrix
 6. **Billing Overview**: Cost breakdown by tenant, provider, time period
 7. **System Health**: Service health, latency metrics, error rates
 8. **Compliance Audit**: Cross-tenant audit log viewer with filters
@@ -256,8 +256,8 @@ async def configure_provider(
 | List providers      | `GET /api/v1/admin/providers`                   | Available LLM providers |
 | Select provider     | `POST /api/v1/admin/providers/{id}/enable`      | Enable for org          |
 | BYOLLM config       | `PUT /api/v1/admin/providers/byollm`            | Own API keys            |
-| List MCP servers    | `GET /api/v1/admin/mcp-servers`                 | Available MCP servers   |
-| Enable MCP          | `POST /api/v1/admin/mcp-servers/{id}/enable`    | Enable for org          |
+| List A2A agents     | `GET /api/v1/admin/a2a-agents`                  | Available A2A agents    |
+| Enable A2A agent    | `POST /api/v1/admin/a2a-agents/{id}/enable`     | Enable for org          |
 | Manage indexes      | `GET/POST/PUT/DELETE /api/v1/admin/indexes`     | Search index CRUD       |
 | View analytics      | `GET /api/v1/admin/analytics/*`                 | Usage analytics         |
 | View billing        | `GET /api/v1/admin/billing`                     | Cost and usage          |
@@ -274,7 +274,7 @@ Tenant Admins can see:
 - All analytics for their tenant
 - Their tenant's LLM usage and costs
 - Their tenant's audit logs
-- Available (platform-approved) LLM providers and MCP servers
+- Available (platform-approved) LLM providers and A2A agents
 
 Tenant Admins **cannot** see:
 
@@ -342,7 +342,7 @@ async def configure_byollm(
 3. **Role Management**: Custom roles, permission matrix, assignment view
 4. **SSO Configuration**: Provider selection, connection test, user mapping
 5. **LLM Providers**: Available providers, enabled status, BYOLLM config
-6. **MCP Servers**: Available servers, enabled/disabled toggle, configuration
+6. **A2A Agents**: Available agents, enabled/disabled toggle, configuration
 7. **Search Indexes**: Index list, sync status, document counts
 8. **Analytics**: Usage charts, cost breakdown, query analysis
 9. **Billing**: Current usage, plan limits, upgrade options
@@ -424,9 +424,9 @@ async def resolve_permissions(user_id: str, tenant_id: str) -> EffectivePermissi
         "byollm_allowed": True,
     },
     "features": {
-        "mcp_enabled": True,
+        "a2a_agents_enabled": True,
         "sharepoint_sync": True,
-        "custom_mcp_servers": False,       # Enterprise only
+        "custom_a2a_agents": False,        # Enterprise only (BYOA2A)
         "dedicated_database": False,       # Enterprise only
         "sla_tier": "standard",
     },
@@ -452,7 +452,7 @@ async def resolve_permissions(user_id: str, tenant_id: str) -> EffectivePermissi
 | LLM budget/mo | $500          | $5,000       | Custom         |
 | SSO           | Password only | Any SSO      | Any SSO + SAML |
 | BYOLLM        | No            | Yes          | Yes            |
-| MCP servers   | 3             | All standard | All + custom   |
+| A2A agents    | 3             | All standard | All + custom   |
 | Dedicated DB  | No            | No           | Yes            |
 | Custom domain | No            | Yes          | Yes            |
 | SLA           | Best effort   | 99.9%        | 99.99%         |
