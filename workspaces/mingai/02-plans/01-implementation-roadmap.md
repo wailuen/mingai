@@ -2,16 +2,16 @@
 
 ## Summary Table
 
-| Phase | Name             | Duration | Key Deliverable                                                                        | Kailash SDK                                                                      | Risk                               |
-| ----- | ---------------- | -------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
-| 1     | Foundation       | 8 weeks  | tenant_id isolation, platform RBAC, glossary v1                                        | DataFlow (PostgreSQL models, Alembic migrations)                                 | HIGH — touches every query path    |
-| 2     | LLM Library      | 4 weeks  | Platform LLM Library + Tenant LLM Setup (Library or BYOLLM)                            | Kaizen (LLMProvider, instrumented client), DataFlow (tenant_config, llm_library) | MEDIUM — cost modeling uncertainty |
-| 3     | Auth Flexibility | 3 weeks  | Tenant-selectable SSO (Entra, Google, Okta, SAML) + Google Drive credential groundwork | Nexus (auth middleware)                                                          | MEDIUM — token migration window    |
-| 4     | Agentic Upgrade  | 5 weeks  | Kaizen multi-agent + A2A + Google Drive full sync + glossary RAG integration           | Kaizen (orchestration, A2A), MCP (internal agent protocol)                       | HIGH — 9 A2A agents to isolate     |
-| 5     | Cloud Agnostic   | 4 weeks  | Azure + GCP certification, CloudStorageConnector abstraction (SharePoint + GDrive)     | Core SDK (workflow nodes), Nexus (deployment)                                    | MEDIUM — abstraction leakage       |
-| 6     | GA               | 3 weeks  | Billing, self-service onboarding, SLA monitoring, DR runbooks                          | Nexus (billing API), DataFlow (usage tracking)                                   | LOW — polish phase                 |
+| Phase | Name             | Duration | Key Deliverable                                                                                                  | Kailash SDK                                                                      | Risk                                   |
+| ----- | ---------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
+| 1     | Foundation       | 8 weeks  | tenant_id isolation, platform RBAC, glossary v1                                                                  | DataFlow (PostgreSQL models, Alembic migrations)                                 | HIGH — touches every query path        |
+| 2     | LLM Library      | 4 weeks  | Platform LLM Library + Tenant LLM Setup (Library or BYOLLM)                                                      | Kaizen (LLMProvider, instrumented client), DataFlow (tenant_config, llm_library) | MEDIUM — cost modeling uncertainty     |
+| 3     | Auth Flexibility | 3 weeks  | Tenant-selectable SSO (Entra, Google, Okta, SAML) + Google Drive credential groundwork                           | Nexus (auth middleware)                                                          | MEDIUM — token migration window        |
+| 4     | Agentic Upgrade  | 6 weeks  | Kaizen multi-agent + A2A + guardrail enforcement + synthesis context management + DAG failure policy + fast-path | Kaizen (orchestration, A2A), MCP (internal agent protocol)                       | HIGH — 9 A2A agents + guardrail system |
+| 5     | Cloud Agnostic   | 5 weeks  | Azure + GCP certification, OTel tracing, DAG replay UI, CloudStorageConnector abstraction                        | Core SDK (workflow nodes), Nexus (deployment)                                    | MEDIUM — abstraction leakage           |
+| 6     | GA               | 4 weeks  | Billing, self-service onboarding, BYOMCP sandboxing, marketplace consent model, DR runbooks                      | Nexus (billing API), DataFlow (usage tracking)                                   | MEDIUM — enterprise security gates     |
 
-**Total estimated duration: 27 weeks (~7 months)**
+**Total estimated duration: 30 weeks (~7.5 months)**
 
 **80/15/5 Rule Applied Throughout:**
 
@@ -211,14 +211,18 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 ### Key Deliverables
 
 1. **Kaizen multi-agent orchestration** — Supervisor agent delegates to specialist agents (research, analysis, synthesis) per conversation
-2. **A2A protocol** — Standardized inter-agent communication using Google A2A v0.3; agents publish AgentCards at `/.well-known/agent.json`
-3. **A2A agent registry** — Central registry of all 9 A2A agents (Bloomberg Intelligence, CapIQ Intelligence, Perplexity Web Search, Oracle Fusion, AlphaGeo, Teamworks, PitchBook Intelligence, Azure AD Directory, iLevel Portfolio); agents internally use MCP — not user-facing
+2. **A2A protocol** — Standardized inter-agent communication using Google A2A v0.3; agents publish AgentCards at `/.well-known/agent.json`; `AgentDispatcher` abstraction layer isolates wire protocol from orchestrator internals
+3. **A2A agent registry** — Central registry of all 9 A2A agents (Bloomberg Intelligence, CapIQ Intelligence, Perplexity Web Search, Oracle Fusion, AlphaGeo, Teamworks, PitchBook Intelligence, Azure AD Directory, iLevel Portfolio); agents internally use MCP — not user-facing; health tracking and credential verification per tenant
 4. **Per-tenant A2A agent routing** — Tenant admin configures which agents are enabled; tenant provides credentials; platform enforces agent guardrails and credential isolation
-5. **5 additional LLM providers added to LLM Library** — Anthropic, Deepseek, DashScope (Qwen), Bytedance Ark (Doubao), Google Gemini adapters added to LLMProvider abstraction and published in Platform LLM Library per plan tier
-6. **Agent memory isolation** — Conversation context and agent state scoped to tenant_id
-7. **Cost controls for agentic RAG** — Per-tenant budget limits, circuit breakers for runaway agent loops
-8. **Google Drive sync worker** — Full sync worker with folder browser API, incremental sync via `changes.list`, push notification channels, OAuth2 and Service Account auth, admin UI for setup and schedule. See `01-analysis/01-research/22-google-drive-sync-architecture.md`.
-9. **Glossary RAG integration** — Wire approved glossary terms into the RAG pipeline: query enrichment (GlossaryEnricher), LLM prompt injection (system prompt glossary section), and source attribution tooltips. Analytics tracking for term match rates.
+5. **Three-layer guardrail enforcement** — (a) Positional system prompt ordering (guardrails injected last), (b) Output filter with per-agent rule sets (keyword_block, citation_required, semantic_check), (c) Registration-time LLM audit of tenant prompt extensions. Golden test sets per agent template as CI gate. See `01-analysis/01-research/25-a2a-guardrail-enforcement.md`.
+6. **Synthesis context management** — Per-agent extraction schemas (all 9 agents) convert raw Artifacts to 300–1,500 token synthesis-ready summaries. ExtractionService runs in parallel before synthesis LLM call using intent-tier model. Multi-pass synthesis for 8+ agent DAGs. Context budget enforced at 4,000 tokens/agent cap. See `01-analysis/01-research/26-a2a-synthesis-context-management.md`.
+7. **DAG partial failure policy** — Node criticality classification (CRITICAL/SUPPLEMENTARY); per-failure-class propagation rules (auth_failure blocks critical agents, soft-fails supplementary; infra_failure retries once; rate_limited queues with user notification); partial result disclosure in user-facing responses. See `01-analysis/01-research/27-a2a-execution-hardening.md`.
+8. **Planning LLM fast-path** — Single-agent queries (intent confidence ≥ 0.92, no cross-agent dependency) bypass DAG planner, reducing P50 latency by ~42% for 55-70% of query volume. See `01-analysis/01-research/27-a2a-execution-hardening.md`.
+9. **5 additional LLM providers added to LLM Library** — Anthropic, Deepseek, DashScope (Qwen), Bytedance Ark (Doubao), Google Gemini adapters added to LLMProvider abstraction and published in Platform LLM Library per plan tier
+10. **Agent memory isolation** — Conversation context and agent state scoped to tenant_id
+11. **Cost controls for agentic RAG** — Per-tenant budget limits, circuit breakers for runaway agent loops
+12. **Google Drive sync worker** — Full sync worker with folder browser API, incremental sync via `changes.list`, push notification channels, OAuth2 and Service Account auth, admin UI for setup and schedule. See `01-analysis/01-research/22-google-drive-sync-architecture.md`.
+13. **Glossary RAG integration** — Wire approved glossary terms into the RAG pipeline: query enrichment (GlossaryEnricher), LLM prompt injection (system prompt glossary section), and source attribution tooltips. Analytics tracking for term match rates.
 
 ### Kailash SDK Components
 
@@ -251,7 +255,7 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - 7 LLM providers in LLM Library pass integration test suite; tenant LLM Setup supports all 7
 - Per-tenant cost tracking accurate; no tenant exceeds budget without alert
 
-**User Flows**: Platform Admin: 04-Global A2A Agent Management | End User: 05-Agent Delegation | Tenant Admin: 07-Google Drive Setup, 08-Glossary Approval Workflow | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
+**User Flows**: Platform Admin: 04-Global A2A Agent Management | End User: 05-Agent Delegation, 09-DAG Execution (fast-path, multi-agent, partial failure, guardrail block) | Tenant Admin: 07-Google Drive Setup, 08-Glossary Approval Workflow, 09-DAG Replay/Debug, 09-BYOMCP Registration | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
 
 ### Red-Team Recommendation Applied
 
@@ -280,6 +284,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 7. **GCP deployment** — Full stack deployed on GCP (Cloud SQL for PostgreSQL, Vertex AI Search, GCS); integration tests passing
 8. **Terraform IaC** — Infrastructure as code for AWS, Azure, and GCP; shared module structure
 9. **CloudStorageConnector abstraction** — Abstract interface covering SharePoint and Google Drive connectors; sync worker becomes connector-agnostic. Non-Microsoft enterprises can use Google Drive as their primary knowledge source without SharePoint. See `01-analysis/01-research/22-google-drive-sync-architecture.md` Section 9.
+10. **OpenTelemetry distributed tracing** — W3C Trace Context propagation from orchestrator through all A2A agent containers and MCP calls. OTel collector exporting to Jaeger/Grafana Tempo. Platform admin trace explorer UI with DAG waterfall visualization. See `01-analysis/01-research/27-a2a-execution-hardening.md` Section 3.
+11. **DAG replay and debug UI** — `dag_runs`, `dag_nodes`, `dag_synthesis` tables with per-plan retention policy (7/30/90 days). Tenant admin DAG run panel: artifact inspection, synthesis input/output view, re-run capability, export artifacts as JSON. See `01-analysis/01-research/27-a2a-execution-hardening.md` Section 4.
 
 **Note:** PostgreSQL is the database on all clouds — no DocumentStore abstraction needed. The `DATABASE_URL` connection string handles cloud-specific PostgreSQL endpoints (RDS Aurora, Azure Database for PostgreSQL, Cloud SQL).
 
@@ -342,6 +348,8 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 6. **Load testing** — Simulate 50 concurrent tenants with realistic workloads; identify bottlenecks
 7. **DR runbooks** — Document and test disaster recovery procedures per component: database failover, LLM provider failover, search outage, Redis failover. SLA tiers per plan enforced. See `01-analysis/08-red-team-v2/01-remediation-plan.md` §7 for DR architecture.
 8. **Demo environment** — Production-quality tenant with seeded data, realistic glossary, 3 search indexes, and 2 A2A agents enabled; used for design partner onboarding and sales demos
+9. **BYOMCP sandboxing** — Kubernetes NetworkPolicy per tenant (ingress from own orchestrator only, egress to declared domains only), Envoy sidecar rate limiting, resource quotas per plan tier, registration-time capability audit, platform admin approval gate for write-capable agents. See `01-analysis/01-research/28-a2a-extensibility-security.md`.
+10. **Marketplace data residency and consent model** — Publisher trust verification (domain + DPA + capability probe), three-level consent architecture (platform admin → tenant admin policy → per-query user disclosure), data egress audit log, GDPR data sovereignty filter, per-publisher blocklist for Enterprise tenants. See `01-analysis/01-research/28-a2a-extensibility-security.md`.
 
 ### Kailash SDK Components
 
