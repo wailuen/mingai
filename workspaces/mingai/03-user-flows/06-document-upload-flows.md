@@ -158,7 +158,7 @@ Start
   |
   +-- Stage: indexing (80%)
   |   |-- Chunks indexed in Azure AI Search
-  |   |-- Index: aihub-conversation-documents
+  |   |-- Index: mingai-conversation-documents
   |   |-- Per-chunk fields: document_id, conversation_id, user_id,
   |   |   content, content_vector, chunk_type, metadata fields
   |

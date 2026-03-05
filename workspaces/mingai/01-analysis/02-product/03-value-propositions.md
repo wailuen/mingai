@@ -7,7 +7,7 @@
 | Producer                | Value Created                                                       | Current State                            |
 | ----------------------- | ------------------------------------------------------------------- | ---------------------------------------- |
 | Index Administrators    | Register and configure Azure AI Search indexes with metadata        | Implemented                              |
-| Content Authors         | Create documents in SharePoint, OneDrive, enterprise systems        | External -- AI Hub indexes their content |
+| Content Authors         | Create documents in SharePoint, OneDrive, enterprise systems        | External -- mingai indexes their content |
 | MCP Server Developers   | Build connectors to external data sources (Bloomberg, Oracle, BIPO) | Research phase for new connectors        |
 | Glossary Managers       | Curate domain-specific terminology for better search                | Implemented                              |
 | Subject Matter Experts  | Respond to escalated queries, building the knowledge graph          | Partially designed                       |

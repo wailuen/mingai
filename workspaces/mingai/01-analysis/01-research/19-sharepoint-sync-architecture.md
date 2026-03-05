@@ -23,7 +23,7 @@ grant_type=client_credentials
 &scope=https://graph.microsoft.com/.default
 ```
 
-**Source**: `aihub_shared/services/sharepoint_client.py`
+**Source**: `mingai_shared/services/sharepoint_client.py`
 
 The `SharePointClient` class manages the full token lifecycle:
 
@@ -142,7 +142,7 @@ The folder path is normalized (lowered, stripped of trailing slashes, default `"
 Before creation, the service checks both storage layers:
 
 1. **CosmosDB**: Query for existing document with the generated `index_id`
-2. **Azure AI Search**: Check if a search index with name `aihub-sp-{index_id}` already exists
+2. **Azure AI Search**: Check if a search index with name `mingai-sp-{index_id}` already exists
 
 If either exists, the creation is rejected with a 409 Conflict response.
 
@@ -152,7 +152,7 @@ The search index is created with the following field structure, defined in `shar
 
 ```python
 # Key fields
-INDEX_PREFIX = "aihub-sp-"
+INDEX_PREFIX = "mingai-sp-"
 EMBEDDING_MODEL = "text-embedding-3-large"
 VECTOR_DIMENSIONS = 3072
 EMBEDDING_BATCH_SIZE = 16
@@ -368,7 +368,7 @@ Delta Token Expired (410 Gone)
     └─> Store new delta token after completion
 ```
 
-**Source**: `aihub_shared/services/sharepoint_client.py` — `get_delta_changes()` method
+**Source**: `mingai_shared/services/sharepoint_client.py` — `get_delta_changes()` method
 
 ### Folder Scoping
 
@@ -541,7 +541,7 @@ This allows the RAG query pipeline to distinguish text-extracted chunks from vis
 
 ### Chunking Parameters
 
-Defined in `DocumentProcessor` (`aihub_shared/services/document_processor.py`):
+Defined in `DocumentProcessor` (`mingai_shared/services/document_processor.py`):
 
 ```python
 DEFAULT_MAX_TOKENS = 1000
@@ -682,8 +682,8 @@ The current architecture is **single-tenant by design**. Converting to multi-ten
 | **OAuth Credentials**    | Single set of env vars / Key Vault secrets  | Per-tenant Azure AD app registration or admin consent             |
 | **SharePoint Client**    | One `SharePointClient` instance per process | Tenant-scoped client pool or factory                              |
 | **Graph API Scope**      | `https://graph.microsoft.com/.default`      | Same scope, but per-tenant token endpoint                         |
-| **Redis Keys**           | Prefix `aihub2:` — no tenant isolation      | Prefix `mingai:{tenant_id}:` — namespaced per tenant              |
-| **Azure Search Indexes** | Naming: `aihub-sp-{index_id}`               | Naming: `{tenant_id}-sp-{index_id}` or dedicated index per tenant |
+| **Redis Keys**           | Prefix `mingai:` — no tenant isolation      | Prefix `mingai:{tenant_id}:` — namespaced per tenant              |
+| **Azure Search Indexes** | Naming: `mingai-sp-{index_id}`               | Naming: `{tenant_id}-sp-{index_id}` or dedicated index per tenant |
 | **CosmosDB Documents**   | No tenant_id field                          | Partition key should include tenant_id                            |
 | **Worker Queue**         | Single queue for all syncs                  | Per-tenant queue or tenant-tagged jobs                            |
 | **Scheduled Sync**       | APScheduler in API container                | Per-tenant schedule evaluation                                    |
@@ -716,12 +716,12 @@ A client pool with LRU eviction would prevent unbounded memory growth while avoi
 
 **3. Redis Key Namespace**
 
-The `RedisKeyBuilder` currently uses a flat `aihub2:` prefix. Multi-tenant requires tenant isolation:
+The `RedisKeyBuilder` currently uses a flat `mingai:` prefix. Multi-tenant requires tenant isolation:
 
 ```python
 # Current
-"aihub2:sharepoint:sync:queue"
-"aihub2:sync_progress:idx_sp_abc123"
+"mingai:sharepoint:sync:queue"
+"mingai:sync_progress:idx_sp_abc123"
 
 # Required
 "mingai:{tenant_id}:sharepoint:sync:queue"
@@ -740,7 +740,7 @@ Three strategies, each with trade-offs:
 | Index-per-tenant             | High (index-level)   | Medium  | Create `{tenant_id}-sp-{index_id}` indexes               |
 | Service-per-tenant           | Maximum              | Highest | Dedicated Azure Search service per tenant                |
 
-The current index naming (`aihub-sp-{index_id}`) and schema would need a `tenant_id` field at minimum, regardless of isolation strategy.
+The current index naming (`mingai-sp-{index_id}`) and schema would need a `tenant_id` field at minimum, regardless of isolation strategy.
 
 **5. Worker Queue Architecture**
 
@@ -772,8 +772,8 @@ The current `SharePointSyncJob` iterates all indexes in a single APScheduler job
 
 | File               | Path (relative to `aihub2/src/`)                                 | Purpose                                                |
 | ------------------ | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| SharePoint Client  | `backend/shared/aihub_shared/services/sharepoint_client.py`      | Graph API client, OAuth2, token caching, rate limiting |
-| Constants          | `backend/shared/aihub_shared/services/sharepoint_constants.py`   | Index schema, embedding config, field definitions      |
+| SharePoint Client  | `backend/shared/mingai_shared/services/sharepoint_client.py`      | Graph API client, OAuth2, token caching, rate limiting |
+| Constants          | `backend/shared/mingai_shared/services/sharepoint_constants.py`   | Index schema, embedding config, field definitions      |
 | Router             | `backend/api-service/app/modules/sharepoint/router.py`           | Input validation, browsing endpoints                   |
 | Schemas            | `backend/api-service/app/modules/sharepoint/schemas.py`          | Pydantic models for all SharePoint entities            |
 | Index Endpoints    | `backend/api-service/app/modules/sharepoint/index_endpoints.py`  | Index CRUD + description management                    |
@@ -790,6 +790,6 @@ The current `SharePointSyncJob` iterates all indexes in a single APScheduler job
 | Sync Processor     | `sync-worker/app/services/sync_processor.py`                     | Core processing: delta, extract, embed, index          |
 | Checkpoint         | `sync-worker/app/checkpoint.py`                                  | Checkpoint + distributed lock                          |
 | Heartbeat          | `sync-worker/app/heartbeat.py`                                   | Worker liveness detection                              |
-| Redis Utils        | `backend/shared/aihub_shared/redis/utils.py`                     | Key builder, Redis client factory                      |
-| Document Processor | `backend/shared/aihub_shared/services/document_processor.py`     | Text extraction, chunking                              |
+| Redis Utils        | `backend/shared/mingai_shared/redis/utils.py`                     | Key builder, Redis client factory                      |
+| Document Processor | `backend/shared/mingai_shared/services/document_processor.py`     | Text extraction, chunking                              |
 | Frontend Types     | `frontend/src/types/sharepoint.ts`                               | TypeScript type definitions                            |

@@ -294,7 +294,7 @@ mingai competes primarily in category 2 but with cloud-agnostic deployment (AWS-
 
 ## Competitive Matrix
 
-| Capability              | AI Hub                | M365 Copilot        | Glean            | Guru        | Notion AI        | Rovo               | Moveworks      | Kore.ai         | Agentforce      | Custom RAG     |
+| Capability              | mingai                | M365 Copilot        | Glean            | Guru        | Notion AI        | Rovo               | Moveworks      | Kore.ai         | Agentforce      | Custom RAG     |
 | ----------------------- | --------------------- | ------------------- | ---------------- | ----------- | ---------------- | ------------------ | -------------- | --------------- | --------------- | -------------- |
 | Enterprise RBAC         | Deep (9 functions)    | Via M365            | Permission-aware | Basic       | Basic            | Basic              | Enterprise     | Enterprise      | Salesforce-only | Build yourself |
 | Azure AD SSO            | Native                | Native              | Supported        | Supported   | Limited          | Supported          | Supported      | Supported       | Supported       | Build yourself |

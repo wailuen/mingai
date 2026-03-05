@@ -33,7 +33,7 @@
 Start
   |
   v
-[User navigates to https://{tenant-slug}.aihub.com]
+[User navigates to https://{tenant-slug}.mingai.ai]
   |
   v
 [Login page displayed]
@@ -81,7 +81,7 @@ Start
   |
   v
 [First-time onboarding tour]
-  |-- Step 1: "Welcome to AI Hub" -- brief product intro
+  |-- Step 1: "Welcome to mingai" -- brief product intro
   |-- Step 2: "Ask anything" -- show chat interface, explain capabilities
   |-- Step 3: "Your data sources" -- show which indexes you can access
   |   |-- Based on role: "You have access to HR Policies, Finance Reports"

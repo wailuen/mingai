@@ -43,7 +43,7 @@ Only the connection string changes. Cosmos DB locks mingai to Azure. The previou
 
 Source: `app/core/database.py:94-118`, `scripts/provision_cosmosdb.py:61-187`
 
-The aihub2 system uses 23 Cosmos DB containers (2 deprecated). Every container maps to a PostgreSQL table.
+The mingai system uses 23 Cosmos DB containers (2 deprecated). Every container maps to a PostgreSQL table.
 
 | #   | Cosmos DB Container       | Partition Key      | PostgreSQL Table          | Primary Key | Foreign Keys                                | Partition Strategy | Key Indexes                                                           |
 | --- | ------------------------- | ------------------ | ------------------------- | ----------- | ------------------------------------------- | ------------------ | --------------------------------------------------------------------- |

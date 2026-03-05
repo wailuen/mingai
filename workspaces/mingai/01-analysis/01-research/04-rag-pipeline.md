@@ -242,7 +242,7 @@ Enterprise Glossary:
 
 ## Stage 4: LLM Synthesis (RAG)
 
-**Model**: Azure OpenAI GPT-5.2-chat (aihub2-main deployment)
+**Model**: Azure OpenAI GPT-5.2-chat (mingai-main deployment)
 **Latency**: 1-2s
 **Token Budget**: 8000 tokens max output
 
@@ -308,7 +308,7 @@ Please provide a comprehensive answer based on the sources above.
 
 ```python
 response = azure_openai.chat.completions.create(
-    model="aihub2-main",  # GPT-5.2-chat deployment
+    model="mingai-main",  # GPT-5.2-chat deployment
     messages=[
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}

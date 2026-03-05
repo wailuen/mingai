@@ -4,7 +4,7 @@
 
 | Deployment                 | Model        | Purpose                             | Latency | Token Limit |
 | -------------------------- | ------------ | ----------------------------------- | ------- | ----------- |
-| **aihub2-main**            | GPT-5.2-chat | Chat synthesis, complex reasoning   | 2-5s    | 128K ctx    |
+| **mingai-main**            | GPT-5.2-chat | Chat synthesis, complex reasoning   | 2-5s    | 128K ctx    |
 | **intent5**                | GPT-5 Mini   | Intent detection, fast tasks        | <1s     | 128K ctx    |
 | **text-embedding-3-large** | Embeddings   | Document & query vectors (3072-dim) | <1s     | N/A         |
 | **gpt-vision**             | GPT-5 Vision | Image analysis, document OCR        | 2-3s    | 4K out      |
@@ -18,7 +18,7 @@
 AZURE_OPENAI_ENDPOINT = "https://[resource-name].openai.azure.com/"
 AZURE_OPENAI_KEY = "[api-key]"
 AZURE_OPENAI_API_VERSION = "2024-12-01-preview"
-AZURE_OPENAI_PRIMARY_DEPLOYMENT = "aihub2-main"
+AZURE_OPENAI_PRIMARY_DEPLOYMENT = "mingai-main"
 AZURE_OPENAI_AUXILIARY_DEPLOYMENT = "intent5"
 
 # Embeddings
@@ -36,7 +36,7 @@ AZURE_OPENAI_VISION_KEY = ""       # uses primary key if empty
 
 ### OpenAI Client (Shared Library)
 
-Located at: `src/backend/shared/aihub_shared/services/openai_client.py`
+Located at: `src/backend/shared/mingai_shared/services/openai_client.py`
 
 **Capabilities**:
 
@@ -64,7 +64,7 @@ class AzureOpenAIClient:
 
 ### Embeddings Service
 
-Located at: `src/backend/shared/aihub_shared/services/embeddings.py`
+Located at: `src/backend/shared/mingai_shared/services/embeddings.py`
 
 **Caching**:
 
@@ -186,10 +186,10 @@ def select_model_for_task(task_type: str, priority: str) -> str:
 
     model_map = {
         "intent_detection": "intent5",      # Fast, cheap
-        "synthesis": "aihub2-main",         # High quality
+        "synthesis": "mingai-main",         # High quality
         "vision_analysis": "gpt-vision",    # Multimodal
         "fast_task": "intent5",             # Quick response
-        "complex_reasoning": "aihub2-main"  # Deep analysis
+        "complex_reasoning": "mingai-main"  # Deep analysis
     }
 
     if priority == "urgent":
@@ -197,13 +197,13 @@ def select_model_for_task(task_type: str, priority: str) -> str:
         return model_map.get(task_type, "intent5")
     else:
         # Use highest quality
-        return model_map.get(task_type, "aihub2-main")
+        return model_map.get(task_type, "mingai-main")
 ```
 
 ### Fallback Chain
 
 ```
-Primary: GPT-5.2-chat (aihub2-main)
+Primary: GPT-5.2-chat (mingai-main)
     ↓ (timeout/rate limit)
 Fallback 1: GPT-5 Mini (intent5)
     ↓ (still fails)
@@ -328,13 +328,13 @@ Daily aggregation:
 
 ```
 Status: Migration complete. Both deployments now run GPT-5 models.
-- aihub2-main → gpt-5.2-chat (128K context)
+- mingai-main → gpt-5.2-chat (128K context)
 - intent5 → gpt-5-mini (128K context)
 
 Completed features:
 - reasoning_effort parameter support (none/low/medium/high)
 - Separate intent endpoint (AZURE_OPENAI_INTENT_ENDPOINT)
-- Fallback deployments configured (intent-detection, aihub2-main)
+- Fallback deployments configured (intent-detection, mingai-main)
 - supports_reasoning_effort flag in model registry
 
 Remaining (from config TODO-51 comments):

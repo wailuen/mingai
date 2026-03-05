@@ -20,9 +20,9 @@ mingai's agent platform is built on three architectural principles that differen
 
 ## The Problem This Solves
 
-### Current aihub2 Limitations (What We Leave Behind)
+### Current mingai Limitations (What We Leave Behind)
 
-In aihub2's `ResearchAgentHandler`, the orchestrator acts as a god object:
+In mingai's `ResearchAgentHandler`, the orchestrator acts as a god object:
 
 - `ToolPlanner` (LLM) selects which tools to call and constructs the query
 - `ToolExecutor` calls MCP servers directly as dumb data endpoints
@@ -37,7 +37,7 @@ This works for a single-tenant internal system. It cannot scale to multi-tenant 
 
 ### What mingai Fixes
 
-| aihub2 Problem                    | mingai Solution                               |
+| mingai Problem                    | mingai Solution                               |
 | --------------------------------- | --------------------------------------------- |
 | Orchestrator selects tool queries | Agent reasons about its own tool calls        |
 | MCP servers = dumb data endpoints | All 9 = autonomous A2A agents                 |
@@ -55,7 +55,7 @@ This works for a single-tenant internal system. It cannot scale to multi-tenant 
 
 An agent is autonomous when it can receive a natural language task and decide — without orchestrator intervention — which of its MCP tools to call and how to synthesize the result.
 
-**aihub2**: Orchestrator decides tool → calls MCP → gets raw data
+**mingai**: Orchestrator decides tool → calls MCP → gets raw data
 **mingai**: Orchestrator delegates task → Agent decides tools → Agent synthesizes → returns Artifact
 
 CapIQ example: Query is "What are the comparable companies for Emerson Electric?" The CapIQ agent must reason: call `get_company_profile`? `search_deals`? `get_competitor_analysis`? All three? This is reasoning. Pushing that decision into the orchestrator requires the orchestrator to know every possible query pattern for every agent — which doesn't scale to 9 agents, let alone a marketplace of hundreds.
@@ -67,7 +67,7 @@ The DAG (Directed Acyclic Graph of agent tasks) is the orchestrator's private st
 **What an agent receives**: "Get AAPL current P/E ratio and earnings news for the last 7 days"
 **What an agent never receives**: "You are step 2 of 5. Step 1 was internet search. After you complete, step 4 will calculate ratios. Here is the full execution plan."
 
-Sending the full plan to an agent is an anti-pattern from aihub2. It creates coupling, leaks orchestration logic into agents, and makes agents non-reusable across different orchestration contexts.
+Sending the full plan to an agent is an anti-pattern from mingai. It creates coupling, leaks orchestration logic into agents, and makes agents non-reusable across different orchestration contexts.
 
 ### Principle 3: Industry Standards, Not Custom Protocols
 
@@ -481,9 +481,9 @@ Round 2 — Node F (all deps satisfied):
   → stream final answer to user
 ```
 
-### What the DAG Enables vs aihub2
+### What the DAG Enables vs mingai
 
-| Capability               | aihub2 (flat tool list, sequential)     | mingai (DAG, parallel)                       |
+| Capability               | mingai (flat tool list, sequential)     | mingai (DAG, parallel)                       |
 | ------------------------ | --------------------------------------- | -------------------------------------------- |
 | Parallel agent execution | No — one tool call per iteration        | Yes — all independent nodes simultaneously   |
 | Dependency tracking      | No                                      | Yes — downstream waits on upstream artifacts |
@@ -500,13 +500,13 @@ Tools are the orchestrator's direct-call capabilities. No A2A, no LLM reasoning,
 
 ### Built-in Tools (Platform-Managed)
 
-| Tool              | Source in aihub2                | Description                     | Credential       |
+| Tool              | Source in mingai                | Description                     | Credential       |
 | ----------------- | ------------------------------- | ------------------------------- | ---------------- |
 | `search_internet` | `INTERNET_SEARCH_TOOL` (Tavily) | Web search via Tavily REST API  | Platform API key |
 | `calculate`       | None (new)                      | Safe math expression evaluation | None             |
 | `get_weather`     | None (new)                      | Location weather via REST API   | Platform API key |
 
-`search_internet` is the direct migration of aihub2's Tavily integration — elevated from a baked-in tool call to a first-class governed catalog entry.
+`search_internet` is the direct migration of mingai's Tavily integration — elevated from a baked-in tool call to a first-class governed catalog entry.
 
 ### Extensible Registry
 
@@ -906,9 +906,9 @@ The instrumented client reads the tenant's `model_source` flag from tenant confi
 
 ---
 
-## Migration from aihub2
+## Migration from mingai
 
-| aihub2 Component                     | Action    | mingai Target                                                      |
+| mingai Component                     | Action    | mingai Target                                                      |
 | ------------------------------------ | --------- | ------------------------------------------------------------------ |
 | `research_agent.py` ToolPlanner      | Replace   | Orchestrator DAG planner (LLM builds dependency graph)             |
 | `research_agent.py` ToolExecutor     | Replace   | DAG execution engine (dispatches A2A Tasks + tool calls)           |

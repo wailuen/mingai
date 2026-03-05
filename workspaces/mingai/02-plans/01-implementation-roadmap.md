@@ -1,4 +1,4 @@
-# Implementation Roadmap: AIHub2 Multi-Tenant SaaS Conversion
+# Implementation Roadmap: mingai Multi-Tenant SaaS Conversion
 
 ## Summary Table
 
@@ -255,7 +255,7 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - 7 LLM providers in LLM Library pass integration test suite; tenant LLM Setup supports all 7
 - Per-tenant cost tracking accurate; no tenant exceeds budget without alert
 
-**User Flows**: Platform Admin: 04-Global A2A Agent Management | End User: 05-Agent Delegation, 09-DAG Execution (fast-path, multi-agent, partial failure, guardrail block) | Tenant Admin: 07-Google Drive Setup, 08-Glossary Approval Workflow, 09-DAG Replay/Debug, 09-BYOMCP Registration | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
+**User Flows**: Platform Admin: 04-Global A2A Agent Management | End User: 05-Agent Delegation, 09-DAG Execution (fast-path, multi-agent, partial failure, guardrail block) | Tenant Admin: 07-Google Drive Setup, 08-Glossary Approval Workflow, 09-DAG Replay/Debug | Platform Model: 01-Producers/Consumers/Partners, 03-Network Effects
 
 ### Red-Team Recommendation Applied
 
@@ -379,7 +379,7 @@ Phase 1 expanded from 6 to 8 weeks to account for PostgreSQL migration complexit
 - System handles 50 concurrent tenants with P95 latency <2s
 - Zero data leakage across tenants (final isolation audit)
 
-**User Flows**: Platform Admin: 05-Billing/Quota Management, 06-Platform Monitoring | Platform Model: 04-Value Creation/Capture, 05-Competitive Moat
+**User Flows**: Platform Admin: 05-Billing/Quota Management, 06-Platform Monitoring, 09-BYOMCP Approval, 09-Marketplace Verification | Tenant Admin: 09-BYOMCP Registration | End User: 09-Marketplace Consent | Platform Model: 04-Value Creation/Capture, 05-Competitive Moat
 
 ---
 

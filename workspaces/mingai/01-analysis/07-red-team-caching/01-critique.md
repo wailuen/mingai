@@ -550,7 +550,7 @@ The following are well-reasoned and should be retained:
 
 6. **Not caching personal queries and real-time queries** (`15-semantic-caching-analysis.md`, Section 3): The explicit exclusion of "personal queries" (queries containing "my," "mine," first-person context) and real-time data queries from semantic caching is the correct design decision and the analysis in Section 3 is sound.
 
-7. **Separate `aihub2:` → `mingai:` namespace migration** (`02-plans/03-caching-implementation-plan.md`, Phase C1): Explicitly calling out the prefix migration as a Phase C1 deliverable prevents the namespace confusion that would arise from running both prefixes in production simultaneously.
+7. **Separate `mingai:` → `mingai:` namespace migration** (`02-plans/03-caching-implementation-plan.md`, Phase C1): Explicitly calling out the prefix migration as a Phase C1 deliverable prevents the namespace confusion that would arise from running both prefixes in production simultaneously.
 
 8. **Cache state transparency in UX** (`03-user-flows/05-caching-ux-flows.md`): The distinction between "⚡ Fast response", "🟢 Live response", and "🟡 Live data" is a clean, non-technical communication of cache state. The absence of jargon ("Cache hit") is intentionally correct.
 

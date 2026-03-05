@@ -208,6 +208,113 @@ AZURE_AD_EXTRACTION_SCHEMA = ExtractionSchema(
 )
 ```
 
+### iLevel Extraction Schema
+
+```python
+ILEVEL_EXTRACTION_SCHEMA = ExtractionSchema(
+    agent_id="ilevel",
+    target_tokens=1_200,
+    fields=[
+        ExtractionField("fund_summary", priority="required",
+            description="Fund name, vintage year, strategy (buyout/growth/venture), AUM"),
+        ExtractionField("portfolio_company_summary", priority="required",
+            description="Company name, sector, investment date, cost basis, current NAV"),
+        ExtractionField("performance_metrics", priority="required",
+            description="IRR, TVPI, MOIC, DPI — gross and net where available"),
+        ExtractionField("valuation_metrics", priority="query_dependent",
+            description="Current valuation methodology, comparable multiples, EV/EBITDA",
+            include_if_query_contains=["valuation", "fair value", "marks", "write-up", "write-down"]),
+        ExtractionField("distribution_schedule", priority="query_dependent",
+            description="Expected distributions, capital call schedule, unfunded commitment",
+            include_if_query_contains=["distribution", "capital call", "unfunded", "liquidity"]),
+        ExtractionField("raw_transaction_history", priority="omit",
+            description="Skip raw transaction log and full LP stack"),
+    ],
+    source_attribution="iLevel Portfolio Intelligence",
+    format="structured_text",
+)
+```
+
+### PitchBook Extraction Schema
+
+```python
+PITCHBOOK_EXTRACTION_SCHEMA = ExtractionSchema(
+    agent_id="pitchbook",
+    target_tokens=1_500,
+    fields=[
+        ExtractionField("company_profile", priority="required",
+            description="Company name, founded, HQ, sector/industry, employee count, description"),
+        ExtractionField("funding_summary", priority="required",
+            description="Total raised, last round type and amount, lead investors, post-money valuation"),
+        ExtractionField("valuation_multiples", priority="required",
+            description="Revenue multiple, EV/EBITDA, price/book — latest and series-over-series trend"),
+        ExtractionField("investor_list", priority="query_dependent",
+            description="Top 5 investors by ownership percentage, board seats",
+            include_if_query_contains=["investor", "shareholder", "cap table", "ownership", "board"]),
+        ExtractionField("ma_activity", priority="query_dependent",
+            description="Recent M&A: buyer, target, deal value, close date",
+            include_if_query_contains=["M&A", "acquisition", "merger", "deal", "exit"]),
+        ExtractionField("comparable_transactions", priority="query_dependent",
+            description="3–5 comparable transactions in same sector: revenue multiple, deal size",
+            include_if_query_contains=["comps", "comparable", "benchmark", "precedent"]),
+        ExtractionField("raw_deal_table", priority="omit",
+            description="Skip full cap table and raw deal history"),
+    ],
+    source_attribution="PitchBook",
+    format="structured_text",
+)
+```
+
+### AlphaGeo Extraction Schema
+
+```python
+ALPHAGEO_EXTRACTION_SCHEMA = ExtractionSchema(
+    agent_id="alphageo",
+    target_tokens=800,
+    fields=[
+        ExtractionField("location_summary", priority="required",
+            description="Location name, coordinates, administrative boundary (city/state/country)"),
+        ExtractionField("key_demographic_signals", priority="required",
+            description="Top 3–5 demographic metrics most relevant to query: income, age distribution, population density"),
+        ExtractionField("competitive_density", priority="query_dependent",
+            description="Count and proximity of competitor locations within defined radius",
+            include_if_query_contains=["competition", "competitor", "density", "nearby", "proximity"]),
+        ExtractionField("trade_area_metrics", priority="query_dependent",
+            description="Trade area size, daytime vs. nighttime population, foot traffic index",
+            include_if_query_contains=["trade area", "foot traffic", "catchment", "retail", "site"]),
+        ExtractionField("raw_polygon_data", priority="omit",
+            description="Skip raw GeoJSON polygon data and full demographic tables"),
+    ],
+    source_attribution="AlphaGeo",
+    format="structured_text",
+)
+```
+
+### Teamworks Extraction Schema
+
+```python
+TEAMWORKS_EXTRACTION_SCHEMA = ExtractionSchema(
+    agent_id="teamworks",
+    target_tokens=600,
+    fields=[
+        ExtractionField("project_summary", priority="required",
+            description="Project name, status (on track / at risk / delayed / completed), owner, due date"),
+        ExtractionField("milestone_status", priority="required",
+            description="Next 3 upcoming milestones: name, due date, completion percentage"),
+        ExtractionField("open_tasks_summary", priority="query_dependent",
+            description="Count of open/overdue tasks by assignee; top 3 overdue tasks",
+            include_if_query_contains=["tasks", "overdue", "blocking", "open", "action items"]),
+        ExtractionField("team_assignments", priority="query_dependent",
+            description="Team member names, roles, current task assignments",
+            include_if_query_contains=["team", "assigned", "who", "responsibility", "owner"]),
+        ExtractionField("raw_task_list", priority="omit",
+            description="Skip full task list and complete comment history"),
+    ],
+    source_attribution="Teamworks",
+    format="structured_text",
+)
+```
+
 ---
 
 ## 4. ExtractionService Implementation

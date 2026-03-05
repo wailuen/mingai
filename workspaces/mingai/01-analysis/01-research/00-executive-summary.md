@@ -1,365 +1,321 @@
-# mingai - Technical Architecture Executive Summary
+# mingai — Executive Summary
 
-**Date**: March 4, 2026
-**Project**: mingai
-**Status**: Single-Tenant MVP with Multi-Tenant Foundation
-
----
-
-## Overview
-
-mingai is a sophisticated **Retrieval-Augmented Generation (RAG)** platform designed for enterprise-scale intelligent document search and conversation management. It integrates Azure AI services (OpenAI, AI Search, Cosmos DB) with enterprise identity (Azure Entra ID) and role-based access control.
-
-**Current State**: Single-tenant application with organizational context awareness
-**Tech Stack**: Next.js 14 (frontend) + FastAPI (backend) + Azure (infrastructure)
+> **Document Status**: Post-Analysis Summary (supersedes initial architecture snapshot of 2026-03-04)
+> **Date**: 2026-03-05
+> **Scope**: Consolidates findings from the full analysis corpus (docs 01–28) into a single reference document
+> **Audience**: Product owners, engineering leads, stakeholders
 
 ---
 
-## Key Capabilities
+## 1. What We Are Building
 
-### 1. Intelligent Document Retrieval
+**mingai** is an enterprise multi-tenant SaaS platform that provides a single AI-powered conversational interface to all of an organization's knowledge — internal documents, enterprise systems, financial terminals, ERP data, and internet sources — with the access controls, compliance boundaries, and data sovereignty guarantees that regulated enterprises require.
 
-- **Hybrid Search**: Vector + keyword search across enterprise knowledge bases
-- **Multi-Index Queries**: Simultaneously query HR, Finance, Engineering, and custom indexes
-- **Confidence Scoring**: Probabilistic metrics on answer quality
-- **Source Attribution**: Clear citations for all retrieved information
+**Current state**: Single-tenant MVP deployed on Azure OpenAI with functional RAG, RBAC, SharePoint sync, and 9 A2A agent integrations. PostgreSQL migration underway as Phase 1 of the multi-tenant conversion.
 
-### 2. Enterprise Authentication
-
-- **Dual-Mode Auth**: Azure Entra ID SSO + Local authentication
-- **RBAC Model**: Index-level, system-function-level, and data-level access controls
-- **Azure AD Groups**: Dynamic role assignment via organizational groups
-- **JWT Tokens**: 8-hour access tokens + 7-day refresh tokens
-
-### 3. RAG Pipeline
-
-```
-Query → Intent Detection → Index Selection → Vector Search → Embedding Generation → LLM Synthesis → Confidence Scoring → Response
-```
-
-### 4. SharePoint Integration
-
-- **Document Sync**: Automatic sync from SharePoint sites to search indexes
-- **Change Tracking**: Incremental updates, change detection, delta sync
-- **Access Isolation**: Per-user document visibility based on SharePoint permissions
-
-### 5. Real-Time Collaboration
-
-- **WebSocket Support**: Server-Sent Events (SSE) for streaming responses
-- **Conversation Threads**: Multi-turn context management
-- **Activity Tracking**: User behavior analytics and audit logs
+**Target state (after 6 phases, ~30 weeks)**: A fully multi-tenant SaaS platform with per-tenant LLM provider selection, cloud-agnostic deployment (AWS/Azure/GCP), enterprise A2A multi-agent orchestration, marketplace-extensible agent catalog, and GA self-service onboarding.
 
 ---
 
-## System Architecture
+## 2. Architecture Decisions Made
 
-### Frontend Layer (Next.js 14)
+The analysis phase produced the following binding architecture decisions. These supersede any earlier references to Cosmos DB, Azure-only infrastructure, or single-IdP authentication.
 
-- **Port**: 3022
-- **Stack**: React 19 + TypeScript + TailwindCSS + shadcn/ui
-- **State Management**: TanStack Query (React Query)
-- **Real-Time**: WebSocket + SSE for streaming chat responses
-
-### API Gateway (FastAPI)
-
-- **Port**: 8022 (8021 internal)
-- **Responsibilities**: Authentication, routing, rate limiting, CORS
-- **Modularity**: All backend in single service (extractable into microservices)
-
-### Microservices (Consolidated in One Container)
-
-- **Auth Module**: JWT validation, Azure AD integration, token refresh
-- **User Module**: User profiles, preferences, organizational context
-- **Role Module**: RBAC enforcement, permission resolution
-- **Chat Module**: RAG orchestration, LLM interaction, streaming
-- **Conversation Module**: Thread management, message history
-- **Index Module**: Search index configuration, metadata, access control
-- **SharePoint Module**: Document sync, change tracking
-- **Analytics Module**: Usage metrics, user behavior analysis
-- **Admin Module**: Role management, system configuration
-- **MCP Module**: Model Context Protocol server integration
-
-### Data Layer
-
-#### Azure Cosmos DB (NoSQL)
-
-**Database**: `mingai-dev` or production equivalent
-
-**Containers** (Partition Keys):
-| Container | Partition Key | Purpose |
-|-----------|---------------|---------|
-| users | /id | User accounts, emails, profiles |
-| roles | /id | Role definitions and permissions |
-| user_roles | /user_id | User-to-role assignments |
-| group_roles | /group_id | Azure AD group role mappings |
-| indexes | /id | Search index metadata & credentials |
-| conversations | /user_id | Chat conversation threads |
-| messages | /conversation_id | Individual chat messages |
-| events | /partition_key (user_id:YYYY-MM) | Unified audit & analytics events |
-| glossary_terms | /scope | Enterprise glossary with embeddings |
-| mcp_servers | /id | MCP server configurations |
-| notifications | /user_id | Real-time push notifications (30-day TTL) |
-
-#### Azure Search (Vector + Keyword)
-
-- **Hybrid Search**: BM25 (keyword) + vector similarity
-- **Embeddings**: text-embedding-3-large (3072 dimensions)
-- **Top-K**: 5 results per index (configurable)
-- **Min Score**: 0.6 (60% relevance threshold)
-- **Indexes Created Dynamically**: Per knowledge base / SharePoint site
-
-#### Redis Cache
-
-- **Primary Use**: Session caching, rate limiting, cache warming
-- **Key Prefix**: `aihub2:`
-- **Pub/Sub**: Cross-instance cache invalidation (for multi-deployment scenarios)
-
-#### Azure OpenAI (LLM)
-
-- **Primary**: GPT-5.2-chat (chat, synthesis) - slow but highest quality
-- **Auxiliary**: GPT-5 Mini (intent detection, fast operations)
-- **Embeddings**: text-embedding-3-large (for document chunks)
-- **Vision**: Separate vision model for image analysis
-- **Token Limits**: 8K max output tokens, 0.7 temperature
+| Decision                   | Choice Made                                                                                | Rationale                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **Database**               | PostgreSQL (RDS Aurora) with Row-Level Security                                            | Partition key constraint eliminated; RLS is first-class; cloud-portable       |
+| **Multi-tenant isolation** | `tenant_id` column + RLS on all 21 tables                                                  | Additive migration, no container recreation, engine-enforced                  |
+| **Auth strategy**          | Pluggable IdP: direct Entra ID, Google, Okta, SAML; Auth0 optional for managed SSO         | No mandatory Auth0 dependency; direct IdP supported at Professional+          |
+| **LLM abstraction**        | `LLMProvider` interface with per-provider adapters                                         | 7 providers at Phase 4 GA; BYOLLM for Enterprise                              |
+| **Agent architecture**     | Kaizen multi-agent + Google A2A v0.3; `AgentDispatcher` abstraction                        | Wire protocol isolated from orchestrator internals                            |
+| **Cloud agnostic**         | `CLOUD_PROVIDER` env drives adapter selection; no cloud-specific imports in app code       | Phase 1 on AWS; Azure + GCP certified in Phase 5                              |
+| **Caching**                | Semantic cache with tenant namespace isolation; 35–50% hit rate target                     | Context window budget + margin protection                                     |
+| **BYOMCP sandboxing**      | Cilium FQDN egress policy + resource quotas + runtime monitoring + platform admin approval | Defense-in-depth; enterprise extensibility without shared-infrastructure risk |
+| **Marketplace consent**    | Three-level consent (platform verification → tenant policy → per-query user disclosure)    | GDPR/MiFID II/SOX compliant; Enterprise-tier only                             |
 
 ---
 
-## RAG Pipeline Deep-Dive
+## 3. Product Focus: 80/15/5 Framework
 
-### Stage 1: Intent Analysis
+### 80% — Platform-Managed (Every Tenant Gets This)
 
-- **Model**: GPT-5 Mini (fast, cheap)
-- **Task**: Understand user intent, select relevant indexes
-- **Output**: Selected indexes, language detection, internet search flag
-- **Latency**: <1s
+The core platform provides enterprise-grade capability that requires no per-tenant configuration:
 
-### Stage 2: Parallel Search
+- Multi-tenant PostgreSQL with RLS-enforced data isolation
+- JWT v2 with `tenant_id`, `scope`, and `plan` claims
+- Platform LLM Library with approved providers per plan tier
+- RAG pipeline: intent detection → index routing → hybrid search → synthesis → source attribution
+- A2A agent orchestration: DAG planner, parallel dispatch, partial failure policy, synthesis context management
+- Three-layer guardrail enforcement on all A2A agent responses
+- Per-agent extraction schemas for all 9 agents (Bloomberg, CapIQ, Oracle Fusion, Perplexity, Azure AD, iLevel, PitchBook, AlphaGeo, Teamworks)
+- OpenTelemetry distributed tracing and DAG replay infrastructure
+- Platform RBAC (platform_admin, platform_operator, platform_support, platform_security)
+- Billing, usage tracking, and SLA monitoring
 
-- **Vector Search**: Query each selected index in parallel
-- **Top-K Aggregation**: 5 chunks per index, total 15-20 chunks
-- **Scoring**: Vector similarity + keyword relevance
-- **Deduplication**: Remove duplicate documents
+### 15% — Tenant-Configurable (Self-Service)
 
-### Stage 3: Response Synthesis (RAG)
+Tenant admins configure the platform to their organizational requirements without engineering:
 
-- **Model**: GPT-5.2-chat (aihub2-main deployment)
-- **Task**: Generate answer from retrieved chunks
-- **Context**: Conversation history (last 10 messages, summarized >5K tokens)
-- **Constraints**: Must cite sources, avoid hallucination
+- SSO provider selection (Entra ID, Google, Okta, SAML) within platform-enabled options
+- LLM selection from Platform Library, or BYOLLM API key entry (Enterprise only)
+- A2A agent enablement and credential entry per agent
+- Prompt extension per agent instance (audited at registration time)
+- Knowledge base connections (SharePoint, Google Drive, document upload)
+- Glossary management (terms, definitions, CSV import/export)
+- Role customization (permission bundles, index access assignments)
+- Consent policy per marketplace agent (always allow / notify / always prompt)
+- DAG run retention tier selection per plan
 
-### Stage 4: Confidence Scoring
+### 5% — Custom Extension (Enterprise Engineering)
 
-- **Metrics**:
-  - Source agreement (multiple sources corroborate)
-  - Vector similarity (avg relevance score)
-  - Text analysis (confidence keywords)
-  - Coverage assessment (all aspects covered)
-- **Confidence Levels**: HIGH (>0.8), MEDIUM (0.6-0.8), LOW (<0.6)
+Enterprise tenants invest in custom integrations that create platform lock-in:
 
----
-
-## Authentication & Authorization
-
-### JWT Token Structure
-
-```json
-{
-  "user_id": "uuid",
-  "email": "user@company.com",
-  "roles": ["default", "finance_team"],
-  "exp": 1234567890,
-  "iat": 1234567000,
-  "token_type": "access"
-}
-```
-
-### RBAC Model
-
-- **Default Role**: All new users automatically assigned
-- **System Roles**: role_admin, index_admin, user_admin, analytics_viewer, audit_viewer
-- **Additive Permissions**: User permissions = union of all assigned roles
-- **Index Access**: User can only query indexes their roles permit
-- **Azure AD Groups**: Dynamic assignment via group membership
-
-### Permission Resolution
-
-1. Load user from database
-2. Get assigned roles (direct + Azure AD groups)
-3. Get permissions for each role (index access, system functions)
-4. Union all permissions
-5. Enforce access control
+- Custom MCP server (BYOMCP) development for proprietary internal data sources
+- Custom extraction schema contribution (if BYOMCP returns non-standard artifact shapes)
+- Industry-specific compliance extension (additional guardrail rules submitted to platform)
 
 ---
 
-## Current Single-Tenant Architecture
+## 4. Platform Model Analysis
 
-### How Tenant Isolation Works Today
+| Role          | Who                                                                                                    | Transaction                                                  | Platform Value Created                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| **Producers** | Enterprise knowledge workers, analysts, document owners; A2A data providers (Bloomberg, Reuters, etc.) | Contribute queries, documents, knowledge; provide data feeds | Platform aggregates dispersed knowledge into a unified retrievable corpus       |
+| **Consumers** | Knowledge workers seeking answers; managers needing synthesis across systems                           | Natural-language queries, research requests                  | Receive synthesized multi-source answers with RBAC-enforced access              |
+| **Partners**  | Bloomberg, CapIQ, Oracle, PitchBook, AlphaGeo, Teamworks, iLevel, Azure AD, Perplexity                 | Provide specialized data via A2A agents                      | Access enterprise buyers who already trust the platform; DPA-covered data flows |
 
-**Reality**: No tenant field in any data model. System assumes single organization.
+**Transaction enabled**: An analyst issues one natural-language query; the platform orchestrates 3–9 agents across proprietary financial, ERP, and web sources; delivers a synthesized, cited, compliance-filtered answer in <10 seconds — replacing a process that previously took 30–60 minutes of manual research across disconnected systems.
 
-**Isolation Mechanisms**:
+**Network effects that strengthen the platform over time**:
 
-1. **Azure AD Tenant**: All users from one Azure Entra ID tenant
-2. **Role-Based Filtering**: RBAC acts as de facto access control
-3. **Data Partitioning**: Cosmos DB partition keys use user_id, not tenant_id
-4. **Index Configuration**: Search indexes created per knowledge base, not per tenant
-5. **SharePoint Integration**: Single SharePoint tenant configured in .env
-
-### What Would Break for Multi-Tenancy
-
-1. **No tenant_id field** in users, roles, indexes, conversations, etc.
-2. **No tenant isolation** in Cosmos DB queries (partition key doesn't include tenant)
-3. **No tenant routing** in API gateway
-4. **No tenant-specific LLM deployments** (shared Azure OpenAI account)
-5. **No tenant-aware search indexes** (indexes globally scoped)
-6. **No cross-tenant data filtering** (would require code refactor)
+- More agents enrolled → richer responses → more user queries → more usage data → better intent model routing
+- More tenants → larger violation pattern corpus → better guardrail calibration → lower false-positive rates → safer for all tenants
+- More BYOMCP registrations from enterprise tenants → marketplace receives more publisher submissions → marketplace grows → more agents available → higher tenant retention
 
 ---
 
-## MCP (Model Context Protocol) Integration
+## 5. AAA Framework Evaluation
 
-The system includes MCP servers for external data sources:
+### Automate — Reduce Operational Costs
 
-- **Bloomberg MCP**: Financial data via Bloomberg Terminal API
-- **CapIQ MCP**: Credit intelligence and company data
-- **Perplexity MCP**: Web search integration
-- **Oracle Fusion MCP**: ERP system integration
-- **AlphaGeo MCP**: Geospatial intelligence
-- **Teamworks MCP**: Project management integration
-- **PitchBook MCP**: M&A and market intelligence
-- **Azure AD MCP**: User/group lookup from Azure Entra ID
-- **iLevel MCP**: Investment analytics
+| Capability                                    | Automation Delivered                                                                                                          |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| A2A DAG execution                             | 3–9 parallel agent calls orchestrated automatically; no human coordination                                                    |
+| Guardrail enforcement (Layer 2 output filter) | Every agent response validated at infrastructure level; zero compliance team review for routine queries                       |
+| Three-layer prompt injection defense          | Registration-time audit, positional guardrail ordering, output filter — all automated                                         |
+| Tenant provisioning workflow                  | New tenant database records, Redis namespace, search indexes, default admin: all created in <30s with zero human intervention |
+| Semantic cache                                | 35–50% of queries answered from cache; LLM calls eliminated automatically                                                     |
+| SharePoint / Google Drive sync                | Incremental delta sync, change detection, index update — fully background                                                     |
+| DAG failure recovery                          | Partial failure policy executes automatically: retry, proceed with disclosure, or block — per pre-defined rules               |
 
-MCP servers expose tools callable during chat interactions for real-time data retrieval.
+### Augment — Reduce Decision-Making Costs
 
----
+| Capability                                     | Augmentation Delivered                                                                                                           |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Multi-source synthesis with source attribution | Analyst sees synthesized answer + contributing sources + confidence — makes better decisions than with raw data                  |
+| DAG replay and artifact inspection             | Tenant admin sees exactly which agent contributed which data to each answer — diagnoses quality issues without platform support  |
+| Guardrail violation audit trail                | Compliance team sees every filter event with rule ID, action, and masked content — makes informed regulatory reporting decisions |
+| Cost dashboard with per-tenant budget tracking | Platform admin and tenant admin make informed LLM budget decisions with real-time usage data                                     |
+| Intent detection confidence scoring            | Planner fast-path routes high-confidence single-agent queries immediately — users get fast answers for obvious queries           |
 
-## Deployment
+### Amplify — Reduce Expertise Costs for Scaling
 
-### Local Development
-
-- **Docker Compose**: Defines frontend, API service, sync worker, Cosmos DB emulator, Redis, Mailhog
-- **Network**: Bridge network + external enterprise network
-- **Health Checks**: Each service has /health endpoint
-
-### Production Readiness
-
-- **Azure Resources**: Cosmos DB, Search, OpenAI, Blob Storage, App Service
-- **Secrets Management**: Azure Key Vault
-- **Monitoring**: Azure Application Insights
-- **Scaling**: Horizontal scale via App Service instances
-
----
-
-## Key Technical Decisions
-
-| Aspect         | Decision                 | Rationale                                     |
-| -------------- | ------------------------ | --------------------------------------------- |
-| **Frontend**   | Next.js 14               | SSR, route segments, built-in optimization    |
-| **Backend**    | FastAPI (single service) | Async/await native, fast, modular             |
-| **Database**   | Cosmos DB                | Global scale, multi-region, Azure native      |
-| **Search**     | Azure AI Search          | Vector + keyword hybrid, managed service      |
-| **LLM**        | Azure OpenAI             | Enterprise SLA, dedicated capacity, RBAC      |
-| **Identity**   | Azure Entra ID           | Enterprise standard, group-based RBAC         |
-| **Auth**       | JWT + Azure AD OAuth     | Dual-mode flexibility, stateless              |
-| **Caching**    | Redis                    | Session storage, rate limiting, cache warming |
-| **Containers** | Docker Compose           | Local dev, easy on-ramp                       |
+| Capability                | Expertise Amplification                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Platform LLM Library      | Platform admin configures approved providers once; all tenants benefit with zero per-tenant LLM engineering                       |
+| Agent template system     | Bloomberg/CapIQ/Oracle agents built once by platform team; deployed to any tenant with just their credentials — no re-engineering |
+| Extraction schema library | 9 per-agent extraction schemas defined once; every multi-agent query benefits — no per-tenant context engineering                 |
+| Glossary RAG integration  | Domain expert defines terminology once in glossary; query enrichment and prompt injection happen automatically for all users      |
+| Platform RBAC             | Platform admin defines role model once; all tenants inherit the permission framework                                              |
 
 ---
 
-## Notable Gaps & TODOs
+## 6. Network Effects Coverage
 
-The system has 60+ tracked TODOs for future enhancements:
-
-**Critical Path**:
-
-- TODO-02C: Unified role-based access consolidation
-- TODO-05: User profile learning (behavioral profiling)
-- TODO-08: Usage analytics and cost tracking
-- TODO-24: Distributed observability (Azure Monitor integration)
-- TODO-54: Unified events system (audit & analytics consolidation)
-
-**Infrastructure**:
-
-- TODO-28: Cache warming and cross-instance invalidation
-- TODO-51: GPT-5 migration (intent detection scaling)
-- TODO-58: Real-time notifications (WebSocket push)
-
-**Compliance**:
-
-- TODO-04Q: HIPAA data handling compliance
-- TODO-04T: Data residency and sovereignty options
+| Behavior            | How Platform Achieves It                                                                                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Accessibility**   | Single natural-language interface to all authorized data; SSO login; mobile-responsive; fast-path reduces P50 latency to ~1s for single-agent queries                                                                          |
+| **Engagement**      | Synthesized multi-source answers (not raw documents); source attribution with confidence scores; streaming responses; partial failure disclosure keeps users informed rather than confused                                     |
+| **Personalization** | Per-tenant LLM selection; tenant glossary injected into all queries; agent roster configured per tenant; user conversation history maintained for context continuity                                                           |
+| **Connection**      | 9 A2A agents connect to financial terminals, ERP systems, web search, org directories, portfolio analytics; BYOMCP enables connection to any proprietary system; SharePoint and Google Drive sync workers keep indexes current |
+| **Collaboration**   | DAG run export for sharing with data vendors and compliance teams; tenant admin can re-run a specific DAG and compare results; analyst can share a conversation thread with guardrail violation context attached               |
 
 ---
 
-## What's Missing for Multi-Tenancy
+## 7. Value Propositions & Unique Selling Points
 
-To become a true multi-tenant SaaS platform:
+### Value Propositions (What the platform delivers)
 
-1. **Data Model Changes**: Add tenant_id to all containers
-2. **Partition Key Changes**: Include tenant in partition keys for query optimization
-3. **Cosmos DB Scaling**: Switch to shared provisioned throughput with tenant isolation policies
-4. **Search Indexes**: Tenant-specific index creation, per-tenant analyzers
-5. **Azure OpenAI**: Separate deployments or token-based quotas per tenant
-6. **API Gateway**: Tenant extraction from JWT / subdomain / API key
-7. **Sync Worker**: Tenant-aware SharePoint site selection
-8. **Database Migration**: Separate databases per tenant OR robust row-level security
-9. **Cost Tracking**: Per-tenant billing, resource quotas
-10. **Onboarding**: Automated tenant provisioning, schema initialization
+1. **Unified knowledge access** — One conversational interface spanning enterprise documents, financial terminals, ERP systems, web search, and proprietary internal data
+2. **Compliance-safe AI** — Infrastructure-level guardrail enforcement (output filter layer) ensures no agent response violates regulatory constraints, regardless of LLM behavior or tenant customization
+3. **Cost-predictable AI** — Per-tenant hard budget limits, circuit breakers, and real-time cost dashboards prevent agentic RAG cost overruns (the #1 enterprise AI deployment risk)
+4. **RBAC that matches enterprise permission models** — 9 system functions, custom role bundling, index-level access control, platform roles separate from tenant roles
 
----
+### Genuine USPs (Verifiably differentiated from competitors)
 
-## Performance Characteristics
+See full analysis in `02-product/04-unique-selling-points.md`. Summary:
 
-| Operation           | Target | Current          |
-| ------------------- | ------ | ---------------- |
-| Chat Response (RAG) | <3s    | ~2-3s (observed) |
-| Intent Detection    | <1s    | <0.5s            |
-| Vector Search       | <1s    | <0.5s            |
-| Index Search        | <2s    | ~1-2s            |
-| JWT Validation      | <10ms  | <1ms             |
-| Role Resolution     | <50ms  | <10ms            |
+| USP                                                              | Why it is genuinely unique                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Platform-guaranteed compliance boundaries**                    | Infrastructure-level output filter enforces guardrails regardless of LLM version changes or tenant prompt customization. No competing enterprise RAG platform offers this. Competitors rely on prompt-only constraints.                                              |
+| **Cloud-agnostic deployment with full pipeline control**         | `CLOUD_PROVIDER=aws\|azure\|gcp\|self-hosted` with no cloud-specific imports in application code. Copilot is Azure-locked; Glean is cloud-opaque. Full pipeline control — search parameters, prompt engineering, context window — is a black-box competitor blocker. |
+| **Open MCP standard for custom data integration**                | Enterprises build BYOMCP servers connecting proprietary data to platform orchestration. No competitor offers an open standard integration surface with enterprise-grade sandboxing (network isolation, capability audit, runtime monitoring).                        |
+| **Multi-agent DAG with per-agent extraction context management** | 9 specialized agents in parallel DAG execution with context window engineering built-in. Synthesis context budget prevents the silent truncation failure that plagues naive multi-agent implementations.                                                             |
+| **Synthesis context extraction pipeline**                        | Raw financial API artifacts (50K tokens raw) compressed to 8K structured synthesis context per run. This is what makes 5-agent Bloomberg + CapIQ + Oracle queries reliable, not aspirational.                                                                        |
+
+### What Does Not Differentiate (Table Stakes)
+
+AI-powered chat, enterprise SSO, source attribution, conversation history, multi-language support, feedback, analytics. Every competitor has these. See `02-product/04-unique-selling-points.md` for the full table.
 
 ---
 
-## Security Posture
+## 8. PMF Assessment
 
-✅ **Implemented**:
+**Score**: 3.2/5 (up from 2.7/5 post-initial-red-team)
 
-- JWT token validation
-- RBAC enforcement
-- Azure AD integration
-- HTTPS/TLS required
-- CORS restrictions
-- CSRF protection
-- Input validation
-- Rate limiting
+**Strongest dimensions**: Technical differentiation (4.5/5), RBAC depth (4/5), data source connectivity (4/5)
 
-⚠️ **In Progress**:
+**Weakest dimensions**: WTP validation (2/5 — design partners required), GTM readiness (1.5/5 — Phase 6 deliverable)
 
-- Azure Key Vault secrets management
-- Audit logging (migrating to unified events)
-- Data encryption at rest
-- Cross-region failover
+**Target segment for Phase 1 design partners**: Financial services, 50–2,000 employees. Pain point is acute (Bloomberg/Oracle fragmentation), budget exists, A2A differentiators are directly relevant, RBAC + audit trail are compliance requirements.
 
-❌ **Not Yet**:
+**Pricing**: Starter $15/user/month (max 25 users), Professional $25/user/month (max 500 users), Enterprise custom. Professional gross margin at 2K tokens/query: ~54%. Semantic cache at 40% hit rate target: ~69% GM.
 
-- Multi-tenant row-level security
-- Tenant-aware encryption keys
-- Compliance certifications (SOC 2, HIPAA)
+See full analysis: `02-product/05-pmf-assessment.md`, `08-red-team-v2/01-remediation-plan.md` §6 (cost model), §9 (GTM strategy).
 
 ---
 
-## Next Steps for Product Owners
+## 9. Full Analysis Corpus Index
 
-1. **Validate Single-Tenant Roadmap**: Confirm MVP features before multi-tenant investment
-2. **Plan Multi-Tenant Architecture**: Decide on isolation strategy (databases vs row-level security)
-3. **Design Go-To-Market**: Pricing model, deployment options, customer onboarding
-4. **Assess Scaling Needs**: Expected tenant count, data volume, concurrent users
-5. **Plan Security Compliance**: Required certifications, data residency constraints
+All research documents are in `01-analysis/01-research/`. Cross-reference by topic:
+
+### Architecture Analysis (Current State)
+
+| Doc | Title                     | Key Output                                                 |
+| --- | ------------------------- | ---------------------------------------------------------- |
+| 01  | Service Architecture      | FastAPI modules, port map, service boundaries              |
+| 02  | Data Models               | 21 PostgreSQL tables, Alembic migration plan               |
+| 03  | Auth & RBAC               | JWT v2 structure, 9 system functions, platform roles       |
+| 04  | RAG Pipeline              | 4-stage pipeline, intent detection, hybrid search          |
+| 05  | LLM Integration           | GPT-5.2-chat / GPT-5 Mini slots, token limits              |
+| 06  | MCP Servers               | 9 A2A agents, internal vs. open MCP distinction            |
+| 07  | Frontend Architecture     | Next.js 14, SSE streaming, TanStack Query                  |
+| 08  | Current Tenant Model      | Single-tenant state, what breaks for multi-tenancy         |
+| 09  | Deployment Infrastructure | Docker Compose, Azure services, health checks              |
+| 10  | Kaizen Extension Analysis | Multi-agent upgrade path from current ResearchAgentHandler |
+| 11  | Existing ADRs             | Architecture decisions recorded in codebase                |
+| 12  | Database Architecture     | Full 21-table schema, RLS policy design                    |
+| 13  | RAG Ingestion             | Chunking strategy, embedding pipeline, index management    |
+
+### Caching System
+
+| Doc | Title                         | Key Output                                       |
+| --- | ----------------------------- | ------------------------------------------------ |
+| 14  | Caching Architecture Overview | Redis + semantic cache architecture              |
+| 15  | Semantic Caching Analysis     | Embedding similarity threshold, hit rate targets |
+| 16  | Embedding Search Cache        | Vector cache index design                        |
+| 17  | Multi-Tenant Cache Isolation  | `mingai:{tenant_id}:{key}` namespace migration   |
+
+### A2A Agent Platform
+
+| Doc    | Title                                | Key Output                                                                   |
+| ------ | ------------------------------------ | ---------------------------------------------------------------------------- |
+| 18     | A2A Agent Architecture               | 9-agent catalog, AgentCard spec, DAG planner design                          |
+| 19     | SharePoint Sync Architecture         | Delta sync, change tracking, background worker                               |
+| 20     | Document Upload Architecture         | OneDrive upload, personal index, private search                              |
+| 21     | LLM Model Slot Analysis              | Verified model slots from `app/core/config.py`                               |
+| 22     | Google Drive Sync Architecture       | OAuth2/Service Account, incremental sync, push notifications                 |
+| 23     | Glossary Management Architecture     | CRUD API, CSV import, Redis cache, RAG integration                           |
+| 24     | Platform RBAC Specification          | `platform_members` table, platform JWT, impersonation flow                   |
+| **25** | **A2A Guardrail Enforcement**        | **Three-layer system: prompt position + output filter + registration audit** |
+| **26** | **A2A Synthesis Context Management** | **9 extraction schemas; ExtractionService; multi-pass synthesis**            |
+| **27** | **A2A Execution Hardening**          | **Partial failure policy; fast-path; OTel tracing; DAG replay UI**           |
+| **28** | **A2A Extensibility Security**       | **BYOMCP sandboxing; marketplace consent model**                             |
+
+**Docs 25–28 are P0/P1 architecture requirements for Phase 4 (Agentic Upgrade). None can be deferred.**
+
+### Multi-Tenant Design Decisions
+
+| Doc                | Title                     | Key Output                                                                  |
+| ------------------ | ------------------------- | --------------------------------------------------------------------------- |
+| 04-multi-tenant/01 | Admin Hierarchy           | Platform admin → Tenant admin → End user role hierarchy                     |
+| 04-multi-tenant/02 | Data Isolation            | RLS policy design, Redis namespace, search index isolation                  |
+| 04-multi-tenant/03 | Auth & SSO Strategy       | Pluggable IdP pattern, Auth0 as optional managed provider                   |
+| 04-multi-tenant/04 | LLM Provider Management   | Library + BYOLLM model, per-tenant config cache                             |
+| 04-multi-tenant/05 | Cloud-Agnostic Deployment | `CLOUD_PROVIDER` abstraction, Terraform IaC plan                            |
+| 04-multi-tenant/06 | A2A & MCP Agentic         | Full A2A platform design (superseded by docs 25–28 for enforcement details) |
+
+### Product Analysis
+
+| Doc           | Title                 | Key Output                                                             |
+| ------------- | --------------------- | ---------------------------------------------------------------------- |
+| 02-product/01 | Product Vision        | Problem statement, personas, core value proposition                    |
+| 02-product/02 | Competitive Analysis  | Copilot, Glean, Guru, Notion AI comparison                             |
+| 02-product/03 | Value Propositions    | Unified access, compliance boundaries, cost predictability, RBAC depth |
+| 02-product/04 | Unique Selling Points | Table stakes vs. genuine differentiators; moat analysis                |
+| 02-product/05 | PMF Assessment        | Dimension scores, target segment, GTM foundation                       |
+| 02-product/06 | Multi-Tenant Product  | Plan tiers, feature matrix, pricing model, go-to-market                |
+
+### Red Team & Remediation
+
+| Doc                    | Title            | Key Output                                                      |
+| ---------------------- | ---------------- | --------------------------------------------------------------- |
+| 05-red-team/01         | Phase 1 Critique | 10 critical gaps identified                                     |
+| 07-red-team-caching/01 | Caching Critique | Cache invalidation risk, cost model accuracy                    |
+| 08-red-team-v2/01      | Remediation Plan | All 10 gaps resolved; DR architecture; cost model; GTM strategy |
 
 ---
 
-**Document Generated**: March 4, 2026
-**For**: mingai Technical Review
-**Prepared by**: Tech Explorer Agent
+## 10. Implementation Roadmap Summary
+
+| Phase                    | Weeks | Key Deliverable                                                                                                                                                            | Risk                               |
+| ------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **1 — Foundation**       | 1–8   | tenant_id + RLS on all 21 tables, platform RBAC, glossary v1, response feedback                                                                                            | HIGH — touches every query path    |
+| **2 — LLM Library**      | 9–12  | Platform LLM Library, Tenant LLM Setup, BYOLLM (Enterprise), cost tracking                                                                                                 | MEDIUM — cost modeling uncertainty |
+| **3 — Auth Flexibility** | 13–15 | Pluggable IdP, Google Workspace, Okta, SAML; Auth0 optional managed SSO                                                                                                    | MEDIUM — token migration window    |
+| **4 — Agentic Upgrade**  | 16–20 | Kaizen multi-agent, A2A protocol, guardrail enforcement, synthesis context management, DAG failure policy, fast-path, 5 new LLM providers, Google Drive sync, Glossary RAG | HIGH — docs 25–28 all P0/P1        |
+| **5 — Cloud Agnostic**   | 21–24 | Azure + GCP certification, OTel tracing, DAG replay UI, CloudStorageConnector abstraction                                                                                  | MEDIUM — abstraction leakage risk  |
+| **6 — GA**               | 25–27 | Billing, self-service onboarding, BYOMCP sandboxing, marketplace consent, DR runbooks, demo environment                                                                    | MEDIUM — enterprise security gates |
+
+**Total: ~30 weeks (~7.5 months)**
+
+Full roadmap: `02-plans/01-implementation-roadmap.md`
+
+---
+
+## 11. Key Technical Decisions Reference
+
+| Aspect                       | Decision                                                                                                     | Rationale                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Database**                 | PostgreSQL (RDS Aurora) + Alembic                                                                            | Cloud-portable; RLS first-class; additive migration                 |
+| **Tenant isolation**         | Row-Level Security (`SET app.tenant_id`)                                                                     | Engine-enforced; no application-layer bypass                        |
+| **LLM routing**              | `use_case` param maps to tenant's intent-tier vs. synthesis-tier model                                       | Cost-conscious model tiering per call type                          |
+| **A2A wire protocol**        | Google A2A v0.3 with `AgentDispatcher` abstraction                                                           | Wire protocol isolated; swap to v0.4+ without orchestrator changes  |
+| **Extraction pipeline**      | Intent-tier LLM (10× cheaper) extracts synthesis context from raw artifacts                                  | 40–60% total cost saving on multi-agent queries                     |
+| **Context window**           | Multi-pass synthesis triggered at 80% of context budget (token-based, not agent-count-based)                 | Prevents silent truncation; handles large-artifact agents correctly |
+| **Guardrail enforcement**    | Three layers: positional prompt ordering + output filter + registration audit                                | Layer 2 (output filter) is the only hard enforcement layer          |
+| **BYOMCP network isolation** | Cilium CiliumNetworkPolicy `toFQDNs` (not standard ipBlock)                                                  | Standard K8s ipBlock cannot perform DNS-aware FQDN filtering        |
+| **Fast-path threshold**      | 0.92 intent confidence; empirical calibration required before production                                     | False positive rate target: ≤2%; per-tenant tuning is a v2 feature  |
+| **DAG artifact storage**     | Extracted `SynthesisContext` stored (not raw artifacts); PII-scrubbed; no Bloomberg/CapIQ raw data persisted | Licensed data compliance; GDPR PII constraint                       |
+| **Frontend**                 | Next.js 14, TanStack Query, SSE streaming                                                                    | SSR, optimistic updates, streaming response rendering               |
+| **Secrets**                  | Azure Key Vault (Azure) / AWS Secrets Manager (AWS) — never in code or config files                          | CLAUDE.md directive; security review gate before every commit       |
+
+---
+
+## 12. Risk Register Summary
+
+| Risk                                              | Phase | Likelihood | Impact   | Mitigation                                                                               |
+| ------------------------------------------------- | ----- | ---------- | -------- | ---------------------------------------------------------------------------------------- |
+| Agentic RAG costs blow budget                     | 4+    | HIGH       | HIGH     | Hard per-tenant token limits, circuit breakers, cost dashboard, 3–8× multiplier budgeted |
+| RLS misconfiguration leaks data                   | 1     | MEDIUM     | CRITICAL | Extensive cross-tenant isolation tests; staging-first                                    |
+| `semantic_check` guardrail uncalibrated at launch | 4     | MEDIUM     | HIGH     | Bloomberg agent blocked from production until 50-100 violation exemplars calibrated      |
+| Fast-path routes to wrong agent                   | 4     | LOW        | MEDIUM   | ≤2% false positive target; production monitoring of fast-path quality scores             |
+| BYOMCP capability spoofing                        | 6     | LOW        | HIGH     | Capability probe + Cilium network policy + runtime anomaly monitoring                    |
+| Phase 5 abstraction leakage                       | 5     | MEDIUM     | MEDIUM   | Define interfaces from requirements, not AWS API shapes; test on all three clouds        |
+| Cost model underestimates at 4K+ tokens/query     | All   | MEDIUM     | HIGH     | Hard context window budget; caching reduces average token count                          |
+
+---
+
+**Document Version**: 2.0
+**Last Updated**: 2026-03-05
+**Supersedes**: Initial architecture snapshot (`00-executive-summary.md` v1, 2026-03-04)

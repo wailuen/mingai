@@ -276,8 +276,8 @@ The existing design already includes `tenant_id`, `scope`, and `plan` fields. Th
   "session_id": "session-uuid",
   "exp": 1709587200,
   "iat": 1709558400,
-  "iss": "aihub-platform",
-  "aud": "aihub-api"
+  "iss": "mingai-platform",
+  "aud": "mingai-api"
 }
 ```
 
@@ -407,13 +407,13 @@ async def provision_tenant(
 ### Organization Login Flow
 
 ```
-1. User navigates to acme.aihub.com (or clicks "Sign In")
+1. User navigates to acme.mingai.ai (or clicks "Sign In")
 2. Frontend detects tenant from subdomain or shows org picker
 3. Frontend redirects to Auth0 with organization parameter:
-   GET https://aihub.auth0.com/authorize
-     ?client_id=AIHUB_CLIENT_ID
+   GET https://mingai.auth0.com/authorize
+     ?client_id=MINGAI_CLIENT_ID
      &organization=org_acme123
-     &redirect_uri=https://acme.aihub.com/auth/callback
+     &redirect_uri=https://acme.mingai.ai/auth/callback
      &scope=openid profile email
      &response_type=code
 4. Auth0 shows Acme's configured SSO (e.g., Entra ID login)
@@ -454,7 +454,7 @@ async def resolve_organization_from_subdomain(host: str) -> Optional[str]:
     """
     Resolve Auth0 Organization from request subdomain.
 
-    acme.aihub.com -> org_acme123
+    acme.mingai.ai -> org_acme123
     """
     subdomain = host.split(".")[0] if "." in host else None
     if subdomain and subdomain not in ("www", "api", "app"):
@@ -545,7 +545,7 @@ async def login_local(request: LocalLoginRequest, response: Response):
 
 ```
 Week 1-2:
-├─ Create Auth0 tenant (aihub.auth0.com)
+├─ Create Auth0 tenant (mingai.auth0.com)
 ├─ Configure Auth0 Application (SPA + Regular Web App)
 ├─ Create "default" Organization for existing Entra users
 ├─ Add Entra ID Enterprise Connection to Auth0

@@ -4,7 +4,7 @@
 
 mingai implements a **modular monolith architecture**: All backend functionality runs in a single FastAPI container, organized into logical modules that can be extracted into independent microservices in the future.
 
-**Current Deployment**: Single Docker container (`aihub_api_service`)
+**Current Deployment**: Single Docker container (`mingai_api_service`)
 **Port**: 8022 (externally) → 8021 (internally)
 **Language**: Python 3.12
 **Framework**: FastAPI + Uvicorn (async/await)
@@ -656,7 +656,7 @@ GET /health
 
 ---
 
-## Shared Service Library (`src/backend/shared/aihub_shared/`)
+## Shared Service Library (`src/backend/shared/mingai_shared/`)
 
 Reusable components across modules:
 

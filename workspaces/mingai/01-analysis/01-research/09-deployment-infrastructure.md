@@ -31,7 +31,7 @@ services:
 ```
 ┌─────────────────────────────────────────────────┐
 │          Docker Compose Network                 │
-│  aihub-network (bridge)                         │
+│  mingai-network (bridge)                         │
 ├─────────────────────────────────────────────────┤
 │ ┌──────────┐    ┌──────────┐    ┌───────────┐  │
 │ │ frontend │    │ api-svc  │    │sync-worker│  │
@@ -185,8 +185,8 @@ version: "3.8"
 
 services:
   api-gateway:
-    image: aihub:latest
-    container_name: aihub_api_gateway
+    image: mingai:latest
+    container_name: mingai_api_gateway
     ports:
       - "8000:8000"
     environment:
@@ -197,8 +197,8 @@ services:
       # ... all prod secrets from environment ...
 
   sync-worker:
-    image: aihub-sync:latest
-    container_name: aihub_sync_worker
+    image: mingai-sync:latest
+    container_name: mingai_sync_worker
     environment:
       ENVIRONMENT: production
       # ... sync-specific config ...
@@ -239,14 +239,14 @@ jobs:
 
       - name: Build and push image
         run: |
-          docker build -t ${{ secrets.REGISTRY_LOGIN }}.azurecr.io/aihub:${{ github.sha }} .
-          docker push ${{ secrets.REGISTRY_LOGIN }}.azurecr.io/aihub:${{ github.sha }}
+          docker build -t ${{ secrets.REGISTRY_LOGIN }}.azurecr.io/mingai:${{ github.sha }} .
+          docker push ${{ secrets.REGISTRY_LOGIN }}.azurecr.io/mingai:${{ github.sha }}
 
       - name: Deploy to App Service
         uses: azure/webapps-deploy@v2
         with:
-          app-name: "aihub-prod"
-          images: "${{ secrets.REGISTRY_LOGIN }}.azurecr.io/aihub:${{ github.sha }}"
+          app-name: "mingai-prod"
+          images: "${{ secrets.REGISTRY_LOGIN }}.azurecr.io/mingai:${{ github.sha }}"
 ```
 
 ---

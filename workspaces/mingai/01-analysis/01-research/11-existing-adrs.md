@@ -1,4 +1,4 @@
-# aihub2 Architecture Decision Records (ADRs) - Comprehensive Summary
+# mingai Architecture Decision Records (ADRs) - Comprehensive Summary
 
 **Document Version**: 1.0
 **Date**: 2026-03-04
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-aihub2 has 7 documented Architecture Decision Records (ADRs) that establish the core technical and organizational decisions made during initial development (2025-12-19 through 2026-02-07). These ADRs define:
+mingai has 7 documented Architecture Decision Records (ADRs) that establish the core technical and organizational decisions made during initial development (2025-12-19 through 2026-02-07). These ADRs define:
 
 1. **Technology Stack** (ADR-001): Python/FastAPI backend, React/Next.js frontend, Azure CosmosDB, Azure OpenAI
 2. **Access Control** (ADR-002): RBAC with synthetic role IDs, Azure AD group integration, 10 design gaps identified in 2026-02 operational review

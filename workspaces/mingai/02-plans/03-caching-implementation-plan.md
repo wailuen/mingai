@@ -56,7 +56,7 @@ Eliminate all redundant database reads that occur on every chat turn. Zero LLM i
    - Invalidation: on index update event
 
 6. **Redis key namespace migration**
-   - Migrate from `aihub2:` prefix to `mingai:{tenant_id}:` per Phase 1 requirement
+   - Migrate from `mingai:` prefix to `mingai:{tenant_id}:` per Phase 1 requirement
 
 ### Technical Specification
 

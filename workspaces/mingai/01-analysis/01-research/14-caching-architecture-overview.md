@@ -187,7 +187,7 @@ Response (SSE Stream)
 
 - JWT session caching
 - Rate limiting counters
-- Key prefix: `aihub2:` (migrating to `mingai:` in Phase 1)
+- Key prefix: `mingai:` (migrating to `mingai:` in Phase 1)
 
 **Required Expansion**: 8 additional cache types (see full pipeline map above).
 

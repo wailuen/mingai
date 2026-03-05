@@ -34,9 +34,9 @@ This env var determines which provider implementations are loaded at application
 ```env
 CLOUD_PROVIDER=aws
 DOCUMENT_STORE_ENDPOINT=us-east-1
-SEARCH_ENGINE_ENDPOINT=https://search-aihub-xxx.us-east-1.es.amazonaws.com
+SEARCH_ENGINE_ENDPOINT=https://search-mingai-xxx.us-east-1.es.amazonaws.com
 OBJECT_STORE_CONNECTION=us-east-1
-SECRET_STORE_URL=arn:aws:secretsmanager:us-east-1:123456789:secret:aihub
+SECRET_STORE_URL=arn:aws:secretsmanager:us-east-1:123456789:secret:mingai
 TELEMETRY_CONNECTION=us-east-1
 ```
 
@@ -118,7 +118,7 @@ retention_archive_storage_container: str = Field(default="conversation-archives"
 
 # config.py:216-217
 azure_blob_storage_connection_string: str = Field(default="")
-azure_blob_container_name: str = Field(default="aihub-docs")
+azure_blob_container_name: str = Field(default="mingai-docs")
 ```
 
 **LLM** -- Azure OpenAI (config.py:82-176, openai_client.py:17):
@@ -281,7 +281,7 @@ class CosmosDBStore(DocumentStore):
 class DynamoDBStore(DocumentStore):
     """AWS DynamoDB implementation."""
 
-    def __init__(self, region: str, table_prefix: str = "aihub_"):
+    def __init__(self, region: str, table_prefix: str = "mingai_"):
         import aioboto3
         self.session = aioboto3.Session()
         self.region = region
@@ -514,7 +514,7 @@ class AzureBlobStore(ObjectStore):
 class S3Store(ObjectStore):
     """AWS S3 implementation."""
 
-    def __init__(self, region: str, bucket_prefix: str = "aihub-"):
+    def __init__(self, region: str, bucket_prefix: str = "mingai-"):
         import aioboto3
         self.session = aioboto3.Session()
         self.region = region
@@ -712,7 +712,7 @@ class CloudAgnosticSettings(BaseSettings):
     # Document Store
     document_store_endpoint: str = Field(default="")
     document_store_key: str = Field(default="")
-    document_store_database: str = Field(default="aihub")
+    document_store_database: str = Field(default="mingai")
 
     # Search Engine
     search_engine_endpoint: str = Field(default="")
@@ -721,7 +721,7 @@ class CloudAgnosticSettings(BaseSettings):
 
     # Object Store
     object_store_connection: str = Field(default="")  # Connection string or region
-    object_store_container: str = Field(default="aihub-docs")
+    object_store_container: str = Field(default="mingai-docs")
 
     # Secret Store
     secret_store_url: str = Field(default="")  # Vault URL or ARN
@@ -758,7 +758,7 @@ def create_infrastructure(settings: CloudAgnosticSettings) -> Infrastructure:
             ),
             object_store=S3Store(region=region),
             secret_store=AWSSecretsManagerStore(region=region),
-            telemetry=CloudWatchExporter(region=region, log_group="aihub"),
+            telemetry=CloudWatchExporter(region=region, log_group="mingai"),
         )
 
     elif provider == "azure":
@@ -831,7 +831,7 @@ def create_infrastructure(settings: CloudAgnosticSettings) -> Infrastructure:
 The system already uses Docker containers:
 
 ```
-aihub2/
+mingai/
 ├── src/backend/api-service/        # FastAPI application
 ├── src/backend/sync-worker/        # Background worker
 ├── src/mcp-servers/                # 9 MCP server containers
@@ -867,7 +867,7 @@ spec:
     spec:
       containers:
         - name: api-service
-          image: aihub/api-service:latest
+          image: mingai/api-service:latest
           ports:
             - containerPort: 8000
           envFrom:
@@ -991,7 +991,7 @@ variable "cloud_provider" {
 module "document_store" {
   source = "./modules/document-store/${var.cloud_provider}"
 
-  database_name = "aihub"
+  database_name = "mingai"
   environment   = var.environment
   tags          = var.tags
 }
@@ -1006,7 +1006,7 @@ module "search_engine" {
 module "object_store" {
   source = "./modules/object-store/${var.cloud_provider}"
 
-  container_name = "aihub-docs"
+  container_name = "mingai-docs"
   environment    = var.environment
   tags           = var.tags
 }
@@ -1014,7 +1014,7 @@ module "object_store" {
 module "kubernetes" {
   source = "./modules/kubernetes/${var.cloud_provider}"
 
-  cluster_name = "aihub-${var.environment}"
+  cluster_name = "mingai-${var.environment}"
   node_count   = var.node_count
   node_size    = var.node_size
   tags         = var.tags

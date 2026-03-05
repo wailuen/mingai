@@ -64,10 +64,10 @@ The distinction matters: a tool that works brilliantly for one enterprise is not
 **Why this segment might fit**:
 
 - $30/user/month for Copilot is too expensive for 1,000+ user organizations ($360K/year)
-- Self-hosted AI Hub could be cheaper at scale (infrastructure + hosting vs. per-user licensing)
+- Self-hosted mingai could be cheaper at scale (infrastructure + hosting vs. per-user licensing)
 - Want more control over AI responses than Copilot provides
 
-**PMF risk**: This segment is price-sensitive, which means they also lack the engineering capacity to build MCP servers. They want "Copilot but cheaper" -- and AI Hub is not that. AI Hub requires significant admin setup (roles, indexes, MCP servers) and technical expertise. Mid-size enterprises will gravitate toward Guru ($18/month), Confluence Rovo (bundled), or Notion AI ($20/month) for simplicity. The product is overbuilt for this market.
+**PMF risk**: This segment is price-sensitive, which means they also lack the engineering capacity to build MCP servers. They want "Copilot but cheaper" -- and mingai is not that. mingai requires significant admin setup (roles, indexes, MCP servers) and technical expertise. Mid-size enterprises will gravitate toward Guru ($18/month), Confluence Rovo (bundled), or Notion AI ($20/month) for simplicity. The product is overbuilt for this market.
 
 ---
 

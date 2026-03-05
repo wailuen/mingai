@@ -3,7 +3,7 @@
 ## Cosmos DB Overview
 
 **Database**: Single multi-container NoSQL database
-**Name**: `mingai-dev` (dev) or `aihub-prod` (production)
+**Name**: `mingai-dev` (dev) or `mingai-prod` (production)
 **Consistency**: Session (default), configurable to Strong for critical operations
 **Partition Strategy**: Per-container partition keys (see table below)
 

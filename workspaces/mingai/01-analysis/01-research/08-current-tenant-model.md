@@ -195,7 +195,7 @@ def get_current_tenant() -> str:
     return token.get("tenant_id")
 
     # Option B: Extract from subdomain
-    # subdomain.aihub.com → tenant_id = subdomain
+    # subdomain.mingai.ai → tenant_id = subdomain
     # return request.headers.get("X-Tenant-ID")
 
     # Option C: Extract from API key
@@ -270,7 +270,7 @@ Option A: Single deployment for all tenants
   - Cost-efficient; Multi-tenant awareness required
 
 Option B: Dedicated deployment per tenant
-  - tenant-123.aihub.com → dedicated API instance
+  - tenant-123.mingai.ai → dedicated API instance
   - Separate infrastructure per tenant
   - Cost: Higher; Isolation: Complete
 

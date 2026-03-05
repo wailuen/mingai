@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides the concrete migration steps for converting AIHub2 from a single-tenant application to a multi-tenant SaaS platform. Each section covers a specific migration domain with exact data changes, scripts, and rollback procedures.
+This document provides the concrete migration steps for converting mingai from a single-tenant application to a multi-tenant SaaS platform. Each section covers a specific migration domain with exact data changes, scripts, and rollback procedures.
 
 ---
 
@@ -149,11 +149,11 @@ Applied to all 22 PostgreSQL tables (19 migrated + 3 new): `users`, `roles`, `us
 **Current pattern:**
 
 ```
-aihub2:session:{session_id}
-aihub2:cache:{cache_key}
-aihub2:rate_limit:{user_id}
-aihub2:search_cache:{query_hash}
-aihub2:llm_config
+mingai:session:{session_id}
+mingai:cache:{cache_key}
+mingai:rate_limit:{user_id}
+mingai:search_cache:{query_hash}
+mingai:llm_config
 ```
 
 **New pattern:**
@@ -176,9 +176,9 @@ mingai:{tenant_id}:llm_config
 **Platform-scoped keys (no tenant_id):**
 
 ```
-aihub2:platform:tenant_list
-aihub2:platform:provider_status
-aihub2:platform:feature_flags
+mingai:platform:tenant_list
+mingai:platform:provider_status
+mingai:platform:feature_flags
 ```
 
 ### Azure AI Search Index Strategy
@@ -218,7 +218,7 @@ documents-globex
   "roles": ["analyst", "admin"],
   "exp": 1735689600,
   "iat": 1735603200,
-  "iss": "aihub2"
+  "iss": "mingai"
 }
 ```
 
@@ -233,7 +233,7 @@ documents-globex
   "roles": ["analyst", "admin"],
   "exp": 1735689600,
   "iat": 1735603200,
-  "iss": "aihub2",
+  "iss": "mingai",
   "token_version": 2
 }
 ```
@@ -372,7 +372,7 @@ TTL:    900 seconds (15 minutes)
 
 - Explicit: Admin config save triggers `DEL` on Redis key
 - Implicit: 15-min TTL ensures eventual consistency even if explicit invalidation fails
-- Broadcast: If running multiple FastAPI instances, publish invalidation event to Redis pub/sub channel `aihub2:config_invalidation`
+- Broadcast: If running multiple FastAPI instances, publish invalidation event to Redis pub/sub channel `mingai:config_invalidation`
 
 ### Migration Steps
 
@@ -675,7 +675,7 @@ Run alembic downgrade if needed to revert schema changes
 **Step 4: Redis cleanup**
 
 ```
-Flush tenant-namespaced keys: DEL aihub2:*:* (but preserve mingai:{key} pattern)
+Flush tenant-namespaced keys: DEL mingai:*:* (but preserve mingai:{key} pattern)
 Or more safely: let keys expire naturally (TTL-based)
 ```
 

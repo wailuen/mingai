@@ -11,7 +11,7 @@
 
 Multiple earlier research documents (`06-mcp-servers.md`, `00-executive-summary.md`, `01-service-architecture.md`) describe the 9 data integrations as **"MCP servers"** that users configure. **This is incorrect for the product direction.**
 
-**Incorrect framing (aihub2 legacy)**:
+**Incorrect framing (mingai legacy)**:
 
 > "Users register MCP servers. The LLM calls MCP tools directly."
 
@@ -186,7 +186,7 @@ The following documents contain incorrect "MCP server" terminology in user-facin
 | Document                                                 | Line Range           | Correction Needed                                                                 |
 | -------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------- |
 | `01-research/00-executive-summary.md`                    | Lines 219-232        | "MCP servers" → "A2A agents"; list as agents not servers                          |
-| `01-research/06-mcp-servers.md`                          | Entire file          | File describes OLD aihub2 architecture; superseded by this document               |
+| `01-research/06-mcp-servers.md`                          | Entire file          | File describes OLD mingai architecture; superseded by this document               |
 | `01-research/14-caching-architecture-overview.md`        | CACHE-C section      | "MCP Tool Response Cache" → "A2A Agent Response Cache"                            |
 | `02-plans/01-implementation-roadmap.md`                  | Phase 4              | "MCP server registry" → "A2A agent registry"; "MCP routing" → "A2A agent routing" |
 | `03-user-flows/01-platform-admin-flows.md`               | Section 4            | "Global MCP Server Management" → "Global A2A Agent Management"                    |

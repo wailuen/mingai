@@ -54,7 +54,7 @@ Source: `app/core/config.py` lines 86-97:
 
 ```python
 azure_openai_primary_deployment: str = Field(
-    default="aihub2-main",
+    default="mingai-main",
     description="Primary LLM deployment for chat responses (gpt-5.2-chat)"
 )
 azure_openai_auxiliary_deployment: str = Field(
@@ -97,7 +97,7 @@ Source: `config.py` line 64: `auth_mode: str = Field(default="dual")` with optio
 
 Source: `app/core/database.py` contains container initialization. The data models doc lists 23 containers, but the numbering jumps (1-23 with some gaps). Cross-referencing with `init_database()` shows the actual active containers are fewer -- several (audit_logs, usage_events) are marked DEPRECATED. The effective container count is approximately 20 active containers.
 
-### Claim 7: "Redis cache with aihub2: prefix" (00-executive-summary.md)
+### Claim 7: "Redis cache with mingai: prefix" (00-executive-summary.md)
 
 **VERIFIED: CORRECT**
 
@@ -131,7 +131,7 @@ Source: `config.py` line 110: `azure_openai_doc_embedding_deployment: str = Fiel
 
 **Moat rating in doc**: MODERATE
 
-**Steelman counter-case**: The MCP module in `app/modules/mcp/` uses a custom WebSocket-based tool invocation protocol. This is NOT the same as Anthropic's Model Context Protocol standard that is gaining industry adoption. If Anthropic's MCP becomes the industry standard (which it is trending toward), AI Hub's custom protocol becomes a liability, not a differentiator. Customers would need to maintain two different "MCP" implementations. Furthermore, the 9 MCP servers are custom-built for specific enterprise systems -- they represent engineering investment, not protocol advantage.
+**Steelman counter-case**: The MCP module in `app/modules/mcp/` uses a custom WebSocket-based tool invocation protocol. This is NOT the same as Anthropic's Model Context Protocol standard that is gaining industry adoption. If Anthropic's MCP becomes the industry standard (which it is trending toward), mingai's custom protocol becomes a liability, not a differentiator. Customers would need to maintain two different "MCP" implementations. Furthermore, the 9 MCP servers are custom-built for specific enterprise systems -- they represent engineering investment, not protocol advantage.
 
 **Survives scrutiny?** PARTIALLY. The MCP servers themselves (Bloomberg, Oracle Fusion, etc.) are valuable. The protocol framing as "open standard" is misleading if it's a proprietary implementation.
 
@@ -347,7 +347,7 @@ However, the gap between current state (single provider, env-var config) and tar
 | --- | ------------------------------------------ | -------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- | ------ |
 | 1   | `01-research/00-executive-summary.md`      | Lines 119-123, 131, 145          | References "GPT-4" as primary and "GPT-4 Mini" as auxiliary | Changed to "GPT-5.2-chat" and "GPT-5 Mini" per config.py            | FIXED  |
 | 2   | `01-research/01-service-architecture.md`   | Lines 215, 244, 248, 736, 748    | References "GPT-4" in RAG pipeline description              | Changed to "GPT-5.2-chat" / "GPT-5 Mini"                            | FIXED  |
-| 3   | `01-research/04-rag-pipeline.md`           | Lines 16, 245, 284, 311, 450-451 | Multiple "GPT-4" references                                 | Changed to "GPT-5.2-chat (aihub2-main deployment)" / "GPT-5 Mini"   | FIXED  |
+| 3   | `01-research/04-rag-pipeline.md`           | Lines 16, 245, 284, 311, 450-451 | Multiple "GPT-4" references                                 | Changed to "GPT-5.2-chat (mingai-main deployment)" / "GPT-5 Mini"   | FIXED  |
 | 4   | `02-product/03-value-propositions.md`      | Line 30                          | "Implemented (GPT-4)"                                       | Changed to "Implemented (GPT-5.2-chat)"                             | FIXED  |
 | 5   | `01-research/11-existing-adrs.md`          | Lines 43, 313-316, 329-332       | "GPT-4, GPT-3.5" and cost table                             | Changed to "GPT-5.2-chat, GPT-5 Mini" with corrected cost estimates | FIXED  |
 | 6   | `02-product/01-product-vision.md`          | Line 91                          | "GPT-4 via Azure OpenAI"                                    | Changed to "GPT-5.2-chat via Azure OpenAI"                          | FIXED  |
@@ -607,21 +607,21 @@ The migration plan (Section 1, line 22; Section 4, lines 365-366) references a `
 
 The migration plan correctly identifies the `@lru_cache` Settings singleton pattern. Verified in source:
 
-- `backend/shared/aihub_shared/config/settings.py:136` -- `@lru_cache`
-- `backend/shared/aihub_shared/config/worker_settings.py:435` -- `@lru_cache(maxsize=1)`
-- `backend/shared/aihub_shared/database/cosmos.py:424` -- `@lru_cache`
+- `backend/shared/mingai_shared/config/settings.py:136` -- `@lru_cache`
+- `backend/shared/mingai_shared/config/worker_settings.py:435` -- `@lru_cache(maxsize=1)`
+- `backend/shared/mingai_shared/database/cosmos.py:424` -- `@lru_cache`
 - `backend/api-service/app/core/config.py:7` -- `from functools import lru_cache`
 - `sync-worker/app/config.py:86` -- `@lru_cache`
 
 The replacement with tenant-scoped Redis-cached config is a sound migration strategy.
 
-#### P7: Redis key pattern `aihub2:` prefix confirmed (VERIFIED)
+#### P7: Redis key pattern `mingai:` prefix confirmed (VERIFIED)
 
 The migration plan correctly identifies the current Redis key pattern. Source code confirms:
 
 - `backend/api-service/app/core/config.py:48` -- `redis_key_prefix: str = Field(default="mingai:")`
-- `backend/shared/aihub_shared/config/worker_settings.py:85` -- `default="mingai:"`
-- `backend/shared/aihub_shared/redis/utils.py:31` -- `# Default prefix - MUST be "mingai:" to avoid collisions`
+- `backend/shared/mingai_shared/config/worker_settings.py:85` -- `default="mingai:"`
+- `backend/shared/mingai_shared/redis/utils.py:31` -- `# Default prefix - MUST be "mingai:" to avoid collisions`
 
 The migration to `mingai:{tenant_id}:{key}` pattern with fallback during migration is well-designed.
 
@@ -870,7 +870,7 @@ The cross-database transaction gap (PostgreSQL conversations + Cosmos DB message
 #### Chunk Size
 
 **RAG analysis claim**: `DEFAULT_MAX_TOKENS = 1000` (document_processor.py:73)
-**Source code verified**: `DEFAULT_MAX_TOKENS = 1000` at `backend/shared/aihub_shared/services/document_processor.py:73`
+**Source code verified**: `DEFAULT_MAX_TOKENS = 1000` at `backend/shared/mingai_shared/services/document_processor.py:73`
 **Verdict: CORRECT**
 
 Additionally, the RAG analysis does NOT mention the `SemanticChunker` class (`app/services/semantic_chunker.py`) which uses a separate `MAX_CHUNK_SIZE = 2000` characters (not tokens). This is a different chunking path used for file-type-aware processing (slides, spreadsheets, sections). The existence of two parallel chunking systems with different units (tokens vs characters) and different sizes (1000 vs 2000) is itself a finding the RAG analysis should have flagged.
@@ -1096,14 +1096,14 @@ But this is more engineering work than the PostgreSQL migration, and the result 
 
 Every "Cosmos DB" occurrence across the workspace was categorized:
 
-#### (L) Legitimate Legacy -- Describes aihub2 Source System Being Migrated FROM
+#### (L) Legitimate Legacy -- Describes mingai Source System Being Migrated FROM
 
 | File                                          | Lines                                                                                      | Context                                                                                             | Verdict                                                               |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `02-technical-migration-plan.md`              | 15, 58, 61, 64, 493                                                                        | "Source (Cosmos DB)" column header, "Data Migration: Cosmos DB to PostgreSQL" section, export steps | **(L)** Correctly describes migration origin                          |
 | `01-implementation-roadmap.md`                | 79                                                                                         | "Cosmos DB JSON export and transformation" in Phase 1 timeline note                                 | **(L)** Explains why Phase 1 is 8 weeks                               |
 | `12-database-architecture-analysis.md`        | All 40+ refs                                                                               | Entire doc compares Cosmos DB vs PostgreSQL, explains migration FROM Cosmos DB                      | **(L)** Core purpose of the document is to justify the switch         |
-| `01-research/00-executive-summary.md`         | 11, 84, 204, 211, 241, 247, 260, 301                                                       | Describes current aihub2 system architecture                                                        | **(L)** Research doc describing what EXISTS today                     |
+| `01-research/00-executive-summary.md`         | 11, 84, 204, 211, 241, 247, 260, 301                                                       | Describes current mingai system architecture                                                        | **(L)** Research doc describing what EXISTS today                     |
 | `01-research/01-service-architecture.md`      | 48, 57, 90, 122, 150, 184, 202, 252, 280, 304, 331, 339, 347, 405, 445, 592, 757, 783, 834 | Describes current service dependencies on Cosmos DB                                                 | **(L)** Research doc describing current system                        |
 | `01-research/02-data-models.md`               | 3, 497                                                                                     | "Cosmos DB Overview" heading, encrypted storage note                                                | **(L)** Research doc describing current data models                   |
 | `01-research/03-auth-rbac.md`                 | 62, 93, 405, 582                                                                           | "Backend checks if user exists in Cosmos DB"                                                        | **(L)** Research doc describing current auth flow                     |

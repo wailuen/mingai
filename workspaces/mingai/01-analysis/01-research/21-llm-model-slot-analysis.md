@@ -2,13 +2,13 @@
 
 ## 1. Current State: 6 Deployment Slots
 
-The aihub2 backend defines six distinct Azure OpenAI deployment slots, each configurable with its own endpoint, API key, and deployment name. This separation allows independent scaling, region routing, and model selection per operational concern.
+The mingai backend defines six distinct Azure OpenAI deployment slots, each configurable with its own endpoint, API key, and deployment name. This separation allows independent scaling, region routing, and model selection per operational concern.
 
 ### Deployment Slot Inventory
 
 | Slot                 | Env Var (Deployment)                    | Default Value            | Env Var (Endpoint)                    | Env Var (Key)                    | Current Model          |
 | -------------------- | --------------------------------------- | ------------------------ | ------------------------------------- | -------------------------------- | ---------------------- |
-| **Primary**          | `AZURE_OPENAI_PRIMARY_DEPLOYMENT`       | `aihub2-main`            | `AZURE_OPENAI_ENDPOINT`               | `AZURE_OPENAI_KEY`               | GPT-5.2-chat           |
+| **Primary**          | `AZURE_OPENAI_PRIMARY_DEPLOYMENT`       | `mingai-main`            | `AZURE_OPENAI_ENDPOINT`               | `AZURE_OPENAI_KEY`               | GPT-5.2-chat           |
 | **Auxiliary**        | `AZURE_OPENAI_AUXILIARY_DEPLOYMENT`     | `intent5`                | (shares primary)                      | (shares primary)                 | GPT-5 Mini             |
 | **Intent Detection** | `AZURE_OPENAI_INTENT_DEPLOYMENT`        | `intent5`                | `AZURE_OPENAI_INTENT_ENDPOINT`        | `AZURE_OPENAI_INTENT_API_KEY`    | GPT-5 Mini             |
 | **Vision**           | `AZURE_OPENAI_VISION_DEPLOYMENT`        | `gpt-vision`             | `AZURE_OPENAI_VISION_ENDPOINT`        | `AZURE_OPENAI_VISION_KEY`        | GPT-5 Vision           |
@@ -29,7 +29,7 @@ Two slots support configurable `reasoning_effort` (GPT-5 o-series parameter):
 | Parameter       | Env Var                                   | Default            | Purpose                                   |
 | --------------- | ----------------------------------------- | ------------------ | ----------------------------------------- |
 | Intent fallback | `AZURE_OPENAI_INTENT_FALLBACK_DEPLOYMENT` | `intent-detection` | Fallback when intent endpoint unavailable |
-| Chat fallback   | `AZURE_OPENAI_CHAT_FALLBACK_DEPLOYMENT`   | `aihub2-main`      | Fallback when primary GPT-5 unavailable   |
+| Chat fallback   | `AZURE_OPENAI_CHAT_FALLBACK_DEPLOYMENT`   | `mingai-main`      | Fallback when primary GPT-5 unavailable   |
 
 ### Key Design Decisions
 

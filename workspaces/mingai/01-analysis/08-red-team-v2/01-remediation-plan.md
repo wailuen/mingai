@@ -30,7 +30,7 @@
 
 **Root cause**: Documentation written before codebase verification. Assumed GPT-4 from product description language.
 
-**Corrections applied (as of 2026-03-05 commit `fix(docs): correct fabricated RBAC and MCP server data from aihub2 source`):**
+**Corrections applied (as of 2026-03-05 commit `fix(docs): correct fabricated RBAC and MCP server data from mingai source`):**
 
 - `00-executive-summary.md` — Lines 119-123 updated to GPT-5.2-chat / GPT-5 Mini
 - `01-service-architecture.md` — Lines 215, 248 updated
@@ -65,9 +65,9 @@
 | **Auth0 managed**           | Platform hosts Auth0 tenant for multi-provider SSO        | Starter (managed simplicity) |
 | **BYOIDP**                  | Customer provides their own IdP (Okta, Ping, custom SAML) | Enterprise only              |
 
-### Migration Path from aihub2
+### Migration Path from mingai
 
-The existing Azure AD direct integration in aihub2 maps to the "Azure Entra ID (direct)" option. Migration path:
+The existing Azure AD direct integration in mingai maps to the "Azure Entra ID (direct)" option. Migration path:
 
 1. **Phase 1 (Week 1-2)**: Wrap existing Azure AD auth behind `IdentityProviderAdapter` interface. Zero functional change.
 2. **Phase 3 (Auth Flexibility)**: Add Google SSO, Okta, SAML adapters behind the same interface. Auth0 becomes optional managed provider for tenants who need multi-provider SSO without operating their own IdP.
@@ -160,7 +160,7 @@ BYOLLM: Enterprise tier customers can provide their own API key for any supporte
 
 ### Internal MCP (current implementation)
 
-- The A2A agents in aihub2 use an **internal tool-calling protocol** built on top of Azure OpenAI function calling
+- The A2A agents in mingai use an **internal tool-calling protocol** built on top of Azure OpenAI function calling
 - This is NOT the open MCP standard from Anthropic
 - It is an internal implementation detail — users never see it
 - Terminology in docs should be "A2A agent protocol" or "internal tool orchestration" — not "MCP"

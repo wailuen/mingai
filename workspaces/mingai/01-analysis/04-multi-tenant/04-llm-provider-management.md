@@ -55,7 +55,7 @@ From `10-kaizen-extension-analysis.md` Part 1:
 │         Primary Azure OpenAI Resource               │
 │  (AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_KEY)        │
 ├─────────────────────────────────────────────────────┤
-│ ├─ aihub2-main (GPT-5.2-chat)           [CHAT]     │
+│ ├─ mingai-main (GPT-5.2-chat)           [CHAT]     │
 │ ├─ intent5 (GPT-5-mini)                  [INTENT]   │
 │ └─ text-embedding-3-large                [DOCS]     │
 └─────────────────────────────────────────────────────┘
@@ -82,7 +82,7 @@ From `10-kaizen-extension-analysis.md` Part 1:
 | `azure_openai_endpoint`                    | `""`                       | Primary endpoint (config.py:83)      |
 | `azure_openai_key`                         | `""`                       | Primary API key (config.py:84)       |
 | `azure_openai_api_version`                 | `"2024-12-01-preview"`     | API version (config.py:85)           |
-| `azure_openai_primary_deployment`          | `"aihub2-main"`            | Chat model (config.py:86-89)         |
+| `azure_openai_primary_deployment`          | `"mingai-main"`            | Chat model (config.py:86-89)         |
 | `azure_openai_auxiliary_deployment`        | `"intent5"`                | Fast model (config.py:90-93)         |
 | `azure_openai_intent_detection_deployment` | `"intent5"`                | Intent model (config.py:94-97)       |
 | `azure_openai_vision_deployment`           | `"gpt-vision"`             | Vision model (config.py:98-101)      |
@@ -172,7 +172,7 @@ The current `ModelRegistry` (app/models/registry.py:16-100) already maps operati
 
 | Use Case           | Current Azure Deployment     | Purpose                      |
 | ------------------ | ---------------------------- | ---------------------------- |
-| `chat_response`    | `aihub2-main` (GPT-5.2-chat) | Main conversational AI       |
+| `chat_response`    | `mingai-main` (GPT-5.2-chat) | Main conversational AI       |
 | `intent_detection` | `intent5` (GPT-5-mini)       | Fast intent classification   |
 | `doc_embedding`    | `text-embedding-3-large`     | Document embedding at ingest |
 | `kb_embedding`     | `text-embedding-ada-002`     | KB search embedding          |
@@ -536,12 +536,12 @@ Stored in PostgreSQL `llm_providers` table with RLS (PK: `id UUID`):
     "provider_type": "azure_openai",            # Registry key
     "display_name": "Azure OpenAI (GPT-5.2)",
     "description": "Platform-managed Azure OpenAI with GPT-5.2-chat",
-    "endpoint": "https://aihub-prod.openai.azure.com/",
-    "api_key_vault_ref": "vault://aihub/azure-openai-key",  # Key Vault reference
+    "endpoint": "https://mingai-prod.openai.azure.com/",
+    "api_key_vault_ref": "vault://mingai/azure-openai-key",  # Key Vault reference
     "is_enabled": True,
     "is_default": True,                         # Default for new tenants
     "models": {
-        "chat_response": "aihub2-main",         # GPT-5.2-chat
+        "chat_response": "mingai-main",         # GPT-5.2-chat
         "intent_detection": "intent5",          # GPT-5-mini
         "doc_embedding": "text-embedding-3-large",
         "kb_embedding": "text-embedding-ada-002",
@@ -1000,7 +1000,7 @@ Every LLM config field (deployment names, endpoints, keys, reasoning effort) is 
 class TenantLLMConfigCache:
     """Redis-cached tenant LLM configuration."""
 
-    CACHE_PREFIX = "aihub:llm-config:"
+    CACHE_PREFIX = "mingai:llm-config:"
     CACHE_TTL = 300  # 5 minutes
 
     @classmethod

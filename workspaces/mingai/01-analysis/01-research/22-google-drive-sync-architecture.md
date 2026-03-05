@@ -360,7 +360,7 @@ Max File Size: [100] MB
 
 ## 5. Comparison: Google Drive vs SharePoint
 
-| Dimension                     | SharePoint (aihub2)                                               | Google Drive (mingai)                                           |
+| Dimension                     | SharePoint (mingai)                                               | Google Drive (mingai)                                           |
 | ----------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
 | **Auth**                      | Azure AD client credentials (app-level)                           | Service account + domain-wide delegation OR OAuth 2.0           |
 | **API**                       | Microsoft Graph API (REST)                                        | Google Drive API v3 (REST)                                      |
@@ -378,7 +378,7 @@ Max File Size: [100] MB
 
 ## 6. Multi-Tenant Isolation Architecture
 
-Unlike the aihub2 SharePoint implementation (single-credential, no multi-tenant support), the mingai Google Drive connector is designed multi-tenant from day one:
+Unlike the mingai SharePoint implementation (single-credential, no multi-tenant support), the mingai Google Drive connector is designed multi-tenant from day one:
 
 ```
 Platform Vault

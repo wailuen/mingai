@@ -3,7 +3,7 @@
 > **Status**: Architecture Design
 > **Date**: 2026-03-05
 > **Purpose**: Define the complete architecture for tenant-level glossary management — how domain-specific terminology is stored, surfaced, and injected into the RAG pipeline.
-> **Source**: Extends existing aihub2 `glossary` module analysis from `01-research/01-service-architecture.md`.
+> **Source**: Extends existing mingai `glossary` module analysis from `01-research/01-service-architecture.md`.
 
 ---
 
@@ -118,9 +118,9 @@ When a source document mentions a glossary term, the source attribution UI can s
 
 ---
 
-## 3. Existing aihub2 Implementation
+## 3. Existing mingai Implementation
 
-The aihub2 codebase has a `glossary` module with:
+The mingai codebase has a `glossary` module with:
 
 - `GET/POST/PUT/DELETE /admin/glossary` endpoints
 - `GlossaryEntry` model with: `id`, `term`, `definition`, `category`, `aliases` (array), `created_at`

@@ -404,7 +404,7 @@ async def resolve_permissions(user_id: str, tenant_id: str) -> EffectivePermissi
     "created_at": "2026-03-04T00:00:00Z",
     "created_by": "platform-admin-uuid",
     "settings": {
-        "display_name": "Acme Corp AI Hub",
+        "display_name": "Acme Corp mingai",
         "logo_url": "https://...",
         "primary_color": "#1a73e8",
         "custom_domain": "ai.acmecorp.com",
@@ -473,8 +473,8 @@ async def resolve_permissions(user_id: str, tenant_id: str) -> EffectivePermissi
   "plan": "professional",
   "exp": 1709587200,
   "iat": 1709558400,
-  "iss": "aihub-platform",
-  "aud": "aihub-api"
+  "iss": "mingai-platform",
+  "aud": "mingai-api"
 }
 ```
 
@@ -483,15 +483,15 @@ For platform admins operating on a specific tenant:
 ```json
 {
   "sub": "platform-admin-uuid",
-  "email": "admin@aihub-platform.com",
+  "email": "admin@mingai-platform.com",
   "tenant_id": null,
   "scope": "platform",
   "platform_role": "platform_admin",
   "acting_tenant_id": "tenant-uuid",
   "exp": 1709587200,
   "iat": 1709558400,
-  "iss": "aihub-platform",
-  "aud": "aihub-api"
+  "iss": "mingai-platform",
+  "aud": "mingai-api"
 }
 ```
 

@@ -2,7 +2,7 @@
 
 **Document Version**: 1.0
 **Date**: 2026-03-04
-**Scope**: aihub2 LLM provider implementation, MCP server integrations, configuration loading, and multi-tenant extension architecture
+**Scope**: mingai LLM provider implementation, MCP server integrations, configuration loading, and multi-tenant extension architecture
 
 ---
 
@@ -47,7 +47,7 @@
 
 ```python
 # Primary Chat (line 139)
-azure_openai_primary_deployment = "aihub2-main"  # GPT-5.2-chat or equivalent
+azure_openai_primary_deployment = "mingai-main"  # GPT-5.2-chat or equivalent
 
 # Auxiliary/Intent Detection (line 140)
 azure_openai_auxiliary_deployment = "intent5"    # GPT-5-mini
@@ -73,7 +73,7 @@ All configuration comes from environment variables via `Settings` class (config.
 azure_openai_endpoint: str = Field(default="")
 azure_openai_key: str = Field(default="")
 azure_openai_api_version: str = Field(default="2024-12-01-preview")
-azure_openai_primary_deployment: str = Field(default="aihub2-main")
+azure_openai_primary_deployment: str = Field(default="mingai-main")
 azure_openai_auxiliary_deployment: str = Field(default="intent5")
 
 # KB Endpoint (Secondary - lines 174-176)
@@ -98,7 +98,7 @@ azure_openai_chat_reasoning_effort: str = Field(default="none")
 │         Primary Azure OpenAI Resource               │
 │  (uses AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_KEY)   │
 ├─────────────────────────────────────────────────────┤
-│ ├─ aihub2-main (GPT-5.2-chat)          [PRIMARY]   │
+│ ├─ mingai-main (GPT-5.2-chat)          [PRIMARY]   │
 │ ├─ intent5 (GPT-5-mini)                 [AUXILIARY] │
 │ └─ text-embedding-3-large (embeddings)  [DOCS]     │
 └─────────────────────────────────────────────────────┘
@@ -219,7 +219,7 @@ The following providers are **completely absent** from the codebase:
 
 ```python
 AZURE_TENANT_ID: str          # Required
-AZURE_CLIENT_ID: str          # Required (must differ from aihub2 app)
+AZURE_CLIENT_ID: str          # Required (must differ from mingai app)
 AZURE_CLIENT_SECRET: str      # Required
 ```
 
@@ -528,7 +528,7 @@ RETURN_IMAGES_DEFAULT: bool = True  # Enable by default
 
 2. **Hardcoded Defaults** (fallback)
    - API version: `"2024-12-01-preview"` (config.py line 85)
-   - Primary deployment: `"aihub2-main"` (config.py line 87)
+   - Primary deployment: `"mingai-main"` (config.py line 87)
    - Auxiliary deployment: `"intent5"` (config.py line 91)
    - KB embedding: `"text-embedding-ada-002"` (config.py line 176)
 
@@ -573,7 +573,7 @@ settings = get_settings()  # Global singleton
 │   (per environment: dev/staging/prod)   │
 ├─────────────────────────────────────────┤
 │  All Tenants ──→ Same Deployments       │
-│  ├─ aihub2-main (all tenants use)       │
+│  ├─ mingai-main (all tenants use)       │
 │  ├─ intent5 (all tenants use)           │
 │  └─ embeddings (all tenants use)        │
 └─────────────────────────────────────────┘
@@ -693,7 +693,7 @@ CREATE TABLE conversation_llm_settings (
 
 #### **Phase 2: LLM Client Factory (New)**
 
-**File**: `/Users/wailuen/Development/aihub2/src/backend/shared/aihub_shared/services/llm_client_factory.py`
+**File**: `src/backend/shared/mingai_shared/services/llm_client_factory.py`
 
 ```python
 from abc import ABC, abstractmethod
@@ -736,7 +736,7 @@ class AzureOpenAIClientFactory(LLMClientFactory):
     def get_deployment_name(self, use_case: str) -> str:
         # Maps use_case -> deployment name
         deployments = {
-            "chat": self.config.get("primary_deployment", "aihub2-main"),
+            "chat": self.config.get("primary_deployment", "mingai-main"),
             "intent": self.config.get("intent_deployment", "intent5"),
             "embedding": self.config.get("embedding_deployment", "text-embedding-3-large"),
         }
@@ -826,7 +826,7 @@ class LLMClientManager:
 
 #### **Phase 3: Admin API Endpoints**
 
-**File**: `/Users/wailuen/Development/aihub2/src/backend/api-service/app/modules/admin/llm_providers_router.py`
+**File**: `src/backend/api-service/app/modules/admin/llm_providers_router.py`
 
 ```python
 from fastapi import APIRouter, HTTPException, Depends
@@ -872,7 +872,7 @@ async def delete_llm_provider(provider_id: str, current_user = Depends(require_a
 
 #### **Phase 4: Tenant Settings UI / API**
 
-**File**: `/Users/wailuen/Development/aihub2/src/backend/api-service/app/modules/settings/llm_router.py`
+**File**: `src/backend/api-service/app/modules/settings/llm_router.py`
 
 ```python
 @router.get("/v1/tenant/llm-settings")
@@ -907,7 +907,7 @@ async def update_tenant_llm_settings(
 
 #### **Phase 5: Chat Endpoint Modification**
 
-**File**: `/Users/wailuen/Development/aihub2/src/backend/api-service/app/modules/chat/router.py` (existing, modify lines ~100)
+**File**: `src/backend/api-service/app/modules/chat/router.py` (existing, modify lines ~100)
 
 **Current Code** (lines ~100-120):
 
@@ -1097,7 +1097,7 @@ Next conversation uses OpenAI
 
 | Component              | File                                                     | Lines  | Details                                     |
 | ---------------------- | -------------------------------------------------------- | ------ | ------------------------------------------- |
-| Azure OpenAI Client    | `/backend/shared/aihub_shared/services/openai_client.py` | 1-464  | Factory pattern, 4 client managers          |
+| Azure OpenAI Client    | `/backend/shared/mingai_shared/services/openai_client.py` | 1-464  | Factory pattern, 4 client managers          |
 | Config Settings        | `/backend/api-service/app/core/config.py`                | 13-495 | Pydantic BaseSettings, env variable loading |
 | Service Initialization | `/backend/api-service/app/main.py`                       | 1-150+ | Startup bootstrap, no conditional imports   |
 | Azure AD MCP Config    | `/mcp-servers/azure-ad-mcp/app/config.py`                | 1-148  | Azure AD + Graph API, LLM orchestration     |

@@ -66,6 +66,8 @@ class FailurePropagationPolicy:
     Determines whether to proceed, abort, or surface partial results.
     """
 
+    MAX_RATE_LIMIT_WAIT_SECONDS = 60  # Beyond this, fail the node rather than queue indefinitely
+
     def evaluate(
         self,
         failed_node: DAGNode,
@@ -129,7 +131,7 @@ class FailurePropagationPolicy:
         # Rule 5: rate_limited → queue with user notification, bounded by max wait
         if failure_class == FailureClass.RATE_LIMITED:
             retry_after = failed_node.last_retry_after or 30
-            if retry_after > MAX_RATE_LIMIT_WAIT_SECONDS:
+            if retry_after > self.MAX_RATE_LIMIT_WAIT_SECONDS:
                 # Rate limit wait exceeds threshold → treat as soft/hard fail per criticality
                 return self.evaluate(
                     failed_node,
@@ -144,8 +146,6 @@ class FailurePropagationPolicy:
                     f"rate limit reached, retrying in {retry_after}s..."
                 ),
             )
-
-MAX_RATE_LIMIT_WAIT_SECONDS = 60  # Beyond this, fail the node rather than queue indefinitely
 
         # Rule 6: data_not_found → always soft-fail
         if failure_class == FailureClass.DATA_NOT_FOUND:

@@ -90,7 +90,7 @@ Start
   v
 [Step 5: Review & Launch]
   |-- Summary of configuration
-  |-- "Launch AI Hub for your organization" button
+  |-- "Launch mingai for your organization" button
   |
   v
 [Wizard complete]
@@ -131,7 +131,7 @@ Start
 [Step 1: Azure App Registration]
   |-- Instructions displayed:
   |   1. Go to Azure Portal > App registrations > New registration
-  |   2. Set redirect URI to: https://{tenant-slug}.aihub.com/auth/callback
+  |   2. Set redirect URI to: https://{tenant-slug}.mingai.ai/auth/callback
   |   3. Enable ID tokens
   |   4. Create client secret
   |   5. Note: Application (client) ID, Directory (tenant) ID, Client secret

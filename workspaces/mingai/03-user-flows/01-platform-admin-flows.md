@@ -38,7 +38,7 @@ Start
   |
   v
 [Run bootstrap CLI command]
-  platform-cli bootstrap --email admin@aihub-platform.com
+  platform-cli bootstrap --email admin@mingai-platform.com
   |
   v
 [System creates platform_admin record]

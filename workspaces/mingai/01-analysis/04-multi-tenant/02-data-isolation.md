@@ -224,7 +224,7 @@ async def extract_tenant_id(request: Request) -> str:
 
     Priority:
     1. JWT token tenant_id claim (most secure, always available after auth)
-    2. Subdomain mapping (acme.aihub.com -> tenant lookup)
+    2. Subdomain mapping (acme.mingai.ai -> tenant lookup)
     3. X-Tenant-ID header (for API key auth / service-to-service)
     """
     # 1. JWT claim (primary for authenticated requests)
@@ -253,10 +253,10 @@ async def extract_tenant_id(request: Request) -> str:
 ### Subdomain Routing
 
 ```
-acme.aihub.com      -> tenant_id = "acme-tenant-uuid"
-bigcorp.aihub.com   -> tenant_id = "bigcorp-tenant-uuid"
-api.aihub.com       -> platform API (tenant from JWT/API key)
-app.aihub.com       -> default tenant selection page
+acme.mingai.ai      -> tenant_id = "acme-tenant-uuid"
+bigcorp.mingai.ai   -> tenant_id = "bigcorp-tenant-uuid"
+api.mingai.ai       -> platform API (tenant from JWT/API key)
+app.mingai.ai       -> default tenant selection page
 ```
 
 ---
@@ -334,7 +334,7 @@ class TenantRedisClient:
     """Redis client with automatic tenant key prefixing."""
 
     def __init__(self, tenant_id: str):
-        self.prefix = f"aihub:{tenant_id}:"
+        self.prefix = f"mingai:{tenant_id}:"
         self.redis = get_redis_client()
 
     def _key(self, key: str) -> str:
@@ -351,26 +351,26 @@ class TenantRedisClient:
 
 
 # Key patterns:
-# aihub:tenant-uuid:perms:user-uuid          (permission cache)
-# aihub:tenant-uuid:session:session-uuid      (session data)
-# aihub:tenant-uuid:rate:user-uuid:chat       (rate limit counter)
-# aihub:tenant-uuid:embed:hash                (embedding cache)
-# aihub:tenant-uuid:intent:hash               (intent cache)
+# mingai:tenant-uuid:perms:user-uuid          (permission cache)
+# mingai:tenant-uuid:session:session-uuid      (session data)
+# mingai:tenant-uuid:rate:user-uuid:chat       (rate limit counter)
+# mingai:tenant-uuid:embed:hash                (embedding cache)
+# mingai:tenant-uuid:intent:hash               (intent cache)
 
 # Platform-level keys (no tenant prefix):
-# aihub:platform:tenant-list                   (active tenant list)
-# aihub:platform:provider-status               (provider health)
+# mingai:platform:tenant-list                   (active tenant list)
+# mingai:platform:provider-status               (provider health)
 ```
 
 ### Cache Invalidation
 
 ```python
 # Tenant-scoped pub/sub channels
-CHANNEL_PATTERN = "aihub:{tenant_id}:invalidation"
+CHANNEL_PATTERN = "mingai:{tenant_id}:invalidation"
 
 async def publish_cache_invalidation(tenant_id: str, key_pattern: str):
     """Broadcast cache invalidation to all API instances for a tenant."""
-    channel = f"aihub:{tenant_id}:invalidation"
+    channel = f"mingai:{tenant_id}:invalidation"
     await redis.publish(channel, json.dumps({
         "pattern": key_pattern,
         "timestamp": datetime.now(UTC).isoformat(),
@@ -513,7 +513,7 @@ For document storage (PDFs, uploaded files):
 
 ```
 Container structure:
-  aihub-documents/
+  mingai-documents/
     tenant-acme-uuid/
       indexes/
         hr-policies/
@@ -531,7 +531,7 @@ Container structure:
 class TenantBlobStorage:
     def __init__(self, tenant_id: str):
         self.prefix = f"{tenant_id}/"
-        self.container = get_blob_container("aihub-documents")
+        self.container = get_blob_container("mingai-documents")
 
     async def upload(self, path: str, data: bytes):
         blob_name = f"{self.prefix}{path}"
@@ -557,7 +557,7 @@ class TenantBlobStorage:
 | Application   | tenant_session() context manager   | Code pattern       |
 | PostgreSQL    | Row-Level Security (RLS) policies  | Database engine    |
 | Search Index  | Tenant-prefixed indexes            | Physical isolation |
-| Redis         | Key prefixing (aihub:{tenant_id}:) | Client wrapper     |
+| Redis         | Key prefixing (mingai:{tenant_id}:) | Client wrapper     |
 | Blob/Object   | Tenant-prefixed paths              | Client wrapper     |
 | Secrets Vault | Tenant-scoped secrets              | Vault policies     |
 

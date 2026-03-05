@@ -270,7 +270,7 @@ Routing is by file extension:
 | `.txt`, `.csv`, `.md`                                     | `_extract_text()`             | Built-in (UTF-8 with latin-1 fallback; CSV parsed as table)  |
 | `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tiff`, `.gif`, `.webp` | `_extract_standalone_image()` | PIL for dimensions, VisionDescriptionService for description |
 
-For PDF, PPTX, and DOCX: if vision is enabled, `_process_vision()` runs after text extraction to extract embedded images (via `ImageExtractionService` from `aihub_shared`) and generate descriptions (via `VisionDescriptionService`).
+For PDF, PPTX, and DOCX: if vision is enabled, `_process_vision()` runs after text extraction to extract embedded images (via `ImageExtractionService` from `mingai_shared`) and generate descriptions (via `VisionDescriptionService`).
 
 ### Vision Processing Integration
 
@@ -303,7 +303,7 @@ Embeddings are generated using `text-embedding-3-large` (3072 dimensions) via th
 
 ### Azure AI Search Index
 
-**Index name**: Configured via `settings.azure_search_conversation_docs_index` (typically `aihub-conversation-documents`).
+**Index name**: Configured via `settings.azure_search_conversation_docs_index` (typically `mingai-conversation-documents`).
 
 **Service**: `ConversationDocumentSearchService` (`src/backend/api-service/app/services/document_search.py`)
 
@@ -445,7 +445,7 @@ This ensures blob storage paths are isolated per tenant. The `BlobStorageService
 
 ### Search Index Needs Tenant Isolation
 
-**Current**: Security is enforced via `user_id` filter at query time. There is no tenant-level isolation -- all users share the same Azure AI Search index (`aihub-conversation-documents`).
+**Current**: Security is enforced via `user_id` filter at query time. There is no tenant-level isolation -- all users share the same Azure AI Search index (`mingai-conversation-documents`).
 
 **Options**:
 
@@ -459,7 +459,7 @@ This ensures blob storage paths are isolated per tenant. The `BlobStorageService
    ]
    ```
 
-2. **Per-tenant index**: Create separate indexes per tenant (`aihub-conv-docs-{tenant_id}`). Stronger isolation but higher operational overhead (index provisioning, scaling per tenant).
+2. **Per-tenant index**: Create separate indexes per tenant (`mingai-conv-docs-{tenant_id}`). Stronger isolation but higher operational overhead (index provisioning, scaling per tenant).
 
 **Recommendation**: Start with option 1 (tenant-scoped filter) for MVP. Migrate to per-tenant indexes if noisy-neighbor or compliance requirements demand it.
 

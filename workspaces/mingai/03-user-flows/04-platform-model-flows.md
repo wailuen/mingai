@@ -46,7 +46,7 @@ This is the atomic unit of value. Every feature, integration, and optimization e
      knowledge sources                   synthesized answers
             |                                  |
             +---------->  PLATFORM  <----------+
-            |          (AI Hub Core)           |
+            |          (mingai Core)           |
             |               ^                  |
             |               |                  |
             +-----+---------+---------+--------+
@@ -343,7 +343,7 @@ Admin decides: create new content, add new data source, or accept gap
 BEFORE: Expertise concentrated            AFTER: Expertise distributed
 ------------------------------            ----------------------------
 
-[Analyst with Bloomberg access]           [Any employee with AI Hub access]
+[Analyst with Bloomberg access]           [Any employee with mingai access]
   knows market data                         asks: "What's Apple's P/E ratio?"
                                             -> Bloomberg MCP returns data
 [HR specialist]                             -> LLM contextualizes

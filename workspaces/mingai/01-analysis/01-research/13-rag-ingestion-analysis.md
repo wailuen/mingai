@@ -6,7 +6,7 @@
 | ------------- | --------------------------------------------------------------------------------- |
 | Author        | rag-analyst                                                                       |
 | Date          | 2026-03-04                                                                        |
-| Source System | aihub2                                                                            |
+| Source System | mingai                                                                            |
 | Target System | mingai (multi-tenant SaaS)                                                        |
 | Scope         | Full ingestion pipeline: upload -> extract -> chunk -> embed -> index -> retrieve |
 
@@ -16,7 +16,7 @@
 
 ### 1.1 End-to-End Flow
 
-The current aihub2 ingestion pipeline spans three services:
+The current mingai ingestion pipeline spans three services:
 
 ```
 [SharePoint / Manual Upload]
@@ -45,11 +45,11 @@ The current aihub2 ingestion pipeline spans three services:
 | Manual      | Upload API -> `sync_processor.py` | User-initiated     |
 | MCP         | `mcp_adapter.py` agent invocation | Real-time at query |
 
-Source: `/Users/wailuen/Development/aihub2/src/backend/api-service/app/modules/kb/schemas.py` defines `KBSourceType` as `sharepoint | manual | mcp`.
+Source: `src/backend/api-service/app/modules/kb/schemas.py` defines `KBSourceType` as `sharepoint | manual | mcp`.
 
 ### 1.3 Sync Worker Pipeline
 
-The sync worker (`/Users/wailuen/Development/aihub2/src/sync-worker/app/services/sync_processor.py`) implements the core ingestion loop:
+The sync worker (`src/sync-worker/app/services/sync_processor.py`) implements the core ingestion loop:
 
 1. **Job Polling**: Redis BLPOP with 1s timeout for efficient queue consumption (`worker.py:234`).
 2. **Delta Detection**: SharePoint delta queries identify new, modified, and deleted files. eTag-based deduplication prevents reprocessing unchanged files.
@@ -62,7 +62,7 @@ The sync worker (`/Users/wailuen/Development/aihub2/src/sync-worker/app/services
 
 ### 1.4 Supported File Formats
 
-The document processor (`/Users/wailuen/Development/aihub2/src/backend/shared/aihub_shared/services/document_processor.py`) handles:
+The document processor (`src/backend/shared/mingai_shared/services/document_processor.py`) handles:
 
 | Format | Library       | Metadata Extracted    |
 | ------ | ------------- | --------------------- |
@@ -85,7 +85,7 @@ Images embedded in documents are processed through a separate pipeline:
 2. **Description** (`vision_description.py`): Multimodal LLM generates textual descriptions. Images are optimized to 1500px max dimension, JPEG at 85% quality, targeting 500KB. Retry handling: 2 retries, 3 rate-limit retries, 120s max total wait.
 3. **Indexing**: Descriptions are included as chunk content alongside the surrounding text context.
 
-Source: `/Users/wailuen/Development/aihub2/src/backend/shared/aihub_shared/services/image_extraction.py` and `vision_description.py`.
+Source: `src/backend/shared/mingai_shared/services/image_extraction.py` and `vision_description.py`.
 
 ---
 
@@ -133,7 +133,7 @@ The overlap uses an approximate word count: `int(self.OVERLAP_TOKENS * 0.75)` = 
 
 ### 2.4 Comparison to Best-in-Class
 
-| Feature                          | aihub2 Current       | Best Practice (2026)                                 |
+| Feature                          | mingai Current       | Best Practice (2026)                                 |
 | -------------------------------- | -------------------- | ---------------------------------------------------- |
 | Chunk sizing                     | Fixed 1000 tokens    | Adaptive 256-2048 based on content type              |
 | Boundary detection               | Paragraph + sentence | Semantic (heading-aware, section-aware)              |
@@ -180,7 +180,7 @@ The dual-model design appears intentional: uploaded conversation documents use t
 1. **No cross-space search**: A query against uploaded documents cannot simultaneously search KB indexes with a single embedding.
 2. **Model drift risk**: If either model is updated independently, existing embeddings become stale.
 
-Source: `/Users/wailuen/Development/aihub2/src/backend/shared/aihub_shared/services/embeddings.py:80-81`, `/Users/wailuen/Development/aihub2/src/backend/shared/aihub_shared/services/openai_client.py:141-147`.
+Source: `src/backend/shared/mingai_shared/services/embeddings.py:80-81`, `src/backend/shared/mingai_shared/services/openai_client.py:141-147`.
 
 ### 3.3 Embedding Cache
 
@@ -193,7 +193,7 @@ Redis-based caching is implemented in `embeddings.py:176-195`:
 
 ### 3.4 Comparison to Best-in-Class
 
-| Feature                    | aihub2 Current                | Best Practice (2026)                                    |
+| Feature                    | mingai Current                | Best Practice (2026)                                    |
 | -------------------------- | ----------------------------- | ------------------------------------------------------- |
 | Model                      | ada-002 (KB) + 3-large (docs) | Single model: text-embedding-3-large or Cohere embed-v4 |
 | Dimensions                 | 1536 / 3072 split             | Unified 1024-3072 with Matryoshka support               |
@@ -344,7 +344,7 @@ This is well-implemented. The sentence-boundary truncation prevents mid-thought 
 
 ### 5.5 Comparison to Best-in-Class
 
-| Feature                     | aihub2 Current                 | Best Practice (2026)                         |
+| Feature                     | mingai Current                 | Best Practice (2026)                         |
 | --------------------------- | ------------------------------ | -------------------------------------------- |
 | Query expansion             | Glossary rewriting only        | HyDE + query decomposition + synonyms        |
 | Retrieval stages            | Single-pass hybrid search      | Two-stage: broad recall + precise rerank     |
@@ -360,7 +360,7 @@ This is well-implemented. The sentence-boundary truncation prevents mid-thought 
 
 ### 6.1 Current Isolation Model
 
-The current aihub2 system achieves multi-user isolation through:
+The current mingai system achieves multi-user isolation through:
 
 1. **Permission Service**: `kb_discovery.py:359-397` checks `check_user_permission()` before any KB access. This consults the `PermissionService` to verify the user's `kb_permissions` / `index_permissions`.
 2. **KB Filtering**: `kb_discovery.py:62-63` filters indexes by `permitted_kb_ids` set.
@@ -517,7 +517,7 @@ For mingai, implement **tenant-level data isolation**:
 
 ### 8.2 Before/After Comparison
 
-| Component                | aihub2 (Before)                         | mingai (After)                              |
+| Component                | mingai (Before)                         | mingai (After)                              |
 | ------------------------ | --------------------------------------- | ------------------------------------------- |
 | **Chunking**             | Fixed 1000 tokens, paragraph/sentence   | Adaptive 256-2048, heading/table-aware      |
 | **Chunk hierarchy**      | Flat chunks only                        | Parent (section summary) + child (detail)   |

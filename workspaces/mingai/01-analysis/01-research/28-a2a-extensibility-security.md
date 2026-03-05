@@ -32,14 +32,14 @@ Tenant Admin → registers custom MCP server URL + capability schema
     ▼
 Platform Registry → runs registration-time security checks:
     ├── (1) Capability declaration audit (LLM-based, same as guardrail audit)
-    ├── (2) Domain allowlist check (container network egress)
-    └── (3) Admin approval gate (platform admin must approve BYOMCP registrations)
+    ├── (2) Domain allowlist check (container network egress / Cilium FQDN policy)
+    └── (5) Admin approval gate (platform admin must approve BYOMCP registrations)
     │
     ▼
 Approved BYOMCP → deployed into isolated tenant agent container
-    ├── Network: tenant-scoped namespace (cannot reach other tenants)
-    ├── Rate limits: per-tenant, per-MCP
-    └── Resource quotas: CPU/memory per agent container
+    ├── (3) Runtime behavioral monitoring (egress logging, anomaly detection)
+    ├── (4) Resource quotas: CPU/memory/rate limits per plan tier
+    └── Network isolation: tenant-scoped namespace (cannot reach other tenants)
 ```
 
 ### (1) Capability Declaration Audit
@@ -169,7 +169,7 @@ If Cilium is not available, use an Envoy sidecar proxy with FQDN-allowlist as an
 
 **Cross-tenant isolation**: Even if a tenant BYOMCP attempts to reach another tenant's orchestrator or data, the network policy blocks it at the infrastructure layer.
 
-### (4) Runtime Behavioral Monitoring
+### (3) Runtime Behavioral Monitoring
 
 Registration-time controls are insufficient alone — a BYOMCP that passes registration could exhibit unexpected runtime behavior (DNS rebinding, anomalous traffic patterns, data exfiltration via allowed channels). Runtime monitoring adds a detection layer:
 
@@ -179,7 +179,7 @@ Registration-time controls are insufficient alone — a BYOMCP that passes regis
 
 This monitoring is passive (no blocking) but provides the signal needed to suspend a BYOMCP agent if anomalous behavior is detected by the platform security team.
 
-### (5) Resource Quotas
+### (4) Resource Quotas
 
 Each BYOMCP container has enforced resource limits:
 
@@ -204,7 +204,7 @@ BYOMCP_RESOURCE_LIMITS = {
 
 Rate limits are enforced by a sidecar proxy (Envoy) on the BYOMCP container, not by the MCP server itself (tenant-controlled code cannot self-limit).
 
-### (4) Platform Admin Approval Gate
+### (5) Platform Admin Approval Gate
 
 BYOMCP registrations require explicit platform admin approval before activation:
 

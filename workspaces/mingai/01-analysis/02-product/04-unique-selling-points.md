@@ -6,7 +6,7 @@ This document applies rigorous scrutiny. The question is not "what features do w
 
 ### Table Stakes (Every competitor has these)
 
-These features are **necessary but not differentiating**. They do not justify choosing AI Hub over Copilot, Glean, or Guru:
+These features are **necessary but not differentiating**. They do not justify choosing mingai over Copilot, Glean, or Guru:
 
 | Feature                               | Why it is table stakes                             |
 | ------------------------------------- | -------------------------------------------------- |
@@ -35,7 +35,7 @@ These features are less common but not truly unique. They create preference but 
 | Expert escalation                           | Moveworks/ServiceNow (ticket routing)       | Different mechanism but same user outcome                              |
 | Audit logging (3-year retention)            | ServiceNow, Salesforce, any enterprise tool | Compliance feature, expected in enterprise                             |
 
-### Genuine Differentiators (What makes AI Hub different)
+### Genuine Differentiators (What makes mingai different)
 
 After rigorous analysis, here are the features that genuinely differentiate mingai from competitors:
 
@@ -57,9 +57,9 @@ After rigorous analysis, here are the features that genuinely differentiate ming
 
 #### 2. Deep, Fine-Grained RBAC with 9 System Functions
 
-**What it is**: Beyond basic role-to-index access mapping, AI Hub implements 9 distinct system functions (role:manage, user:manage, index:manage, analytics:view, audit:view, integration:manage, glossary:manage, feedback:view, sync:manage) that map to synthetic role IDs in JWTs. Custom roles can bundle any combination of index access and system functions. Admin UI sections are visible if and only if the user holds the corresponding permission.
+**What it is**: Beyond basic role-to-index access mapping, mingai implements 9 distinct system functions (role:manage, user:manage, index:manage, analytics:view, audit:view, integration:manage, glossary:manage, feedback:view, sync:manage) that map to synthetic role IDs in JWTs. Custom roles can bundle any combination of index access and system functions. Admin UI sections are visible if and only if the user holds the corresponding permission.
 
-**Why it matters**: Most competitors offer binary admin access (admin vs. not-admin) or simplistic RBAC. AI Hub's model allows creating roles like "Knowledge Base Manager" (index:manage + glossary:manage but not user:manage) or "Compliance Auditor" (audit:view + analytics:view but nothing else). This matches how large enterprises actually delegate administrative responsibilities.
+**Why it matters**: Most competitors offer binary admin access (admin vs. not-admin) or simplistic RBAC. mingai's model allows creating roles like "Knowledge Base Manager" (index:manage + glossary:manage but not user:manage) or "Compliance Auditor" (audit:view + analytics:view but nothing else). This matches how large enterprises actually delegate administrative responsibilities.
 
 **Who cares**: Regulated industries (finance, healthcare, government) where the principle of least privilege is a compliance requirement. Enterprises with distributed admin models where different teams manage different aspects of the platform.
 
@@ -73,7 +73,7 @@ After rigorous analysis, here are the features that genuinely differentiate ming
 
 **What it is**: Built on a provider abstraction layer that supports deployment to AWS (primary), Azure, GCP, or self-hosted infrastructure. A single environment variable (`CLOUD_PROVIDER=aws|azure|gcp|self-hosted`) drives which provider implementations are loaded at startup. All application code is cloud-provider-agnostic. The platform provides full control over the RAG pipeline -- prompt engineering, search strategies, reranking, context window management, and response formatting.
 
-**Why it matters**: Enterprises are not locked into a single cloud vendor. The platform deploys on whichever cloud the customer already uses, with consistent compliance posture and integration with existing cloud governance (IAM, secrets management, monitoring). Unlike Copilot (which is a black box), AI Hub gives full visibility into and control over how queries are processed, how search works, and how responses are generated. Entra ID / Azure AD remains a supported SSO provider alongside Okta, Auth0, and other OIDC-compliant identity providers -- but no single cloud is a prerequisite.
+**Why it matters**: Enterprises are not locked into a single cloud vendor. The platform deploys on whichever cloud the customer already uses, with consistent compliance posture and integration with existing cloud governance (IAM, secrets management, monitoring). Unlike Copilot (which is a black box), mingai gives full visibility into and control over how queries are processed, how search works, and how responses are generated. Entra ID / Azure AD remains a supported SSO provider alongside Okta, Auth0, and other OIDC-compliant identity providers -- but no single cloud is a prerequisite.
 
 **Who cares**: Enterprises with proprietary data sources requiring full RAG pipeline control, deployable on AWS, Azure, GCP, or self-hosted. Security teams that need full auditability of the AI pipeline. Engineering teams that want to tune search quality rather than accept vendor defaults. Organizations that want cloud portability without vendor lock-in.
 
@@ -99,7 +99,7 @@ After rigorous analysis, here are the features that genuinely differentiate ming
 
 **What it is**: The AI agent can send and receive emails on behalf of users (meeting confirmations, follow-ups) through a shared agent mailbox. Inbound emails are triaged through a multi-layer routing system: correlation matching (replies to agent-sent emails), People API reverse lookup, and admin triage queue.
 
-**Why it matters**: This moves AI Hub from a passive search tool to an active agent that can take action on behalf of users. No pure-play search competitor (Glean, Guru, Notion AI) offers this. Only Moveworks/ServiceNow and Kore.ai have comparable agent-action capabilities, but they are locked to their respective ecosystems.
+**Why it matters**: This moves mingai from a passive search tool to an active agent that can take action on behalf of users. No pure-play search competitor (Glean, Guru, Notion AI) offers this. Only Moveworks/ServiceNow and Kore.ai have comparable agent-action capabilities, but they are locked to their respective ecosystems.
 
 **Who cares**: Organizations where the AI assistant needs to go beyond answering questions to actually executing tasks (scheduling, confirmations, follow-ups). Financial services firms where the assistant needs to process incoming communications.
 
