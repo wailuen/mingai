@@ -73,17 +73,24 @@ export function WorkProfileCard({
           disabled={saving}
         />
 
-        {orgContextEnabled && (
-          <div className="ml-6">
+        <div
+          style={{
+            overflow: "hidden",
+            maxHeight: orgContextEnabled ? "80px" : "0",
+            opacity: orgContextEnabled ? 1 : 0,
+            transition: "max-height 220ms ease, opacity 220ms ease",
+          }}
+        >
+          <div className="ml-6 pt-1">
             <ToggleRow
               label="Include manager name"
               description="Share your manager's name for org-aware responses"
               checked={shareManagerInfo}
               onChange={toggleShareManager}
-              disabled={saving}
+              disabled={saving || !orgContextEnabled}
             />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

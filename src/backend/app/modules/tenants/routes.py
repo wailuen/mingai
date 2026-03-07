@@ -228,6 +228,8 @@ async def update_tenant_db(tenant_id: str, updates: dict, db) -> Optional[dict]:
     invalid = set(updates) - _TENANT_UPDATE_ALLOWLIST
     if invalid:
         raise ValueError(f"Invalid tenant update fields: {invalid}")
+    # Column names sourced exclusively from _TENANT_UPDATE_ALLOWLIST (static set).
+    # Values remain parameterized (`:col`). No user-controlled strings reach SQL.
     set_clauses = ", ".join(f"{col} = :{col}" for col in safe_updates)
     params = {"id": tenant_id, **safe_updates}
     result = await db.execute(
@@ -409,6 +411,8 @@ async def update_llm_profile_db(profile_id: str, updates: dict, db) -> Optional[
         raise ValueError(f"Invalid LLM profile update fields: {invalid}")
     if not safe_updates:
         raise ValueError("No valid fields to update")
+    # Column names sourced exclusively from _LLM_PROFILE_UPDATE_ALLOWLIST (static set).
+    # Values remain parameterized (`:col`). No user-controlled strings reach SQL.
     set_clauses = ", ".join(f"{col} = :{col}" for col in safe_updates)
     set_clauses += ", updated_at = NOW()"
     params = {"id": profile_id, **safe_updates}
@@ -540,20 +544,26 @@ async def get_tenant_quota_db(tenant_id: str, db) -> Optional[dict]:
     )
     user_count = user_count_result.scalar() or 0
 
+    # Sum tokens used in the current calendar month from messages table
+    tokens_used_result = await db.execute(
+        text(
+            "SELECT COALESCE(SUM(tokens_used), 0) FROM messages "
+            "WHERE tenant_id = :tenant_id "
+            "AND created_at >= DATE_TRUNC('month', NOW())"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    tokens_used = int(tokens_used_result.scalar() or 0)
+
     return {
         "tenant_id": tenant_id,
         "tokens": {
             "limit": monthly_token_limit,
-            # Actual token metering not yet implemented; returns 0 until
-            # the usage-tracking pipeline (metering service) is built.
-            "used": 0,
+            "used": tokens_used,
             "period": "monthly",
         },
         "storage_gb": {
             "limit": float(storage_gb_limit),
-            # Actual storage metering not yet implemented; returns 0.0 until
-            # the storage-tracking pipeline is built.
-            "used": 0.0,
         },
         "users": {"limit": users_max, "used": user_count},
     }

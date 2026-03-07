@@ -2,9 +2,9 @@
 
 **Project**: mingai Enterprise RAG Platform
 **Generated**: 2026-03-07
-**Status**: IN PROGRESS — Phase 1 backend substantially complete (~87%)
-**Progress**: ~192/192 Phase 1 items complete | 673 unit tests + 31 integration tests passing
-**Last updated**: 2026-03-07 (this session: API-025/030/031 — provisioning SSE status, tenant quota get/update; INFRA-019 — screenshot blur service — all evidence notes added; AI-034 — profile SSE flag; INFRA-014 — cache warming job; INFRA-020 — provisioning worker)
+**Status**: IN PROGRESS — Phase 1 backend complete | Phase 1 frontend 24/24 items done
+**Progress**: Phase 1 backend complete | Phase 1 frontend 24/24 items implemented | 694 unit tests + 69 integration tests passing
+**Last updated**: 2026-03-07 (this session: AI-034/INFRA-014/INFRA-020 complete; security hardening (H1-H4); path validation on all tenant/profile route params; FE-001–FE-029 audited — 23 Phase 1 frontend items implemented; FE-018 WorkProfileCard completed with smooth sub-toggle animation)
 **Total items across all files**: 354 todos (44 DB + 120 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 398 work items when including sub-file test counts)
 
 > This is the single navigation document for the entire implementation. Reference individual files for full acceptance criteria, dependencies, and notes on each item.
@@ -13,15 +13,15 @@
 
 ## 1. Summary Table
 
-| File                    | Domain             | Items   | ID Range              | Total Effort | Status                                                                                          |
-| ----------------------- | ------------------ | ------- | --------------------- | ------------ | ----------------------------------------------------------------------------------------------- |
-| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22/44 DONE (DB-001–DB-022)                                                                      |
-| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | ~60/120 DONE (Phase 1 core + API-025/030/031 evidence confirmed, 50%)                           |
-| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | 23/51 DONE (AI-001–021/032/033/034/035, 45%)                                                    |
-| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | 0/61 PENDING                                                                                    |
-| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | 15/72 DONE (auth/RLS/blur/GDPR/memory/cache/routing, 21%)                                       |
+| File                    | Domain             | Items   | ID Range              | Total Effort | Status                                                                                                                                                |
+| ----------------------- | ------------------ | ------- | --------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22/44 DONE (DB-001–DB-022)                                                                                                                            |
+| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | ~60/120 DONE (Phase 1 core + API-025/030/031 evidence confirmed, 50%)                                                                                 |
+| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | 23/51 DONE (AI-001–021/032/033/034/035, 45%)                                                                                                          |
+| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | 24/61 DONE (Phase 1 implemented: FE-001–009/012–013/015–023/026–029; FE-010/011/014/024/025/030–035/036–048 are Phase 2)      |
+| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | 30/72 DONE (auth/RLS/blur/GDPR/memory/cache/routing + TEST-008/009/010/023 integration, ~42%)                                                         |
 | `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | 28/50 DONE (migrations+DevOps+CacheService+ProfileLRU+OrgCtx+GlossaryCache+INFRA-019 blur+INFRA-014 cache warming+INFRA-020 provisioning worker, 56%) |
-| **Totals**              |                    | **398** |                       | **~1,594h**  | **~142/398 DONE (~36% overall)**                                                                |
+| **Totals**              |                    | **398** |                       | **~1,594h**  | **~166/398 DONE (~42% overall)**                                                                                                                      |
 
 > Effort estimate: ~1,594 hours total. At 2 engineers full-time = ~100 working days (~20 weeks). Parallelism across domains reduces calendar time significantly.
 
@@ -428,7 +428,7 @@ These items MUST be completed and verified with passing tests before any product
 
 | Gate Item                                                     | Required Test                                                        | Status                               |
 | ------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------ |
-| FE-022: RAG response area blurred by default                  | TEST-015, case: "screenshot without blur metadata flag REJECTED"     | Pending (FE not started)             |
+| FE-022: RAG response area blurred by default                  | TEST-015, case: "screenshot without blur metadata flag REJECTED"     | DONE (FE-022 implemented)            |
 | INFRA-019: Server-side blur pipeline — unblurred never stored | TEST-015, case: "unblurred screenshot never persisted"               | DONE (INFRA-019 + TEST-015 complete) |
 | API-013: blur_acknowledged validation                         | TEST-015, case: "API request with blur_acknowledged: false REJECTED" | DONE (API-013 complete)              |
 
