@@ -134,6 +134,19 @@ async def startup():
             hint="Check .env file and .env.example for required variables",
         )
 
+    # INFRA-026: Warm up glossary cache for all active tenants.
+    # Lazy import to avoid import errors if Redis/DB not ready at module load.
+    # Failure never blocks startup.
+    try:
+        from app.modules.glossary.warmup import warm_up_glossary_cache
+
+        await warm_up_glossary_cache()
+    except Exception as exc:
+        logger.warning(
+            "glossary_warmup_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
 

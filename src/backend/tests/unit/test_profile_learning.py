@@ -59,9 +59,7 @@ class TestGetProfile:
         service._db = AsyncMock()
 
         mock_redis = MagicMock()
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             result = await service.get_profile_context("u1", "t1")
 
         assert result == {"technical_level": "expert"}
@@ -91,9 +89,7 @@ class TestGetProfile:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=json.dumps(cached_profile))
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             result = await service.get_profile_context("u2", "t2")
 
         assert result == cached_profile
@@ -121,9 +117,7 @@ class TestGetProfile:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.get_profile_context("my-user", "my-tenant")
 
         mock_redis.get.assert_called_once_with(
@@ -151,9 +145,7 @@ class TestGetProfile:
         mock_redis.get = AsyncMock(return_value=None)
         mock_redis.setex = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             result = await service.get_profile_context("u3", "t3")
 
         assert result == db_profile
@@ -183,9 +175,7 @@ class TestGetProfile:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             result = await service.get_profile_context("u4", "t4")
 
         assert result is None
@@ -207,9 +197,7 @@ class TestQueryCounter:
         mock_redis.incr = AsyncMock(return_value=1)
         mock_redis.expire = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("u1", "t1", "agent-1")
 
         mock_redis.incr.assert_called_once()
@@ -227,9 +215,7 @@ class TestQueryCounter:
         mock_redis.incr = AsyncMock(return_value=1)
         mock_redis.expire = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("user-abc", "tenant-xyz", "a1")
 
         mock_redis.incr.assert_called_once_with(
@@ -250,9 +236,7 @@ class TestQueryCounter:
         mock_redis.expire = AsyncMock()
         mock_redis.set = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("u1", "t1", "a1")
 
         service._run_profile_extraction.assert_called_once_with("u1", "t1", "a1")
@@ -271,9 +255,7 @@ class TestQueryCounter:
         mock_redis.expire = AsyncMock()
         mock_redis.set = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("u1", "t1", "a1")
 
         service._run_profile_extraction.assert_called_once()
@@ -291,9 +273,7 @@ class TestQueryCounter:
         mock_redis.incr = AsyncMock(return_value=11)
         mock_redis.expire = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("u1", "t1", "a1")
 
         service._run_profile_extraction.assert_not_called()
@@ -312,9 +292,7 @@ class TestQueryCounter:
         mock_redis.expire = AsyncMock()
         mock_redis.set = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("u1", "t1", "a1")
 
         # Counter should be reset
@@ -334,9 +312,7 @@ class TestQueryCounter:
         mock_redis.incr = AsyncMock(return_value=1)
         mock_redis.expire = AsyncMock()
 
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             await service.on_query_completed("u1", "t1", "a1")
 
         # 30 days = 30 * 24 * 3600 = 2592000
@@ -363,9 +339,7 @@ class TestTenantIsolation:
         service._db = AsyncMock()
 
         mock_redis = MagicMock()
-        with patch(
-            "app.modules.profile.learning.get_redis", return_value=mock_redis
-        ):
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
             result_a = await service.get_profile_context("user-1", "tenant-a")
             result_b = await service.get_profile_context("user-1", "tenant-b")
 
@@ -435,3 +409,206 @@ class TestExtractionPrompt:
         from app.modules.profile.learning import LEARN_TRIGGER_THRESHOLD
 
         assert LEARN_TRIGGER_THRESHOLD == 10
+
+
+class TestCounterCheckpoint:
+    """Test INFRA-032: Redis counter write-back to PostgreSQL."""
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_called_on_trigger(self):
+        """When counter reaches threshold (10), _checkpoint_counter_to_db is called."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        service = ProfileLearningService.__new__(ProfileLearningService)
+        service._db = AsyncMock()
+        service._run_profile_extraction = AsyncMock()
+        service._checkpoint_counter_to_db = AsyncMock()
+        service._seed_counter_from_db = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.incr = AsyncMock(return_value=10)
+        mock_redis.expire = AsyncMock()
+        mock_redis.set = AsyncMock()
+
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
+            await service.on_query_completed("u1", "t1", "a1")
+
+        service._checkpoint_counter_to_db.assert_called_once_with("u1", "t1")
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_no_db_session_is_noop(self):
+        """When db is None, _checkpoint_counter_to_db is silently skipped."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        service = ProfileLearningService(db_session=None)
+
+        # Should not raise — just return silently
+        await service._checkpoint_counter_to_db("u1", "t1")
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_db_failure_suppressed(self):
+        """DB error in _checkpoint_counter_to_db is suppressed (warning logged, no raise)."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(side_effect=Exception("DB connection lost"))
+
+        service = ProfileLearningService(db_session=mock_db)
+
+        # Must not raise
+        await service._checkpoint_counter_to_db("u1", "t1")
+
+        # DB execute was attempted
+        mock_db.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_upserts_with_threshold_increment(self):
+        """Checkpoint upserts query_count by adding LEARN_TRIGGER_THRESHOLD to existing value."""
+        from app.modules.profile.learning import (
+            LEARN_TRIGGER_THRESHOLD,
+            ProfileLearningService,
+        )
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock()
+        mock_db.commit = AsyncMock()
+
+        service = ProfileLearningService(db_session=mock_db)
+
+        await service._checkpoint_counter_to_db("user-1", "tenant-1")
+
+        # Verify the SQL was called with parameterized values
+        call_args = mock_db.execute.call_args
+        sql_params = call_args[0][1]
+        assert sql_params["user_id"] == "user-1"
+        assert sql_params["tenant_id"] == "tenant-1"
+        assert sql_params["threshold"] == LEARN_TRIGGER_THRESHOLD
+        mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_seed_from_db_on_fresh_counter(self):
+        """When INCR returns 1, _seed_counter_from_db is called to restore position."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        service = ProfileLearningService.__new__(ProfileLearningService)
+        service._db = AsyncMock()
+        service._run_profile_extraction = AsyncMock()
+        service._checkpoint_counter_to_db = AsyncMock()
+        service._seed_counter_from_db = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.incr = AsyncMock(return_value=1)
+        mock_redis.expire = AsyncMock()
+
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
+            await service.on_query_completed("u1", "t1", "a1")
+
+        counter_key = "mingai:t1:profile_learning:query_count:u1"
+        service._seed_counter_from_db.assert_called_once_with(
+            "u1", "t1", mock_redis, counter_key
+        )
+
+    @pytest.mark.asyncio
+    async def test_seed_not_called_when_count_not_1(self):
+        """When INCR returns > 1, _seed_counter_from_db is NOT called."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        service = ProfileLearningService.__new__(ProfileLearningService)
+        service._db = AsyncMock()
+        service._run_profile_extraction = AsyncMock()
+        service._checkpoint_counter_to_db = AsyncMock()
+        service._seed_counter_from_db = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.incr = AsyncMock(return_value=5)
+        mock_redis.expire = AsyncMock()
+
+        with patch("app.modules.profile.learning.get_redis", return_value=mock_redis):
+            await service.on_query_completed("u1", "t1", "a1")
+
+        service._seed_counter_from_db.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_seed_skips_when_db_is_none(self):
+        """When db is None, _seed_counter_from_db is skipped gracefully."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        service = ProfileLearningService(db_session=None)
+        mock_redis = AsyncMock()
+
+        # Should not raise
+        await service._seed_counter_from_db("u1", "t1", mock_redis, "some:key")
+
+        # Redis set should NOT be called (nothing to seed)
+        mock_redis.set.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_seed_no_checkpoint_is_noop(self):
+        """When PostgreSQL has no row for user, seed does nothing to Redis."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = None
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        service = ProfileLearningService(db_session=mock_db)
+        mock_redis = AsyncMock()
+
+        await service._seed_counter_from_db("u1", "t1", mock_redis, "some:key")
+
+        # No checkpoint found — Redis should NOT be updated
+        mock_redis.set.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_seed_sets_modular_position(self):
+        """When PostgreSQL has checkpoint=23, Redis is set to 23 % 10 = 3."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (23,)
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        service = ProfileLearningService(db_session=mock_db)
+        mock_redis = AsyncMock()
+
+        await service._seed_counter_from_db("u1", "t1", mock_redis, "some:counter:key")
+
+        # 23 % 10 = 3 — set Redis counter to 3
+        mock_redis.set.assert_called_once_with("some:counter:key", 3)
+
+    @pytest.mark.asyncio
+    async def test_seed_zero_modular_position_not_set(self):
+        """When PostgreSQL has checkpoint=20, modular position is 0 — no Redis set needed."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (20,)
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        service = ProfileLearningService(db_session=mock_db)
+        mock_redis = AsyncMock()
+
+        await service._seed_counter_from_db("u1", "t1", mock_redis, "some:key")
+
+        # 20 % 10 = 0 — no need to set, counter already at correct position
+        mock_redis.set.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_seed_db_failure_suppressed(self):
+        """DB error in _seed_counter_from_db is suppressed (warning logged, no raise)."""
+        from app.modules.profile.learning import ProfileLearningService
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(side_effect=Exception("DB timeout"))
+
+        service = ProfileLearningService(db_session=mock_db)
+        mock_redis = AsyncMock()
+
+        # Must not raise
+        await service._seed_counter_from_db("u1", "t1", mock_redis, "some:key")
+
+        # Redis should NOT be touched on DB failure
+        mock_redis.set.assert_not_called()

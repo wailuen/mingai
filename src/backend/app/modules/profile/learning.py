@@ -128,6 +128,12 @@ class ProfileLearningService:
         Called after every chat query. Increments counter, triggers
         profile extraction at every LEARN_TRIGGER_THRESHOLD queries.
 
+        On Redis cache miss (INCR returns 1), seeds counter from PostgreSQL
+        checkpoint to recover position after Redis restart.
+
+        On trigger (count % threshold == 0), checkpoints cumulative query
+        count to PostgreSQL for durability.
+
         Args:
             user_id: User who queried.
             tenant_id: Tenant scope.
@@ -139,6 +145,14 @@ class ProfileLearningService:
         count = await redis.incr(counter_key)
         await redis.expire(counter_key, COUNTER_TTL_SECONDS)
 
+        # INFRA-032: Seed from PostgreSQL on Redis cache miss
+        if count == 1:
+            await self._seed_counter_from_db(user_id, tenant_id, redis, counter_key)
+            # Re-read the counter after seeding (seed may have updated it)
+            raw_count = await redis.get(counter_key)
+            if raw_count is not None:
+                count = int(raw_count)
+
         if count % LEARN_TRIGGER_THRESHOLD == 0:
             logger.info(
                 "profile_learn_triggered",
@@ -147,6 +161,8 @@ class ProfileLearningService:
                 query_count=count,
             )
             await redis.set(counter_key, 0)
+            # INFRA-032: Checkpoint cumulative count to PostgreSQL
+            await self._checkpoint_counter_to_db(user_id, tenant_id)
             await self._run_profile_extraction(user_id, tenant_id, agent_id)
 
     async def clear_l1_cache(self, user_id: str) -> None:
@@ -164,6 +180,86 @@ class ProfileLearningService:
             user_id=user_id,
             entries_removed=len(keys_to_delete),
         )
+
+    async def _checkpoint_counter_to_db(self, user_id: str, tenant_id: str) -> None:
+        """
+        Checkpoint query count to PostgreSQL for Redis restart recovery.
+
+        Uses upsert to increment user_profiles.query_count by LEARN_TRIGGER_THRESHOLD.
+        Fire-and-forget: failures are logged and suppressed.
+        """
+        if self._db is None:
+            return
+
+        try:
+            await self._db.execute(
+                text(
+                    "INSERT INTO user_profiles (user_id, tenant_id, query_count) "
+                    "VALUES (:user_id, :tenant_id, :threshold) "
+                    "ON CONFLICT (user_id, tenant_id) DO UPDATE "
+                    "SET query_count = user_profiles.query_count + :threshold"
+                ),
+                {
+                    "user_id": user_id,
+                    "tenant_id": tenant_id,
+                    "threshold": LEARN_TRIGGER_THRESHOLD,
+                },
+            )
+            await self._db.commit()
+            logger.info(
+                "counter_checkpoint_saved",
+                user_id=user_id,
+                tenant_id=tenant_id,
+                increment=LEARN_TRIGGER_THRESHOLD,
+            )
+        except Exception as exc:
+            logger.warning(
+                "counter_checkpoint_failed",
+                user_id=user_id,
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+
+    async def _seed_counter_from_db(
+        self, user_id: str, tenant_id: str, redis, counter_key: str
+    ) -> None:
+        """
+        Seed Redis counter from PostgreSQL checkpoint after cache miss.
+
+        If PostgreSQL has a checkpoint, set Redis counter to (checkpoint % threshold)
+        so the next trigger fires at the correct query count.
+        """
+        if self._db is None:
+            return
+
+        try:
+            result = await self._db.execute(
+                text(
+                    "SELECT query_count FROM user_profiles "
+                    "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+                ),
+                {"user_id": user_id, "tenant_id": tenant_id},
+            )
+            row = result.fetchone()
+            if row and row[0]:
+                checkpoint = int(row[0])
+                modular_position = checkpoint % LEARN_TRIGGER_THRESHOLD
+                if modular_position > 0:
+                    await redis.set(counter_key, modular_position)
+                    logger.info(
+                        "counter_seeded_from_db",
+                        user_id=user_id,
+                        tenant_id=tenant_id,
+                        checkpoint=checkpoint,
+                        modular_position=modular_position,
+                    )
+        except Exception as exc:
+            logger.warning(
+                "counter_seed_from_db_failed",
+                user_id=user_id,
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
 
     async def _load_from_db(self, user_id: str, tenant_id: str) -> dict | None:
         """
