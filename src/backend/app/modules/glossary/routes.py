@@ -30,6 +30,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_current_user, require_tenant_admin
+from app.core.redis_client import get_redis
 from app.core.session import get_async_session
 from app.modules.glossary.expander import (
     MAX_DEFINITION_LENGTH,
@@ -40,6 +41,30 @@ from app.modules.glossary.expander import (
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/glossary", tags=["glossary"])
+
+
+async def _invalidate_glossary_cache(tenant_id: str) -> None:
+    """
+    Invalidate the Redis glossary terms cache for a tenant (INFRA-038).
+
+    Called after any write operation (create, update, delete, bulk import)
+    so that GlossaryExpander reads fresh terms on the next expand() call.
+    Failure is logged and suppressed — cache miss is safe (falls back to DB).
+    """
+    cache_key = f"mingai:{tenant_id}:glossary_terms"
+    try:
+        redis = get_redis()
+        await redis.delete(cache_key)
+        logger.debug(
+            "glossary_cache_invalidated",
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "glossary_cache_invalidation_failed",
+            tenant_id=tenant_id,
+            error=str(exc),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -54,8 +79,10 @@ class CreateTermRequest(BaseModel):
 
 
 class UpdateTermRequest(BaseModel):
-    term: Optional[str] = Field(None, max_length=100)
-    full_form: Optional[str] = Field(None, max_length=MAX_DEFINITION_LENGTH)
+    term: Optional[str] = Field(None, min_length=1, max_length=100)
+    full_form: Optional[str] = Field(
+        None, min_length=1, max_length=MAX_DEFINITION_LENGTH
+    )
     aliases: Optional[List[str]] = None
 
 
@@ -319,6 +346,7 @@ async def import_glossary_csv(
         csv_content=csv_content,
         db=session,
     )
+    await _invalidate_glossary_cache(current_user.tenant_id)
     return result
 
 
@@ -353,6 +381,7 @@ async def create_glossary_term(
         aliases=request.aliases,
         db=session,
     )
+    await _invalidate_glossary_cache(current_user.tenant_id)
     return result
 
 
@@ -401,6 +430,7 @@ async def update_glossary_term(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Glossary term '{term_id}' not found",
         )
+    await _invalidate_glossary_cache(current_user.tenant_id)
     return result
 
 
@@ -421,4 +451,5 @@ async def delete_glossary_term(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Glossary term '{term_id}' not found",
         )
+    await _invalidate_glossary_cache(current_user.tenant_id)
     return None
