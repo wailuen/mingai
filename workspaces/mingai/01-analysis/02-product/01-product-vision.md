@@ -120,7 +120,7 @@ As implemented (based on codebase analysis), the product includes:
 | Oracle Fusion A2A agent       | Research phase (detailed API analysis complete)     |
 | Bloomberg data integration    | Research phase (SDK and API exploration)            |
 | BIPO HRMS integration         | Research phase (SAML SSO and API documented)        |
-| Expert escalation (full flow) | Partially designed, SME identification not complete |
+| Expert escalation / HITL routing | Removed from scope — deferred to future pivot |
 
 ## Intended Use Cases
 
@@ -130,8 +130,6 @@ As implemented (based on codebase analysis), the product includes:
 2. **Cross-domain research**: "Compare Q3 revenue projections with engineering headcount growth" -- Routes to Finance and HR indexes simultaneously, synthesizes cross-domain answer
 3. **Private document Q&A**: Manager uploads strategy draft, asks "What are the key initiatives in my Q4 strategy?" -- Searches personal docs alongside enterprise content
 4. **Content gap discovery**: Analytics dashboard reveals 85 queries about "remote work equipment policies" with no results -- drives content creation
-5. **Expert escalation**: User gets partial answer, escalates to SME who provides authoritative response that feeds future queries
-
 ### Emerging Use Cases (from research folder)
 
 6. **Financial data Q&A**: Integrate Bloomberg data and Oracle Fusion financials via MCP for real-time financial queries

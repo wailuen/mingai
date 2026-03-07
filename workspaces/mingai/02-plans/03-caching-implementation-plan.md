@@ -124,7 +124,7 @@ class CacheService:
 
 ### Success Metrics
 
-- Cosmos DB / PostgreSQL read count reduced by 80% per chat turn
+- PostgreSQL read count reduced by 80% per chat turn (Redis cache serving cold queries)
 - P99 response latency for context-building phase: <20ms (down from 80-120ms)
 - Zero cross-tenant cache violations in security test suite
 

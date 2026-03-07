@@ -20,8 +20,8 @@
       - use the latest modern UI/UX principles/components/widgets in your implementation.
 2. This is where the codebases should reside
    - `src/...` for all backend codebase
-   - `apps/web` for all web FE codebase
-   - `apps/mobile` for all mobile FE codebase
+   - `src/web` for all web FE codebase
+   - `src/mobile` for all mobile FE codebase
 3. Work with todo-manager, following our procedural directives
    - create detailed todos for EVERY todo/task required.
    - The detailed todos should be created in `todos/active`.

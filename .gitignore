@@ -62,3 +62,6 @@ secrets/
 **/scripts/data/
 **/scripts/outputs/
 **/scripts/*.log
+
+# Playwright MCP runtime data (console logs, captured screenshots)
+.playwright-mcp/

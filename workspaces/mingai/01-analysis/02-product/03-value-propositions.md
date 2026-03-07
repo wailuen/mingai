@@ -10,7 +10,7 @@
 | Content Authors         | Create documents in SharePoint, OneDrive, enterprise systems        | External -- mingai indexes their content |
 | MCP Server Developers   | Build connectors to external data sources (Bloomberg, Oracle, BIPO) | Research phase for new connectors        |
 | Glossary Managers       | Curate domain-specific terminology for better search                | Implemented                              |
-| Subject Matter Experts  | Respond to escalated queries, building the knowledge graph          | Partially designed                       |
+| Subject Matter Experts  | Respond to escalated queries, building the knowledge graph          | Removed from scope — future phase        |
 | Azure AD Administrators | Configure groups and roles that flow into RBAC                      | Implemented via group sync               |
 
 ### Consumers (Who receives/consumes value?)
@@ -20,7 +20,7 @@
 | Knowledge Workers      | Synthesized answers from enterprise content with sources     | Implemented           |
 | Researchers / Analysts | Cross-domain search and synthesis across multiple indexes    | Implemented           |
 | Managers               | Private document Q&A alongside enterprise search             | Implemented           |
-| Support Staff          | Quick answers to customer/internal questions with escalation | Partially implemented |
+| Support Staff          | Quick answers to customer/internal questions                 | Implemented           |
 | Analytics Viewers      | Usage insights, content gap identification, cost visibility  | Implemented           |
 
 ### Partners (Who facilitates transactions?)
@@ -43,7 +43,7 @@ Potential network effects that could be activated:
 
 1. **Data network effect**: More queries improve index routing accuracy and user profiling. Each query teaches the system which indexes are relevant for which question types. This is implicit but not currently leveraged explicitly.
 
-2. **Content network effect**: Expert escalation responses build the knowledge graph. When SME answers are stored and reused for similar future queries, each answered question makes the system smarter. This is designed but not fully implemented.
+2. **Content network effect**: Knowledge graph enrichment from verified answers. Deferred — expert escalation routing removed from scope.
 
 3. **Cross-functional learning**: Multi-index queries reveal connections between data silos that no individual employee would discover. The analytics dashboard surfaces these patterns, but they are passive -- not actively pushed to users.
 
@@ -63,7 +63,7 @@ Potential network effects that could be activated:
 | -------------------------------------------- | -------------------------------------------- | ------------------------------------------------- |
 | Searching multiple systems for answers       | Single-query multi-index search              | 60-80% of search time per query                   |
 | Checking permissions before sharing data     | RBAC-enforced search results                 | Eliminates manual access checks                   |
-| Routing questions to the right expert        | LLM-driven index routing + expert escalation | Reduces interruption cost to SMEs                 |
+| Routing questions to the right agent         | LLM-driven intent + index routing            | Eliminates manual agent selection by user         |
 | Translating queries/answers across languages | Auto-detect + respond in query language      | Eliminates manual translation                     |
 | Monitoring system usage for compliance       | Automated audit logging (3-year retention)   | Eliminates manual audit log compilation           |
 | Syncing SharePoint content for search        | Background sync workers                      | Eliminates manual re-indexing                     |
@@ -79,7 +79,7 @@ Potential network effects that could be activated:
 | "Which system has the answer?"                   | LLM selects relevant indexes automatically              | Eliminates decision overhead  |
 | "Is this information current?"                   | Source attribution with timestamps and scores           | Reduces verification effort   |
 | "Should I search the internet too?"              | Automatic fallback when enterprise content insufficient | Eliminates manual judgment    |
-| "Who is the right expert for this question?"     | SME identification from org structure + expertise graph | Faster escalation             |
+| "Who should handle this query?"                  | LLM intent routing to correct agent/index               | Eliminates manual routing overhead |
 | "What content gaps exist in our knowledge base?" | Unanswered query analytics with clustering              | Data-driven content strategy  |
 | "Are we getting value from this AI investment?"  | Comprehensive cost analytics per service                | Evidence-based ROI assessment |
 
@@ -165,13 +165,13 @@ Potential network effects that could be activated:
 
 **Current state: WEAK (partially mitigated by feedback mechanism)**
 
-- Expert escalation designed but not fully implemented
 - No collaborative annotation of search results
 - No ability for users to mark answers as "verified" or "outdated"
 - No shared conversation feature (all conversations are private)
 - No community Q&A or knowledge forum
 - Email triage exists but is primarily agent-to-user, not user-to-user
-- **Partial mitigation**: The thumb up/down feedback mechanism provides a lightweight consumer-to-platform signal loop. Users flag poor responses, admins review aggregate feedback. This is not full collaboration (no peer-to-peer interaction, no expert escalation flow) but it closes the most basic gap: consumers can now influence platform quality. Full expert escalation remains future work.
+- **Partial mitigation**: The thumb up/down feedback mechanism provides a lightweight consumer-to-platform signal loop. Users flag poor responses, admins review aggregate feedback. This closes the most basic gap: consumers can now influence platform quality.
+- **Expert escalation / HITL routing**: Removed from scope. Deferred to future phase.
 
 **This is the weakest dimension and the biggest opportunity for differentiation in a multi-tenant scenario.**
 

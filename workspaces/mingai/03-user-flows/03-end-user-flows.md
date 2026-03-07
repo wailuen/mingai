@@ -794,3 +794,253 @@ Positive ratings reinforce which agent/index combinations produce quality answer
 
 **Document Version**: 1.1
 **Last Updated**: March 4, 2026
+
+---
+
+## 10. Issue Reporting
+
+**Trigger**: User encounters unexpected behavior — wrong answer, missing sources, UI glitch, performance problem — at any point during platform use.
+**Entry points**:
+- `⚐ Report Issue` floating button (bottom-right, always visible)
+- Keyboard shortcut: `Ctrl+Shift+F`
+- Auto-triggered soft prompt when a 5xx API error is detected
+
+---
+
+### Happy Path — User Reports a Bug
+
+```
+Start
+  |
+  v
+[User notices a problem during any screen]
+  |-- Examples:
+  |   |-- AI response cites a document from 2 years ago as "current policy"
+  |   |-- Chat returns a confidence score of 0% on a clearly answerable question
+  |   |-- Page is blank / fails to load after a query
+  |   |-- Response took 45 seconds (unexpected slowness)
+  |
+  v
+[User clicks "⚐ Report Issue" button (bottom-right)]
+  |-- OR: Ctrl+Shift+F
+  |
+  v
+[Issue Reporter dialog opens]
+  |
+  |-- System automatically:
+  |   |-- Captures screenshot of current page state (html2canvas)
+  |   |-- Collects session context: last query, model used, retrieval confidence, sources
+  |   |-- Collects browser context: browser, OS, viewport, any console errors
+  |   |-- Pre-populates current URL
+  |
+  |-- Screenshot preview is shown in the dialog.
+  |   RAG RESPONSE AREA IS BLURRED BY DEFAULT.
+  |   User must click "Reveal RAG content" and confirm before the AI
+  |   response text becomes visible in the screenshot. This prevents
+  |   accidental inclusion of retrieved confidential document content.
+  |
+  v
+[User reviews Issue Type]
+  |-- Bug              → AI triage in < 5 min, severity + SLA committed
+  |-- Performance      → auto-tagged with response time context
+  |-- UX               → routed to product team for review
+  |-- Feature Request  → routed to product backlog; NO bug SLA applied
+  |
+  v
+[User enters Title (required)]
+  |-- Suggested format: "[Component] — brief description"
+  |-- Example: "Chat — confidence score missing after Finance query"
+  |
+  v
+[User enters Description (required)]
+  |-- "What happened? What did you expect to happen? Steps to reproduce."
+  |-- Max 10,000 characters
+  |
+  v
+[User optionally selects Severity Hint]
+  |-- High / Medium / Low / Suggestion
+  |-- This is a hint only — AI performs final P0–P4 classification
+  |
+  v
+[User clicks "Submit Report"]
+  |
+  v
+[Validation]
+  |-- Title not empty
+  |-- Description not empty
+  |-- Not a duplicate within the last 5 minutes (same content)
+  |-- Rate limit not exceeded (max 10 reports/day per user)
+  |
+  +-- Validation fails →
+  |     Focus the empty field; no submission
+  |
+  v
+[Submission in progress]
+  |-- [Frontend → Backend, async, non-blocking]
+  |-- a) GET /api/v1/issue-reports/presign → pre-signed Azure Blob URL
+  |-- b) PUT screenshot directly to Azure Blob Storage
+  |-- c) POST /api/v1/issue-reports with full payload
+  |
+  v
+[Success state shown in dialog]
+  |-- ✓  "Report submitted"
+  |-- Reference: rpt_Q5FEID   (monospaced, accent-colored)
+  |-- "Your report has been received. AI triage will assign a severity
+  |    and SLA commitment within 5 minutes. You'll be notified in-app
+  |    and by email."
+  |-- "Done" button closes dialog
+  |
+  v
+[User continues working (non-blocking)]
+  |-- Dialog closes; user returns to whatever they were doing
+  |
+  v
+[Within 5 minutes — background, user does nothing]
+  |
+  |-- AI triage agent processes the report:
+  |   |-- Checks for semantic duplicates (similarity > 0.88)
+  |   |-- Classifies severity: P0 (critical) → P4 (routine)
+  |   |-- Identifies root cause hypothesis from session context
+  |   |-- Calculates SLA target date
+  |   |-- Creates GitHub issue (or Jira/Linear per tenant config)
+  |
+  v
+[User receives in-app notification]
+  |-- "Your report rpt_Q5FEID has been triaged: Priority P2, target
+  |    resolution by March 13. GitHub issue: #4521. [View My Reports]"
+  |
+  v
+[Ongoing — user is passively notified as status changes]
+  |-- "Fix in progress — a developer has started working on #4521"
+  |-- "Fix deployed to staging — please test if your issue is resolved"
+  |-- "Fix live in production — resolved in version 2.3.1"
+  |
+  v
+[User can confirm: "Was this resolved for you?"]
+  |-- Yes → issue closed as resolved for this reporter
+  |-- No — still happening → regression report created automatically;
+  |   linked to original; severity escalated by one level;
+  |   rate-limited: once per 24h per issue per user
+  |
+  v
+End
+```
+
+**Success criteria**: Report submitted in < 2 minutes, acknowledgment received in < 30 seconds, SLA committed in < 5 minutes.
+
+---
+
+### Duplicate Detected
+
+```
+[User submits report]
+  |
+  v
+[AI finds existing open issue with similarity score > 0.88]
+  |
+  v
+[User receives notification]
+  |-- "Your report matches a known issue (#4521: 'Confidence score missing
+  |    on Finance queries'). Your +1 has been recorded. Current priority:
+  |    P2, target resolution: March 13."
+  |
+  v
+[User's report is stored as "duplicate_linked" — not discarded]
+  |-- User added to notification list for parent issue
+  |-- User receives all future status updates on #4521
+  |-- User sees their report in My Reports with status "Linked to #4521"
+  |
+  v
+[If duplicate volume crosses threshold]
+  |-- 5 reports → priority boost reviewed
+  |-- 10 reports → automatic escalation to next severity level
+  |-- All reporters notified: "Due to high report volume, this issue has
+  |    been elevated to P1."
+  |
+  v
+End
+```
+
+---
+
+### Auto-Triggered on Error Detection
+
+```
+[Frontend detects 5xx API error, network timeout > 30s, or critical JS exception]
+  |
+  v
+[Non-modal toast appears — does NOT block the user]
+  |-- "Something went wrong. Would you like to report this?"
+  |-- [Report Now]  [Dismiss]
+  |
+  +-- Dismiss → toast closes; no report created
+  |
+  +-- Report Now →
+  |     Issue Reporter dialog opens with:
+  |       |-- Error context pre-filled: "API error 500 on /api/v1/rag/query at 14:23:45"
+  |       |-- Title pre-filled: "Error 500 on RAG query"
+  |       |-- Screenshot from moment of error (held in memory, not yet uploaded)
+  |     User reviews, optionally adds description, clicks Submit
+  |
+  v
+[5xx error → minimum P2 severity enforced by platform]
+  |-- Repeated 5xx on same endpoint (> 3 times) → P1
+  |-- Service unavailable → P0
+  |-- P0/P1: immediate PagerDuty / Slack engineering alert
+  |
+  v
+End
+```
+
+---
+
+### Error Paths
+
+**Screenshot capture fails** (cross-origin iframe, WebGL canvas):
+→ User asked to manually attach a screenshot. Submission proceeds without one (marked "screenshot unavailable").
+
+**Rate limit exceeded** (> 10 reports/day):
+→ "You've reached today's report limit. You can report again tomorrow, or contact support for urgent issues."
+
+**Network failure on submit**:
+→ Report queued in browser IndexedDB, retried automatically when connection returns.
+→ User sees: "Saved locally. Retrying when connection is restored."
+
+**AI triage timeout** (> 2 minutes):
+→ Report assigned default P3/bug classification.
+→ User notified: "Your issue is being reviewed manually by our team."
+
+---
+
+### Phase Mapping
+
+| Sub-flow                  | Phase |
+|---------------------------|-------|
+| FAB + modal + submission  | Phase 2 |
+| AI triage + GitHub issue  | Phase 2 |
+| Duplicate detection       | Phase 2 |
+| Auto-trigger on 5xx       | Phase 2 |
+| "Still happening" signal  | Phase 3 |
+| My Reports tracking page  | Phase 3 |
+
+---
+
+**Updated Flow Summary Table**
+
+| Flow | Flow Name | Built in Phase | Notes |
+|------|-----------|----------------|-------|
+| 01 | First Login and Onboarding | Phase 1 | SSO login, JWT session, onboarding tour |
+| 02 | Standard Chat (Query → RAG → Response) | Phase 1 | Core RAG pipeline, streaming responses |
+| 03 | Research Mode (Multi-Index Deep Search) | Phase 1 | Multi-index parallel search, deep synthesis |
+| 04 | Document Upload | Phase 1 | Personal document indexing and search |
+| 05 | Agent Delegation (Research Agent) | Phase 4 | Kaizen multi-agent orchestration |
+| 06 | Internet Search Fallback | Phase 1 | Tavily web search when KB insufficient |
+| 07 | Conversation History | Phase 1 | History, search, share, export |
+| 08 | Failure Paths | Phase 1 | Timeout, rate limit, session expiry handling |
+| 09 | User Response Feedback (Thumb Up/Down) | Phase 1 | Rating, tags, comments, admin review queue |
+| 10 | Issue Reporting | Phase 2 | FAB + modal, AI triage, SLA commitment, status tracking |
+
+---
+
+**Document Version**: 1.2
+**Last Updated**: 2026-03-06

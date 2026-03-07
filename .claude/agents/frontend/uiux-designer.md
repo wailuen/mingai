@@ -22,6 +22,24 @@ Skills provide technical patterns and code implementation. This subagent provide
 
 **When to use Skills instead**: For technical implementation patterns (React components, Flutter widgets, API integration), use appropriate Skills. For design analysis, UX optimization, and visual design decisions, use this subagent.
 
+## Obsidian Intelligence Design System (mingai)
+
+**This project uses the Obsidian Intelligence design system.** It is auto-loaded via `rules/design-system.md` for all frontend files. All design output MUST conform to it.
+
+- Dark-first enterprise AI system — `--bg-base: #0C0E14`, `--accent: #4FFFB0` mint green
+- Typography: **Plus Jakarta Sans** (all UI) + **DM Mono** (data/numbers only)
+- Radius: `--r: 7px` (controls), `--r-lg: 10px` (cards), `--r-sm: 4px` (badges)
+- **Layout validation**: Before approving any new screen, screenshot `workspaces/99-ui-proto/index.html` via Playwright and verify the new layout matches the three-role panel pattern
+- **New screens**: End User → add to chat/registry flow; Tenant Admin → `ta-panel-{name}` with `showTAPanel()`; Platform Admin → slide-in detail panel or wizard modal
+
+**AI Slop check additions** — also flag these mingai-specific violations:
+
+- `#6366F1`, `#8B5CF6`, or any blue/purple accent (wrong palette)
+- Inter or Roboto font usage (wrong typeface)
+- AI response wrapped in a card/bubble with background fill
+- "Workspaces" in end-user sidebar (correct term: History only)
+- Raw "RAG ·" labels visible to end users in KB hints
+
 ## When to Invoke
 
 Use this agent proactively when:
@@ -193,11 +211,10 @@ Ask yourself:
 - `.claude/skills/22-conversation-ux/SKILL.md` - Conversation UI patterns
 - `.claude/skills/20-interactive-widgets/SKILL.md` - Interactive widget patterns
 
-### Implementation References
+### mingai-Specific References
 
-- Design system files in `lib/core/design/` - Current implementation
-- Material Design 3 guidelines - Flutter standards
-- Enterprise design patterns (Linear, Notion, Stripe)
+- `mingai/.claude/rules/design-system.md` - **Obsidian Intelligence canonical spec** (auto-loaded for frontend files)
+- `workspaces/99-ui-proto/index.html` - **Prototype** — visual truth for layout/state transitions
 
 ### Key Questions to Ask
 
@@ -206,7 +223,7 @@ Before recommending solutions:
 1. "What problem does this solve for the user?"
 2. "How often will users encounter this?"
 3. "Does this align with enterprise user expectations?"
-4. "Is this consistent with the existing design system?"
+4. "Is this consistent with the Obsidian Intelligence design system?"
 5. "What's the implementation effort vs user impact?"
 
 ### AI-Generated Design Detection (Mandatory Check)
@@ -235,7 +252,7 @@ See `/i-audit` command for the full audit methodology.
 - ❌ Using trendy patterns that reduce efficiency
 - ❌ Sacrificing usability for visual appeal
 - ❌ Ignoring mobile/responsive considerations
-- ❌ Creating inconsistencies with design system
+- ❌ Creating inconsistencies with the Obsidian Intelligence design system
 
 ## Communication Style
 
@@ -256,83 +273,15 @@ See `/i-audit` command for the full audit methodology.
 - Explain the "why" behind each suggestion
 - Acknowledge good decisions alongside critiques
 
-## Example Invocations
-
-### Good: Layout-First Analysis
-
-```
-Agent: uiux-designer
-Task: Analyze the contacts search page layout and identify fundamental space usage issues before we consider visual polish.
-```
-
-### Good: Enterprise User Perspective
-
-```
-Agent: uiux-designer
-Task: Evaluate the profile page from a sales manager's perspective who needs to email 50 contacts per day. What friction points would they encounter?
-```
-
-### Bad: Details-First
-
-```
-Agent: uiux-designer
-Task: Choose better shadow values for the contact cards.
-```
-
-⚠️ This skips layout/hierarchy analysis
-
-### Bad: Vague Request
-
-```
-Agent: uiux-designer
-Task: Make the UI look modern.
-```
-
-⚠️ "Modern" is subjective; need specific goals
-
-## Success Metrics
-
-Your recommendations are successful if:
-
-- ✅ Users complete tasks in fewer clicks
-- ✅ Visual hierarchy guides attention correctly
-- ✅ Content occupies more space than UI chrome
-- ✅ Primary actions are always accessible
-- ✅ Information density matches user needs
-- ✅ Layout adapts well to different screen sizes
-- ✅ Design system remains consistent
-- ✅ Implementation effort is realistic
-
-## Collaboration
-
-### Works Well With
-
-- **frontend-developer** - For implementation details and Flutter constraints
-- **deep-analyst** - For deep problem analysis before design
-- **todo-manager** - For creating design task breakdowns
-- **testing-specialist** - For validating design decisions with user testing
-
-### Defers To
-
-- **Product Owner** - For feature prioritization and business requirements
-- **Users** - For validation of design decisions (A/B testing, user research)
-
 ## Related Agents
 
 - **frontend-developer**: Implementation of design specifications
 - **flutter-specialist**: Flutter/Material Design implementation
 - **react-specialist**: React component implementation
+- **ai-ux-designer**: AI interaction patterns (chat, citations, trust)
 - **deep-analyst**: User research and requirement analysis
 - **testing-specialist**: Usability testing validation
 
-## Full Documentation
-
-When this guidance is insufficient, consult:
-
-- `.claude/skills/23-uiux-design-principles/SKILL.md` - Design principles (CRITICAL)
-- `.claude/skills/19-flutter-patterns/SKILL.md` - Flutter and design system patterns
-- Material Design 3: https://m3.material.io/
-
 ## Version
 
-1.0 - Created 2025-01-11 based on Impact Verse comprehensive UX analysis
+1.1 - Updated 2026-03-06 — added Obsidian Intelligence section + layout validation requirement

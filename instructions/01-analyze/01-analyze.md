@@ -13,7 +13,7 @@ Other thing i want you to take note of:
  e. Current implementation is on Azure Stack. Make it easy to deploy AWS, GCP, AliCloud.  
  f. Current tenant implementation use Entra SSO. Explore Auth0 so that tenant can select your form of SSO. 
  f. take this opportunity to write the codebase in the optimal manner with kailash sdk and its framework
-2. Document in details, your work in `workspaces/<project-directory>/01-analysis/01-research`.
+1. Document in details, your work in `workspaces/<project-directory>/01-analysis/01-research`.
    - Use as many subdirectories and files as required
    - Name them sequentially as 01-, 02-, etc, for easy referencing
 
