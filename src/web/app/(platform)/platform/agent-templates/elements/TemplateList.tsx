@@ -1,0 +1,294 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
+import { ArrowUpDown, Pencil, Upload } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  useAgentTemplatesAdmin,
+  usePublishAgentTemplate,
+  type AgentTemplateAdmin,
+} from "@/lib/hooks/useAgentTemplatesAdmin";
+
+interface TemplateListProps {
+  statusFilter: "all" | "published" | "draft";
+  onEdit: (template: AgentTemplateAdmin) => void;
+}
+
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <tr key={i} className="border-b border-border-faint">
+          {Array.from({ length: 7 }).map((__, j) => (
+            <td key={j} className="px-3.5 py-3">
+              <div className="h-4 w-20 animate-pulse rounded-badge bg-bg-elevated" />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+interface SortHeaderProps {
+  label: string;
+  canSort: boolean;
+  sorted: false | "asc" | "desc";
+  onClick: () => void;
+}
+
+function SortHeader({ label, canSort, sorted, onClick }: SortHeaderProps) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex items-center gap-1 text-label-nav uppercase tracking-wider text-text-faint",
+        canSort && "cursor-pointer hover:text-text-muted",
+      )}
+      onClick={canSort ? onClick : undefined}
+    >
+      {label}
+      {canSort && (
+        <ArrowUpDown
+          size={10}
+          className={cn(sorted ? "text-accent" : "text-text-faint")}
+        />
+      )}
+    </button>
+  );
+}
+
+function StatusBadge({ status }: { status: "published" | "draft" }) {
+  const styles =
+    status === "published"
+      ? "bg-accent-dim text-accent"
+      : "bg-warn-dim text-warn";
+
+  return (
+    <span
+      className={cn(
+        "inline-block rounded-badge px-2 py-0.5 font-mono text-[10px] uppercase",
+        styles,
+      )}
+    >
+      {status}
+    </span>
+  );
+}
+
+export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
+  const { data, isPending, error } = useAgentTemplatesAdmin();
+  const publishMutation = usePublishAgentTemplate();
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (statusFilter === "all") return data;
+    return data.filter((t) => t.status === statusFilter);
+  }, [data, statusFilter]);
+
+  const columns = useMemo<ColumnDef<AgentTemplateAdmin>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="text-[13px] font-medium text-text-primary">
+            {info.getValue<string>()}
+          </span>
+        ),
+        enableSorting: true,
+      },
+      {
+        accessorKey: "category",
+        header: "Category",
+        cell: (info) => (
+          <span className="text-[13px] text-text-muted">
+            {info.getValue<string>()}
+          </span>
+        ),
+        enableSorting: true,
+      },
+      {
+        accessorKey: "version",
+        header: "Version",
+        cell: (info) => (
+          <span className="font-mono text-data-value text-text-muted">
+            v{info.getValue<number>()}
+          </span>
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <StatusBadge status={info.getValue<"published" | "draft">()} />
+        ),
+        enableSorting: true,
+      },
+      {
+        accessorKey: "satisfaction_rate",
+        header: "Satisfaction",
+        cell: (info) => {
+          const value = info.getValue<number | null>();
+          if (value === null) {
+            return (
+              <span className="font-mono text-data-value text-text-faint">
+                --
+              </span>
+            );
+          }
+          return (
+            <span className="font-mono text-data-value text-text-primary">
+              {value.toFixed(1)}%
+            </span>
+          );
+        },
+        enableSorting: true,
+      },
+      {
+        accessorKey: "tenant_adoption_count",
+        header: "Adoption",
+        cell: (info) => (
+          <span className="font-mono text-data-value text-text-primary">
+            {info.getValue<number>()}
+          </span>
+        ),
+        enableSorting: true,
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(row);
+                }}
+                className="inline-flex items-center gap-1 rounded-control border border-border px-2 py-1 text-[11px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              >
+                <Pencil size={11} />
+                Edit
+              </button>
+              {row.status === "draft" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    publishMutation.mutate(row.id);
+                  }}
+                  disabled={publishMutation.isPending}
+                  className="inline-flex items-center gap-1 rounded-control border border-accent/30 px-2 py-1 text-[11px] text-accent transition-colors hover:bg-accent-dim disabled:opacity-30"
+                >
+                  <Upload size={11} />
+                  Publish
+                </button>
+              )}
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+    ],
+    [onEdit, publishMutation],
+  );
+
+  const table = useReactTable({
+    data: filteredData,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  if (error) {
+    return (
+      <p className="text-sm text-alert">
+        Failed to load templates: {error.message}
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-card border border-border bg-bg-surface">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="border-b border-border">
+                {headerGroup.headers.map((header) => (
+                  <th key={header.id} className="px-3.5 py-2.5 text-left">
+                    {header.isPlaceholder ? null : (
+                      <SortHeader
+                        label={
+                          typeof header.column.columnDef.header === "string"
+                            ? header.column.columnDef.header
+                            : header.id
+                        }
+                        canSort={header.column.getCanSort()}
+                        sorted={header.column.getIsSorted()}
+                        onClick={
+                          header.column.getToggleSortingHandler() as () => void
+                        }
+                      />
+                    )}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {isPending && <SkeletonRows />}
+
+            {data && filteredData.length === 0 && (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                >
+                  No templates yet
+                </td>
+              </tr>
+            )}
+
+            {table.getRowModel().rows.map((row) => (
+              <tr
+                key={row.id}
+                onClick={() => onEdit(row.original)}
+                className="cursor-pointer border-b border-border-faint transition-colors hover:bg-accent-dim"
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-3.5 py-3">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {data && filteredData.length > 0 && (
+        <div className="border-t border-border px-5 py-2.5">
+          <p className="font-mono text-[11px] text-text-faint">
+            Showing {filteredData.length} of {data.length} templates
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

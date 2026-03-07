@@ -25,6 +25,7 @@ const config: Config = {
         "alert-ring": "var(--alert-ring)",
         warn: "var(--warn)",
         "warn-dim": "var(--warn-dim)",
+        "warn-ring": "var(--warn-ring)",
         "text-primary": "var(--text-primary)",
         "text-muted": "var(--text-muted)",
         "text-faint": "var(--text-faint)",

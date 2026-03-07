@@ -46,7 +46,8 @@ export function setTokenCookie(token: string): void {
   if (typeof document === "undefined") return;
   const claims = decodeToken(token);
   const expires = new Date(claims.exp * 1000);
-  document.cookie = `access_token=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `access_token=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax${secure}`;
 }
 
 export function clearTokenCookie(): void {

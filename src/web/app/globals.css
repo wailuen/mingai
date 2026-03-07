@@ -19,6 +19,7 @@
   --alert-ring: rgba(255, 107, 53, 0.28);
   --warn: #f5c518;
   --warn-dim: rgba(245, 197, 24, 0.08);
+  --warn-ring: rgba(245, 197, 24, 0.28);
   --text-primary: #f1f5fb;
   --text-muted: #8892a4;
   --text-faint: #4a5568;
@@ -47,6 +48,7 @@
   --alert-ring: rgba(201, 77, 26, 0.25);
   --warn: #b8860b;
   --warn-dim: rgba(184, 134, 11, 0.08);
+  --warn-ring: rgba(184, 134, 11, 0.28);
   --text-primary: #0f1118;
   --text-muted: #4a5568;
   --text-faint: #9aa3b2;
