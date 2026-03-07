@@ -10,7 +10,7 @@
 
 ## Plan 01 — Foundation Phase 1
 
-### API-001: JWT v2 validation middleware
+### API-001: JWT v2 validation middleware ✅ COMPLETED
 
 **Effort**: 8h
 **Depends on**: none
@@ -31,7 +31,7 @@
 
 ---
 
-### API-002: Platform health check
+### API-002: Platform health check ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: none
@@ -50,7 +50,7 @@
 
 ---
 
-### API-003: Auth local login
+### API-003: Auth local login ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -70,7 +70,7 @@
 
 ---
 
-### API-004: Token refresh
+### API-004: Token refresh ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -89,7 +89,7 @@
 
 ---
 
-### API-005: Logout
+### API-005: Logout ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -107,7 +107,7 @@
 
 ---
 
-### API-006: Get current user
+### API-006: Get current user ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -125,7 +125,7 @@
 
 ---
 
-### API-007: Response feedback
+### API-007: Response feedback ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -147,7 +147,7 @@
 
 ## Plan 01 — Chat & SSE
 
-### API-008: Chat stream
+### API-008: Chat stream ✅ COMPLETED
 
 **Effort**: 16h
 **Depends on**: API-001, API-007
@@ -176,7 +176,7 @@
 
 ---
 
-### API-009: List conversations
+### API-009: List conversations ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -195,7 +195,7 @@
 
 ---
 
-### API-010: Create conversation
+### API-010: Create conversation ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -213,7 +213,7 @@
 
 ---
 
-### API-011: Get conversation messages
+### API-011: Get conversation messages ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -262,7 +262,7 @@
 
 ## Plan 04 — Issue Reporting
 
-### API-013: Submit issue report
+### API-013: Submit issue report ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-001
@@ -299,11 +299,11 @@
 **Response**: `{ "upload_url": "string", "blob_url": "string", "expires_in": 300 }`
 **Acceptance criteria**:
 
-- [ ] Pre-signed URL scoped to tenant's storage path
-- [ ] URL expires in 5 minutes
-- [ ] Content type restricted to image/png, image/jpeg
-- [ ] Max file size: 10MB enforced by storage policy
-      **Notes**: Uses ObjectStore abstraction (S3/Azure Blob/GCS per CLOUD_PROVIDER).
+- [x] Pre-signed URL scoped to tenant's storage path
+- [x] URL expires in 5 minutes
+- [x] Content type restricted to image/png, image/jpeg
+- [x] Max file size: 10MB enforced by storage policy
+      **Notes**: Uses ObjectStore abstraction (S3/Azure Blob/GCS per CLOUD_PROVIDER). Cloud-agnostic: aws/azure/gcp/local backends. Files: `app/core/storage.py`, `app/core/local_storage_routes.py`, `app/modules/issues/routes.py`. Tests: `tests/unit/test_storage.py`, `tests/unit/test_issues_routes.py` (TestPresignScreenshotUpload). Committed: fe1d212.
 
 ---
 
@@ -321,11 +321,11 @@
 **Response**: `{ "items": [{ "id": "string", "title": "string", "type": "string", "status": "string", "severity": "string", "created_at": "ISO-8601", "updated_at": "ISO-8601" }], "total": int }`
 **Acceptance criteria**:
 
-- [ ] Only returns reports submitted by current user within their tenant
-- [ ] Status filter works (received, triaging, in_progress, resolved, closed, wont_fix)
-- [ ] Paginated with default page_size=20
-- [ ] Sorted by created_at descending
-      **Notes**: Phase 3+ endpoint per integration guide.
+- [x] Only returns reports submitted by current user within their tenant
+- [x] Status filter works (received, triaging, in_progress, resolved, closed, wont_fix)
+- [x] Paginated with default page_size=20
+- [x] Sorted by created_at descending
+      **Notes**: Helper: `list_my_issues_db()`. Tests: TestListMyReports in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d.
 
 ---
 
@@ -343,11 +343,11 @@
 **Response**: `{ "id": "string", "title": "string", "description": "string", "type": "string", "status": "string", "severity": "string", "ai_triage": { "severity": "string", "category": "string", "root_cause_hypothesis": "string" }, "github_issue_url": "string|null", "timeline": [{ "event": "string", "timestamp": "ISO-8601", "actor": "string" }], "created_at": "ISO-8601" }`
 **Acceptance criteria**:
 
-- [ ] 404 if report not found or belongs to different user/tenant
-- [ ] Timeline includes all status transitions
-- [ ] AI triage result included when available
-- [ ] GitHub issue link included when created
-      **Notes**: Links to related duplicate parent issue if flagged as duplicate.
+- [x] 404 if report not found or belongs to different user/tenant
+- [x] Timeline includes all status transitions
+- [x] AI triage result included when available
+- [x] GitHub issue link included when created
+      **Notes**: Helper: `get_my_issue_db()`. Tests: TestGetMyReport in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d. Links to related duplicate parent issue if flagged as duplicate.
 
 ---
 
@@ -365,12 +365,12 @@
 **Response**: `{ "status": "regression_reported", "new_report_id": "string" }`
 **Acceptance criteria**:
 
-- [ ] Only callable when report status is "resolved" or "fix_deployed"
-- [ ] Rate limited: 1 per fix deployment per original report
-- [ ] Creates new linked regression report
-- [ ] Second "still happening" on same fix triggers human review flag
-- [ ] Notifies assigned engineer
-      **Notes**: Implements the closed-loop regression detection from Plan 04 Phase 3.
+- [x] Only callable when report status is "resolved" or "fix_deployed"
+- [x] Rate limited: 1 per fix deployment per original report
+- [x] Creates new linked regression report
+- [x] Second "still happening" on same fix triggers human review flag
+- [x] Notifies assigned engineer
+      **Notes**: Implements closed-loop regression detection via StillHappeningRateLimiter. Helper: `record_still_happening_db()`. Tests: TestStillHappening in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d.
 
 ---
 
@@ -523,7 +523,7 @@
 
 ## Plan 05 — Platform Admin
 
-### API-024: Provision new tenant
+### API-024: Provision new tenant ✅ COMPLETED
 
 **Effort**: 12h
 **Depends on**: API-001
@@ -545,7 +545,7 @@
 
 ---
 
-### API-025: Get provisioning job status (SSE)
+### API-025: Get provisioning job status (SSE) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-024
@@ -556,14 +556,14 @@
 **Response**: SSE events: `{ "step": "string", "status": "pending|running|completed|failed", "message": "string" }`
 **Acceptance criteria**:
 
-- [ ] Events emitted for each of 6 provisioning steps
-- [ ] Final event is "completed" or "failed"
-- [ ] Job_id validated and scoped to platform
-      **Notes**: Platform admin watches this during tenant creation wizard.
+- [x] Events emitted for each of 6 provisioning steps
+- [x] Final event is "completed" or "failed"
+- [x] Job_id validated and scoped to platform
+      **Notes**: Platform admin watches this during tenant creation wizard. Implemented in `src/backend/app/modules/tenants/routes.py` as `GET /platform/provisioning/{job_id}` returning SSE stream. Tests: `tests/unit/test_tenants_routes.py::TestProvisioningSSE` (3 tests: requires_platform_admin, returns_404_for_unknown_job, returns_sse_content_type). All 673 unit tests passing.
 
 ---
 
-### API-026: List all tenants
+### API-026: List all tenants ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -582,7 +582,7 @@
 
 ---
 
-### API-027: Get tenant detail
+### API-027: Get tenant detail ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-026
@@ -600,7 +600,7 @@
 
 ---
 
-### API-028: Update tenant status
+### API-028: Update tenant status ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-027
@@ -634,16 +634,16 @@
 **Response**: `{ "tenant_id": "uuid", "overall_score": int, "components": { "usage_trend": { "score": int, "weight": 0.30, "details": {} }, "feature_breadth": { "score": int, "weight": 0.20, "details": {} }, "satisfaction": { "score": int, "weight": 0.35, "details": {} }, "error_rate": { "score": int, "weight": 0.15, "details": {} } }, "at_risk": bool, "trend": [{ "week": "ISO-8601", "score": int }] }`
 **Acceptance criteria**:
 
-- [ ] Composite score calculated per Plan 05 formula
-- [ ] All 4 components returned with individual scores
-- [ ] At-risk flag set when declining 3+ consecutive weeks or score < 40
-- [ ] Trend data for last 12 weeks
-- [ ] Returns null/empty gracefully when insufficient data
-      **Notes**: Health score calculated by nightly batch job. API reads from cache.
+- [x] Composite score calculated per Plan 05 formula (usage_trend 30%, feature_breadth 20%, satisfaction 35%, error_rate 15%)
+- [x] All 4 components returned with individual scores
+- [x] At-risk flag set when declining 3+ consecutive weeks or score < 40
+- [x] Trend data for last 12 weeks
+- [x] Returns null/empty gracefully when insufficient data
+      **Notes**: Helper: `get_tenant_health_components_db()`. Tests: TestGetTenantHealthScore in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d. Health score calculated by nightly batch job; API reads from cache.
 
 ---
 
-### API-030: Get tenant quota
+### API-030: Get tenant quota ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-027
@@ -654,13 +654,13 @@
 **Response**: `{ "tenant_id": "uuid", "tokens": { "limit": int, "used": int, "period": "monthly" }, "storage_gb": { "limit": float, "used": float }, "users": { "limit": int, "used": int } }`
 **Acceptance criteria**:
 
-- [ ] Usage data is current
-- [ ] All quota types returned
-      **Notes**: Feeds quota management UI.
+- [x] Usage data is current
+- [x] All quota types returned
+      **Notes**: Feeds quota management UI. Implemented in `src/backend/app/modules/tenants/routes.py` as `GET /platform/tenants/{tenant_id}/quota`. Tests: `tests/unit/test_tenants_routes.py::TestGetTenantQuota`. All 673 unit tests passing.
 
 ---
 
-### API-031: Update tenant quota
+### API-031: Update tenant quota ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-030
@@ -671,14 +671,14 @@
 **Response**: `{ "tenant_id": "uuid", "quotas": { ... updated } }`
 **Acceptance criteria**:
 
-- [ ] Only provided fields updated (partial update)
-- [ ] New limits enforced immediately
-- [ ] Audit log entry created
-      **Notes**: Plan tier defaults applied at provisioning; this overrides per-tenant.
+- [x] Only provided fields updated (partial update)
+- [x] New limits enforced immediately
+- [x] Audit log entry created
+      **Notes**: Plan tier defaults applied at provisioning; this overrides per-tenant. UPSERT to tenant_configs table with quota config_type. Implemented in `src/backend/app/modules/tenants/routes.py`. Tests: `tests/unit/test_tenants_routes.py::TestUpdateTenantQuota` (4 tests: requires_platform_admin, returns_updated, rejects_negative_token_limit, 404_for_unknown_tenant). All 673 unit tests passing.
 
 ---
 
-### API-032: Create LLM profile
+### API-032: Create LLM profile ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-001
@@ -697,7 +697,7 @@
 
 ---
 
-### API-033: List LLM profiles
+### API-033: List LLM profiles ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-032
@@ -715,7 +715,7 @@
 
 ---
 
-### API-034: Update LLM profile
+### API-034: Update LLM profile ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-032
@@ -891,7 +891,7 @@
 
 ## Plan 06 — Tenant Admin
 
-### API-043: Invite user (single)
+### API-043: Invite user (single) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -912,7 +912,7 @@
 
 ---
 
-### API-044: Bulk invite users
+### API-044: Bulk invite users ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-043
@@ -932,7 +932,7 @@
 
 ---
 
-### API-045: Change user role
+### API-045: Change user role ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -951,7 +951,7 @@
 
 ---
 
-### API-046: Update user status
+### API-046: Update user status ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -971,7 +971,7 @@
 
 ---
 
-### API-047: Delete user
+### API-047: Delete user ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -993,7 +993,7 @@
 
 ---
 
-### API-048: Get workspace settings
+### API-048: Get workspace settings ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1010,7 +1010,7 @@
 
 ---
 
-### API-049: Update workspace settings
+### API-049: Update workspace settings ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-048
@@ -1029,8 +1029,9 @@
 
 ---
 
-### API-050: Connect SharePoint
+### API-050: Connect SharePoint ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 8h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/admin/integrations/sharepoint/connect
@@ -1050,8 +1051,9 @@
 
 ---
 
-### API-051: Test SharePoint connection
+### API-051: Test SharePoint connection ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-050
 **Method + Path**: POST /api/v1/admin/integrations/sharepoint/test
@@ -1108,8 +1110,9 @@
 
 ---
 
-### API-054: Manual sync trigger
+### API-054: Manual sync trigger ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-050, API-052
 **Method + Path**: POST /api/v1/admin/sync/trigger
@@ -1127,8 +1130,9 @@
 
 ---
 
-### API-055: Sync status
+### API-055: Sync status ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-054
 **Method + Path**: GET /api/v1/admin/sync/status
@@ -1165,7 +1169,7 @@
 
 ---
 
-### API-057: List glossary terms
+### API-057: List glossary terms ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1183,7 +1187,7 @@
 
 ---
 
-### API-058: Add glossary term
+### API-058: Add glossary term ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-057
@@ -1203,7 +1207,7 @@
 
 ---
 
-### API-059: Update glossary term
+### API-059: Update glossary term ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-058
@@ -1222,7 +1226,7 @@
 
 ---
 
-### API-060: Delete glossary term
+### API-060: Delete glossary term ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-058
@@ -1241,7 +1245,7 @@
 
 ---
 
-### API-061: Bulk import glossary
+### API-061: Bulk import glossary ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-058
@@ -1562,7 +1566,7 @@
 
 ---
 
-### API-078: List teams
+### API-078: List teams ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1580,7 +1584,7 @@
 
 ---
 
-### API-079: Create team
+### API-079: Create team ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-078
@@ -1598,7 +1602,7 @@
 
 ---
 
-### API-080: Update team
+### API-080: Update team ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-079
@@ -1615,7 +1619,7 @@
 
 ---
 
-### API-081: Delete team
+### API-081: Delete team ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-079
@@ -1635,7 +1639,7 @@
 
 ---
 
-### API-082: List team members
+### API-082: List team members ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-078
@@ -1652,7 +1656,7 @@
 
 ---
 
-### API-083: Add team member
+### API-083: Add team member ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-082
@@ -1670,7 +1674,7 @@
 
 ---
 
-### API-084: Remove team member
+### API-084: Remove team member ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-083
@@ -1688,7 +1692,7 @@
 
 ---
 
-### API-085: Team membership audit log
+### API-085: Team membership audit log ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-078
@@ -1962,7 +1966,7 @@
 
 ## Plan 08 — Profile & Memory
 
-### API-099: Get user profile
+### API-099: Get user profile ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1981,8 +1985,9 @@
 
 ---
 
-### API-100: Update privacy preferences
+### API-100: Update privacy preferences ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-099
 **Method + Path**: PATCH /api/v1/me/preferences
@@ -2000,7 +2005,7 @@
 
 ---
 
-### API-101: List memory notes
+### API-101: List memory notes ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -2020,7 +2025,7 @@
 
 ---
 
-### API-102: Delete single memory note
+### API-102: Delete single memory note ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-101
@@ -2038,8 +2043,9 @@
 
 ---
 
-### API-103: Clear all memory notes (GDPR)
+### API-103: Clear all memory notes (GDPR) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 2h
 **Depends on**: API-101
 **Method + Path**: DELETE /api/v1/me/memory
@@ -2056,8 +2062,9 @@
 
 ---
 
-### API-104: Export profile data (GDPR)
+### API-104: Export profile data (GDPR) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 4h
 **Depends on**: API-099, API-101
 **Method + Path**: GET /api/v1/me/data-export
@@ -2075,8 +2082,9 @@
 
 ---
 
-### API-105: Clear all profile data (GDPR erasure)
+### API-105: Clear all profile data (GDPR erasure) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 4h
 **Depends on**: API-099, API-101
 **Method + Path**: DELETE /api/v1/me/data
@@ -2194,7 +2202,7 @@
 
 ## Plan 10 — Teams Collaboration
 
-### API-111: Set active team for chat session
+### API-111: Set active team for chat session ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-078

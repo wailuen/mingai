@@ -328,10 +328,10 @@ AI-009 (WorkingMemoryService with agent-scoped keys)
 | P0       | INFRA-008 (JWT middleware)         | All auth, all API endpoints                  |
 | P0       | API-001 (JWT v2 middleware)        | All 119 other API endpoints                  |
 | P0       | TEST-002 + TEST-003 (RLS tests)    | Platform may not ship without passing        |
-| P1       | INFRA-009 (Redis namespace)        | All caching                                  |
-| P1       | INFRA-011 (CacheService)           | All cache-dependent features                 |
+| P1       | INFRA-009 (Redis namespace) ✅     | All caching                                  |
+| P1       | INFRA-011 (CacheService) ✅        | All cache-dependent features                 |
 | P1       | TEST-015 (screenshot blur)         | Issue reporting may not ship without passing |
-| P1       | AI-035 (GDPR erasure fix)          | GDPR compliance                              |
+| P1       | AI-035 (GDPR erasure fix) ✅       | GDPR compliance                              |
 | P1       | TEST-054 (GDPR test)               | EU tenant deployment                         |
 
 ---
@@ -706,7 +706,7 @@ These items MUST be completed and verified with passing tests before any product
 
 ## 7. Risk Items (Red Team Cross-Reference)
 
-### R01 — GDPR Bug (aihub2): Working Memory Not Cleared on Erasure Request
+### R01 — GDPR Bug (aihub2): Working Memory Not Cleared on Erasure Request ✅ RESOLVED
 
 **Risk level**: CRITICAL
 **Origin**: Red team 13-05, aihub2 source code analysis
@@ -722,7 +722,7 @@ These items MUST be completed and verified with passing tests before any product
 
 ---
 
-### R4.1 — Screenshot Blur Default (Issue Reporting): RAG Content Leakage
+### R4.1 — Screenshot Blur Default (Issue Reporting): RAG Content Leakage ✅ BACKEND RESOLVED (FE pending)
 
 **Risk level**: CRITICAL
 **Origin**: Red team 09-issue-reporting, risk R4.1
@@ -739,7 +739,7 @@ These items MUST be completed and verified with passing tests before any product
 
 ---
 
-### R02 (Memory) — Memory Note 200-char Limit Not Enforced in aihub2
+### R02 (Memory) — Memory Note 200-char Limit Not Enforced in aihub2 ✅ RESOLVED
 
 **Risk level**: HIGH
 **Origin**: Red team 13-05, aihub2 source code analysis
@@ -766,7 +766,7 @@ These items MUST be completed and verified with passing tests before any product
 
 ---
 
-### R04 (Issue Reporting) — Glossary Prompt Injection via Definitions
+### R04 (Issue Reporting) — Glossary Prompt Injection via Definitions ✅ RESOLVED
 
 **Risk level**: HIGH
 **Origin**: Red team analysis, Plan 06 glossary architecture
