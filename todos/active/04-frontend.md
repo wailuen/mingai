@@ -11,6 +11,9 @@
 
 ### FE-001: Initialize Next.js project with Obsidian Intelligence design system
 
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/tailwind.config.ts` defines all Obsidian Intelligence design tokens (colors, radii, fonts). `src/web/app/globals.css` sets CSS custom properties including `--bg-base: #0C0E14` and `--accent: #4FFFB0`. `src/web/app/layout.tsx` provides the root layout with Plus Jakarta Sans and DM Mono font classes. TypeScript strict mode enabled, zero `any` types confirmed.
+
 **Effort**: 8h
 **Depends on**: none
 **Route**: N/A (project-level)
@@ -22,19 +25,22 @@
 - `lib/fonts.ts` — Plus Jakarta Sans (display + body) + DM Mono (data/numbers) via `next/font/google`
 - `app/layout.tsx` — root layout with font classes, dark theme, QueryClientProvider
   **Acceptance criteria**:
-- [ ] `--bg-base: #0C0E14` applied as body background
-- [ ] `--accent: #4FFFB0` available as Tailwind color `accent`
-- [ ] Border radius tokens: controls `7px`, cards `10px`, badges `4px`
-- [ ] Plus Jakarta Sans renders for all body/display text
-- [ ] DM Mono renders for all numeric/data content
-- [ ] Shadcn/UI components render in dark theme
-- [ ] `NEXT_PUBLIC_API_URL` read from `.env.local` (never hardcoded)
-- [ ] TypeScript strict mode enabled, zero `any` types
+- [x] `--bg-base: #0C0E14` applied as body background
+- [x] `--accent: #4FFFB0` available as Tailwind color `accent`
+- [x] Border radius tokens: controls `7px`, cards `10px`, badges `4px`
+- [x] Plus Jakarta Sans renders for all body/display text
+- [x] DM Mono renders for all numeric/data content
+- [x] Shadcn/UI components render in dark theme
+- [x] `NEXT_PUBLIC_API_URL` read from `.env.local` (never hardcoded)
+- [x] TypeScript strict mode enabled, zero `any` types
       **Notes**: Use `npx create-next-app@14 src/web --typescript --tailwind --app --no-src-dir`. Follow `02-web-instructions.md` setup section exactly.
 
 ---
 
 ### FE-002: API client and auth infrastructure
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/lib/api.ts` implements `apiClient` with Bearer token injection and error handling. `src/web/lib/auth.ts` provides `getToken()`, `getCurrentUser()`, and role helpers. `src/web/lib/react-query.tsx` exports QueryClientProvider. `src/web/middleware.ts` enforces route protection by scope/role. `src/web/app/login/page.tsx` implements the login page. `src/web/hooks/useAuth.ts` exposes auth state. JWT stored in httpOnly cookie.
 
 **Effort**: 6h
 **Depends on**: FE-001
@@ -48,18 +54,21 @@
 - `middleware.ts` — Next.js middleware for route protection by scope/role
 - `app/(auth)/login/page.tsx` — login page
   **Acceptance criteria**:
-- [ ] `apiClient` reads `NEXT_PUBLIC_API_URL` from env, never hardcodes URL
-- [ ] 401 responses redirect to `/login`
-- [ ] 403 responses show "Access Denied" page
-- [ ] JWT stored in httpOnly cookie
-- [ ] Middleware blocks `/platform/*` unless `scope=platform`
-- [ ] Middleware blocks `/admin/*` unless `scope=tenant` + admin role
-- [ ] React Query provider wraps all pages
+- [x] `apiClient` reads `NEXT_PUBLIC_API_URL` from env, never hardcodes URL
+- [x] 401 responses redirect to `/login`
+- [x] 403 responses show "Access Denied" page
+- [x] JWT stored in httpOnly cookie
+- [x] Middleware blocks `/platform/*` unless `scope=platform`
+- [x] Middleware blocks `/admin/*` unless `scope=tenant` + admin role
+- [x] React Query provider wraps all pages
       **Notes**: Phase 1 uses JWT auth only (no Auth0). Login via `POST /api/v1/auth/local/login`.
 
 ---
 
 ### FE-003: Shared layout shell with role-based navigation
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/layout/AppShell.tsx` provides sidebar + topbar + content area shell. `src/web/components/layout/Sidebar.tsx` implements role-aware navigation. `src/web/components/layout/Topbar.tsx` includes user menu, notification bell slot, and role badge.
 
 **Effort**: 6h
 **Depends on**: FE-002
@@ -72,13 +81,13 @@
 - `components/layout/Topbar.tsx` — user menu, notification bell slot, role badge
 - `components/layout/RoleSwitcher.tsx` — dev-only role switcher (disabled in production)
   **Acceptance criteria**:
-- [ ] End user sees: Chat, Agents, My Reports in sidebar
-- [ ] Tenant admin sees: Dashboard, Users, Document Stores, Glossary, Agents, Analytics, Teams, Settings
-- [ ] Platform admin sees: Dashboard, Tenants, LLM Profiles, Agent Templates, Tool Catalog, Cost Analytics, Issues
-- [ ] Sidebar label reads "Agents" for end user view (not "Workspaces")
-- [ ] Active nav item highlighted with `--accent` color
-- [ ] Responsive: sidebar collapses to icon-only on mobile (375px)
-- [ ] Sidebar collapses to hamburger menu on tablet (768px)
+- [x] End user sees: Chat, Agents, My Reports in sidebar
+- [x] Tenant admin sees: Dashboard, Users, Document Stores, Glossary, Agents, Analytics, Teams, Settings
+- [x] Platform admin sees: Dashboard, Tenants, LLM Profiles, Agent Templates, Tool Catalog, Cost Analytics, Issues
+- [x] Sidebar label reads "Agents" for end user view (not "Workspaces")
+- [x] Active nav item highlighted with `--accent` color
+- [x] Responsive: sidebar collapses to icon-only on mobile (375px)
+- [x] Sidebar collapses to hamburger menu on tablet (768px)
       **Notes**: Three role views share the same Next.js app. JWT claims drive visibility.
 
 ---
@@ -86,6 +95,9 @@
 ## Core Chat Interface (End User)
 
 ### FE-004: Chat page — empty state layout
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/app/chat/page.tsx` is the two-state orchestrator. `src/web/components/chat/ChatEmptyState.tsx` implements the centered empty state layout. `src/web/components/chat/ChatInput.tsx` provides the message input with send button.
 
 **Effort**: 6h
 **Depends on**: FE-003
@@ -99,18 +111,21 @@
 - `app/(user)/chat/elements/ChatInput.tsx` — message input with send button, attach file
 - `app/(user)/chat/elements/KBHint.tsx` — "SharePoint . Google Drive . 2,081 documents indexed"
   **Acceptance criteria**:
-- [ ] Input is centered vertically and horizontally on empty state
-- [ ] Agent selector shows all agents user has access to
-- [ ] KB hint shows actual document count and source names (never raw "RAG ." label)
-- [ ] Pressing Enter or clicking Send transitions to active state
-- [ ] Agent selector fetches from `GET /api/v1/agents` (user-scoped)
-- [ ] Loading skeleton shown while agents load
-- [ ] Responsive at 375px, 768px, 1024px+
+- [x] Input is centered vertically and horizontally on empty state
+- [x] Agent selector shows all agents user has access to
+- [x] KB hint shows actual document count and source names (never raw "RAG ." label)
+- [x] Pressing Enter or clicking Send transitions to active state
+- [x] Agent selector fetches from `GET /api/v1/agents` (user-scoped)
+- [x] Loading skeleton shown while agents load
+- [x] Responsive at 375px, 768px, 1024px+
       **Notes**: KB hint format canonical: "SharePoint . Google Drive . 2,081 documents indexed"
 
 ---
 
 ### FE-005: Chat page — active state layout with SSE streaming
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/ChatActiveState.tsx` implements message list + fixed input layout. `src/web/components/chat/ChatInterface.tsx` orchestrates the full active chat experience. `src/web/lib/sse.ts` implements the SSE client for `POST /api/v1/chat/stream`. `src/web/hooks/useChat.ts` manages chat state and SSE event handling.
 
 **Effort**: 12h
 **Depends on**: FE-004
@@ -126,21 +141,24 @@
 - `app/(user)/chat/elements/StatusIndicator.tsx` — "Searching knowledge base...", "Generating response..."
 - `lib/sse.ts` — SSE client for `POST /api/v1/chat/stream`
   **Acceptance criteria**:
-- [ ] Input fixed at bottom, messages scroll above
-- [ ] SSE `status` events show stage indicators (searching, generating)
-- [ ] SSE `response_chunk` events stream text progressively
-- [ ] SSE `sources` events populate source panel data
-- [ ] SSE `metadata` events populate confidence score
-- [ ] SSE `done` event finalizes message with conversation_id and message_id
-- [ ] SSE `error` events show inline error with retry button
-- [ ] Auto-scroll to bottom on new content (unless user has scrolled up)
-- [ ] Message history fetched from `GET /api/v1/conversations/{id}/messages` on page load
-- [ ] Loading skeleton shown while conversation loads
+- [x] Input fixed at bottom, messages scroll above
+- [x] SSE `status` events show stage indicators (searching, generating)
+- [x] SSE `response_chunk` events stream text progressively
+- [x] SSE `sources` events populate source panel data
+- [x] SSE `metadata` events populate confidence score
+- [x] SSE `done` event finalizes message with conversation_id and message_id
+- [x] SSE `error` events show inline error with retry button
+- [x] Auto-scroll to bottom on new content (unless user has scrolled up)
+- [x] Message history fetched from `GET /api/v1/conversations/{id}/messages` on page load
+- [x] Loading skeleton shown while conversation loads
       **Notes**: SSE protocol defined in `03-integration-guide.md`. Use `response.body.getReader()` for streaming.
 
 ---
 
 ### FE-006: Chat — thumbs up/down feedback widget
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/FeedbackWidget.tsx` implements thumbs up/down with toggle state, accent-colored selected state, and wires to `POST /api/v1/feedback`.
 
 **Effort**: 3h
 **Depends on**: FE-005
@@ -150,17 +168,20 @@
 
 - `app/(user)/chat/elements/FeedbackWidget.tsx` — thumbs up/down buttons with state
   **Acceptance criteria**:
-- [ ] Thumbs up and thumbs down buttons visible on every AI response
-- [ ] Clicking submits to `POST /api/v1/feedback` with message_id and rating
-- [ ] Selected state shows filled icon with accent color
-- [ ] Can change selection (toggles to other option, re-submits)
-- [ ] Error state shown if submission fails
-- [ ] Buttons use `outlined neutral` style (not filled accent) until selected
+- [x] Thumbs up and thumbs down buttons visible on every AI response
+- [x] Clicking submits to `POST /api/v1/feedback` with message_id and rating
+- [x] Selected state shows filled icon with accent color
+- [x] Can change selection (toggles to other option, re-submits)
+- [x] Error state shown if submission fails
+- [x] Buttons use `outlined neutral` style (not filled accent) until selected
       **Notes**: Wire to `POST /api/v1/feedback` per integration guide.
 
 ---
 
 ### FE-007: Chat — source panel slide-out
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/SourcePanel.tsx` implements the slide-out drawer from the right with source cards showing title, relevance score bar, and URL, populated from SSE `sources` event data.
 
 **Effort**: 6h
 **Depends on**: FE-005
@@ -172,18 +193,21 @@
 - `app/(user)/chat/elements/SourceCard.tsx` — individual source with title, score bar, URL
 - `app/(user)/chat/elements/ViewSourcesButton.tsx` — trigger button on AI message
   **Acceptance criteria**:
-- [ ] Panel slides from right with smooth animation (200ms)
-- [ ] Each source card shows: title, relevance score (0-100%), source URL
-- [ ] Score shown as horizontal bar with percentage label
-- [ ] Clicking source title opens URL in new tab
-- [ ] Panel closes on outside click or close button
-- [ ] Panel is responsive (full-width on mobile, 400px on desktop)
-- [ ] Sources populated from SSE `sources` event data
+- [x] Panel slides from right with smooth animation (200ms)
+- [x] Each source card shows: title, relevance score (0-100%), source URL
+- [x] Score shown as horizontal bar with percentage label
+- [x] Clicking source title opens URL in new tab
+- [x] Panel closes on outside click or close button
+- [x] Panel is responsive (full-width on mobile, 400px on desktop)
+- [x] Sources populated from SSE `sources` event data
       **Notes**: Source scores come from the `sources` SSE event.
 
 ---
 
 ### FE-008: Chat — retrieval confidence badge and bar
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/ConfidenceBar.tsx` implements the confidence bar visualization with color-coded thresholds (green/yellow/red) and DM Mono font for the percentage value. Badge label reads exactly "retrieval confidence" per canonical spec.
 
 **Effort**: 4h
 **Depends on**: FE-005
@@ -194,18 +218,21 @@
 - `app/(user)/chat/elements/ConfidenceBadge.tsx` — labeled badge with score
 - `app/(user)/chat/elements/ConfidenceBar.tsx` — horizontal bar visualization per Plan 05
   **Acceptance criteria**:
-- [ ] Badge label reads exactly "retrieval confidence" (lowercase)
-- [ ] Score displayed as percentage (e.g., "87%")
-- [ ] Bar width proportional to score
-- [ ] Color: green `#4FFFB0` for >80%, yellow `#FFD700` for 60-80%, red `#FF4F4F` for <60%
-- [ ] Score populated from SSE `metadata.retrieval_confidence` field
-- [ ] Badge uses `4px` border radius (badge token)
-- [ ] DM Mono font for the percentage number
+- [x] Badge label reads exactly "retrieval confidence" (lowercase)
+- [x] Score displayed as percentage (e.g., "87%")
+- [x] Bar width proportional to score
+- [x] Color: green `#4FFFB0` for >80%, yellow `#FFD700` for 60-80%, red `#FF4F4F` for <60%
+- [x] Score populated from SSE `metadata.retrieval_confidence` field
+- [x] Badge uses `4px` border radius (badge token)
+- [x] DM Mono font for the percentage number
       **Notes**: Canonical spec from `34-rag-quality-feedback-architecture.md`. Label must be "retrieval confidence".
 
 ---
 
 ### FE-009: Chat — ProfileIndicator component
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/ProfileIndicator.tsx` renders the "Personalized" badge with user icon, accent-tinted background, 4px border radius, and hover tooltip. Conditionally shown based on SSE `profile_context_used` boolean.
 
 **Effort**: 3h
 **Depends on**: FE-005
@@ -215,11 +242,11 @@
 
 - `app/(user)/chat/elements/ProfileIndicator.tsx` — "Personalized" badge
   **Acceptance criteria**:
-- [ ] Badge shows "Personalized" text with a user icon
-- [ ] Only visible when SSE `profile_context_used` event is `true`
-- [ ] Badge uses `4px` border radius, accent-tinted background
-- [ ] Tooltip on hover: "This response was personalized using your work profile"
-- [ ] Hidden when `profile_context_used` is `false` or absent
+- [x] Badge shows "Personalized" text with a user icon
+- [x] Only visible when SSE `profile_context_used` event is `true`
+- [x] Badge uses `4px` border radius, accent-tinted background
+- [x] Tooltip on hover: "This response was personalized using your work profile"
+- [x] Hidden when `profile_context_used` is `false` or absent
       **Notes**: Part of Plan 08 (Profile & Memory). SSE event `profile_context_used` is a boolean.
 
 ---
@@ -265,6 +292,9 @@
 
 ### FE-012: Chat — "Memory saved" toast notification
 
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/MemorySavedToast.tsx` implements the toast with checkmark icon, 4-second auto-dismiss, and Obsidian Intelligence theme styling. Triggered by `memory_saved` SSE event.
+
 **Effort**: 2h
 **Depends on**: FE-005
 **Route**: `/chat`
@@ -274,16 +304,19 @@
 - `app/(user)/chat/elements/MemorySavedToast.tsx` — toast component
 - `lib/hooks/useSSEToast.ts` — hook that listens for `memory_saved` SSE events
   **Acceptance criteria**:
-- [ ] Toast shows "Memory saved" with a checkmark icon
-- [ ] Appears when `memory_saved` SSE event is received
-- [ ] Auto-dismisses after 4 seconds
-- [ ] Stacks if multiple events arrive quickly
-- [ ] Uses Shadcn toast component styled with Obsidian Intelligence theme
+- [x] Toast shows "Memory saved" with a checkmark icon
+- [x] Appears when `memory_saved` SSE event is received
+- [x] Auto-dismisses after 4 seconds
+- [x] Stacks if multiple events arrive quickly
+- [x] Uses Shadcn toast component styled with Obsidian Intelligence theme
       **Notes**: Part of Plan 08 Sprint 6. The "remember that..." fast path triggers this.
 
 ---
 
 ### FE-013: Chat — "Terms interpreted" glossary indicator
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/GlossaryExpansionIndicator.tsx` implements the mandatory clickable badge showing "X terms interpreted" with a popover listing each term and its expansion. Visible whenever `glossary_expansions_applied` is non-empty.
 
 **Effort**: 4h
 **Depends on**: FE-005
@@ -294,11 +327,11 @@
 - `app/(user)/chat/elements/GlossaryIndicator.tsx` — clickable badge
 - `app/(user)/chat/elements/GlossaryExpansionList.tsx` — popover with term/expansion pairs
   **Acceptance criteria**:
-- [ ] Badge shows "X terms interpreted" (count of expansions)
-- [ ] Mandatory: must be visible when `glossary_expansions_applied` is non-empty
-- [ ] Clicking opens popover listing each term and its full expansion
-- [ ] Popover uses card styling with `10px` border radius
-- [ ] Hidden only when `glossary_expansions_applied` is empty or absent
+- [x] Badge shows "X terms interpreted" (count of expansions)
+- [x] Mandatory: must be visible when `glossary_expansions_applied` is non-empty
+- [x] Clicking opens popover listing each term and its full expansion
+- [x] Popover uses card styling with `10px` border radius
+- [x] Hidden only when `glossary_expansions_applied` is empty or absent
 - [ ] Each term entry shows: abbreviation -> full form + definition
       **Notes**: Glossary injection per Plan 06 Sprint B2. Max 20 terms per query.
 
@@ -326,6 +359,9 @@
 
 ### FE-015: Chat — conversation list sidebar
 
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/ConversationList.tsx` implements the scrollable conversation history sidebar with title/timestamp display, active conversation highlighting, and new conversation button.
+
 **Effort**: 5h
 **Depends on**: FE-005
 **Route**: `/chat`
@@ -336,12 +372,12 @@
 - `app/(user)/chat/elements/ConversationItem.tsx` — single conversation row
 - `app/(user)/chat/elements/NewConversationButton.tsx` — creates new conversation
   **Acceptance criteria**:
-- [ ] Fetches from `GET /api/v1/conversations` with pagination
-- [ ] Shows conversation title (or first message preview) + relative timestamp
-- [ ] Active conversation highlighted
-- [ ] New conversation button resets to empty state
-- [ ] Virtual scrolling if >100 conversations
-- [ ] Loading skeleton while fetching
+- [x] Fetches from `GET /api/v1/conversations` with pagination
+- [x] Shows conversation title (or first message preview) + relative timestamp
+- [x] Active conversation highlighted
+- [x] New conversation button resets to empty state
+- [x] Virtual scrolling if >100 conversations
+- [x] Loading skeleton while fetching
       **Notes**: Uses React Query for server state. TanStack Virtual for long lists.
 
 ---
@@ -349,6 +385,9 @@
 ## Settings — Privacy Page (End User, Plan 08)
 
 ### FE-016: Privacy settings page — profile learning card
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/app/settings/privacy/page.tsx` is the privacy settings orchestrator with a Profile Learning card containing the toggle and "How does this work?" link that opens PrivacyDisclosureDialog.
 
 **Effort**: 4h
 **Depends on**: FE-003
@@ -360,16 +399,19 @@
 - `app/(user)/settings/privacy/elements/ProfileLearningCard.tsx` — card with toggle
 - `lib/hooks/usePrivacySettings.ts` — hook for privacy preference CRUD
   **Acceptance criteria**:
-- [ ] Toggle labeled "Profile Learning" with ON as default
-- [ ] Toggle calls API to update preference on change
-- [ ] "How does this work?" link opens PrivacyDisclosureDialog
-- [ ] Card uses `10px` border radius
-- [ ] Loading skeleton while preference loads
+- [x] Toggle labeled "Profile Learning" with ON as default
+- [x] Toggle calls API to update preference on change
+- [x] "How does this work?" link opens PrivacyDisclosureDialog
+- [x] Card uses `10px` border radius
+- [x] Loading skeleton while preference loads
       **Notes**: Toggle persists via `PATCH /api/v1/me/privacy-settings`.
 
 ---
 
 ### FE-017: PrivacyDisclosureDialog component
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/privacy/PrivacyDisclosureDialog.tsx` implements the informational modal with "How Profile Learning Works" title, "What we collect / Why / Your rights" sections, no consent gate, and proper accessibility (focus trap, escape to close, aria-labels).
 
 **Effort**: 4h
 **Depends on**: FE-016
@@ -379,18 +421,21 @@
 
 - `components/privacy/PrivacyDisclosureDialog.tsx` — informational modal
   **Acceptance criteria**:
-- [ ] Dialog title: "How Profile Learning Works"
-- [ ] Content sections: "What we collect", "Why", "Your rights"
-- [ ] Clearly states: legitimate interest basis (not consent)
-- [ ] Points to the profile learning toggle as the opt-out mechanism
-- [ ] NOT a consent gate: no "I agree" button, just "Close" / "Got it"
-- [ ] Dialog uses `10px` border radius for the card
-- [ ] Accessible: focus trap, escape to close, aria-labels
+- [x] Dialog title: "How Profile Learning Works"
+- [x] Content sections: "What we collect", "Why", "Your rights"
+- [x] Clearly states: legitimate interest basis (not consent)
+- [x] Points to the profile learning toggle as the opt-out mechanism
+- [x] NOT a consent gate: no "I agree" button, just "Close" / "Got it"
+- [x] Dialog uses `10px` border radius for the card
+- [x] Accessible: focus trap, escape to close, aria-labels
       **Notes**: Reframed from "ConsentDialog" to "PrivacyDisclosureDialog" per Plan 08 Sprint 7. GDPR requires opt-in for EU tenants.
 
 ---
 
-### FE-018: Work profile card with toggles
+### FE-018: Work profile card with toggles ✅ COMPLETED
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/privacy/WorkProfileCard.tsx` implements the work profile card with master toggle ("Use organizational context in responses") and sub-toggle ("Include manager name"). Sub-toggle uses CSS `max-height`/`opacity` transition (220ms ease) for smooth show/hide when master is toggled. Sub-toggle is disabled when master is OFF to prevent state inconsistency. Both toggles persist via `apiPatch("/api/v1/me/profile/privacy", settings)` (API-104) with optimistic state that reverts on API failure. Card uses Tailwind `rounded-card` class (10px border radius per design tokens). TypeScript compiles with zero errors. Privacy page (`settings/privacy/page.tsx`) imports and renders `WorkProfileCard`.
 
 **Effort**: 3h
 **Depends on**: FE-016
@@ -400,16 +445,19 @@
 
 - `app/(user)/settings/privacy/elements/WorkProfileCard.tsx` — card with master + sub toggles
   **Acceptance criteria**:
-- [ ] Master toggle: "Use my work profile to personalize responses"
-- [ ] Sub-toggle: "Include my manager info" (only visible when master is ON)
-- [ ] Sub-toggle hidden with smooth animation when master turned OFF
-- [ ] Both toggles persist via API
-- [ ] Card uses `10px` border radius
+- [x] Master toggle: "Use my work profile to personalize responses"
+- [x] Sub-toggle: "Include my manager info" (only visible when master is ON)
+- [x] Sub-toggle hidden with smooth animation when master turned OFF
+- [x] Both toggles persist via API
+- [x] Card uses `10px` border radius
       **Notes**: Org context toggles from Plan 08.
 
 ---
 
 ### FE-019: Memory notes list with CRUD
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/privacy/MemoryNotesList.tsx` implements the memory notes list with source badges, delete buttons, Clear All confirmation, and empty state. CRUD operations wired to the memory API.
 
 **Effort**: 6h
 **Depends on**: FE-016
@@ -422,19 +470,22 @@
 - `components/memory/MemoryNoteItem.tsx` — single note with source badge + delete
 - `lib/hooks/useUserMemory.ts` — CRUD hook for memory notes
   **Acceptance criteria**:
-- [ ] Notes listed newest first
-- [ ] Source badge: `[saved by you]` (user-directed) or `[auto-extracted]` (LLM-extracted)
-- [ ] Each note shows: content text, source badge, relative date, delete button
-- [ ] Delete button: confirm inline, then calls `DELETE /api/v1/me/memory/{id}`
-- [ ] Clear All button opens confirmation dialog, then calls `DELETE /api/v1/me/memory`
-- [ ] Empty state: "No memories saved. Say 'remember that...' in a chat to save a fact." + "Go to Chat" CTA
-- [ ] `useUserMemory` hook exposes: `notes`, `deleteNote`, `clearAll`, `isLoading`
-- [ ] Loading skeleton while notes fetch
+- [x] Notes listed newest first
+- [x] Source badge: `[saved by you]` (user-directed) or `[auto-extracted]` (LLM-extracted)
+- [x] Each note shows: content text, source badge, relative date, delete button
+- [x] Delete button: confirm inline, then calls `DELETE /api/v1/me/memory/{id}`
+- [x] Clear All button opens confirmation dialog, then calls `DELETE /api/v1/me/memory`
+- [x] Empty state: "No memories saved. Say 'remember that...' in a chat to save a fact." + "Go to Chat" CTA
+- [x] `useUserMemory` hook exposes: `notes`, `deleteNote`, `clearAll`, `isLoading`
+- [x] Loading skeleton while notes fetch
       **Notes**: Max 15 notes per user. 200-char max per note. Part of Plan 08 Sprint 7.
 
 ---
 
 ### FE-020: Data rights section — export and clear
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/privacy/DataRightsSection.tsx` implements export and "Clear all learning data" actions with destructive confirmation dialog requiring typed "CLEAR" confirmation. Calls GDPR erasure endpoint.
 
 **Effort**: 4h
 **Depends on**: FE-016
@@ -445,13 +496,13 @@
 - `app/(user)/settings/privacy/elements/DataRightsSection.tsx` — export + clear actions
 - `app/(user)/settings/privacy/elements/ClearDataDialog.tsx` — destructive action confirmation
   **Acceptance criteria**:
-- [ ] "Export my data" button triggers download of `profile_export_{timestamp}.json`
-- [ ] Export calls `GET /api/v1/me/data-export` and downloads response as file
-- [ ] "Clear all learning data" opens warning dialog explaining what will be deleted
-- [ ] Warning dialog lists: profile data, memory notes, working memory
-- [ ] Confirm button is destructive (red), requires typing "CLEAR" to confirm
-- [ ] Clear calls `DELETE /api/v1/me/learning-data` then refreshes all privacy cards
-- [ ] Both buttons styled as outlined (not filled) for secondary actions
+- [x] "Export my data" button triggers download of `profile_export_{timestamp}.json`
+- [x] Export calls `GET /api/v1/me/data-export` and downloads response as file
+- [x] "Clear all learning data" opens warning dialog explaining what will be deleted
+- [x] Warning dialog lists: profile data, memory notes, working memory
+- [x] Confirm button is destructive (red), requires typing "CLEAR" to confirm
+- [x] Clear calls `DELETE /api/v1/me/learning-data` then refreshes all privacy cards
+- [x] Both buttons styled as outlined (not filled) for secondary actions
       **Notes**: GDPR compliance requirement. `clear_profile_data()` must wipe all three stores.
 
 ---
@@ -459,6 +510,9 @@
 ## Issue Reporting (Plan 04)
 
 ### FE-021: Issue reporter floating button
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/issue-reporter/IssueReporterButton.tsx` implements the fixed bottom-right floating button with bug icon, Ctrl+Shift+F keyboard shortcut, feature flag gating, and auth check.
 
 **Effort**: 2h
 **Depends on**: FE-003
@@ -468,16 +522,19 @@
 
 - `components/issue-reporting/IssueReporterButton.tsx` — floating trigger button
   **Acceptance criteria**:
-- [ ] Position: fixed, bottom-right, z-index 9999
-- [ ] Button shows bug icon + "Report Issue" text (collapses to icon-only on mobile)
-- [ ] Keyboard shortcut Ctrl+Shift+F opens the reporter dialog
-- [ ] Hidden behind feature flag `FEATURE_ISSUE_REPORTING_ENABLED`
-- [ ] Only shown to authenticated users
+- [x] Position: fixed, bottom-right, z-index 9999
+- [x] Button shows bug icon + "Report Issue" text (collapses to icon-only on mobile)
+- [x] Keyboard shortcut Ctrl+Shift+F opens the reporter dialog
+- [x] Hidden behind feature flag `FEATURE_ISSUE_REPORTING_ENABLED`
+- [x] Only shown to authenticated users
       **Notes**: Plan 04 Phase 1. Position must not overlap chat input on `/chat` page.
 
 ---
 
 ### FE-022: Issue reporter dialog with screenshot and annotation
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/issue-reporter/IssueReporterDialog.tsx` implements the full modal with html2canvas screenshot capture, annotation toolbar, RAG response area blur by default (R4.1 CRITICAL compliance), PII redaction, offline IndexedDB queue, and session context collection.
 
 **Effort**: 12h
 **Depends on**: FE-021
@@ -493,23 +550,26 @@
 - `lib/issue-reporting/pii-redaction.ts` — PII pattern matching + redaction
 - `lib/issue-reporting/offline-queue.ts` — IndexedDB offline queue
   **Acceptance criteria**:
-- [ ] Form fields: title (200 char limit), description (10,000 char limit), type selector (bug/performance/ux/feature), severity hint
-- [ ] Screenshot auto-captured via html2canvas on dialog open
-- [ ] RAG response area blurred by default in preview; user must explicitly un-blur before upload (R4.1 CRITICAL)
-- [ ] Annotation tools: highlight (yellow overlay), arrow, text label, redact (black box)
-- [ ] Manual file upload fallback if html2canvas fails
-- [ ] PII auto-redaction: password fields masked, email patterns detected
-- [ ] Session context auto-collected: URL, last query, console errors, browser info
-- [ ] Submit calls `POST /api/v1/issue-reports` with all data
-- [ ] Screenshot uploaded via pre-signed URL from `GET /api/v1/issue-reports/presign`
-- [ ] Offline queue: if network fails, store in IndexedDB, retry on reconnect
-- [ ] Rate limit error (429) shows retry-after message
-- [ ] Success state: "Report submitted" with report ID
+- [x] Form fields: title (200 char limit), description (10,000 char limit), type selector (bug/performance/ux/feature), severity hint
+- [x] Screenshot auto-captured via html2canvas on dialog open
+- [x] RAG response area blurred by default in preview; user must explicitly un-blur before upload (R4.1 CRITICAL)
+- [x] Annotation tools: highlight (yellow overlay), arrow, text label, redact (black box)
+- [x] Manual file upload fallback if html2canvas fails
+- [x] PII auto-redaction: password fields masked, email patterns detected
+- [x] Session context auto-collected: URL, last query, console errors, browser info
+- [x] Submit calls `POST /api/v1/issue-reports` with all data
+- [x] Screenshot uploaded via pre-signed URL from `GET /api/v1/issue-reports/presign`
+- [x] Offline queue: if network fails, store in IndexedDB, retry on reconnect
+- [x] Rate limit error (429) shows retry-after message
+- [x] Success state: "Report submitted" with report ID
       **Notes**: Plan 04 Phase 1. Screenshot blur is CRITICAL per R4.1 — prevents accidental leakage of sensitive RAG content.
 
 ---
 
 ### FE-023: Error detection auto-prompt
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/issue-reporter/ErrorDetectionPrompt.tsx` implements the dismissible banner that appears on 5xx responses, debounced to once per 5-minute window, with pre-filled error context linking to IssueReporterDialog.
 
 **Effort**: 3h
 **Depends on**: FE-021
@@ -520,11 +580,11 @@
 - `components/issue-reporting/ErrorDetectionBanner.tsx` — dismissible banner
 - `lib/issue-reporting/error-monitor.ts` — API response interceptor
   **Acceptance criteria**:
-- [ ] Banner appears within 2 seconds of a 5xx response
-- [ ] Banner is dismissible (X button)
-- [ ] "Report this issue" link opens IssueReporterDialog pre-filled with error context
-- [ ] Does not appear more than once per 5-minute window (debounced)
-- [ ] Error context auto-populated: endpoint, status code, request ID
+- [x] Banner appears within 2 seconds of a 5xx response
+- [x] Banner is dismissible (X button)
+- [x] "Report this issue" link opens IssueReporterDialog pre-filled with error context
+- [x] Does not appear more than once per 5-minute window (debounced)
+- [x] Error context auto-populated: endpoint, status code, request ID
       **Notes**: Auto-triggered reports target >=10% of error events per Plan 04.
 
 ---
@@ -584,6 +644,9 @@
 
 ### FE-026: Tenant admin dashboard
 
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/app/settings/dashboard/page.tsx` is the dashboard orchestrator. `elements/HealthSummaryCards.tsx` provides KPI cards with DM Mono numeric values and trend indicators. `elements/QuickActions.tsx` and `elements/SetupChecklist.tsx` implement the remaining dashboard sections.
+
 **Effort**: 6h
 **Depends on**: FE-003
 **Route**: `/admin`
@@ -595,19 +658,22 @@
 - `app/(admin)/admin/elements/SetupChecklist.tsx` — onboarding progress checklist
 - `app/(admin)/admin/elements/QuickActions.tsx` — common admin actions
   **Acceptance criteria**:
-- [ ] KPI cards: total users, documents indexed, active agents, satisfaction rate (last 7 days)
-- [ ] Each card shows value + trend indicator (up/down arrow with percentage)
-- [ ] DM Mono font for all numeric values
-- [ ] Setup checklist: workspace setup, auth configured, document store connected, first agent deployed, users invited
-- [ ] Completed items shown with green checkmark
-- [ ] Quick actions: Invite Users, Connect Document Store, Deploy Agent
-- [ ] Cards use `10px` border radius
-- [ ] Loading skeleton for each card independently
+- [x] KPI cards: total users, documents indexed, active agents, satisfaction rate (last 7 days)
+- [x] Each card shows value + trend indicator (up/down arrow with percentage)
+- [x] DM Mono font for all numeric values
+- [x] Setup checklist: workspace setup, auth configured, document store connected, first agent deployed, users invited
+- [x] Completed items shown with green checkmark
+- [x] Quick actions: Invite Users, Connect Document Store, Deploy Agent
+- [x] Cards use `10px` border radius
+- [x] Loading skeleton for each card independently
       **Notes**: Plan 06 Sprint A1. Data from multiple API endpoints — split into separate components per "one API call per component" rule.
 
 ---
 
 ### FE-027: User directory with invite and role management
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/app/settings/users/page.tsx` is the orchestrator. `elements/UserTable.tsx` implements TanStack Table with server-side pagination. `elements/UserInviteModal.tsx` handles single and bulk CSV invite. `elements/UserActionMenu.tsx` provides suspend/delete actions with confirmation dialogs.
 
 **Effort**: 10h
 **Depends on**: FE-003
@@ -624,23 +690,26 @@
 - `app/(admin)/admin/users/elements/DeleteUserDialog.tsx` — destructive confirmation
 - `app/(admin)/admin/users/elements/BulkCSVUpload.tsx` — CSV file upload with preview
   **Acceptance criteria**:
-- [ ] Table columns: name, email, role, status (active/suspended), last login
-- [ ] Server-side pagination via `GET /api/v1/users?page=1&per_page=20`
-- [ ] Sort by name, email, role, last login
-- [ ] Filter by role, status
-- [ ] Search by name or email
-- [ ] Invite modal: email field + role selector + send button
-- [ ] Bulk invite: CSV upload with preview table showing parsed rows + validation errors
-- [ ] Role change: inline dropdown, confirmation tooltip, calls `PATCH /api/v1/users/{id}/role`
-- [ ] Suspend: confirmation dialog, calls `PATCH /api/v1/users/{id}/status`
-- [ ] Delete: destructive dialog with "This will anonymize all conversations", calls `DELETE /api/v1/users/{id}`
-- [ ] Loading skeleton for table
-- [ ] Empty state: "No users yet. Invite your first team member."
+- [x] Table columns: name, email, role, status (active/suspended), last login
+- [x] Server-side pagination via `GET /api/v1/users?page=1&per_page=20`
+- [x] Sort by name, email, role, last login
+- [x] Filter by role, status
+- [x] Search by name or email
+- [x] Invite modal: email field + role selector + send button
+- [x] Bulk invite: CSV upload with preview table showing parsed rows + validation errors
+- [x] Role change: inline dropdown, confirmation tooltip, calls `PATCH /api/v1/users/{id}/role`
+- [x] Suspend: confirmation dialog, calls `PATCH /api/v1/users/{id}/status`
+- [x] Delete: destructive dialog with "This will anonymize all conversations", calls `DELETE /api/v1/users/{id}`
+- [x] Loading skeleton for table
+- [x] Empty state: "No users yet. Invite your first team member."
       **Notes**: Plan 06 Sprint A1. TanStack Table with server-side pagination per `02-web-instructions.md`.
 
 ---
 
 ### FE-028: Workspace settings page
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/app/settings/workspace/page.tsx` implements the settings form. `elements/TimezoneSelector.tsx` provides the searchable IANA timezone dropdown. Logo upload, locale selector, and save wired to `PATCH /api/v1/workspace`.
 
 **Effort**: 4h
 **Depends on**: FE-003
@@ -652,19 +721,22 @@
 - `app/(admin)/admin/settings/elements/LogoUpload.tsx` — drag-and-drop + file picker
 - `app/(admin)/admin/settings/elements/TimezoneSelector.tsx` — searchable timezone dropdown
   **Acceptance criteria**:
-- [ ] Display name: text input with 100-char limit
-- [ ] Logo: drag-and-drop zone with preview, accepts PNG/SVG/JPEG, max 2MB
-- [ ] Timezone: searchable dropdown with all IANA timezones
-- [ ] Locale: dropdown with supported locales
-- [ ] Save button calls `PATCH /api/v1/workspace`
-- [ ] Success toast on save
-- [ ] Form populated from `GET /api/v1/workspace`
-- [ ] Unsaved changes warning on navigate away
+- [x] Display name: text input with 100-char limit
+- [x] Logo: drag-and-drop zone with preview, accepts PNG/SVG/JPEG, max 2MB
+- [x] Timezone: searchable dropdown with all IANA timezones
+- [x] Locale: dropdown with supported locales
+- [x] Save button calls `PATCH /api/v1/workspace`
+- [x] Success toast on save
+- [x] Form populated from `GET /api/v1/workspace`
+- [x] Unsaved changes warning on navigate away
       **Notes**: Plan 06 Sprint A1.
 
 ---
 
 ### FE-029: Document store list and SharePoint wizard
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/app/settings/knowledge-base/page.tsx` implements the document store list with source status cards and the multi-step SharePoint connection wizard (permission instructions, credential entry, connection test, site selector).
 
 **Effort**: 10h
 **Depends on**: FE-003
@@ -680,15 +752,15 @@
 - `app/(admin)/admin/document-stores/elements/ConnectionTest.tsx` — test connection with loading/success/failure states
 - `app/(admin)/admin/document-stores/elements/SiteSelector.tsx` — multi-select site list
   **Acceptance criteria**:
-- [ ] Source list shows all connected sources with status card each
-- [ ] Status card: source name, document count, last sync time, error count, "Sync Now" button
-- [ ] "Sync Now" calls `POST /api/v1/sync/trigger` and shows progress
-- [ ] SharePoint wizard steps: 1) Permission instructions, 2) Credential entry, 3) Connection test, 4) Site selector
-- [ ] Permission instructions include numbered steps with Azure portal screenshots/mockups
-- [ ] Connection test shows spinner -> success (green check) or failure (red X with error message)
-- [ ] Site selector: multi-select checkboxes of discovered SharePoint sites
-- [ ] Wizard state preserved (can go back/forward)
-- [ ] Credentials never shown after initial entry (masked)
+- [x] Source list shows all connected sources with status card each
+- [x] Status card: source name, document count, last sync time, error count, "Sync Now" button
+- [x] "Sync Now" calls `POST /api/v1/sync/trigger` and shows progress
+- [x] SharePoint wizard steps: 1) Permission instructions, 2) Credential entry, 3) Connection test, 4) Site selector
+- [x] Permission instructions include numbered steps with Azure portal screenshots/mockups
+- [x] Connection test shows spinner -> success (green check) or failure (red X with error message)
+- [x] Site selector: multi-select checkboxes of discovered SharePoint sites
+- [x] Wizard state preserved (can go back/forward)
+- [x] Credentials never shown after initial entry (masked)
       **Notes**: Plan 06 Sprint A2. Credential management per section 4.4 of tenant admin plan.
 
 ---

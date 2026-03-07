@@ -1,0 +1,132 @@
+{
+  "id": "checkpoint_1772859779443",
+  "name": "pre-compact-1772859779443",
+  "created_at": "2026-03-07T05:02:59.443Z",
+  "observations": [
+    {
+      "timestamp": "2026-03-07T04:55:39.925Z",
+      "type": "stop",
+      "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+      "reason": "signal",
+      "success": true
+    },
+    {
+      "id": "obs_1772859341557_hkl6ir84g",
+      "timestamp": "2026-03-07T04:55:41.557Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/.claude/worktrees/agent-a890eedb/src/web",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772859354648_6fsmars5a",
+      "timestamp": "2026-03-07T04:55:54.648Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/.claude/worktrees/agent-a890eedb/src/web",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772859359914_wvudee8yv",
+      "timestamp": "2026-03-07T04:55:59.914Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/.claude/worktrees/agent-a890eedb/src/web",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772859406075_d5r8yz7u4",
+      "timestamp": "2026-03-07T04:56:46.075Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/.claude/worktrees/agent-a890eedb/src/web",
+        "framework": "unknown"
+      }
+    },
+    {
+      "timestamp": "2026-03-07T04:57:09.242Z",
+      "type": "stop",
+      "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+      "reason": "signal",
+      "success": true
+    },
+    {
+      "timestamp": "2026-03-07T04:57:20.585Z",
+      "type": "stop",
+      "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+      "reason": "signal",
+      "success": true
+    },
+    {
+      "timestamp": "2026-03-07T04:59:14.390Z",
+      "type": "stop",
+      "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+      "reason": "signal",
+      "success": true
+    },
+    {
+      "id": "obs_1772859779441_m0nmbcqxu",
+      "timestamp": "2026-03-07T05:02:59.441Z",
+      "type": "connection_pattern",
+      "data": {
+        "framework": "core-sdk",
+        "active_workflows": [],
+        "critical_patterns": {
+          "hasDataFlowModels": false,
+          "hasNexusApp": false,
+          "hasKaizenAgent": false,
+          "hasCyclicWorkflow": false,
+          "hasAsyncRuntime": false
+        },
+        "recently_modified_count": 0
+      },
+      "context": {
+        "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+        "cwd": "/Users/cheongwailuen/Development/mingai/.claude/worktrees/agent-a890eedb/src/web",
+        "framework": "unknown"
+      }
+    }
+  ],
+  "instincts": {},
+  "identity": {
+    "system": "kailash-vibe-cc-setup",
+    "version": "2.0.0",
+    "created_at": "2026-03-07T04:55:39.925Z",
+    "learning_enabled": true,
+    "per_project": true,
+    "focus_areas": [
+      "workflow-patterns",
+      "error-fixes",
+      "dataflow-patterns",
+      "testing-patterns",
+      "framework-selection"
+    ]
+  },
+  "stats": {
+    "observation_count": 9,
+    "instinct_categories": 0
+  }
+}

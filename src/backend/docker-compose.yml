@@ -1,0 +1,53 @@
+# INFRA-039: Docker Compose for local development
+# PostgreSQL 15 + pgvector + Redis 7 + backend
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mingai-postgres
+    environment:
+      POSTGRES_DB: mingai
+      POSTGRES_USER: mingai
+      POSTGRES_PASSWORD: local_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mingai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mingai-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mingai-backend
+    ports:
+      - "8022:8022"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8022 --reload
+
+volumes:
+  postgres_data:

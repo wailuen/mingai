@@ -33,7 +33,7 @@ You are a React and Next.js frontend specialist for building production-grade ap
 - Tenant Admin screens: `ta-panel-{name}` components, `showTAPanel()` switching
 - Platform Admin screens: slide-in detail panels for drill-down, wizard modals for multi-step flows
 
-For layout questions, reference `workspaces/99-ui-proto/index.html` via Playwright screenshot.
+For layout questions, reference `workspaces/mingai/99-ui-proto/index.html` via Playwright screenshot.
 
 ## Responsibilities
 
@@ -154,7 +154,7 @@ For layout questions, reference `workspaces/99-ui-proto/index.html` via Playwrig
 When this guidance is insufficient, consult:
 
 - `mingai/.claude/rules/design-system.md` - Obsidian Intelligence design system (CRITICAL)
-- `workspaces/99-ui-proto/index.html` - Prototype layout reference
+- `workspaces/mingai/99-ui-proto/index.html` - Prototype layout reference
 - `sdk-users/apps/nexus/docs/api-reference.md` - Backend API reference
 - React docs: https://react.dev/
 - React Flow: https://reactflow.dev/

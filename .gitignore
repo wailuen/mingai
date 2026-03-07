@@ -12,6 +12,7 @@ eggs/
 .eggs/
 lib/
 !scripts/hooks/lib/
+!src/web/lib/
 lib64/
 parts/
 sdist/
@@ -65,3 +66,14 @@ secrets/
 
 # Playwright MCP runtime data (console logs, captured screenshots)
 .playwright-mcp/
+
+# E2E test screenshots (generated artifacts)
+*.png
+*.jpg
+*.jpeg
+e2e-*.png
+demo-*.png
+
+# Node.js (Playwright runner)
+node_modules/
+package-lock.json

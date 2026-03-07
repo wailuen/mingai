@@ -8,15 +8,22 @@
 
 ## Pre-Implementation Checklist
 
-- [ ] Read `/Users/wailuen/Development/aihub2` frontend code — understand existing pages, components, API calls
+- [ ] Screenshot `workspaces/mingai/99-ui-proto/index.html` via Playwright — study every screen, panel, and state transition before writing a single component
 - [ ] Read `workspaces/mingai/03-user-flows/01-platform-admin-flows.md` — what platform admin can do
 - [ ] Read `workspaces/mingai/03-user-flows/02-tenant-admin-flows.md` — what tenant admin can do
 - [ ] Read `workspaces/mingai/03-user-flows/03-end-user-flows.md` — what end users do
-- [ ] Read `workspaces/mingai/design/01-design-language.md` — **Obsidian Intelligence** design system
+- [ ] Read `workspaces/mingai/design/01-design-language.md` — **Obsidian Intelligence** design system (tokens + rules)
+- [ ] Read `workspaces/mingai/04-codegen-instructions/07-design-system.md` — implementation reference
 
 ---
 
 ## Design System (Non-Negotiable)
+
+**Proto UI is the visual ground truth — not the design doc.**
+Every screen MUST visually match `workspaces/mingai/99-ui-proto/index.html`.
+Screenshot it via Playwright before implementing each screen.
+The design doc explains tokens and rules; the prototype defines layout, spacing, and state transitions.
+If the proto and the design doc conflict, the proto wins.
 
 From `workspaces/mingai/design/01-design-language.md`:
 

@@ -255,7 +255,7 @@ USER PROBLEM                          → PATTERN TO APPLY
 ### mingai-Specific References
 
 - `mingai/.claude/rules/design-system.md` - **Obsidian Intelligence canonical spec**
-- `workspaces/99-ui-proto/index.html` - **Prototype** — visual truth for chat layout and state transitions
+- `workspaces/mingai/99-ui-proto/index.html` - **Prototype** — visual truth for chat layout and state transitions
 
 ### External Reference
 

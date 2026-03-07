@@ -1,0 +1,74 @@
+{
+  "_comment": "Real Azure OpenAI deployments for LLM provider configuration flow testing. Use these as input when testing the Platform Admin > LLM Profiles creation flow. All deployments are live and billable.",
+  "providers": [
+    {
+      "name": "Azure OpenAI — Platform (eastus2)",
+      "provider_type": "azure_openai",
+      "account": "agentic-openai-eastus2",
+      "resource_group": "rg-agentic-worker",
+      "region": "eastus2",
+      "endpoint": "https://eastus2.api.cognitive.microsoft.com/",
+      "api_version": "2025-01-01-preview",
+      "api_key_env": "AZURE_PLATFORM_OPENAI_API_KEY",
+      "deployments": [
+        {
+          "slot": "router",
+          "deployment_name": "agentic-router",
+          "model": "gpt-5-mini",
+          "model_version": "2025-08-07",
+          "sku": "GlobalStandard",
+          "capacity_tpm": 150000,
+          "purpose": "Intent detection and query routing"
+        },
+        {
+          "slot": "worker",
+          "deployment_name": "agentic-worker",
+          "model": "gpt-5.2",
+          "model_version": "2025-12-11",
+          "sku": "GlobalStandard",
+          "capacity_tpm": 120000,
+          "purpose": "Primary chat completion worker"
+        },
+        {
+          "slot": "vision",
+          "deployment_name": "agentic-vision",
+          "model": "gpt-5.2-chat",
+          "model_version": "2025-12-11",
+          "sku": "GlobalStandard",
+          "capacity_tpm": 150000,
+          "purpose": "Vision and multimodal tasks"
+        },
+        {
+          "slot": "embedding",
+          "deployment_name": "text-embedding-3-small",
+          "model": "text-embedding-3-small",
+          "model_version": "1",
+          "sku": "GlobalStandard",
+          "capacity_tpm": 150000,
+          "purpose": "Query and document embeddings for RAG"
+        }
+      ]
+    },
+    {
+      "name": "Azure OpenAI — mingai primary (southeastasia)",
+      "provider_type": "azure_openai",
+      "account": "agentic-openai01",
+      "resource_group": "rg-agentic-worker",
+      "region": "southeastasia",
+      "endpoint": "https://agentic-openai01.cognitiveservices.azure.com/",
+      "api_version": "2025-01-01-preview",
+      "api_key_env": "AZURE_OPENAI_API_KEY",
+      "deployments": [
+        {
+          "slot": "primary",
+          "deployment_name": "agentic-gpt5",
+          "model": "gpt-5",
+          "model_version": "2025-08-07",
+          "sku": "GlobalStandard",
+          "capacity_tpm": 10000,
+          "purpose": "mingai primary model — provisioned 2026-03-07"
+        }
+      ]
+    }
+  ]
+}

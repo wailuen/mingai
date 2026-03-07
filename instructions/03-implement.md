@@ -1,25 +1,30 @@
-# Pre-implementation (if using parallel worktrees)
-1. Write the detailed instructions for each worktree. We are using CodeGen (Claude Code) to implement the codebase.
-2. The instructions should be:
-   - Independent to each worktree with the detailed referencing to the detailed todos.
-   - Integration between the worktrees
-3. Note that I will be pasting each instruction to a fresh terminal for each worktree accordingly.
-4. Put these instructions into `workspaces/<project-directory>/04-codegen-instructions`, naming them sequentially as 01-, 02-, for easy referencing.
+Use an agent team and deploy the specialist agent per procedural directives for the right task.
 
-# Pre-implementation (if using single repo)
+# Pre-implementation
+
 1. Write the detailed instructions for CodeGen to implement the codebase.
 2. Put these instructions into `workspaces/<project-directory>/04-codegen-instructions`
    - use as many files as required and name them sequentially as 01-, 02-, for easy referencing.
 
-# For context loading (fresh start)
-1. Peruse `workspaces/<project-directory>/04-codegen-instructions` and actively reference any docs so that you can achieve a high level of situational awareness on this project
-   - (if you are the ...-backend worktree) Follow the instructions given in `workspaces/<project-directory>/04-codegen-instructions/01-backend-worktree.md` and implement.
-   - (if you are the ...-web worktree) Follow the instructions given in `workspaces/<project-directory>/04-codegen-instructions/02-web-worktree.md` and implement.
-   - (if you are the ...-app worktree) Follow the instructions given in `workspaces/<project-directory>/04-codegen-instructions/03-mobile-worktree.md` and implement.
-   - For reference (if required), consult `workspaces/<project-directory>/04-codegen-instructions/04-integration-guide.md` to understand how the codebases will come together eventually.
+# Agent Team Launch
+
+Deploy backend and web agents in parallel via the Agent tool. Each agent receives its role
+identity and the path to its instruction file. Sequential dependencies (e.g. backend API
+must exist before frontend integration tests) are enforced within each agent's instruction file.
+
+# For context loading (orchestrator resuming context)
+
+1. Peruse `workspaces/<project-directory>/04-codegen-instructions` and actively reference any docs to achieve full situational awareness
+   - (if you are the backend agent) Follow `workspaces/<project-directory>/04-codegen-instructions/02-backend-worktree.md` and implement
+   - (if you are the web agent) Follow `workspaces/<project-directory>/04-codegen-instructions/03-web-worktree.md` and implement
+   - (if you are the app agent) Follow `workspaces/<project-directory>/04-codegen-instructions/03-mobile-worktree.md` and implement
+   - For reference, consult `workspaces/<project-directory>/04-codegen-instructions/04-integration-guide.md` for how codebases integrate
 
 # From todos to implementation
 ## NOTE: Spam this repeatedly until all todos/active have been moved to todos/completed)
+
+Use a team of agents and always follow procedural directives with right specialist agent for the right job. 
+
 1. You MUST always use the todo-manager to create the detailed todos FOR EVERY SINGLE TODO in `todos/000-master.md`
    - Review with agents, before implementation.
    - Ensure that both FE and BE detailed todos exist, if applicable
@@ -55,9 +60,20 @@
    - using as many subdirectories and files as required, and naming them sequentially 00-, 01- for easy referencing.
    - focus on capturing the essence and intent, the 'what it is' and 'how to use it', and not status/progress/reports and other irrelevant information that consumes context unnecessarily.
 
-# Sync all worktrees to main (if using parallel worktrees)
-1. Progressively sync all the worktrees (starting from backend, then web, and app) to the main worktree.
-2. There may be files that are worked on by different worktrees.
-   - Do not blindly adopt theirs/ours, please check for unique codebases between the different versions and integrate them accordingly.
-3. Sync across all worktrees and ensure that they are all on the same commit
-   - If there are any conflicts, please stop, and ensure that the unique codebase has been properly integrated into the combined one.
+At the end of each phase, launch `documentation-validator` then update:
+
+- `docs/` — complete detailed codebase documentation (last-resort reference for agents)
+- `docs/00-authority/` — authoritative docs agents read first for situational awareness:
+  - `README.md` — navigation guide for all authority documents
+  - `CLAUDE.md` — preloaded instructions for developers and codegen agents
+- `.claude/agents/project/` — project-specific agents (follow `.claude/agents/_subagent-guide.md`)
+- `.claude/skills/project/` — project-specific skills (follow `.claude/guides/claude-code/06-the-skill-system.md`)
+
+Use as many subdirectories and files as needed, named sequentially `00-`, `01-`.
+Capture essence and intent — what it is and how to use it. No status reports or progress notes.
+
+# Mandatory Gates (every cycle, non-negotiable)
+
+- After every file change → `intermediate-reviewer`
+- Before every commit → `security-reviewer`
+- After each phase → `gold-standards-validator`

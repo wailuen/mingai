@@ -1,7 +1,7 @@
 # 07 — Obsidian Intelligence Design System
 
 **Reference**: `workspaces/mingai/design/01-design-language.md` (source of truth)
-**Prototype**: `workspaces/99-ui-proto/index.html` (visual reference)
+**Prototype**: `workspaces/mingai/99-ui-proto/index.html` (visual reference)
 
 This file is the implementation reference. For any conflict with product documentation, product documentation wins.
 
