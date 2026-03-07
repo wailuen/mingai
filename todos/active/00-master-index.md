@@ -2,9 +2,9 @@
 
 **Project**: mingai Enterprise RAG Platform
 **Generated**: 2026-03-07
-**Status**: IN PROGRESS — Phase 1 backend substantially complete (~83%)
-**Progress**: ~160/192 Phase 1 items complete | 432 unit tests + 31 integration tests passing
-**Last updated**: 2026-03-07 (this session: AI-013/014, API-013/048/049, INFRA-019/046, TEST-015)
+**Status**: IN PROGRESS — Phase 1 backend substantially complete (~85%)
+**Progress**: ~184/192 Phase 1 items complete | 495 unit tests + 31 integration tests passing
+**Last updated**: 2026-03-07 (this session: API-050/051/054/055/100/103/104/105, AI-016–021/032/033/035, INFRA-010, TEST-014/050, INFRA-011/012/013, TEST-006/007/017, INFRA-033/034/036/038)
 **Total items across all files**: 354 todos (44 DB + 120 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 398 work items when including sub-file test counts)
 
 > This is the single navigation document for the entire implementation. Reference individual files for full acceptance criteria, dependencies, and notes on each item.
@@ -13,15 +13,15 @@
 
 ## 1. Summary Table
 
-| File                    | Domain             | Items   | ID Range              | Total Effort | Status                              |
-| ----------------------- | ------------------ | ------- | --------------------- | ------------ | ----------------------------------- |
-| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22/44 DONE (DB-001–DB-022)          |
-| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | ~50/120 DONE (Phase 1 core, 42%)    |
-| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | 14/51 DONE (AI-001–014, 27%)        |
-| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | 0/61 PENDING                        |
-| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | 11/72 DONE (auth/RLS/blur/GDPR)     |
-| `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | 15/50 DONE (migrations+DevOps, 30%) |
-| **Totals**              |                    | **398** |                       | **~1,594h**  | **~112/398 DONE (~28% overall)**    |
+| File                    | Domain             | Items   | ID Range              | Total Effort | Status                                                                           |
+| ----------------------- | ------------------ | ------- | --------------------- | ------------ | -------------------------------------------------------------------------------- |
+| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22/44 DONE (DB-001–DB-022)                                                       |
+| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | ~54/120 DONE (Phase 1 core, 45%)                                                 |
+| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | 22/51 DONE (AI-001–021/032/033/035, 43%)                                         |
+| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | 0/61 PENDING                                                                     |
+| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | 15/72 DONE (auth/RLS/blur/GDPR/memory/cache/routing, 21%)                        |
+| `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | 23/50 DONE (migrations+DevOps+CacheService+ProfileLRU+OrgCtx+GlossaryCache, 46%) |
+| **Totals**              |                    | **398** |                       | **~1,594h**  | **~136/398 DONE (~34% overall)**                                                 |
 
 > Effort estimate: ~1,594 hours total. At 2 engineers full-time = ~100 working days (~20 weeks). Parallelism across domains reduces calendar time significantly.
 
@@ -91,9 +91,9 @@ AI-009 (WorkingMemoryService with agent-scoped keys)
 | P0       | API-001 (JWT v2 middleware)        | All 119 other API endpoints                  |
 | P0       | TEST-002 + TEST-003 (RLS tests)    | Platform may not ship without passing        |
 | P1       | INFRA-009 (Redis namespace) ✅     | All caching                                  |
-| P1       | INFRA-011 (CacheService)           | All cache-dependent features                 |
+| P1       | INFRA-011 (CacheService) ✅        | All cache-dependent features                 |
 | P1       | TEST-015 (screenshot blur)         | Issue reporting may not ship without passing |
-| P1       | AI-035 (GDPR erasure fix)          | GDPR compliance                              |
+| P1       | AI-035 (GDPR erasure fix) ✅       | GDPR compliance                              |
 | P1       | TEST-054 (GDPR test)               | EU tenant deployment                         |
 
 ---
@@ -417,36 +417,36 @@ These items MUST be completed and verified with passing tests before any product
 
 ### Gate 2 — Authentication (BLOCKING all user-facing features)
 
-| Gate Item                                         | Required Test                                      | Status  |
-| ------------------------------------------------- | -------------------------------------------------- | ------- |
-| API-001: JWT v2 validation                        | TEST-001 (15 unit tests, 100% coverage)            | DONE    |
-| INFRA-008: JWT v1/v2 dual acceptance              | TEST-004 (6 integration tests, 100% coverage)      | DONE    |
-| Auth0 integration                                 | TEST-005 (8 integration tests, 100% coverage)      | DONE    |
-| RBAC enforced at query time (not assignment time) | TEST-028 (KB access: "checked at QUERY TIME" case) | DONE    |
+| Gate Item                                         | Required Test                                      | Status |
+| ------------------------------------------------- | -------------------------------------------------- | ------ |
+| API-001: JWT v2 validation                        | TEST-001 (15 unit tests, 100% coverage)            | DONE   |
+| INFRA-008: JWT v1/v2 dual acceptance              | TEST-004 (6 integration tests, 100% coverage)      | DONE   |
+| Auth0 integration                                 | TEST-005 (8 integration tests, 100% coverage)      | DONE   |
+| RBAC enforced at query time (not assignment time) | TEST-028 (KB access: "checked at QUERY TIME" case) | DONE   |
 
 ### Gate 3 — Privacy: Screenshot Blur (BLOCKING issue reporting)
 
-| Gate Item                                                     | Required Test                                                        | Status  |
-| ------------------------------------------------------------- | -------------------------------------------------------------------- | ------- |
-| FE-022: RAG response area blurred by default                  | TEST-015, case: "screenshot without blur metadata flag REJECTED"     | Pending (FE not started) |
+| Gate Item                                                     | Required Test                                                        | Status                               |
+| ------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------ |
+| FE-022: RAG response area blurred by default                  | TEST-015, case: "screenshot without blur metadata flag REJECTED"     | Pending (FE not started)             |
 | INFRA-019: Server-side blur pipeline — unblurred never stored | TEST-015, case: "unblurred screenshot never persisted"               | DONE (INFRA-019 + TEST-015 complete) |
-| API-013: blur_acknowledged validation                         | TEST-015, case: "API request with blur_acknowledged: false REJECTED" | DONE (API-013 complete)  |
+| API-013: blur_acknowledged validation                         | TEST-015, case: "API request with blur_acknowledged: false REJECTED" | DONE (API-013 complete)              |
 
 ### Gate 4 — GDPR Erasure (BLOCKING EU tenant deployment)
 
-| Gate Item                                                                   | Required Test                                         | Status  |
-| --------------------------------------------------------------------------- | ----------------------------------------------------- | ------- |
-| AI-035: clear_profile_data() includes WorkingMemoryService.clear_memory()   | TEST-054, case: "GDPR clear — working memory deleted" | DONE    |
-| AI-023: 200-char memory note limit enforced server-side                     | TEST-050, case: "200-char limit rejection"            | DONE    |
-| API-047: User delete anonymizes conversations + clears Redis working memory | TEST-054 (comprehensive GDPR test)                    | DONE    |
+| Gate Item                                                                   | Required Test                                         | Status |
+| --------------------------------------------------------------------------- | ----------------------------------------------------- | ------ |
+| AI-035: clear_profile_data() includes WorkingMemoryService.clear_memory()   | TEST-054, case: "GDPR clear — working memory deleted" | DONE   |
+| AI-023: 200-char memory note limit enforced server-side                     | TEST-050, case: "200-char limit rejection"            | DONE   |
+| API-047: User delete anonymizes conversations + clears Redis working memory | TEST-054 (comprehensive GDPR test)                    | DONE   |
 
 ### Gate 5 — Glossary Injection Security (BLOCKING glossary feature)
 
-| Gate Item                                                                 | Required Test                          | Status  |
-| ------------------------------------------------------------------------- | -------------------------------------- | ------- |
-| API-058: Glossary definition sanitized before injection                   | TEST-030 (8 unit tests, 100% coverage) | DONE    |
-| AI-028: Layer 6 removed from SystemPromptBuilder                          | TEST-033 (4 integration tests)         | DONE    |
-| Glossary terms cap: max 20 terms, 200 chars/definition, 800-token ceiling | TEST-029, canonical spec cases         | DONE    |
+| Gate Item                                                                 | Required Test                          | Status |
+| ------------------------------------------------------------------------- | -------------------------------------- | ------ |
+| API-058: Glossary definition sanitized before injection                   | TEST-030 (8 unit tests, 100% coverage) | DONE   |
+| AI-028: Layer 6 removed from SystemPromptBuilder                          | TEST-033 (4 integration tests)         | DONE   |
+| Glossary terms cap: max 20 terms, 200 chars/definition, 800-token ceiling | TEST-029, canonical spec cases         | DONE   |
 
 ### Gate 6 — Credentials and Secrets
 

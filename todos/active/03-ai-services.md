@@ -251,8 +251,9 @@
 
 ## Org Context Service
 
-### AI-016: OrgContextData Pydantic model
+### AI-016: OrgContextData Pydantic model ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 1h
 **Depends on**: none
 **Description**: Define the normalized data model for organizational context attributes extracted from SSO providers.
@@ -265,8 +266,9 @@
 - [ ] Handles all-None optional fields gracefully (outputs company-only context)
       **Notes**: Actual aihub2 usage was ~70 tokens, well under 500 budget. We budget 100 tokens for this layer.
 
-### AI-017: OrgContextSource abstract interface
+### AI-017: OrgContextSource abstract interface ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 2h
 **Depends on**: AI-016
 **Description**: Define the abstract interface that all SSO-specific org context sources must implement.
@@ -279,8 +281,9 @@
 - [ ] Cache invalidated on login event (new JWT received)
       **Notes**: Redis cache is mandatory for all sources to shield upstream rate limits (especially Auth0 Management API).
 
-### AI-018: Auth0OrgContextSource implementation
+### AI-018: Auth0OrgContextSource implementation ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 4h
 **Depends on**: AI-017
 **Description**: Implement Auth0-specific org context source. JWT-first approach: parse claims from the access token. If claims are incomplete, fall back to Auth0 Management API.
@@ -296,8 +299,9 @@
 - [ ] Cache invalidated when new JWT received (login event)
       **Notes**: Replaces aihub2's Azure AD-specific implementation. Auth0 is the primary SSO provider for mingai.
 
-### AI-019: OktaOrgContextSource implementation
+### AI-019: OktaOrgContextSource implementation ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 2h
 **Depends on**: AI-017
 **Description**: Implement Okta org context source as a valid zero-data class. All fields return None except company (extracted from JWT). Full Okta API integration deferred to Phase 2.
@@ -310,8 +314,9 @@
 - [ ] No Okta API calls made in Phase 1
       **Notes**: Per no-stubs rule, this is a valid implementation that returns correct zero-data. It is NOT a placeholder.
 
-### AI-020: GenericSAMLOrgContextSource implementation
+### AI-020: GenericSAMLOrgContextSource implementation ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: AI-017
 **Description**: Implement SAML attribute-based org context source. Extracts org context from SAML assertion attributes passed via the identity provider.
@@ -324,8 +329,9 @@
 - [ ] Caches result in Redis (same pattern as other sources)
       **Notes**: Fallback source when tenant uses a non-Auth0/non-Okta SAML provider.
 
-### AI-021: OrgContextService (source selector)
+### AI-021: OrgContextService (source selector) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 2h
 **Depends on**: AI-018, AI-019, AI-020
 **Description**: Service that selects the appropriate org context source based on the tenant's SSO configuration and builds the Layer 2 prompt text.
@@ -511,6 +517,7 @@
 
 ### AI-032: SystemPromptBuilder with 6-layer architecture ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 6h
 **Depends on**: AI-009, AI-013, AI-021, AI-023
 **Description**: Implement `SystemPromptBuilder` that assembles the system prompt from 6 layers. All layer data fetched in parallel via `asyncio.gather()`.
@@ -528,8 +535,9 @@
 - [ ] Each layer returns empty string if data unavailable (graceful degradation)
       **Notes**: Layer 5 (RAG) budget = total_budget - sum(Layer 0-4b actual usage). RAG context is NEVER truncated by the memory system.
 
-### AI-033: Token budget enforcement and truncation priority
+### AI-033: Token budget enforcement and truncation priority ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 4h
 **Depends on**: AI-032
 **Description**: Implement token budget enforcement with a defined truncation priority order when the total system prompt exceeds the configured budget.
@@ -556,8 +564,9 @@
 - [ ] SSE metadata includes list of active layers for debugging (dev mode only)
       **Notes**: Enables user transparency about personalization. Required by Plan 08 Sprint 6.
 
-### AI-035: GDPR clear_profile_data comprehensive erasure
+### AI-035: GDPR clear_profile_data comprehensive erasure ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: AI-002, AI-009, AI-023
 **Description**: Implement `clear_profile_data(user_id, tenant_id)` that wipes ALL user memory data across all stores. Fixes the aihub2 bug where working memory persisted after erasure.

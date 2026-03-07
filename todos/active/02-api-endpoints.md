@@ -977,8 +977,9 @@
 
 ---
 
-### API-050: Connect SharePoint
+### API-050: Connect SharePoint ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 8h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/admin/integrations/sharepoint/connect
@@ -998,8 +999,9 @@
 
 ---
 
-### API-051: Test SharePoint connection
+### API-051: Test SharePoint connection ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-050
 **Method + Path**: POST /api/v1/admin/integrations/sharepoint/test
@@ -1056,8 +1058,9 @@
 
 ---
 
-### API-054: Manual sync trigger
+### API-054: Manual sync trigger ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-050, API-052
 **Method + Path**: POST /api/v1/admin/sync/trigger
@@ -1075,8 +1078,9 @@
 
 ---
 
-### API-055: Sync status
+### API-055: Sync status ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-054
 **Method + Path**: GET /api/v1/admin/sync/status
@@ -1931,6 +1935,7 @@
 
 ### API-100: Update privacy preferences ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 3h
 **Depends on**: API-099
 **Method + Path**: PATCH /api/v1/me/preferences
@@ -1988,6 +1993,7 @@
 
 ### API-103: Clear all memory notes (GDPR) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 2h
 **Depends on**: API-101
 **Method + Path**: DELETE /api/v1/me/memory
@@ -2006,6 +2012,7 @@
 
 ### API-104: Export profile data (GDPR) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 4h
 **Depends on**: API-099, API-101
 **Method + Path**: GET /api/v1/me/data-export
@@ -2025,6 +2032,7 @@
 
 ### API-105: Clear all profile data (GDPR erasure) ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 4h
 **Depends on**: API-099, API-101
 **Method + Path**: DELETE /api/v1/me/data
