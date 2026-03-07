@@ -8,7 +8,7 @@ interface IssueSeverityBadgeProps {
 }
 
 const SEVERITY_STYLES: Record<IssueSeverity, string> = {
-  P0: "bg-[rgb(255,53,71,0.1)] text-[#FF3547] border-[rgb(255,53,71,0.3)]",
+  P0: "bg-p0-dim text-p0 border-p0-ring",
   P1: "bg-alert-dim text-alert border-alert-ring",
   P2: "bg-warn-dim text-warn border-warn-ring",
   P3: "bg-bg-elevated text-text-muted border-border",

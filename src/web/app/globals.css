@@ -14,6 +14,9 @@
   --accent: #4fffb0;
   --accent-dim: rgba(79, 255, 176, 0.08);
   --accent-ring: rgba(79, 255, 176, 0.28);
+  --p0: #ff3547; /* P0/critical severity — distinct from alert (P1 orange) */
+  --p0-dim: rgba(255, 53, 71, 0.08);
+  --p0-ring: rgba(255, 53, 71, 0.28);
   --alert: #ff6b35;
   --alert-dim: rgba(255, 107, 53, 0.08);
   --alert-ring: rgba(255, 107, 53, 0.28);

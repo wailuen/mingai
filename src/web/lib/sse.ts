@@ -43,6 +43,8 @@ export async function* streamChat(
 ): AsyncGenerator<SSEEvent> {
   const token = getStoredToken();
 
+  // fetch() used directly: SSE streaming requires ReadableStream access which
+  // apiRequest() in @/lib/api cannot provide (it always resolves .json())
   const response = await fetch(`${API_URL}/api/v1/chat/stream`, {
     method: "POST",
     headers: {

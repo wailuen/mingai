@@ -130,6 +130,7 @@ export function useExportGlossary() {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
+      // fetch() used directly: apiGet() calls .json() and cannot handle binary blobs
       const res = await fetch(`${API_URL}/api/v1/glossary/export`, {
         headers,
       });
@@ -161,6 +162,8 @@ export function useImportGlossary() {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
+      // fetch() used directly: apiPost() hardcodes Content-Type: application/json
+      // and cannot send multipart/form-data (let browser set boundary automatically)
       const res = await fetch(`${API_URL}/api/v1/glossary/import`, {
         method: "POST",
         headers,
