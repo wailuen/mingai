@@ -172,13 +172,20 @@ async def create_issue_db(
     )
     await db.commit()
 
-    # Trigger blur pipeline if screenshot is attached
+    # Trigger blur pipeline if screenshot is attached (INFRA-019)
     if screenshot_url:
+        from app.modules.issues.blur_pipeline import apply_blur_to_uploaded_screenshot
+
+        blur_ok = await apply_blur_to_uploaded_screenshot(
+            blob_url=screenshot_url,
+            content_type="image/png",
+        )
         logger.info(
             "issue_screenshot_attached",
             issue_id=issue_id,
             screenshot_url=screenshot_url,
             blur_acknowledged=blur_acknowledged,
+            blur_applied=blur_ok,
         )
 
     logger.info(
