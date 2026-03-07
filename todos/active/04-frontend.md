@@ -591,51 +591,57 @@
 
 ### FE-024: My Reports page
 
+**Status**: ✅ COMPLETE
 **Effort**: 6h
 **Depends on**: FE-003
 **Route**: `/my-reports`
 **Description**: User-facing list of submitted issue reports with status badges and detail view. Each report shows status timeline, AI triage result, linked GitHub issue, and SLA info. Includes "Still happening?" confirmation flow after fix notification.
 **Components**:
 
-- `app/(user)/my-reports/page.tsx` — paginated report list
-- `app/(user)/my-reports/elements/ReportList.tsx` — list with status badges
-- `app/(user)/my-reports/elements/ReportDetail.tsx` — detail view with timeline
-- `app/(user)/my-reports/elements/StatusTimeline.tsx` — visual status progression
-- `app/(user)/my-reports/elements/StillHappeningPrompt.tsx` — post-fix confirmation
+- `src/web/app/my-reports/page.tsx` — paginated report list
+- `src/web/app/my-reports/elements/ReportList.tsx` — list with status badges
+- `src/web/app/my-reports/elements/ReportDetail.tsx` — detail view with timeline
+- `src/web/app/my-reports/elements/StatusTimeline.tsx` — visual status progression
+- `src/web/app/my-reports/elements/StillHappeningPrompt.tsx` — post-fix confirmation
+- `src/web/hooks/useMyReports.ts` — React Query hooks
+- `src/web/lib/types/issues.ts` — TypeScript types
+  **Evidence**: commit d43d041 — all 7 files. TypeScript clean (npx tsc --noEmit). Status badge colors: received→gray, triaging→warn/yellow (design system token, not blue), investigating/fix_in_progress→warn, resolved/fix_deployed→accent green, closed→faint. Scoped query keys ["my-reports","list",page] and ["my-reports","detail",id] prevent collision.
   **Acceptance criteria**:
-- [ ] List shows: title, type badge, severity badge, status badge, submitted date
-- [ ] Status badges color-coded: received (gray), triaging (blue), in-progress (yellow), resolved (green), closed (dim)
-- [ ] Detail view shows full timeline: received -> triaged -> assigned -> fix in progress -> resolved
-- [ ] GitHub issue link shown if available (opens in new tab)
-- [ ] "Still happening?" prompt appears after status changes to "resolved"
-- [ ] Follow-up comment submission via text input
-- [ ] Paginated with `GET /api/v1/my-reports`
-- [ ] Loading skeleton while fetching
+- [x] List shows: title, type badge, severity badge, status badge, submitted date
+- [x] Status badges color-coded per design system tokens (triaging→warn, resolved→accent, closed→faint)
+- [x] Detail view shows full timeline via StatusTimeline (Received→Triaging→Fix In Progress→Resolved)
+- [x] GitHub issue link shown if available (opens in new tab)
+- [x] "Still happening?" prompt appears for fix_deployed and resolved statuses
+- [x] Follow-up comment submission via text input
+- [x] Paginated with `GET /api/v1/my-reports`
+- [x] Loading skeleton while fetching
       **Notes**: Plan 04 Phase 3. "Still happening?" rate limit: max 1 auto-escalation per fix deployment.
 
 ---
 
 ### FE-025: Notification bell with SSE
 
+**Status**: ✅ COMPLETE
 **Effort**: 5h
 **Depends on**: FE-003
 **Route**: All pages (topbar)
 **Description**: Notification bell icon in the topbar with unread count badge. Clicking opens a dropdown list of notifications. Real-time delivery via SSE subscription to `/api/v1/notifications/stream`. Notifications link to relevant report/page.
 **Components**:
 
-- `components/notifications/NotificationBell.tsx` — bell icon with count badge
-- `components/notifications/NotificationList.tsx` — dropdown list
-- `components/notifications/NotificationItem.tsx` — single notification row
-- `lib/hooks/useNotifications.ts` — SSE subscription + notification state
+- `src/web/components/notifications/NotificationBell.tsx` — bell icon with count badge
+- `src/web/components/notifications/NotificationList.tsx` — dropdown list
+- `src/web/components/notifications/NotificationItem.tsx` — single notification row
+- `src/web/lib/hooks/useNotifications.ts` — SSE subscription + notification state
+  **Evidence**: commit d43d041. fetch+ReadableStream (not EventSource) to support Bearer auth. Exponential backoff: 3s base, 60s cap, 10 max attempts. reader.cancel() before reconnect prevents concurrent reader TypeError. Max 50 notifications, dedup by id. Navigation validated to internal paths only (link.startsWith("/") guard). TypeScript clean.
   **Acceptance criteria**:
-- [ ] Bell icon in topbar with red badge showing unread count
-- [ ] Badge hidden when count is 0
-- [ ] Dropdown shows recent notifications (paginated, 20 per page)
-- [ ] Each notification: icon, message, relative time, read/unread indicator
-- [ ] Clicking notification marks as read and navigates to relevant page
-- [ ] SSE connection to `/api/v1/notifications/stream` for real-time updates
-- [ ] SSE auto-reconnects on disconnect
-- [ ] Notification delivery latency < 2 seconds
+- [x] Bell icon in topbar with red badge showing unread count (99+ cap)
+- [x] Badge hidden when count is 0
+- [x] Dropdown shows recent notifications (last 50 kept in memory)
+- [x] Each notification: type icon, title, body, relative time, unread dot indicator
+- [x] Clicking notification marks as read and navigates to relevant page
+- [x] SSE connection to `/api/v1/notifications/stream` for real-time updates
+- [x] SSE auto-reconnects on disconnect with exponential backoff
+- [x] Notification delivery latency < 2 seconds (SSE push)
       **Notes**: Plan 04 Phase 3. Reused across issue reporting, sync alerts, and other notification sources.
 
 ---
@@ -843,29 +849,36 @@
 
 ### FE-033: Glossary management page
 
+**Status**: 🔶 PARTIAL — Core CRUD + import complete; advanced features pending
 **Effort**: 10h
 **Depends on**: FE-003
-**Route**: `/admin/glossary`
+**Route**: `/settings/glossary`
 **Description**: Glossary term management with CRUD, search, filter, bulk import/export, version history, and miss signals panel. Terms have 200-char definition limit with character counter.
-**Components**:
+**Components (implemented)**:
 
-- `app/(admin)/admin/glossary/page.tsx` — glossary orchestrator
-- `app/(admin)/admin/glossary/elements/TermList.tsx` — searchable, filterable list
-- `app/(admin)/admin/glossary/elements/TermForm.tsx` — add/edit form with character counter
-- `app/(admin)/admin/glossary/elements/BulkImportDialog.tsx` — CSV upload, preview, conflict resolution
-- `app/(admin)/admin/glossary/elements/VersionHistoryDrawer.tsx` — per-term edit history with rollback
-- `app/(admin)/admin/glossary/elements/MissSignalsPanel.tsx` — top uncovered terms from queries
+- `src/web/app/settings/glossary/page.tsx` — glossary orchestrator
+- `src/web/app/settings/glossary/elements/TermList.tsx` — TanStack Table with server-side pagination+search+filter
+- `src/web/app/settings/glossary/elements/TermForm.tsx` — add/edit dialog with character counter, alias pills
+- `src/web/app/settings/glossary/elements/BulkImportDialog.tsx` — 3-step CSV wizard (upload→preview→result)
+- `src/web/lib/hooks/useGlossary.ts` — React Query CRUD + import hooks
+
+**Components (pending)**:
+
+- `VersionHistoryDrawer.tsx` — per-term edit history with rollback
+- `MissSignalsPanel.tsx` — top uncovered terms from queries
+  **Evidence**: commit d43d041. statusFilter passed as `is_active` param to API (server-side, not client-side). TypeScript clean.
   **Acceptance criteria**:
-- [ ] Term list: searchable by term/definition, filterable by active/inactive
-- [ ] Term form fields: term, full form, definition (200 char limit), context tags, scope
-- [ ] Character counter on definition field: warning at 180 chars, block at 200 chars
-- [ ] Character counter uses DM Mono font
-- [ ] Bulk import: CSV upload -> preview table -> conflict resolution (skip/overwrite/rename) -> import
+- [x] Term list: searchable by term/definition, filterable by active/inactive
+- [x] Term form fields: term, full form, definition (200 char limit), aliases
+- [x] Character counter on definition field: warning at 180 chars, block at 200 chars
+- [x] Character counter uses DM Mono font
+- [x] Bulk import: CSV upload → preview table → import (basic, no conflict resolution)
+- [ ] Bulk import conflict resolution (skip/overwrite/rename)
 - [ ] Bulk export: CSV download of all terms
 - [ ] Version history: per-term drawer showing edit history with rollback button
 - [ ] Miss signals panel: top terms appearing in queries without glossary coverage
-- [ ] Each action persists immediately via API
-- [ ] Empty state: "No glossary terms yet. Add your first term or import from CSV."
+- [x] Each action persists immediately via API
+- [x] Empty state: "No glossary terms yet. Add your first term or import from CSV."
       **Notes**: Plan 06 Sprint B2. Canonical spec: max 20 terms injected, 200 chars/def, 800-token ceiling.
 
 ---

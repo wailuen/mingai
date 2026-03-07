@@ -347,3 +347,233 @@ class TestQueryTruncation:
         assert (
             len(anon_query) <= 121
         ), f"Anonymized query too long: {len(anon_query)} chars"
+
+
+class TestUpdateValidation:
+    """update() must validate required parameters."""
+
+    @pytest.mark.asyncio
+    async def test_update_requires_team_id(self):
+        """update() raises ValueError when team_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="team_id"):
+            await service.update(team_id="", tenant_id="t1", query="q", response="r")
+
+    @pytest.mark.asyncio
+    async def test_update_requires_tenant_id(self):
+        """update() raises ValueError when tenant_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="tenant_id"):
+            await service.update(
+                team_id="team-1", tenant_id="", query="q", response="r"
+            )
+
+
+class TestGetValidation:
+    """get() must validate required parameters."""
+
+    @pytest.mark.asyncio
+    async def test_get_requires_team_id(self):
+        """get() raises ValueError when team_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="team_id"):
+            await service.get(team_id="", tenant_id="t1")
+
+    @pytest.mark.asyncio
+    async def test_get_requires_tenant_id(self):
+        """get() raises ValueError when tenant_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="tenant_id"):
+            await service.get(team_id="team-1", tenant_id="")
+
+    @pytest.mark.asyncio
+    async def test_get_returns_existing_data(self):
+        """get() returns stored topics and queries from Redis."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        mock_redis = AsyncMock()
+        stored = {
+            "topics": ["refund", "billing"],
+            "recent_queries": ["a team member asked: how to refund?"],
+        }
+        mock_redis.get = AsyncMock(return_value=json.dumps(stored))
+
+        service = TeamWorkingMemoryService(redis=mock_redis)
+        result = await service.get(team_id="team-1", tenant_id="t1")
+
+        assert result["topics"] == ["refund", "billing"]
+        assert len(result["recent_queries_anonymous"]) == 1
+
+
+class TestGetForPromptValidation:
+    """get_for_prompt() must validate required parameters."""
+
+    @pytest.mark.asyncio
+    async def test_get_for_prompt_requires_team_id(self):
+        """get_for_prompt() raises ValueError when team_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="team_id"):
+            await service.get_for_prompt(team_id="", tenant_id="t1")
+
+    @pytest.mark.asyncio
+    async def test_get_for_prompt_requires_tenant_id(self):
+        """get_for_prompt() raises ValueError when tenant_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="tenant_id"):
+            await service.get_for_prompt(team_id="team-1", tenant_id="")
+
+    @pytest.mark.asyncio
+    async def test_get_for_prompt_returns_data_when_topics_only(self):
+        """get_for_prompt() returns data when topics exist even with no queries."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        mock_redis = AsyncMock()
+        stored = {"topics": ["billing"], "recent_queries": []}
+        mock_redis.get = AsyncMock(return_value=json.dumps(stored))
+
+        service = TeamWorkingMemoryService(redis=mock_redis)
+        result = await service.get_for_prompt(team_id="team-1", tenant_id="t1")
+        assert result is not None
+        assert result["topics"] == ["billing"]
+
+    @pytest.mark.asyncio
+    async def test_get_for_prompt_returns_none_when_both_empty(self):
+        """get_for_prompt() returns None when topics and queries are both empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        mock_redis = AsyncMock()
+        stored = {"topics": [], "recent_queries": []}
+        mock_redis.get = AsyncMock(return_value=json.dumps(stored))
+
+        service = TeamWorkingMemoryService(redis=mock_redis)
+        result = await service.get_for_prompt(team_id="team-1", tenant_id="t1")
+        assert result is None
+
+
+class TestClearValidation:
+    """clear() must validate required parameters."""
+
+    @pytest.mark.asyncio
+    async def test_clear_requires_team_id(self):
+        """clear() raises ValueError when team_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="team_id"):
+            await service.clear(team_id="", tenant_id="t1")
+
+    @pytest.mark.asyncio
+    async def test_clear_requires_tenant_id(self):
+        """clear() raises ValueError when tenant_id is empty."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        with pytest.raises(ValueError, match="tenant_id"):
+            await service.clear(team_id="team-1", tenant_id="")
+
+
+class TestTeamIsolation:
+    """Different teams must have different Redis keys."""
+
+    @pytest.mark.asyncio
+    async def test_different_teams_use_different_keys(self):
+        """team-1 and team-2 must have distinct Redis keys."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        key1 = service._redis_key("t1", "team-1")
+        key2 = service._redis_key("t1", "team-2")
+        assert key1 != key2
+        assert "team-1" in key1
+        assert "team-2" in key2
+
+    @pytest.mark.asyncio
+    async def test_different_tenants_use_different_keys(self):
+        """Same team-id under different tenants must have distinct keys."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        key1 = service._redis_key("tenant-a", "team-1")
+        key2 = service._redis_key("tenant-b", "team-1")
+        assert key1 != key2
+        assert "tenant-a" in key1
+        assert "tenant-b" in key2
+
+
+class TestTopicExtraction:
+    """_extract_topics_from_query must filter stopwords and cap at 3."""
+
+    def test_extract_topics_filters_stopwords(self):
+        """Common stopwords must not appear in extracted topics."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        topics = service._extract_topics_from_query("what is the policy about refunds")
+        assert "about" not in topics
+        assert "what" not in topics
+
+    def test_extract_topics_caps_at_three(self):
+        """At most 3 topics extracted per query."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        # This query has many long words
+        topics = service._extract_topics_from_query(
+            "enterprise contracts billing invoices refunds escalations policies"
+        )
+        assert len(topics) <= 3
+
+    def test_extract_topics_empty_query_returns_empty(self):
+        """Empty query returns empty list."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        service = TeamWorkingMemoryService(redis=AsyncMock())
+        topics = service._extract_topics_from_query("")
+        assert topics == []
+
+
+class TestQueriesAppendOrder:
+    """Newest queries should be kept when capping."""
+
+    @pytest.mark.asyncio
+    async def test_newest_query_present_after_cap(self):
+        """After cap, the newest query must always be present."""
+        from app.modules.memory.team_working_memory import TeamWorkingMemoryService
+
+        mock_redis = AsyncMock()
+        existing = {
+            "topics": [],
+            "recent_queries": [
+                "a team member asked: q1",
+                "a team member asked: q2",
+                "a team member asked: q3",
+                "a team member asked: q4",
+                "a team member asked: q5",
+            ],
+        }
+        mock_redis.get = AsyncMock(return_value=json.dumps(existing))
+        mock_redis.setex = AsyncMock()
+
+        service = TeamWorkingMemoryService(redis=mock_redis)
+        await service.update(
+            team_id="team-1",
+            tenant_id="t1",
+            query="newest query here",
+            response="response",
+        )
+
+        stored = json.loads(mock_redis.setex.call_args[0][2])
+        newest = stored["recent_queries"][-1]
+        assert "newest query here" in newest
