@@ -19,12 +19,14 @@ export interface JWTClaims {
  */
 export function getStoredToken(): string | null {
   if (typeof document === "undefined") return null;
-  return (
-    document.cookie
+  return (() => {
+    const row = document.cookie
       .split("; ")
-      .find((row) => row.startsWith("access_token="))
-      ?.split("=")[1] ?? null
-  );
+      .find((r) => r.startsWith("access_token="));
+    if (!row) return null;
+    // Use substring to preserve any '=' padding characters in the JWT value
+    return row.substring("access_token=".length);
+  })();
 }
 
 export function decodeToken(token: string): JWTClaims {

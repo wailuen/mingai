@@ -130,3 +130,84 @@ export function useCreateTenant() {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Tenant detail (GET /api/v1/platform/tenants/:id)
+// ---------------------------------------------------------------------------
+
+export function useTenantDetail(id: string | null) {
+  return useQuery({
+    queryKey: ["platform-tenant-detail", id],
+    queryFn: () => apiGet<Tenant>(`/api/v1/platform/tenants/${id}`),
+    enabled: !!id,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tenant quota (GET /api/v1/platform/tenants/:id/quota)
+// ---------------------------------------------------------------------------
+
+export interface TenantQuotaResponse {
+  tenant_id: string;
+  tokens: {
+    limit: number;
+    used: number;
+    period: string;
+  };
+  storage_gb: {
+    limit: number;
+  };
+  users: {
+    limit: number;
+    used: number;
+  };
+}
+
+export function useTenantQuota(tenantId: string | null) {
+  return useQuery({
+    queryKey: ["platform-tenant-quota", tenantId],
+    queryFn: () =>
+      apiGet<TenantQuotaResponse>(`/api/v1/platform/tenants/${tenantId}/quota`),
+    enabled: !!tenantId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Update tenant status (suspend / activate)
+// ---------------------------------------------------------------------------
+
+export function useSuspendTenant() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tenantId: string) =>
+      apiPost<{ id: string; status: string }>(
+        `/api/v1/platform/tenants/${tenantId}/suspend`,
+        {},
+      ),
+    onSuccess: (_data, tenantId) => {
+      queryClient.invalidateQueries({
+        queryKey: ["platform-tenant-detail", tenantId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["platform-tenants"] });
+    },
+  });
+}
+
+export function useActivateTenant() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tenantId: string) =>
+      apiPost<{ id: string; status: string }>(
+        `/api/v1/platform/tenants/${tenantId}/activate`,
+        {},
+      ),
+    onSuccess: (_data, tenantId) => {
+      queryClient.invalidateQueries({
+        queryKey: ["platform-tenant-detail", tenantId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["platform-tenants"] });
+    },
+  });
+}
