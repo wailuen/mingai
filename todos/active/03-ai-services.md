@@ -356,7 +356,7 @@
 
 ## Memory Notes Service
 
-### AI-023: Memory notes CRUD service
+### AI-023: Memory notes CRUD service ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: memory_notes DataFlow model
@@ -408,7 +408,7 @@
 
 ## Glossary Expander
 
-### AI-026: GlossaryExpander.expand() core implementation
+### AI-026: GlossaryExpander.expand() core implementation ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: glossary_terms table and Redis cache (existing infrastructure)
@@ -425,7 +425,7 @@
 - [ ] Max 10 expansions per query
       **Notes**: Reads glossary terms from Redis cache `{tenant_id}:glossary:terms` (already populated by glossary CRUD service).
 
-### AI-027: Glossary stop-word exclusion and uppercase rule
+### AI-027: Glossary stop-word exclusion and uppercase rule ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: AI-026
@@ -438,7 +438,7 @@
 - [ ] Both rules apply before any expansion logic
       **Notes**: Prevents "it" -> "Information Technology" false positive, which was a known issue in early glossary designs.
 
-### AI-028: Glossary pipeline integration
+### AI-028: Glossary pipeline integration ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: AI-026, AI-027
@@ -509,7 +509,7 @@
 
 ## System Prompt Builder
 
-### AI-032: SystemPromptBuilder with 6-layer architecture
+### AI-032: SystemPromptBuilder with 6-layer architecture ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: AI-009, AI-013, AI-021, AI-023

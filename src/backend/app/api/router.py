@@ -57,3 +57,8 @@ router.include_router(platform_router)
 from app.modules.admin.workspace import router as admin_workspace_router
 
 router.include_router(admin_workspace_router)
+
+# SharePoint document integration endpoints (API-050 to API-055)
+from app.modules.documents.sharepoint import router as sharepoint_router
+
+router.include_router(sharepoint_router)

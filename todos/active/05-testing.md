@@ -10,7 +10,7 @@
 
 ## Plan 01+02 — Core Platform Migration
 
-### TEST-001: JWT v2 validation middleware — unit tests
+### TEST-001: JWT v2 validation middleware — unit tests ✅ COMPLETED
 
 **Effort**: 4h
 **Test tier**: Unit
@@ -37,7 +37,7 @@
 - [ ] Null/empty Authorization header — returns 401
       **Notes**: Mocking Auth0 JWKS endpoint is allowed in unit tier. Use `python-jose` or `PyJWT` test helpers to forge tokens with known keys.
 
-### TEST-002: Multi-tenant RLS enforcement — unit tests
+### TEST-002: Multi-tenant RLS enforcement — unit tests ✅ COMPLETED
 
 **Effort**: 6h
 **Test tier**: Unit
@@ -69,7 +69,7 @@
 - [ ] RLS on audit_log table — tenant-scoped
       **Notes**: Use SQLAlchemy session events to inject tenant_id. Test with real PostgreSQL in integration tier (TEST-003). Unit tests may use SQLite with manual tenant filtering to validate ORM-level enforcement.
 
-### TEST-003: Cross-tenant isolation — integration tests
+### TEST-003: Cross-tenant isolation — integration tests ✅ COMPLETED
 
 **Effort**: 8h
 **Test tier**: Integration
@@ -93,7 +93,7 @@
 - [ ] Tenant suspension blocks ALL data access (auth returns 403)
       **Notes**: Requires real PostgreSQL with RLS policies applied via Alembic migration. Create two test tenants with known data. This is the single most important security test suite in the platform.
 
-### TEST-004: JWT v1-to-v2 dual-acceptance window — integration tests
+### TEST-004: JWT v1-to-v2 dual-acceptance window — integration tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Integration
@@ -111,7 +111,7 @@
 - [ ] JWT v2 continues working after window closes
       **Notes**: Use real Auth0 test tenant. Dual-acceptance controlled by `JWT_V1_ACCEPT=true|false` env var.
 
-### TEST-005: Auth0 integration — integration tests
+### TEST-005: Auth0 integration — integration tests ✅ COMPLETED
 
 **Effort**: 4h
 **Test tier**: Integration
@@ -331,7 +331,7 @@
 - [ ] Classification confidence below threshold — routes to human review
       **Notes**: LLM classification may be mocked in unit tier (Tier 1 allows mocking).
 
-### TEST-015: Screenshot blur enforcement — unit tests
+### TEST-015: Screenshot blur enforcement — unit tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Unit
@@ -602,7 +602,7 @@
 - [ ] Network timeout on discovery — fallback to cached config
       **Notes**: OIDC discovery endpoint may be mocked in unit tier.
 
-### TEST-028: Group-to-role mapping — unit tests
+### TEST-028: Group-to-role mapping — unit tests ✅ COMPLETED
 
 **Effort**: 2h
 **Test tier**: Unit
@@ -622,7 +622,7 @@
 - [ ] Case-insensitive group matching
       **Notes**: Mapping config stored per tenant. JWT claims populated at login.
 
-### TEST-029: Glossary pre-translation pipeline — unit tests
+### TEST-029: Glossary pre-translation pipeline — unit tests ✅ COMPLETED
 
 **Effort**: 8h
 **Test tier**: Unit
@@ -654,7 +654,7 @@
 - [ ] Expansion preserves original query casing
       **Notes**: This is a pure string processing function. No external dependencies needed. Fixtures: glossary term list in `tests/fixtures/glossary_terms.json`.
 
-### TEST-030: Glossary prompt injection sanitization — unit tests
+### TEST-030: Glossary prompt injection sanitization — unit tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Unit
@@ -674,7 +674,7 @@
 - [ ] Batch sanitization: 20 terms processed, all clean
       **Notes**: Canonical spec: max 20 terms, 200 chars/definition, 800-token ceiling for Layer 6.
 
-### TEST-031: Glossary cache with Redis — integration tests
+### TEST-031: Glossary cache with Redis — integration tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Integration
@@ -1197,7 +1197,7 @@
 - [ ] Final prompt is a single string (not a list of messages) for system role
       **Notes**: Test with real token counting (tiktoken). Layer data can be synthetic in unit tier.
 
-### TEST-054: GDPR clear_profile_data() — unit tests
+### TEST-054: GDPR clear_profile_data() — unit tests ✅ COMPLETED
 
 **Effort**: 5h
 **Test tier**: Unit

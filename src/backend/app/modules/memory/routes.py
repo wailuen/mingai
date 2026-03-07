@@ -5,9 +5,13 @@ Endpoints:
 - GET    /memory/notes          — List memory notes
 - POST   /memory/notes          — Create memory note (max 200 chars)
 - DELETE /memory/notes/{id}     — Delete memory note
+- DELETE /memory/notes           — Clear ALL notes for user
+- PATCH  /memory/privacy        — Update privacy preferences
 - GET    /memory/profile        — Get user profile
+- DELETE /memory/profile        — GDPR comprehensive erasure
 - GET    /memory/working        — Get working memory summary
 - DELETE /memory/working        — Clear working memory
+- GET    /memory/export         — Export profile data (GDPR)
 """
 import uuid
 from typing import Optional
@@ -37,6 +41,13 @@ class CreateNoteRequest(BaseModel):
     """POST /api/v1/memory/notes request body."""
 
     content: str = Field(..., min_length=1, max_length=MAX_NOTE_CONTENT_LENGTH)
+
+
+class UpdatePrivacyRequest(BaseModel):
+    """PATCH /api/v1/memory/privacy request body."""
+
+    profile_learning_enabled: bool
+    working_memory_enabled: bool
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +154,126 @@ async def clear_working_memory_data(
     logger.info("working_memory_cleared", user_id=user_id, tenant_id=tenant_id)
 
 
+async def clear_all_notes_db(user_id: str, tenant_id: str, db) -> None:
+    """Delete ALL memory notes for a user within a tenant."""
+    await db.execute(
+        text(
+            "DELETE FROM memory_notes "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    await db.commit()
+    logger.info("memory_notes_cleared_all", user_id=user_id, tenant_id=tenant_id)
+
+
+async def upsert_privacy_settings(
+    user_id: str,
+    tenant_id: str,
+    profile_learning_enabled: bool,
+    working_memory_enabled: bool,
+    db,
+) -> dict:
+    """Upsert user privacy settings (ON CONFLICT update)."""
+    settings_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO user_privacy_settings "
+            "(id, user_id, tenant_id, profile_learning_enabled, working_memory_enabled) "
+            "VALUES (:id, :user_id, :tenant_id, :profile_learning, :working_memory) "
+            "ON CONFLICT (user_id, tenant_id) DO UPDATE SET "
+            "profile_learning_enabled = :profile_learning, "
+            "working_memory_enabled = :working_memory"
+        ),
+        {
+            "id": settings_id,
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "profile_learning": profile_learning_enabled,
+            "working_memory": working_memory_enabled,
+        },
+    )
+    await db.commit()
+    logger.info(
+        "privacy_settings_updated",
+        user_id=user_id,
+        tenant_id=tenant_id,
+        profile_learning_enabled=profile_learning_enabled,
+        working_memory_enabled=working_memory_enabled,
+    )
+    return {
+        "profile_learning_enabled": profile_learning_enabled,
+        "working_memory_enabled": working_memory_enabled,
+    }
+
+
+async def get_privacy_settings(user_id: str, tenant_id: str, db) -> dict:
+    """Get privacy settings for a user, returning defaults if none exist."""
+    result = await db.execute(
+        text(
+            "SELECT profile_learning_enabled, working_memory_enabled "
+            "FROM user_privacy_settings "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        return {
+            "profile_learning_enabled": True,
+            "working_memory_enabled": True,
+        }
+    return {
+        "profile_learning_enabled": row[0],
+        "working_memory_enabled": row[1],
+    }
+
+
+async def gdpr_clear_working_memory(user_id: str, tenant_id: str) -> None:
+    """Clear working memory via WorkingMemoryService (GDPR -- aihub2 bug fix)."""
+    from app.modules.memory.working_memory import WorkingMemoryService
+
+    wm = WorkingMemoryService()
+    await wm.clear_memory(user_id, tenant_id)
+    logger.info("gdpr_working_memory_cleared", user_id=user_id, tenant_id=tenant_id)
+
+
+async def gdpr_clear_profile(user_id: str, tenant_id: str, db) -> None:
+    """Delete profile data from user_profiles table."""
+    await db.execute(
+        text(
+            "DELETE FROM user_profiles "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    await db.commit()
+    logger.info("gdpr_profile_cleared", user_id=user_id, tenant_id=tenant_id)
+
+
+async def gdpr_clear_l1_cache(user_id: str) -> None:
+    """Clear L1 in-process cache for profile learning."""
+    from app.modules.profile.learning import ProfileLearningService
+
+    service = ProfileLearningService()
+    await service.clear_l1_cache(user_id)
+    logger.info("gdpr_l1_cache_cleared", user_id=user_id)
+
+
+async def gdpr_reset_privacy_settings(user_id: str, tenant_id: str, db) -> None:
+    """Soft-delete privacy settings by resetting to defaults (keep row)."""
+    await db.execute(
+        text(
+            "UPDATE user_privacy_settings "
+            "SET profile_learning_enabled = true, working_memory_enabled = true "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    await db.commit()
+    logger.info("gdpr_privacy_settings_reset", user_id=user_id, tenant_id=tenant_id)
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
@@ -194,6 +325,20 @@ async def create_memory_note(
         db=session,
     )
     return result
+
+
+@router.delete("/notes", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_all_notes(
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-103: Clear ALL memory notes for the current user."""
+    await clear_all_notes_db(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+    return None
 
 
 @router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -258,5 +403,107 @@ async def clear_working_memory(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         db=session,
+    )
+    return None
+
+
+@router.patch("/privacy")
+async def update_privacy_settings(
+    request: UpdatePrivacyRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-100: Update user privacy preferences."""
+    result = await upsert_privacy_settings(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        profile_learning_enabled=request.profile_learning_enabled,
+        working_memory_enabled=request.working_memory_enabled,
+        db=session,
+    )
+    return result
+
+
+@router.get("/export")
+async def export_profile_data(
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-104: Export all user profile data (GDPR data portability)."""
+    profile = await get_profile_data(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+    notes = await list_notes_db(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+    working_memory = await get_working_memory_data(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        agent_id="default",
+        db=session,
+    )
+    privacy_settings = await get_privacy_settings(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+    return {
+        "profile": profile,
+        "notes": notes,
+        "working_memory": working_memory,
+        "privacy_settings": privacy_settings,
+    }
+
+
+@router.delete("/profile", status_code=status.HTTP_204_NO_CONTENT)
+async def gdpr_erase_profile(
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-105: GDPR comprehensive erasure.
+
+    Clears all user data: notes, working memory, profile, L1 cache,
+    and resets privacy settings to defaults.
+    CRITICAL: This fixes the aihub2 bug where working memory was NOT cleared.
+    """
+    # 1. Clear memory notes
+    await clear_all_notes_db(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+
+    # 2. Clear working memory (aihub2 bug fix -- this was missing)
+    await gdpr_clear_working_memory(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
+
+    # 3. Clear profile data
+    await gdpr_clear_profile(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+
+    # 4. Clear L1 in-process cache
+    await gdpr_clear_l1_cache(user_id=current_user.id)
+
+    # 5. Soft-delete privacy settings (reset to defaults)
+    await gdpr_reset_privacy_settings(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+
+    logger.info(
+        "gdpr_erasure_complete",
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
     return None

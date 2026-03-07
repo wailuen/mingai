@@ -147,7 +147,7 @@
 
 ## Plan 01 — Chat & SSE
 
-### API-008: Chat stream
+### API-008: Chat stream ✅ COMPLETED
 
 **Effort**: 16h
 **Depends on**: API-001, API-007
@@ -176,7 +176,7 @@
 
 ---
 
-### API-009: List conversations
+### API-009: List conversations ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -195,7 +195,7 @@
 
 ---
 
-### API-010: Create conversation
+### API-010: Create conversation ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -213,7 +213,7 @@
 
 ---
 
-### API-011: Get conversation messages
+### API-011: Get conversation messages ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -860,7 +860,7 @@
 
 ---
 
-### API-044: Bulk invite users
+### API-044: Bulk invite users ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-043
@@ -880,7 +880,7 @@
 
 ---
 
-### API-045: Change user role
+### API-045: Change user role ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -899,7 +899,7 @@
 
 ---
 
-### API-046: Update user status
+### API-046: Update user status ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -919,7 +919,7 @@
 
 ---
 
-### API-047: Delete user
+### API-047: Delete user ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -941,7 +941,7 @@
 
 ---
 
-### API-048: Get workspace settings
+### API-048: Get workspace settings ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -958,7 +958,7 @@
 
 ---
 
-### API-049: Update workspace settings
+### API-049: Update workspace settings ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-048
@@ -1113,7 +1113,7 @@
 
 ---
 
-### API-057: List glossary terms
+### API-057: List glossary terms ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1131,7 +1131,7 @@
 
 ---
 
-### API-058: Add glossary term
+### API-058: Add glossary term ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-057
@@ -1151,7 +1151,7 @@
 
 ---
 
-### API-059: Update glossary term
+### API-059: Update glossary term ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-058
@@ -1170,7 +1170,7 @@
 
 ---
 
-### API-060: Delete glossary term
+### API-060: Delete glossary term ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-058
@@ -1189,7 +1189,7 @@
 
 ---
 
-### API-061: Bulk import glossary
+### API-061: Bulk import glossary ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-058
@@ -1510,7 +1510,7 @@
 
 ---
 
-### API-078: List teams
+### API-078: List teams ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1528,7 +1528,7 @@
 
 ---
 
-### API-079: Create team
+### API-079: Create team ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-078
@@ -1546,7 +1546,7 @@
 
 ---
 
-### API-080: Update team
+### API-080: Update team ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-079
@@ -1563,7 +1563,7 @@
 
 ---
 
-### API-081: Delete team
+### API-081: Delete team ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-079
@@ -1583,7 +1583,7 @@
 
 ---
 
-### API-082: List team members
+### API-082: List team members ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-078
@@ -1600,7 +1600,7 @@
 
 ---
 
-### API-083: Add team member
+### API-083: Add team member ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-082
@@ -1618,7 +1618,7 @@
 
 ---
 
-### API-084: Remove team member
+### API-084: Remove team member ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-083
@@ -1636,7 +1636,7 @@
 
 ---
 
-### API-085: Team membership audit log
+### API-085: Team membership audit log ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-078
@@ -1910,7 +1910,7 @@
 
 ## Plan 08 — Profile & Memory
 
-### API-099: Get user profile
+### API-099: Get user profile ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1929,7 +1929,7 @@
 
 ---
 
-### API-100: Update privacy preferences
+### API-100: Update privacy preferences ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-099
@@ -1948,7 +1948,7 @@
 
 ---
 
-### API-101: List memory notes
+### API-101: List memory notes ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1968,7 +1968,7 @@
 
 ---
 
-### API-102: Delete single memory note
+### API-102: Delete single memory note ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-101
@@ -1986,7 +1986,7 @@
 
 ---
 
-### API-103: Clear all memory notes (GDPR)
+### API-103: Clear all memory notes (GDPR) ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-101
@@ -2004,7 +2004,7 @@
 
 ---
 
-### API-104: Export profile data (GDPR)
+### API-104: Export profile data (GDPR) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-099, API-101
@@ -2023,7 +2023,7 @@
 
 ---
 
-### API-105: Clear all profile data (GDPR erasure)
+### API-105: Clear all profile data (GDPR erasure) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-099, API-101
@@ -2142,7 +2142,7 @@
 
 ## Plan 10 — Teams Collaboration
 
-### API-111: Set active team for chat session
+### API-111: Set active team for chat session ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-078

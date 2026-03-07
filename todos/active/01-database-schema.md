@@ -8,7 +8,7 @@
 
 ## Plan 01+02: Core Multi-Tenant Migration
 
-### TODO DB-001: Create `tenants` table via Alembic migration
+### TODO DB-001: Create `tenants` table via Alembic migration ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: none
@@ -23,7 +23,7 @@
 
 ---
 
-### TODO DB-002: Create `tenant_configs` table via Alembic migration
+### TODO DB-002: Create `tenant_configs` table via Alembic migration ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: DB-001
@@ -38,7 +38,7 @@
 
 ---
 
-### TODO DB-003: Add `tenant_id` column to all 19 existing tables
+### TODO DB-003: Add `tenant_id` column to all 19 existing tables ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: DB-001
@@ -54,7 +54,7 @@
 
 ---
 
-### TODO DB-004: Backfill `tenant_id = 'default'` on all existing rows
+### TODO DB-004: Backfill `tenant_id = 'default'` on all existing rows ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: DB-003
@@ -69,7 +69,7 @@
 
 ---
 
-### TODO DB-005: Enable Row-Level Security on all 22 tables
+### TODO DB-005: Enable Row-Level Security on all 22 tables ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: DB-004
@@ -86,7 +86,7 @@
 
 ---
 
-### TODO DB-006: Create `user_feedback` table
+### TODO DB-006: Create `user_feedback` table ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: DB-001
@@ -101,7 +101,7 @@
 
 ---
 
-### TODO DB-007: Create `platform_members` table and seed platform roles
+### TODO DB-007: Create `platform_members` table and seed platform roles ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: DB-003
@@ -118,7 +118,7 @@
 
 ---
 
-### TODO DB-008: Create `token_blocklist` table for JWT migration
+### TODO DB-008: Create `token_blocklist` table for JWT migration ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: DB-001
@@ -133,7 +133,7 @@
 
 ---
 
-### TODO DB-009: Partition `messages` table by month
+### TODO DB-009: Partition `messages` table by month ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: DB-003
@@ -150,7 +150,7 @@
 
 ---
 
-### TODO DB-010: Partition `events` table by month
+### TODO DB-010: Partition `events` table by month ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: DB-003
@@ -165,7 +165,7 @@
 
 ---
 
-### TODO DB-011: Partition `profile_learning_events` table by month
+### TODO DB-011: Partition `profile_learning_events` table by month ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: DB-003
@@ -180,7 +180,7 @@
 
 ---
 
-### TODO DB-012: Redis key namespace migration
+### TODO DB-012: Redis key namespace migration ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: DB-001
@@ -197,7 +197,7 @@
 
 ---
 
-### TODO DB-013: Redis key structure for LLM config cache
+### TODO DB-013: Redis key structure for LLM config cache ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: DB-002, DB-012
@@ -215,7 +215,7 @@
 
 ## Plan 02: LLM Library & Usage Tracking
 
-### TODO DB-014: Create `llm_library` table for platform LLM catalog
+### TODO DB-014: Create `llm_library` table for platform LLM catalog ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: DB-001
@@ -231,7 +231,7 @@
 
 ---
 
-### TODO DB-015: Create `usage_events` table for token tracking
+### TODO DB-015: Create `usage_events` table for token tracking ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: DB-001
@@ -249,7 +249,7 @@
 
 ## Plan 03: Caching
 
-### TODO DB-016: Enable pgvector extension on PostgreSQL
+### TODO DB-016: Enable pgvector extension on PostgreSQL ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: none
@@ -263,7 +263,7 @@
 
 ---
 
-### TODO DB-017: Create `semantic_cache` table with HNSW index
+### TODO DB-017: Create `semantic_cache` table with HNSW index ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: DB-016, DB-001
@@ -280,7 +280,7 @@
 
 ---
 
-### TODO DB-018: Create `index_versions` table for cache invalidation
+### TODO DB-018: Create `index_versions` table for cache invalidation ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: DB-001
@@ -294,7 +294,7 @@
 
 ---
 
-### TODO DB-019: Redis caching layer — foundation caches (Phase C1)
+### TODO DB-019: Redis caching layer — foundation caches (Phase C1) ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: DB-012
@@ -313,7 +313,7 @@
 
 ---
 
-### TODO DB-020: Redis caching layer — pipeline caches (Phase C2)
+### TODO DB-020: Redis caching layer — pipeline caches (Phase C2) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: DB-019
@@ -330,7 +330,7 @@
 
 ## Plan 04: Issue Reporting
 
-### TODO DB-021: Create `issue_reports` table
+### TODO DB-021: Create `issue_reports` table ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: DB-001
@@ -346,7 +346,7 @@
 
 ---
 
-### TODO DB-022: Create `issue_events` table
+### TODO DB-022: Create `issue_events` table ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: DB-021

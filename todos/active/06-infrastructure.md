@@ -122,7 +122,7 @@
 - [ ] Integration test: v1 token sets `app.tenant_id = 'default'` on DB connection
       **Notes**: See migration plan Section 2 for exact token structures.
 
-### INFRA-009: Redis key namespace migration
+### INFRA-009: Redis key namespace migration ✅ COMPLETED
 
 **Effort**: 5h
 **Depends on**: INFRA-008
