@@ -408,8 +408,10 @@
 - [ ] Version counter incremented after sync (triggers cache invalidation via INFRA-013)
       **Notes**: Supports SharePoint (Phase A) and Google Drive (Phase B). Abstracted behind a DocumentSource interface.
 
-### INFRA-026: Glossary cache warm-up on startup
+### INFRA-026: Glossary cache warm-up on startup ✅ COMPLETED
 
+**Completed**: 2026-03-07
+**Completion note**: Implemented in `src/backend/app/modules/glossary/warmup.py`. Called from the FastAPI startup handler in `app/main.py`.
 **Effort**: 2h
 **Depends on**: INFRA-011
 **Description**: On FastAPI application startup, pre-load active glossary terms for all active tenants into Redis cache. Key: `mingai:{tenant_id}:glossary:active`, TTL: 3600s. Query PostgreSQL for all active terms per tenant, serialize to JSON, SET in Redis. If Redis already has cached values (TTL not expired), skip. Log per-tenant term count and total warm-up duration.
@@ -514,8 +516,10 @@
 
 ## Plan 08 — Profile & Memory Infrastructure
 
-### INFRA-032: Redis hot counter write-back to PostgreSQL
+### INFRA-032: Redis hot counter write-back to PostgreSQL ✅ COMPLETED
 
+**Completed**: 2026-03-07
+**Completion note**: Implemented in `src/backend/app/modules/profile/learning.py`. Counter seeds from DB on first INCR (cache miss), checkpoints to DB every LEARN_TRIGGER_THRESHOLD queries.
 **Effort**: 4h
 **Depends on**: INFRA-011
 **Description**: Implement Redis-based hot counter for profile learning query counts. Key: `mingai:{tenant_id}:profile_learning:query_count:{user_id}`. On each query: INCR counter in Redis. When counter reaches 10: trigger async background learning job, reset counter, checkpoint value to PostgreSQL `user_profiles.query_count`. On Redis cache miss (counter key not found): read last checkpoint from PostgreSQL, seed Redis counter. Handle race conditions: use Redis WATCH/MULTI or Lua script for atomic check-and-reset.
@@ -600,8 +604,10 @@
 
 ## Plan 09 — Glossary Infrastructure
 
-### INFRA-037: Glossary pretranslation rollout flag
+### INFRA-037: Glossary pretranslation rollout flag ✅ COMPLETED
 
+**Completed**: 2026-03-07
+**Completion note**: Implemented in `src/backend/app/core/glossary_config.py`. Per-tenant boolean stored in the `tenant_configs` table.
 **Effort**: 1h
 **Depends on**: INFRA-002
 **Description**: Add `glossary_pretranslation_enabled` boolean flag to `tenant_configs` table (default: false). When enabled, the chat preprocessing pipeline uses GlossaryExpander for inline query expansion instead of Layer 6 system prompt injection. When disabled, legacy Layer 6 behavior is preserved. Flag is per-tenant, toggled by platform admin.

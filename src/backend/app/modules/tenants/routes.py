@@ -8,9 +8,12 @@ Endpoints:
 - PATCH  /platform/tenants/{id}      — Update tenant
 - POST   /platform/tenants/{id}/suspend  — Suspend tenant
 - POST   /platform/tenants/{id}/activate — Activate tenant
-- GET    /platform/llm-profiles      — List LLM profiles (platform-wide)
-- POST   /platform/llm-profiles      — Create LLM profile for a tenant
-- GET    /platform/stats             — Platform-wide stats
+- GET    /platform/llm-profiles           — List LLM profiles (platform-wide)
+- POST   /platform/llm-profiles           — Create LLM profile for a tenant
+- GET    /platform/llm-profiles/{id}      — Get LLM profile by ID
+- PATCH  /platform/llm-profiles/{id}      — Update LLM profile
+- DELETE /platform/llm-profiles/{id}      — Delete unused LLM profile
+- GET    /platform/stats                  — Platform-wide stats
 
 Schema notes:
 - tenants: id, name, slug (UNIQUE NOT NULL), plan, status, primary_contact_email (NOT NULL)
@@ -25,6 +28,7 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +70,17 @@ class CreateLLMProfileRequest(BaseModel):
     endpoint_url: Optional[str] = Field(None, max_length=500)
     api_key_ref: Optional[str] = Field(None, max_length=500)
     is_default: bool = False
+
+
+class UpdateLLMProfileRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    provider: Optional[str] = Field(None, min_length=1, max_length=100)
+    primary_model: Optional[str] = Field(None, min_length=1, max_length=255)
+    intent_model: Optional[str] = Field(None, min_length=1, max_length=255)
+    embedding_model: Optional[str] = Field(None, min_length=1, max_length=255)
+    endpoint_url: Optional[str] = Field(None, max_length=500)
+    api_key_ref: Optional[str] = Field(None, max_length=500)
+    is_default: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -182,12 +197,17 @@ _TENANT_UPDATE_ALLOWLIST = {"name", "plan", "primary_contact_email", "status"}
 
 
 async def update_tenant_db(tenant_id: str, updates: dict, db) -> Optional[dict]:
-    """Update tenant fields."""
+    """Update tenant fields.
+
+    Column names are sourced only from the allowlist — never from dict keys directly —
+    to structurally prevent SQL injection even if validation is bypassed upstream.
+    """
+    safe_updates = {k: v for k, v in updates.items() if k in _TENANT_UPDATE_ALLOWLIST}
     invalid = set(updates) - _TENANT_UPDATE_ALLOWLIST
     if invalid:
         raise ValueError(f"Invalid tenant update fields: {invalid}")
-    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
-    params = {"id": tenant_id, **updates}
+    set_clauses = ", ".join(f"{col} = :{col}" for col in safe_updates)
+    params = {"id": tenant_id, **safe_updates}
     result = await db.execute(
         text(f"UPDATE tenants SET {set_clauses} WHERE id = :id"),
         params,
@@ -263,7 +283,22 @@ async def create_llm_profile_db(
     is_default: bool,
     db,
 ) -> dict:
-    """Create a new LLM profile for a tenant."""
+    """Create a new LLM profile for a tenant.
+
+    Enforces name uniqueness per tenant — raises ValueError on duplicate.
+    """
+    existing = await db.execute(
+        text(
+            "SELECT id FROM llm_profiles "
+            "WHERE tenant_id = :tenant_id AND name = :name"
+        ),
+        {"tenant_id": tenant_id, "name": name},
+    )
+    if existing.fetchone() is not None:
+        raise ValueError(
+            f"LLM profile with name '{name}' already exists for this tenant"
+        )
+
     profile_id = str(uuid.uuid4())
     await db.execute(
         text(
@@ -294,17 +329,109 @@ async def create_llm_profile_db(
         provider=provider,
         tenant_id=tenant_id,
     )
+    # Re-fetch to return consistent shape with get_llm_profile_db (includes timestamps)
+    return await get_llm_profile_db(profile_id, db)
+
+
+async def get_llm_profile_db(profile_id: str, db) -> Optional[dict]:
+    """Get a single LLM profile by ID."""
+    result = await db.execute(
+        text(
+            "SELECT id, tenant_id, name, provider, primary_model, intent_model, "
+            "embedding_model, endpoint_url, is_default, created_at, updated_at "
+            "FROM llm_profiles WHERE id = :id"
+        ),
+        {"id": profile_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        return None
     return {
-        "id": profile_id,
-        "tenant_id": tenant_id,
-        "name": name,
-        "provider": provider,
-        "primary_model": primary_model,
-        "intent_model": intent_model,
-        "embedding_model": embedding_model,
-        "endpoint_url": endpoint_url,
-        "is_default": is_default,
+        "id": str(row[0]),
+        "tenant_id": str(row[1]),
+        "name": row[2],
+        "provider": row[3],
+        "primary_model": row[4],
+        "intent_model": row[5],
+        "embedding_model": row[6],
+        "endpoint_url": row[7],
+        "is_default": row[8],
+        "created_at": str(row[9]),
+        "updated_at": str(row[10]),
     }
+
+
+_LLM_PROFILE_UPDATE_ALLOWLIST = {
+    "name",
+    "provider",
+    "primary_model",
+    "intent_model",
+    "embedding_model",
+    "endpoint_url",
+    "api_key_ref",
+    "is_default",
+}
+
+
+async def update_llm_profile_db(profile_id: str, updates: dict, db) -> Optional[dict]:
+    """Update LLM profile fields. Returns updated profile or None if not found.
+
+    Column names are sourced only from the allowlist — never from dict keys directly —
+    to structurally prevent SQL injection even if validation is bypassed upstream.
+    """
+    safe_updates = {
+        k: v for k, v in updates.items() if k in _LLM_PROFILE_UPDATE_ALLOWLIST
+    }
+    invalid = set(updates) - _LLM_PROFILE_UPDATE_ALLOWLIST
+    if invalid:
+        raise ValueError(f"Invalid LLM profile update fields: {invalid}")
+    if not safe_updates:
+        raise ValueError("No valid fields to update")
+    set_clauses = ", ".join(f"{col} = :{col}" for col in safe_updates)
+    set_clauses += ", updated_at = NOW()"
+    params = {"id": profile_id, **safe_updates}
+    result = await db.execute(
+        text(f"UPDATE llm_profiles SET {set_clauses} WHERE id = :id"),
+        params,
+    )
+    await db.commit()
+    if (result.rowcount or 0) == 0:
+        return None
+    logger.info("llm_profile_updated", profile_id=profile_id, fields=list(updates))
+    return await get_llm_profile_db(profile_id, db)
+
+
+async def delete_llm_profile_db(profile_id: str, db) -> dict:
+    """
+    Delete an LLM profile.
+
+    Returns {"deleted": True} on success.
+    Raises ValueError if the profile is currently assigned to any tenant
+    (tenants.llm_profile_id = profile_id) — callers convert this to 409.
+    Raises LookupError if the profile_id does not exist.
+    """
+    # Check for active tenant assignments
+    in_use_result = await db.execute(
+        text("SELECT COUNT(*) FROM tenants WHERE llm_profile_id = :id"),
+        {"id": profile_id},
+    )
+    in_use_count = in_use_result.scalar() or 0
+    if in_use_count > 0:
+        raise ValueError(
+            f"LLM profile '{profile_id}' is assigned to {in_use_count} tenant(s). "
+            "Unassign it before deleting."
+        )
+
+    result = await db.execute(
+        text("DELETE FROM llm_profiles WHERE id = :id"),
+        {"id": profile_id},
+    )
+    await db.commit()
+    if (result.rowcount or 0) == 0:
+        raise LookupError(f"LLM profile '{profile_id}' not found")
+
+    logger.info("llm_profile_deleted", profile_id=profile_id)
+    return {"deleted": True, "id": profile_id}
 
 
 async def get_platform_stats_db(db) -> dict:
@@ -461,19 +588,100 @@ async def create_llm_profile(
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """API-031: Create a new LLM profile for a tenant."""
-    result = await create_llm_profile_db(
-        tenant_id=request.tenant_id,
-        name=request.name,
-        provider=request.provider,
-        primary_model=request.primary_model,
-        intent_model=request.intent_model,
-        embedding_model=request.embedding_model,
-        endpoint_url=request.endpoint_url,
-        api_key_ref=request.api_key_ref,
-        is_default=request.is_default,
-        db=session,
+    """API-032: Create a new LLM profile for a tenant.
+
+    Returns 409 Conflict if a profile with the same name already exists for the tenant.
+    """
+    try:
+        result = await create_llm_profile_db(
+            tenant_id=request.tenant_id,
+            name=request.name,
+            provider=request.provider,
+            primary_model=request.primary_model,
+            intent_model=request.intent_model,
+            embedding_model=request.embedding_model,
+            endpoint_url=request.endpoint_url,
+            api_key_ref=request.api_key_ref,
+            is_default=request.is_default,
+            db=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
+    except IntegrityError:
+        # DB-level UNIQUE constraint violation (concurrent creates race)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"An LLM profile with name '{request.name}' already exists "
+                "for this tenant."
+            ),
+        )
+    return result
+
+
+@router.get("/llm-profiles/{profile_id}")
+async def get_llm_profile(
+    profile_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-033: Get a single LLM profile by ID."""
+    result = await get_llm_profile_db(profile_id=profile_id, db=session)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"LLM profile '{profile_id}' not found",
+        )
+    return result
+
+
+@router.patch("/llm-profiles/{profile_id}")
+async def update_llm_profile(
+    profile_id: str,
+    request: UpdateLLMProfileRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-034: Update an LLM profile."""
+    updates = request.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No fields to update",
+        )
+    result = await update_llm_profile_db(
+        profile_id=profile_id, updates=updates, db=session
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"LLM profile '{profile_id}' not found",
+        )
+    return result
+
+
+@router.delete("/llm-profiles/{profile_id}")
+async def delete_llm_profile(
+    profile_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-035: Delete (hard-delete) an unused LLM profile."""
+    try:
+        result = await delete_llm_profile_db(profile_id=profile_id, db=session)
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"LLM profile '{profile_id}' not found",
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
     return result
 
 
@@ -482,6 +690,6 @@ async def get_platform_stats(
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """API-034: Get platform-wide statistics."""
+    """API-036: Get platform-wide statistics."""
     result = await get_platform_stats_db(db=session)
     return result
