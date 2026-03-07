@@ -59,23 +59,28 @@ class FeedbackRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def build_orchestrator(db, redis):
+async def build_orchestrator(db, redis, tenant_id: str):
     """
     Build a ChatOrchestrationService wired with all dependencies.
 
-    All sub-services are constructed here with the request-scoped
-    db session and redis connection.
+    Checks the glossary_pretranslation_enabled rollout flag per tenant.
+    If enabled, uses GlossaryExpander (real inline expansion).
+    If disabled, uses NoopGlossaryExpander (returns original query unchanged).
+
+    All sub-services are constructed with the request-scoped db session
+    and redis connection.
     """
     from app.modules.chat.embedding import EmbeddingService
     from app.modules.chat.orchestrator import ChatOrchestrationService
     from app.modules.chat.persistence import ConversationPersistenceService
     from app.modules.chat.prompt_builder import SystemPromptBuilder
     from app.modules.chat.vector_search import VectorSearchService
-    from app.modules.glossary.expander import GlossaryExpander
+    from app.modules.glossary.expander import GlossaryExpander, NoopGlossaryExpander
     from app.modules.memory.org_context import OrgContextService
     from app.modules.memory.team_working_memory import TeamWorkingMemoryService
     from app.modules.memory.working_memory import WorkingMemoryService
     from app.modules.profile.learning import ProfileLearningService
+    from app.core.glossary_config import is_glossary_pretranslation_enabled
 
     class _ConfidenceCalc:
         def calculate(self, sources: list) -> float:
@@ -83,13 +88,24 @@ def build_orchestrator(db, redis):
                 return 0.0
             return min(1.0, len(sources) * 0.2)
 
+    glossary_enabled = await is_glossary_pretranslation_enabled(tenant_id, db)
+    glossary_expander = (
+        GlossaryExpander(db=db) if glossary_enabled else NoopGlossaryExpander()
+    )
+
+    logger.info(
+        "glossary_pretranslation_flag",
+        tenant_id=tenant_id,
+        enabled=glossary_enabled,
+    )
+
     return ChatOrchestrationService(
         embedding_service=EmbeddingService(),
         vector_search_service=VectorSearchService(),
         profile_service=ProfileLearningService(db_session=db),
         working_memory_service=WorkingMemoryService(),
         org_context_service=OrgContextService(),
-        glossary_expander=GlossaryExpander(db=db),
+        glossary_expander=glossary_expander,
         prompt_builder=SystemPromptBuilder(),
         persistence_service=ConversationPersistenceService(db_session=db),
         confidence_calculator=_ConfidenceCalc(),
@@ -253,7 +269,9 @@ async def stream_chat(
         "plan": current_user.plan,
     }
 
-    orchestrator = build_orchestrator(db=session, redis=None)
+    orchestrator = await build_orchestrator(
+        db=session, redis=None, tenant_id=current_user.tenant_id
+    )
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:

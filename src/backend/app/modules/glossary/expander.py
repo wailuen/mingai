@@ -337,3 +337,22 @@ class GlossaryExpander:
                 error=str(exc),
             )
             return []
+
+
+class NoopGlossaryExpander:
+    """
+    No-op implementation of the glossary expander interface.
+
+    Used when the glossary_pretranslation_enabled rollout flag is False for
+    a tenant. Returns the original query unchanged with an empty expansions
+    list, disabling inline glossary expansion without affecting other pipeline
+    stages.
+    """
+
+    async def expand(
+        self,
+        query: str,
+        tenant_id: str,
+    ) -> tuple[str, list[str]]:
+        """Return the original query unchanged with no expansions."""
+        return query, []

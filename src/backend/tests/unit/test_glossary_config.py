@@ -36,12 +36,12 @@ class TestIsGlossaryPretranslationEnabled:
         mock_db.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_flag_enabled_when_config_is_true_string(self, mock_db):
-        """config_value = 'true' (string) returns True."""
+    async def test_flag_enabled_when_config_data_is_dict_true(self, mock_db):
+        """config_data = {"enabled": True} (JSONB dict from DB) returns True."""
         from app.core.glossary_config import is_glossary_pretranslation_enabled
 
         mock_result = MagicMock()
-        mock_result.fetchone.return_value = ("true",)
+        mock_result.fetchone.return_value = ({"enabled": True},)
         mock_db.execute.return_value = mock_result
 
         result = await is_glossary_pretranslation_enabled("tenant-abc", mock_db)
@@ -88,6 +88,7 @@ class TestIsGlossaryPretranslationEnabled:
     @pytest.mark.asyncio
     async def test_set_flag_upserts_to_db(self, mock_db):
         """set_glossary_pretranslation_enabled() calls DB execute with upsert SQL."""
+        import json
         from app.core.glossary_config import set_glossary_pretranslation_enabled
 
         await set_glossary_pretranslation_enabled("tenant-xyz", True, mock_db)
@@ -98,9 +99,12 @@ class TestIsGlossaryPretranslationEnabled:
         sql_text = str(call_args[0][0])
         assert "INSERT INTO tenant_configs" in sql_text
         assert "ON CONFLICT" in sql_text
-        # Verify parameters include correct tenant_id and value
+        # Verify parameters include correct tenant_id, config_type, and enabled value
         params = call_args[0][1]
         assert params["tenant_id"] == "tenant-xyz"
-        assert params["config_value"] is True
+        assert params["config_type"] == "glossary_pretranslation"
+        # config_data is a JSON string with {"enabled": true}
+        config_data = json.loads(params["config_data"])
+        assert config_data["enabled"] is True
         # Verify commit was called
         mock_db.commit.assert_called_once()
