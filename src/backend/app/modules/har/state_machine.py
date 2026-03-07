@@ -217,6 +217,9 @@ async def record_transition_event(
     head_row = head_result.mappings().first()
     prev_event_hash = head_row["chain_head_hash"] if head_row else None
 
+    # _event_inserted tracks whether create_signed_event already persisted the
+    # event row (signed path). All other paths insert it here.
+    _event_inserted = False
     signature = None
     nonce = None
 
@@ -246,9 +249,12 @@ async def record_transition_event(
                     tenant_id=tenant_id,
                     db=db,
                 )
+                # create_signed_event already INSERTed the event — do not insert again.
+                event_id = signed.get("id", event_id)
                 signature = signed.get("signature")
                 nonce = signed.get("nonce")
                 event_hash = signed.get("event_hash")
+                _event_inserted = True
             except Exception as exc:
                 # Signing failed — fall back to unsigned but log clearly (not silently)
                 logger.warning(
@@ -286,32 +292,34 @@ async def record_transition_event(
             prev_event_hash=prev_event_hash,
         )
 
-    # Insert event — use known tenant_id rather than subselect
-    await db.execute(
-        text(
-            "INSERT INTO har_transaction_events "
-            "(id, tenant_id, transaction_id, event_type, actor_agent_id, actor_user_id, "
-            "payload, signature, nonce, prev_event_hash, event_hash) "
-            "VALUES (:id, :tenant_id, :transaction_id, :event_type, "
-            ":actor_agent_id, :actor_user_id, "
-            "CAST(:payload AS jsonb), :signature, :nonce, :prev_event_hash, :event_hash)"
-        ),
-        {
-            "id": event_id,
-            "tenant_id": tenant_id,
-            "transaction_id": transaction_id,
-            "event_type": "state_transition",
-            "actor_agent_id": actor_agent_id,
-            "actor_user_id": actor_user_id,
-            "payload": json.dumps(event_payload),
-            "signature": signature,
-            "nonce": nonce,
-            "prev_event_hash": prev_event_hash,
-            "event_hash": event_hash,
-        },
-    )
+    if not _event_inserted:
+        # Unsigned / fallback: insert event here (signed path already inserted via create_signed_event)
+        await db.execute(
+            text(
+                "INSERT INTO har_transaction_events "
+                "(id, tenant_id, transaction_id, event_type, actor_agent_id, actor_user_id, "
+                "payload, signature, nonce, prev_event_hash, event_hash) "
+                "VALUES (:id, :tenant_id, :transaction_id, :event_type, "
+                ":actor_agent_id, :actor_user_id, "
+                "CAST(:payload AS jsonb), :signature, :nonce, :prev_event_hash, :event_hash)"
+            ),
+            {
+                "id": event_id,
+                "tenant_id": tenant_id,
+                "transaction_id": transaction_id,
+                "event_type": "state_transition",
+                "actor_agent_id": actor_agent_id,
+                "actor_user_id": actor_user_id,
+                "payload": json.dumps(event_payload),
+                "signature": signature,
+                "nonce": nonce,
+                "prev_event_hash": prev_event_hash,
+                "event_hash": event_hash,
+            },
+        )
 
-    # Update chain head hash — scoped to tenant
+    # Update chain head hash — same transaction as the unsigned INSERT above;
+    # for signed events this is a separate commit after create_signed_event's commit.
     await db.execute(
         text(
             "UPDATE har_transactions SET chain_head_hash = :hash "

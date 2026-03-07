@@ -45,6 +45,10 @@ class AgentHealthMonitor:
                 "low_trust_agents": list[str],  # agent IDs with score < threshold
             }
         """
+        # Intentional cross-tenant batch scan: selects only non-sensitive columns
+        # (id, tenant_id) across all tenants so compute_trust_score() can be
+        # called per-agent with proper tenant scoping. Never add sensitive columns
+        # (system_prompt, public_key, private_key_enc) to this SELECT.
         result = await db.execute(
             text("SELECT id, tenant_id FROM agent_cards WHERE status = 'published'")
         )

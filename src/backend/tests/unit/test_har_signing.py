@@ -178,9 +178,26 @@ class TestCreateSignedEvent:
             db=mock_db,
         )
 
-        # DB execute must have been called (INSERT + SELECT or RETURNING)
-        assert mock_db.execute.call_count >= 1
-        assert mock_db.commit.call_count >= 1
+        # DB execute must have been called (INSERT INTO har_transaction_events)
+        assert (
+            mock_db.execute.call_count >= 1
+        ), "DB execute must be called at least once"
+        assert mock_db.commit.call_count >= 1, "DB commit must be called after INSERT"
+
+        # Verify the INSERT was for har_transaction_events with tenant_id scoping.
+        # TextClause exposes SQL via .text attribute; params are the second positional arg.
+        insert_found = False
+        tenant_scoped = False
+        for call in mock_db.execute.call_args_list:
+            sql_arg = call.args[0] if call.args else None
+            params_arg = call.args[1] if len(call.args) > 1 else (call.kwargs or {})
+            sql_text = getattr(sql_arg, "text", str(sql_arg))
+            if "INSERT INTO har_transaction_events" in sql_text:
+                insert_found = True
+                if TEST_TENANT_ID in str(params_arg):
+                    tenant_scoped = True
+        assert insert_found, "Must INSERT into har_transaction_events"
+        assert tenant_scoped, "INSERT params must include tenant_id for isolation"
 
 
 class TestNonceReplay:
@@ -228,6 +245,11 @@ class TestNonceReplay:
         key = call_kwargs[0][0] if call_kwargs[0] else call_kwargs[1].get("name", "")
         assert TEST_TENANT_ID in key, "Redis key must include tenant_id"
         assert "nonce_ttl" in key, "Redis key must include the nonce value"
+        # Verify TTL and SETNX semantics are enforced
+        assert (
+            call_kwargs.kwargs.get("nx") is True
+        ), "Must use nx=True for SETNX semantics"
+        assert call_kwargs.kwargs.get("ex") == 600, "TTL must be 600 seconds"
 
 
 class TestVerifyEventChain:
