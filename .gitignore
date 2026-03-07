@@ -12,6 +12,7 @@ eggs/
 .eggs/
 lib/
 !scripts/hooks/lib/
+!src/web/lib/
 lib64/
 parts/
 sdist/
