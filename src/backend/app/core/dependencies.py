@@ -87,6 +87,7 @@ async def get_current_user(
         roles=payload.get("roles", []),
         scope=payload.get("scope", "tenant"),
         plan=payload.get("plan", "professional"),
+        email=payload.get("email"),
     )
 
 

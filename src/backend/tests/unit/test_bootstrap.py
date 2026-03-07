@@ -3,6 +3,9 @@ Unit tests for platform admin bootstrap (INFRA-066).
 
 Tests seed data generation and platform bootstrap SQL.
 Tier 1: Fast, isolated, no database required.
+
+generate_bootstrap_sql() returns list[tuple[text_obj, params_dict]].
+Each tuple is (sqlalchemy.text, dict) for safe parameterized execution.
 """
 import os
 from unittest.mock import patch
@@ -14,7 +17,7 @@ class TestBootstrapSQLGeneration:
     """INFRA-066: Platform admin bootstrap SQL tests."""
 
     def test_bootstrap_generates_tenant_insert(self):
-        """Bootstrap generates SQL to insert the default tenant."""
+        """Bootstrap generates parameterized SQL to insert the default tenant."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -23,18 +26,19 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "secure-pass-123",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
         # Should have at least: tenant insert, user insert
-        assert len(sql_statements) >= 2
+        assert len(statements) >= 2
 
-        # First statement should be tenant creation
-        tenant_sql = sql_statements[0]
-        assert "INSERT INTO tenants" in tenant_sql
-        assert "acme-corp" in tenant_sql
+        # First statement is a (text_obj, params_dict) tuple
+        tenant_sql, tenant_params = statements[0]
+        assert "INSERT INTO tenants" in str(tenant_sql)
+        # Tenant name is in the params dict, not interpolated into the SQL
+        assert tenant_params["name"] == "acme-corp"
 
     def test_bootstrap_generates_admin_user_insert(self):
-        """Bootstrap generates SQL to insert the platform admin user."""
+        """Bootstrap generates parameterized SQL to insert the platform admin user."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -43,15 +47,15 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "secure-pass-123",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
-        user_sql = sql_statements[1]
-        assert "INSERT INTO users" in user_sql
-        assert "admin@acme.com" in user_sql
-        assert "platform_admin" in user_sql
+        user_sql, user_params = statements[1]
+        assert "INSERT INTO users" in str(user_sql)
+        assert user_params["email"] == "admin@acme.com"
+        assert user_params["role"] == "platform_admin"
 
     def test_bootstrap_never_includes_raw_password(self):
-        """Password must be hashed - raw password never appears in SQL."""
+        """Password must be hashed - raw password never appears in SQL template or params."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -60,13 +64,16 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "my-secret-password-123",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
-        all_sql = " ".join(sql_statements)
-        assert "my-secret-password-123" not in all_sql
+        # Check neither the SQL templates nor param VALUES contain the raw password
+        for sql_obj, params in statements:
+            assert "my-secret-password-123" not in str(sql_obj)
+            for v in params.values():
+                assert "my-secret-password-123" not in str(v)
 
     def test_bootstrap_password_is_bcrypt_hashed(self):
-        """Password in SQL should be a bcrypt hash."""
+        """Password in params should be a bcrypt hash, not plaintext."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -75,11 +82,13 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "test-password",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
-        user_sql = sql_statements[1]
+        _, user_params = statements[1]
         # bcrypt hashes start with $2b$ or $2a$
-        assert "$2b$" in user_sql or "$2a$" in user_sql
+        assert user_params["password_hash"].startswith("$2b$") or user_params[
+            "password_hash"
+        ].startswith("$2a$")
 
     def test_bootstrap_raises_if_email_missing(self):
         """Bootstrap raises clear error if PLATFORM_ADMIN_EMAIL is not set."""
@@ -121,7 +130,7 @@ class TestBootstrapSQLGeneration:
                 generate_bootstrap_sql()
 
     def test_bootstrap_tenant_has_enterprise_plan(self):
-        """Default tenant should have enterprise plan."""
+        """Default tenant should have enterprise plan in params."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -130,13 +139,13 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "password-123",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
-        tenant_sql = sql_statements[0]
-        assert "enterprise" in tenant_sql
+        _, tenant_params = statements[0]
+        assert tenant_params["plan"] == "enterprise"
 
     def test_bootstrap_tenant_has_active_status(self):
-        """Default tenant should have active status."""
+        """Default tenant should have active status in params."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -145,13 +154,13 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "password-123",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
-        tenant_sql = sql_statements[0]
-        assert "active" in tenant_sql
+        _, tenant_params = statements[0]
+        assert tenant_params["status"] == "active"
 
-    def test_bootstrap_uses_parameterized_values(self):
-        """SQL must use safe string escaping, not f-string interpolation."""
+    def test_bootstrap_uses_parameterized_queries(self):
+        """SQL templates use :param placeholders, not interpolated values — SQL injection proof."""
         from app.core.bootstrap import generate_bootstrap_sql
 
         env = {
@@ -160,12 +169,15 @@ class TestBootstrapSQLGeneration:
             "PLATFORM_ADMIN_PASS": "password",
         }
         with patch.dict(os.environ, env):
-            sql_statements = generate_bootstrap_sql()
+            statements = generate_bootstrap_sql()
 
-        # The tenant name should be safely escaped
-        tenant_sql = sql_statements[0]
-        # Single quotes in the name should be doubled (SQL escaping)
-        assert "DROP TABLE" not in tenant_sql or "''" in tenant_sql
+        tenant_sql, tenant_params = statements[0]
+        # The SQL template must use :param placeholders, not the raw value
+        sql_str = str(tenant_sql)
+        assert ":name" in sql_str
+        assert "DROP TABLE" not in sql_str
+        # The injection attempt is safely stored in params (passed to DB driver, not parsed as SQL)
+        assert tenant_params["name"] == "test'; DROP TABLE tenants;--"
 
 
 class TestSeedDataTemplates:

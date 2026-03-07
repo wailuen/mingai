@@ -60,6 +60,7 @@ class ChatOrchestrationService:
         confidence_calculator,
         team_memory_service=None,
         llm_service=None,
+        db_session=None,
     ):
         self._embedding = embedding_service
         self._vector_search = vector_search_service
@@ -72,6 +73,7 @@ class ChatOrchestrationService:
         self._confidence = confidence_calculator
         self._team_memory = team_memory_service
         self._llm_service = llm_service
+        self._db_session = db_session
 
     async def stream_response(
         self,
@@ -217,6 +219,7 @@ class ChatOrchestrationService:
             working_memory=working_memory_context,
             team_memory=team_memory_context,
             rag_context=search_results,
+            db_session=self._db_session,
         )
 
         logger.info(

@@ -110,6 +110,7 @@ async def build_orchestrator(db, redis, tenant_id: str):
         persistence_service=ConversationPersistenceService(db_session=db),
         confidence_calculator=_ConfidenceCalc(),
         team_memory_service=TeamWorkingMemoryService(),
+        db_session=db,
     )
 
 

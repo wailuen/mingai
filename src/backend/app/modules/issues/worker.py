@@ -110,7 +110,7 @@ async def process_message(
     # Load full issue report from PostgreSQL
     result = await db_session.execute(
         text(
-            "SELECT id, tenant_id, user_id, title, description, screenshot_url, "
+            "SELECT id, tenant_id, reporter_id, issue_type, description, screenshot_url, "
             "status, blur_acknowledged, created_at "
             "FROM issue_reports WHERE id = :id AND tenant_id = :tenant_id"
         ),
@@ -126,8 +126,11 @@ async def process_message(
         )
         return
 
-    title = row[3]
+    issue_type_label = row[3]  # category label (e.g. "bug", "feature")
     description = row[4]
+    # Use the first 200 characters of the description as the title for triage
+    # and GitHub issue creation — the issue_reports table has no separate title column.
+    title = description[:200]
 
     # Feature requests route to product backlog, skip severity classification
     if issue_type == "feature":

@@ -24,5 +24,11 @@ def client():
     """
     from app.main import app
 
-    with TestClient(app, raise_server_exceptions=False) as c:
-        yield c
+    try:
+        with TestClient(app, raise_server_exceptions=False) as c:
+            yield c
+    except RuntimeError as exc:
+        # Suppress "Event loop is closed" during TestClient teardown — known
+        # starlette/asyncio race on session-scoped fixtures.
+        if "event loop is closed" not in str(exc).lower():
+            raise

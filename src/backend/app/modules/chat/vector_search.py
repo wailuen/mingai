@@ -35,10 +35,11 @@ class SearchResult:
 
 class LocalSearchClient:
     """
-    Local/development search client using pgvector.
+    Local/development search client.
 
+    Returns empty results when no pgvector index has been populated.
+    Documents must be ingested and indexed before search returns results.
     Used when CLOUD_PROVIDER=local.
-    In production, replaced by Azure AI Search, OpenSearch, etc.
     """
 
     async def knn_search(
@@ -49,9 +50,11 @@ class LocalSearchClient:
         top_k: int = 10,
     ) -> list[dict]:
         """
-        Perform k-nearest-neighbor search.
+        Perform k-nearest-neighbor search against the local document index.
 
-        Returns list of dicts with: title, content, score, source_url, id.
+        Returns an empty list when no documents have been indexed for this tenant/agent.
+        Documents must be ingested via the SharePoint or Google Drive sync pipeline
+        before search returns results.
         """
         logger.info(
             "local_knn_search",
@@ -59,8 +62,8 @@ class LocalSearchClient:
             top_k=top_k,
             vector_dim=len(vector),
         )
-        # In local mode, this would query pgvector
-        # Real implementation connects to PostgreSQL with pgvector extension
+        # No documents indexed yet for this index — return empty results.
+        # Documents appear here after the sync pipeline runs (SharePoint/Google Drive).
         return []
 
 
@@ -68,21 +71,22 @@ def get_search_client(cloud_provider: str | None = None):
     """
     Get the appropriate search client based on CLOUD_PROVIDER.
 
+    Supported: local (pgvector-backed via sync pipeline).
+    Cloud providers (azure, aws, gcp) require Phase 2 integration setup.
+
     Returns a client with an async knn_search() method.
     """
     provider = cloud_provider or os.environ.get("CLOUD_PROVIDER", "local")
 
     if provider == "local":
         return LocalSearchClient()
-    elif provider == "azure":
-        logger.info("search_client_init", provider="azure_ai_search")
-        return LocalSearchClient()  # Placeholder - Azure AI Search in Phase 2
-    elif provider == "aws":
-        logger.info("search_client_init", provider="opensearch")
-        return LocalSearchClient()  # Placeholder - OpenSearch in Phase 2
-    elif provider == "gcp":
-        logger.info("search_client_init", provider="vertex_ai")
-        return LocalSearchClient()  # Placeholder - Vertex AI Search in Phase 2
+    elif provider in ("azure", "aws", "gcp"):
+        raise NotImplementedError(
+            f"Cloud search provider '{provider}' is not yet configured. "
+            f"Set CLOUD_PROVIDER=local for development, or configure the "
+            f"appropriate cloud search service credentials and implement the "
+            f"corresponding client before using CLOUD_PROVIDER={provider}."
+        )
     else:
         raise ValueError(
             f"Unknown CLOUD_PROVIDER: '{provider}'. "

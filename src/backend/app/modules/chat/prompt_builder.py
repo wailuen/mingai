@@ -45,6 +45,7 @@ class SystemPromptBuilder:
         team_memory: dict | None,
         rag_context: list,
         query_budget: int = 2048,
+        db_session=None,
     ) -> tuple[str, list[str]]:
         """
         Build the complete system prompt from all 6 layers.
@@ -66,8 +67,8 @@ class SystemPromptBuilder:
         layers_active = []
         overhead = 0
 
-        # Layer 0: Agent base prompt (from tenant admin config)
-        agent_prompt = await self._get_agent_prompt(agent_id, tenant_id)
+        # Layer 0: Agent base prompt (from agent_cards table)
+        agent_prompt = await self._get_agent_prompt(agent_id, tenant_id, db_session)
         layers.append(agent_prompt)
 
         # Layer 1: Platform base (universal standards)
@@ -132,18 +133,80 @@ class SystemPromptBuilder:
 
         return "\n\n---\n\n".join(filter(None, layers)), layers_active
 
-    async def _get_agent_prompt(self, agent_id: str, tenant_id: str) -> str:
-        """
-        Load agent's base system prompt from database.
+    _DEFAULT_AGENT_PROMPT = (
+        "You are an AI assistant configured for this workspace. "
+        "Answer questions using the provided knowledge base context."
+    )
 
-        In Phase 1, returns a default prompt.
-        Phase 2: queries agent_cards table.
+    async def _get_agent_prompt(
+        self, agent_id: str, tenant_id: str, db_session=None
+    ) -> str:
         """
-        # Phase 1: will be replaced with DB lookup
-        return (
-            "You are an AI assistant configured for this workspace. "
-            "Answer questions using the provided knowledge base context."
+        Load agent's base system prompt from the agent_cards table.
+
+        Queries agent_cards by agent_id and tenant_id. Returns the configured
+        system_prompt if found and active. Falls back to the default platform
+        prompt if the agent card is not found, the agent_id is not a valid UUID,
+        or no DB session is available.
+        """
+        import uuid as _uuid
+
+        from sqlalchemy import text
+
+        if db_session is None:
+            logger.debug(
+                "agent_prompt_db_unavailable",
+                agent_id=agent_id,
+                reason="no db_session — using default platform prompt",
+            )
+            return self._DEFAULT_AGENT_PROMPT
+
+        # Validate agent_id is a UUID before querying (agent_cards uses UUID PK)
+        try:
+            _uuid.UUID(agent_id)
+        except (ValueError, AttributeError):
+            logger.debug(
+                "agent_prompt_id_not_uuid",
+                agent_id=agent_id,
+                reason="agent_id is not a UUID — using default platform prompt",
+            )
+            return self._DEFAULT_AGENT_PROMPT
+
+        try:
+            result = await db_session.execute(
+                text(
+                    "SELECT system_prompt FROM agent_cards "
+                    "WHERE id = :agent_id AND tenant_id = :tenant_id "
+                    "AND status = 'active' LIMIT 1"
+                ),
+                {"agent_id": agent_id, "tenant_id": tenant_id},
+            )
+            row = result.fetchone()
+        except Exception as exc:
+            logger.warning(
+                "agent_prompt_db_lookup_failed",
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+            return self._DEFAULT_AGENT_PROMPT
+
+        if row is None:
+            logger.debug(
+                "agent_prompt_not_found",
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                reason="no active agent_card found — using default platform prompt",
+            )
+            return self._DEFAULT_AGENT_PROMPT
+
+        logger.info(
+            "agent_prompt_loaded",
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            prompt_length=len(row[0]),
         )
+        return row[0]
 
     def _platform_base(self) -> str:
         """Layer 1: Universal platform standards."""

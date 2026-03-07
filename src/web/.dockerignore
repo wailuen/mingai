@@ -1,0 +1,27 @@
+# Exclude secrets and dev-only files from Docker build context
+.env
+.env.*
+!.env.example
+.env.local
+.env.development
+.env.production
+
+# Build artifacts managed by the Dockerfile stages
+node_modules/
+.next/
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Editor and OS metadata
+.git/
+.gitignore
+.DS_Store
+*.swp
+*.swo
+
+# Development-only docs
+README.md
