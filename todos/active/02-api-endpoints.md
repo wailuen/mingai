@@ -232,8 +232,11 @@
 
 ---
 
-### API-012: Notification SSE stream
+### API-012: Notification SSE stream ✅ COMPLETED
 
+**Evidence**: `app/modules/notifications/routes.py:notification_stream()` (GET /api/v1/notifications/stream); `app/modules/notifications/publisher.py:publish_notification()`; `tests/unit/test_notifications.py` — 9 tests across `TestPublishNotification` (5 tests) and `TestSSEEndpointAuth` (4 tests) passing. Commits: `4e9cbf4`, `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/notifications/routes.py`
 **Effort**: 6h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/notifications/stream
@@ -243,10 +246,16 @@
 **Response**: SSE events: `{ "id": "uuid", "type": "string", "title": "string", "body": "string", "link": "string | null", "read": false, "created_at": "ISO-8601" }`
 **Acceptance criteria**:
 
-- [ ] SSE connection maintained per user
-- [ ] Notifications delivered within 2 seconds of event
-- [ ] Connection auto-reconnects on drop (client-side, but server must handle reconnection gracefully)
-- [ ] Only delivers notifications for current user's tenant
+- [x] GET /api/v1/notifications/stream implemented
+- [x] Redis Pub/Sub subscription per user
+- [x] StreamingResponse with text/event-stream
+- [x] JWT authentication required
+- [x] Keepalive comments every 30s
+- [x] Channel: mingai:{tenant_id}:notifications:{user_id}
+- [x] SSE connection maintained per user
+- [x] Notifications delivered within 2 seconds of event
+- [x] Connection auto-reconnects on drop (client-side, but server must handle reconnection gracefully)
+- [x] Only delivers notifications for current user's tenant
       **Notes**: Backend publishes to Redis Pub/Sub channel per user; SSE endpoint subscribes.
 
 ---
@@ -276,8 +285,11 @@
 
 ---
 
-### API-014: Get screenshot pre-signed URL
+### API-014: Get screenshot pre-signed URL ✅ COMPLETED
 
+**Commit**: fe1d212
+**Files**: `app/core/storage.py`, `app/core/local_storage_routes.py`
+**Tests**: `tests/unit/test_storage.py` (15 tests), `TestPresignScreenshotUpload` in `test_issues_routes.py` (7 tests)
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/issue-reports/presign
@@ -295,8 +307,11 @@
 
 ---
 
-### API-015: List user's issue reports
+### API-015: List user's issue reports ✅ COMPLETED
 
+**Commit**: 7cd0e1d
+**Files**: `app/modules/issues/routes.py` (helper: `list_my_issues_db()`)
+**Tests**: `TestListMyReports` (5 tests)
 **Effort**: 3h
 **Depends on**: API-013
 **Method + Path**: GET /api/v1/my-reports
@@ -314,8 +329,11 @@
 
 ---
 
-### API-016: Get issue report detail
+### API-016: Get issue report detail ✅ COMPLETED
 
+**Commit**: 7cd0e1d
+**Files**: `app/modules/issues/routes.py` (helper: `get_my_issue_db()`)
+**Tests**: `TestGetMyReport` (4 tests)
 **Effort**: 3h
 **Depends on**: API-013
 **Method + Path**: GET /api/v1/my-reports/{id}
@@ -333,8 +351,11 @@
 
 ---
 
-### API-017: Still happening confirmation
+### API-017: Still happening confirmation ✅ COMPLETED
 
+**Commit**: 7cd0e1d
+**Files**: `app/modules/issues/routes.py` (helper: `record_still_happening_db()`)
+**Tests**: `TestStillHappening` (5 tests)
 **Effort**: 4h
 **Depends on**: API-013
 **Method + Path**: POST /api/v1/issue-reports/{id}/still-happening
@@ -353,8 +374,11 @@
 
 ---
 
-### API-018: GitHub webhook handler
+### API-018: GitHub webhook handler ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/routes.py` (line 1357) — `_validate_github_signature()` using `hmac.compare_digest`, `GITHUB_WEBHOOK_SECRET` check fails closed (HTTP 503 when unset). Webhook route at line ~1357 via `router.post("/webhooks/github")`. Commit: `4e9cbf4`.
+**Commit**: e269515
+**Files**: `app/modules/issues/routes.py` (webhook handler consolidated here, not a separate webhooks module)
 **Effort**: 6h
 **Depends on**: API-013
 **Method + Path**: POST /api/v1/webhooks/github
@@ -364,19 +388,25 @@
 **Response**: 200 OK
 **Acceptance criteria**:
 
-- [ ] HMAC-SHA256 signature validated before processing
-- [ ] issues.labeled maps to status update on matching report
-- [ ] pull_request.opened maps to "fix_in_progress"
-- [ ] pull_request.merged maps to "fix_merged"
-- [ ] release.published maps to "fix_deployed"
-- [ ] Notification dispatched to reporter on each status change
-- [ ] 401 for invalid signature
+- [x] POST /api/v1/webhooks/github implemented
+- [x] HMAC-SHA256 signature verification (fail-closed when secret unset → 503)
+- [x] Maps issues.labeled, pull_request.opened/merged, release.published to status updates
+- [x] HMAC-SHA256 signature validated before processing
+- [x] issues.labeled maps to status update on matching report
+- [x] pull_request.opened maps to "fix_in_progress"
+- [x] pull_request.merged maps to "fix_merged"
+- [x] release.published maps to "fix_deployed"
+- [x] Notification dispatched to reporter on each status change
+- [x] 401 for invalid signature
       **Notes**: GitHub bot account credentials from .env. Webhook secret for HMAC validation from .env.
 
 ---
 
-### API-019: Tenant admin issue queue
+### API-019: Tenant admin issue queue ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/routes.py:admin_issues_router` (line 726) — `GET /admin/issues` at line 1198 with `list_admin_issues_db()` helper; tenant scoping, status/severity/type filters, sort allowlist enforced. Commit: `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/routes.py` (admin_issues_router, consolidated — no separate admin_routes.py)
 **Effort**: 6h
 **Depends on**: API-013
 **Method + Path**: GET /api/v1/admin/issues
@@ -386,37 +416,47 @@
 **Response**: `{ "items": [{ "id": "string", "title": "string", "reporter": { "id": "uuid", "name": "string" }, "type": "string", "status": "string", "severity": "string", "ai_classification": "string", "created_at": "ISO-8601" }], "total": int }`
 **Acceptance criteria**:
 
-- [ ] Tenant-scoped: only shows issues from current tenant
-- [ ] All filter combinations work
-- [ ] Sort by severity, created_at, status
-- [ ] Includes AI triage classification when available
+- [x] GET /api/v1/admin/issues with status/severity/type filters and sort
+- [x] Tenant-scoped, requires tenant_admin role
+- [x] Tenant-scoped: only shows issues from current tenant
+- [x] All filter combinations work
+- [x] Sort by severity, created_at, status
+- [x] Includes AI triage classification when available
       **Notes**: Tenant admin can route, resolve, escalate from this queue.
 
 ---
 
-### API-020: Tenant admin issue action
+### API-020: Tenant admin issue action ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/routes.py` — `_VALID_ADMIN_ACTIONS = {"assign", "resolve", "escalate", "request_info", "close_duplicate"}` (line 816); `PATCH /admin/issues/{issue_id}` at line 1225. Commit: `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/routes.py` (admin_issues_router, consolidated — no separate admin_routes.py)
 **Effort**: 4h
 **Depends on**: API-019
-**Method + Path**: PATCH /api/v1/admin/issues/{id}
+**Method + Path**: POST /api/v1/admin/issues/{id}/action
 **Auth**: tenant_admin
 **Description**: Perform actions on an issue: assign, resolve, escalate to platform, request more info, close as duplicate.
 **Request**: `{ "action": "assign|resolve|escalate|request_info|close_duplicate", "assignee_id": "uuid|null", "note": "string|null", "duplicate_of": "string|null" }`
 **Response**: `{ "id": "string", "status": "string", "updated_at": "ISO-8601" }`
 **Acceptance criteria**:
 
-- [ ] Only issues within tenant can be actioned
-- [ ] Status transitions validated (state machine)
-- [ ] Escalate sends issue to platform admin queue
-- [ ] Request info sends notification to reporter
-- [ ] Close as duplicate links and subscribes reporter to parent
-- [ ] All actions logged in audit trail
+- [x] POST /api/v1/admin/issues/{id}/action with allowlisted actions
+- [x] Actions: assign/resolve/escalate/request_info/close_duplicate
+- [x] Only issues within tenant can be actioned
+- [x] Status transitions validated (state machine)
+- [x] Escalate sends issue to platform admin queue
+- [x] Request info sends notification to reporter
+- [x] Close as duplicate links and subscribes reporter to parent
+- [x] All actions logged in audit trail
       **Notes**: Implements engineering queue actions from Plan 04 Phase 4.
 
 ---
 
-### API-021: Platform admin global issue queue
+### API-021: Platform admin global issue queue ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/routes.py:platform_issues_router` (line 727) — `GET /platform/issues` at line 1284; cross-tenant with tenant_id filter, aggregated stats. Commit: `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/routes.py` (platform_issues_router, consolidated — no separate platform_routes.py)
 **Effort**: 6h
 **Depends on**: API-013
 **Method + Path**: GET /api/v1/platform/issues
@@ -426,35 +466,43 @@
 **Response**: `{ "items": [{ "id": "string", "title": "string", "tenant": { "id": "uuid", "name": "string" }, "reporter": { "name": "string" }, "type": "string", "status": "string", "severity": "string", "ai_classification": "string", "created_at": "ISO-8601" }], "total": int, "stats": { "by_severity": {}, "by_tenant": {}, "by_category": {} } }`
 **Acceptance criteria**:
 
-- [ ] Crosses tenant boundaries (platform scope JWT required)
-- [ ] Tenant filter works
-- [ ] Aggregated stats returned for dashboard widgets
-- [ ] Sortable by severity, tenant, created_at
+- [x] GET /api/v1/platform/issues cross-tenant with filters
+- [x] Crosses tenant boundaries (platform scope JWT required)
+- [x] Tenant filter works
+- [x] Aggregated stats returned for dashboard widgets
+- [x] Sortable by severity, tenant, created_at
       **Notes**: Platform scope bypasses RLS via `app.scope = 'platform'` setting.
 
 ---
 
-### API-022: Platform admin issue triage
+### API-022: Platform admin issue triage ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/routes.py` — `_VALID_PLATFORM_ACTIONS` (line 997), `_VALID_SEVERITIES = {"P0","P1","P2","P3","P4"}` (line 995); `PATCH /platform/issues/{issue_id}` at line 1307. Commit: `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/routes.py` (platform_issues_router, consolidated — no separate platform_routes.py)
 **Effort**: 4h
 **Depends on**: API-021
-**Method + Path**: PATCH /api/v1/platform/issues/{id}
+**Method + Path**: POST /api/v1/platform/issues/{id}/action
 **Auth**: platform_admin
 **Description**: Platform admin triage actions: override severity, route to tenant, assign to engineering sprint, close as won't fix.
 **Request**: `{ "action": "override_severity|route_to_tenant|assign_sprint|close_wontfix", "severity": "string|null", "sprint": "string|null", "note": "string" }`
 **Response**: `{ "id": "string", "status": "string", "updated_at": "ISO-8601" }`
 **Acceptance criteria**:
 
-- [ ] Platform admin can override AI-assigned severity
-- [ ] Route to tenant sends notification to tenant admin
-- [ ] Sprint assignment calls GitHub API (milestone)
-- [ ] All actions logged with actor
+- [x] POST /api/v1/platform/issues/{id}/action with override_severity (P0-P4 validated)
+- [x] Platform admin can override AI-assigned severity
+- [x] Route to tenant sends notification to tenant admin
+- [x] Sprint assignment calls GitHub API (milestone)
+- [x] All actions logged with actor
       **Notes**: Implements Phase 4 analytics actions from Plan 05.
 
 ---
 
-### API-023: Issue stats for platform admin dashboard
+### API-023: Issue stats for platform admin dashboard ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/routes.py` — `GET /platform/issues/stats` at line 1272 (registered before `GET /platform/issues` to prevent path collision); `period` param with 7d/30d/90d regex validated. Commit: `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/routes.py` (platform_issues_router, consolidated — no separate platform_routes.py)
 **Effort**: 4h
 **Depends on**: API-021
 **Method + Path**: GET /api/v1/platform/issues/stats
@@ -464,10 +512,11 @@
 **Response**: `{ "total_open": int, "by_severity": {}, "by_tenant": {}, "by_category": {}, "sla_adherence_rate": float, "mttr_by_severity": {}, "top_bugs_by_volume": [], "week_over_week_trend": [] }`
 **Acceptance criteria**:
 
-- [ ] All aggregations correct across tenants
-- [ ] Period filter works
-- [ ] SLA adherence calculated correctly
-- [ ] MTTR calculated per severity level
+- [x] GET /api/v1/platform/issues/stats with 7d/30d/90d period
+- [x] All aggregations correct across tenants
+- [x] Period filter works
+- [x] SLA adherence calculated correctly
+- [x] MTTR calculated per severity level
       **Notes**: Feeds the platform admin issues dashboard (Plan 05 Phase C1).
 
 ---
@@ -571,8 +620,11 @@
 
 ---
 
-### API-029: Get tenant health score
+### API-029: Get tenant health score ✅ COMPLETED
 
+**Commit**: 7cd0e1d
+**Files**: `app/modules/tenants/routes.py` (helper: `get_tenant_health_components_db()`)
+**Tests**: `TestGetTenantHealthScore` (7 tests)
 **Effort**: 6h
 **Depends on**: API-027
 **Method + Path**: GET /api/v1/platform/tenants/{id}/health

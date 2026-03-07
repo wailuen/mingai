@@ -251,35 +251,50 @@
 
 ## Plan 04 — Issue Reporting Infrastructure
 
-### INFRA-017: Redis Stream setup for issue reports
+### INFRA-017: Redis Stream setup for issue reports ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/stream.py` — `STREAM_KEY = "issue_reports:incoming"`, `CONSUMER_GROUP = "issue_triage_workers"`, `STREAM_MAX_LEN = 10_000`, `ensure_stream_group()`, `publish_issue_to_stream()`; `tests/unit/test_issue_stream.py` — 11 tests across `TestStreamConstants` (3), `TestEnsureStreamGroup` (3), `TestPublishIssueToStream` (3), `TestProcessMessageFeatureType` (1), `TestProcessMessageBugType` (1). Commits: `4e9cbf4`, `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/stream.py`
 **Effort**: 2h
 **Depends on**: INFRA-009
 **Description**: Create Redis Stream key `issue_reports:incoming` with a consumer group `issue_triage_workers`. Configure stream max length to 10,000 entries (trim oldest). Document the message schema: `{report_id, tenant_id, type, severity_hint, timestamp}`. Implement stream producer in the issue intake endpoint (`POST /api/v1/issue-reports`) that XADDs to the stream after persisting to PostgreSQL.
 **Acceptance criteria**:
 
-- [ ] Redis Stream `issue_reports:incoming` created
-- [ ] Consumer group `issue_triage_workers` created
-- [ ] Stream max length enforced at 10,000
-- [ ] Intake endpoint successfully writes to stream
-- [ ] Message schema validated before XADD
+- [x] Stream key issue_reports:incoming
+- [x] Consumer group issue_triage_workers
+- [x] MAXLEN 10,000 configured
+- [x] Producer in app/modules/issues/stream.py
+- [x] Redis Stream `issue_reports:incoming` created
+- [x] Consumer group `issue_triage_workers` created
+- [x] Stream max length enforced at 10,000
+- [x] Intake endpoint successfully writes to stream
+- [x] Message schema validated before XADD
       **Notes**: Stream consumer (INFRA-018) reads from this stream.
 
-### INFRA-018: Issue triage background worker (Redis Stream consumer)
+### INFRA-018: Issue triage background worker (Redis Stream consumer) ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/worker.py` — `run_triage_worker()`, `process_message()`, `reclaim_abandoned_messages()`; XREADGROUP consumer with `block=5000`; `_MAX_RETRIES = 3`, `_BASE_BACKOFF_SECONDS = 2` exponential backoff; `_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000` XCLAIM for idle >5min messages; XACK on success; GitHub issue creation for P0/P1 via `create_github_issue()`. Commits: `4e9cbf4`, `e269515`.
+**Commit**: e269515
+**Files**: `app/modules/issues/worker.py`
 **Effort**: 8h
 **Depends on**: INFRA-017
 **Description**: Implement async background worker that reads from `issue_reports:incoming` Redis Stream using XREADGROUP. On each message: load full issue report from PostgreSQL, invoke IssueTriageAgent (Kaizen agent) for severity classification and duplicate detection, update issue report status in PostgreSQL, create GitHub issue via GitHub API if classification warrants it. Handle consumer failures with XCLAIM for abandoned messages (visibility timeout: 5 minutes). Acknowledge messages after successful processing.
 **Acceptance criteria**:
 
-- [ ] Worker reads from stream using consumer group
-- [ ] IssueTriageAgent invoked for each report
-- [ ] Issue report status updated after triage
-- [ ] GitHub issue created for non-duplicate bug reports
-- [ ] Abandoned messages reclaimed after 5-minute timeout
-- [ ] Messages ACKed after successful processing
-- [ ] Worker handles IssueTriageAgent failures gracefully (retry with backoff)
-- [ ] Feature request type routed to product backlog channel, not bug triage
+- [x] XREADGROUP consumer in app/modules/issues/worker.py
+- [x] IssueTriageAgent invocation with 3-retry exponential backoff
+- [x] XCLAIM for abandoned messages (idle >5min)
+- [x] XACK after successful processing
+- [x] Optional GitHub issue creation for P0/P1
+- [x] Worker reads from stream using consumer group
+- [x] IssueTriageAgent invoked for each report
+- [x] Issue report status updated after triage
+- [x] GitHub issue created for non-duplicate bug reports
+- [x] Abandoned messages reclaimed after 5-minute timeout
+- [x] Messages ACKed after successful processing
+- [x] Worker handles IssueTriageAgent failures gracefully (retry with backoff)
+- [x] Feature request type routed to product backlog channel, not bug triage
       **Notes**: Feature requests (`type=feature`) skip severity classification and route to product backlog.
 
 ### INFRA-019: Screenshot blur service
