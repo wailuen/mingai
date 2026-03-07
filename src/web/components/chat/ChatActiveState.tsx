@@ -7,6 +7,8 @@ import { FeedbackWidget } from "./FeedbackWidget";
 import { ConfidenceBar } from "./ConfidenceBar";
 import { GlossaryExpansionIndicator } from "./GlossaryExpansionIndicator";
 import { ProfileIndicator } from "./ProfileIndicator";
+import { TeamContextBadge } from "./TeamContextBadge";
+import { CacheStateChip } from "./CacheStateChip";
 import { Loader2, FileText } from "lucide-react";
 
 interface ChatActiveStateProps {
@@ -21,6 +23,12 @@ interface ChatActiveStateProps {
   onSend: (message: string, mode: string) => void;
   onViewSources?: () => void;
   currentMode?: string;
+  /** FE-010: Team name for team context badge */
+  teamName?: string | null;
+  /** FE-014: Whether the last response was a cache hit */
+  cacheHit?: boolean;
+  /** FE-014: Age in seconds of the cached response */
+  cacheAgeSeconds?: number | null;
 }
 
 /**
@@ -39,6 +47,9 @@ export function ChatActiveState({
   onSend,
   onViewSources,
   currentMode = "auto",
+  teamName,
+  cacheHit,
+  cacheAgeSeconds,
 }: ChatActiveStateProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +102,11 @@ export function ChatActiveState({
                   layersActive={idx === messages.length - 1 ? layersActive : []}
                   onViewSources={onViewSources}
                   currentMode={currentMode}
+                  teamName={idx === messages.length - 1 ? teamName : null}
+                  cacheHit={idx === messages.length - 1 ? cacheHit : undefined}
+                  cacheAgeSeconds={
+                    idx === messages.length - 1 ? cacheAgeSeconds : null
+                  }
                 />
               )}
             </div>
@@ -149,6 +165,9 @@ function AIMessage({
   layersActive,
   onViewSources,
   currentMode = "auto",
+  teamName,
+  cacheHit,
+  cacheAgeSeconds,
 }: {
   message: ChatMessage;
   isStreaming: boolean;
@@ -159,6 +178,9 @@ function AIMessage({
   layersActive: string[];
   onViewSources?: () => void;
   currentMode?: string;
+  teamName?: string | null;
+  cacheHit?: boolean;
+  cacheAgeSeconds?: number | null;
 }) {
   const hasSources = (message.sources?.length ?? 0) > 0;
   const modeLabel = currentMode === "auto" ? "AUTO" : currentMode.toUpperCase();
@@ -175,8 +197,15 @@ function AIMessage({
         )}
       </div>
 
-      {/* Profile indicator */}
-      {profileContextUsed && <ProfileIndicator layersActive={layersActive} />}
+      {/* Profile indicator + team context badge */}
+      {(profileContextUsed || teamName) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {profileContextUsed && (
+            <ProfileIndicator layersActive={layersActive} />
+          )}
+          <TeamContextBadge teamName={teamName ?? null} visible={!!teamName} />
+        </div>
+      )}
 
       {/* Status indicator (while streaming) */}
       {statusMessage && (
@@ -199,7 +228,7 @@ function AIMessage({
         <GlossaryExpansionIndicator expansions={glossaryExpansions} />
       )}
 
-      {/* Footer: sources count + latency */}
+      {/* Footer: sources count + cache state + latency */}
       {!isStreaming && message.content && (
         <div className="flex items-center gap-3 pt-1">
           {hasSources && (
@@ -212,6 +241,12 @@ function AIMessage({
                 {message.sources?.length} sources
               </span>
             </button>
+          )}
+          {cacheHit != null && (
+            <CacheStateChip
+              cacheHit={cacheHit}
+              cacheAgeSeconds={cacheAgeSeconds}
+            />
           )}
         </div>
       )}

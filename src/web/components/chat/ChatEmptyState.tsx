@@ -2,11 +2,16 @@
 
 import { Diamond } from "lucide-react";
 import { ChatInput } from "./ChatInput";
+import { ActiveTeamSelector } from "./ActiveTeamSelector";
 
 interface ChatEmptyStateProps {
   onSend: (message: string, mode: string) => void;
   agentId: string;
   userName?: string;
+  /** FE-011: Currently selected team ID */
+  selectedTeamId?: string | null;
+  /** FE-011: Callback when team selection changes */
+  onTeamChange?: (teamId: string | null) => void;
 }
 
 const SUGGESTIONS = [
@@ -31,7 +36,12 @@ function getGreeting(): string {
   return "Good evening";
 }
 
-export function ChatEmptyState({ onSend, userName }: ChatEmptyStateProps) {
+export function ChatEmptyState({
+  onSend,
+  userName,
+  selectedTeamId,
+  onTeamChange,
+}: ChatEmptyStateProps) {
   const displayName = userName ?? "there";
 
   return (
@@ -54,6 +64,16 @@ export function ChatEmptyState({ onSend, userName }: ChatEmptyStateProps) {
 
         {/* Input bar - embedded, not bottom-fixed */}
         <ChatInput onSend={onSend} showModeSelector />
+
+        {/* FE-011: Team context selector */}
+        {onTeamChange && (
+          <div className="mt-3 flex items-center justify-center">
+            <ActiveTeamSelector
+              selectedTeamId={selectedTeamId ?? null}
+              onTeamChange={onTeamChange}
+            />
+          </div>
+        )}
 
         {/* KB hint - never expose "RAG" or technical terms */}
         <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-text-faint">

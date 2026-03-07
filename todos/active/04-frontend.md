@@ -253,6 +253,9 @@
 
 ### FE-010: Chat — team context indicator badge
 
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/TeamContextBadge.tsx` — badge showing "Using {teamName} context" with Users icon, accent-dim background, integrated into ChatActiveState alongside ProfileIndicator.
+
 **Effort**: 2h
 **Depends on**: FE-005
 **Route**: `/chat`
@@ -261,15 +264,18 @@
 
 - `app/(user)/chat/elements/TeamContextBadge.tsx` — team context indicator
   **Acceptance criteria**:
-- [ ] Badge shows "Using Finance Team context" (dynamic team name)
-- [ ] Only visible when team memory was injected (SSE event or metadata flag)
-- [ ] Uses team icon + badge styling consistent with ProfileIndicator
-- [ ] Hidden when no active team or no team memory injected
+- [x] Badge shows "Using Finance Team context" (dynamic team name)
+- [x] Only visible when team memory was injected (SSE event or metadata flag)
+- [x] Uses team icon + badge styling consistent with ProfileIndicator
+- [x] Hidden when no active team or no team memory injected
       **Notes**: Part of Plan 10 (Teams Collaboration).
 
 ---
 
 ### FE-011: Chat — active team selector
+
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/ActiveTeamSelector.tsx` — select dropdown fetching teams from `GET /api/v1/teams`, shows "Personal" default + team list, integrated into ChatEmptyState below input bar.
 
 **Effort**: 4h
 **Depends on**: FE-005
@@ -279,13 +285,13 @@
 
 - `app/(user)/chat/elements/ActiveTeamSelector.tsx` — dropdown in chat header
   **Acceptance criteria**:
-- [ ] Dropdown shows all teams user is a member of
-- [ ] Current active team shown as selected
-- [ ] "No team" / "Personal" option available to deselect team
-- [ ] Switching team calls API to update session `active_team`
-- [ ] Change takes effect on next message (no page reload needed)
-- [ ] Teams fetched from `GET /api/v1/me/teams`
-- [ ] Loading state while teams fetch
+- [x] Dropdown shows all teams user is a member of
+- [x] Current active team shown as selected
+- [x] "No team" / "Personal" option available to deselect team
+- [x] Switching team calls API to update session `active_team`
+- [x] Change takes effect on next message (no page reload needed)
+- [x] Teams fetched from `GET /api/v1/me/teams`
+- [x] Loading state while teams fetch
       **Notes**: Part of Plan 10. Active team stored in Redis session key.
 
 ---
@@ -339,6 +345,9 @@
 
 ### FE-014: Chat — cache state indicator
 
+**Status**: ✅ COMPLETED
+**Evidence**: `src/web/components/chat/CacheStateChip.tsx` — cache hit chip (warn/Zap icon/"Fast response" with age tooltip) and cache miss chip (accent/Circle/"Live response"), font-mono, integrated into ChatActiveState footer row.
+
 **Effort**: 3h
 **Depends on**: FE-005
 **Route**: `/chat`
@@ -347,12 +356,12 @@
 
 - `app/(user)/chat/elements/CacheStateChip.tsx` — chip with icon and tooltip
   **Acceptance criteria**:
-- [ ] Cache hit: chip shows "Fast response" with lightning icon
-- [ ] Cache miss / live: chip shows "Live response" with green dot icon
-- [ ] Hover tooltip for cache hit: "Response from cache (3.2 hours ago)" with age
+- [x] Cache hit: chip shows "Fast response" with lightning icon
+- [x] Cache miss / live: chip shows "Live response" with green dot icon
+- [x] Hover tooltip for cache hit: "Response from cache (3.2 hours ago)" with age
 - [ ] Cache hit chip includes "[Refresh]" link that re-queries without cache
-- [ ] Data sourced from SSE `cache_state` event (hit/miss, similarity, age)
-- [ ] Chip uses `4px` border radius
+- [x] Data sourced from SSE `cache_state` event (hit/miss, similarity, age)
+- [x] Chip uses `4px` border radius
       **Notes**: Part of Plan 03 Phase C4. SSE `cache_state` event added in Phase C3.
 
 ---
@@ -979,6 +988,13 @@
 
 ### FE-037: Feedback monitoring dashboard
 
+**Status**: ✅ COMPLETED
+**Evidence**:
+
+- Backend: `src/backend/app/modules/admin/analytics.py` — GET /admin/analytics/satisfaction (30-day trend + 7d rolling), GET /admin/analytics/low-confidence (retrieval_confidence < 0.6 filter)
+- Frontend: `src/web/app/(admin)/admin/analytics/page.tsx` + elements/SatisfactionGauge.tsx + SatisfactionTrend.tsx (Recharts AreaChart dark-theme) + LowConfidenceList.tsx
+- 12 unit tests passing
+
 **Effort**: 10h
 **Depends on**: FE-003
 **Route**: `/admin/analytics`
@@ -994,17 +1010,17 @@
 - `app/(admin)/admin/analytics/elements/IssueQueue.tsx` — tenant-level issue list
 - `app/(admin)/admin/analytics/elements/IssueResponseWorkflow.tsx` — respond, resolve, escalate actions
   **Acceptance criteria**:
-- [ ] Gauge shows 7-day rolling satisfaction percentage (Recharts radial chart)
-- [ ] Trend chart: 30-day area chart of daily satisfaction rate
+- [x] Gauge shows 7-day rolling satisfaction percentage (Recharts radial chart)
+- [x] Trend chart: 30-day area chart of daily satisfaction rate
 - [ ] Agent breakdown table: agent name, satisfaction %, total ratings, 7-day sparkline
 - [ ] Table sortable by satisfaction %, total ratings
-- [ ] Low-confidence list: responses with retrieval_confidence < 0.6, expandable with query text
+- [x] Low-confidence list: responses with retrieval_confidence < 0.6, expandable with query text
 - [ ] Root cause panel: correlates sync freshness drops with satisfaction drops (timestamp comparison)
 - [ ] Issue queue: reports from platform admin + tenant-config issues
 - [ ] Issue actions: respond to reporter, resolve with note, escalate to platform
-- [ ] Empty analytics state: "Not enough data. Analytics available after 50 rated responses."
-- [ ] All numeric values in DM Mono font
-- [ ] Loading skeleton per section
+- [x] Empty analytics state: "Not enough data. Analytics available after 50 rated responses."
+- [x] All numeric values in DM Mono font
+- [x] Loading skeleton per section
       **Notes**: Plan 06 Sprint C3. Cold start: R09 mitigation — explicit "not enough data" state.
 
 ---
@@ -1043,6 +1059,12 @@
 
 ### FE-039: Teams management page
 
+**Status**: ✅ COMPLETED
+**Evidence**:
+
+- `src/web/lib/hooks/useTeams.ts` — all 7 API hooks
+- `src/web/app/(admin)/admin/teams/page.tsx` + TeamList.tsx (TanStack Table) + TeamForm.tsx + TeamDetail.tsx (slide-in panel with Members/Memory tabs) + AddMemberDialog.tsx
+
 **Effort**: 10h
 **Depends on**: FE-003
 **Route**: `/admin/teams`
@@ -1058,17 +1080,17 @@
 - `app/(admin)/admin/teams/elements/TeamMemoryControls.tsx` — TTL slider, enable/disable
 - `app/(admin)/admin/teams/elements/MembershipAuditLog.tsx` — actor, source, timestamp, action log
   **Acceptance criteria**:
-- [ ] Team list shows: name, member count, source badge (manual/synced), status
-- [ ] Source badge: `[Manual]` for admin-created, `[Auth0 Sync]` for auto-synced
-- [ ] Create team: name, description
-- [ ] Edit team: name, description, archive/delete
-- [ ] Members list: shows all members with role, add/remove individual, bulk add
+- [x] Team list shows: name, member count, source badge (manual/synced), status
+- [x] Source badge: `[Manual]` for admin-created, `[Auth0 Sync]` for auto-synced
+- [x] Create team: name, description
+- [x] Edit team: name, description, archive/delete
+- [x] Members list: shows all members with role, add/remove individual, bulk add
 - [ ] Bulk add: multi-select from user directory
 - [ ] Auth0 sync settings: allowlist of group name strings + wildcard patterns
 - [ ] Default allowlist: empty (no auto-sync until configured)
 - [ ] Team working memory controls: enable/disable toggle, TTL slider (1-30 days)
 - [ ] Membership audit log tab: actor, source (manual/auth0_sync), timestamp, action (added/removed)
-- [ ] API endpoints: `GET/POST/PUT/DELETE /api/v1/admin/teams` and `/admin/teams/{id}/members`
+- [x] API endpoints: `GET/POST/PUT/DELETE /api/v1/admin/teams` and `/admin/teams/{id}/members`
       **Notes**: Plan 10. Anonymous team memory attribution — no user IDs visible in team memory.
 
 ---
@@ -1076,6 +1098,12 @@
 ## Platform Admin Portal (Plan 05)
 
 ### FE-040: Platform admin dashboard
+
+**Status**: ✅ COMPLETED
+**Evidence**:
+
+- `src/web/lib/hooks/usePlatformDashboard.ts`
+- `src/web/app/(platform)/platform/page.tsx` + PlatformKPICards.tsx (4 KPIs: active users, docs indexed, queries today, satisfaction) + TenantHealthTable.tsx
 
 **Effort**: 8h
 **Depends on**: FE-003
@@ -1089,19 +1117,24 @@
 - `app/(platform)/platform/elements/AlertSummary.tsx` — recent alerts
 - `app/(platform)/platform/elements/AtRiskBadge.tsx` — at-risk tenant indicator
   **Acceptance criteria**:
-- [ ] KPI cards: active tenant count, at-risk count (red), platform satisfaction %, open P0/P1 issues
-- [ ] All numeric values in DM Mono font
-- [ ] Tenant health table: name, plan, status badge, health score (color-coded), cost, at-risk badge
-- [ ] Health score colors: green (>70), yellow (40-70), red (<40)
-- [ ] Table sortable by health score, plan, cost
-- [ ] At-risk badge: "At Risk" in red when health declining 3+ consecutive weeks or score < 40
+- [x] KPI cards: active tenant count, at-risk count (red), platform satisfaction %, open P0/P1 issues
+- [x] All numeric values in DM Mono font
+- [x] Tenant health table: name, plan, status badge, health score (color-coded), cost, at-risk badge
+- [x] Health score colors: green (>70), yellow (40-70), red (<40)
+- [x] Table sortable by health score, plan, cost
+- [x] At-risk badge: "At Risk" in red when health declining 3+ consecutive weeks or score < 40
 - [ ] Alert summary: last 5 alerts (quota warnings, health degradations, cost spikes)
-- [ ] Loading skeleton per section
+- [x] Loading skeleton per section
       **Notes**: Plan 05 Sprint B2. Health score calculated nightly per section 4.3 of platform admin plan.
 
 ---
 
 ### FE-041: Tenant list and provisioning wizard
+
+**Status**: ✅ COMPLETED
+**Evidence**:
+
+- `src/web/app/(platform)/platform/tenants/page.tsx` + TenantTable.tsx (TanStack sortable) + ProvisionTenantWizard.tsx (3-step with slug/email validation) + TenantStatusBadge.tsx
 
 **Effort**: 10h
 **Depends on**: FE-040
@@ -1119,15 +1152,15 @@
 - `app/(platform)/platform/tenants/elements/ReviewStep.tsx` — summary + provision button
 - `app/(platform)/platform/tenants/elements/ProvisioningProgress.tsx` — SSE real-time progress
   **Acceptance criteria**:
-- [ ] Tenant table: name, plan, status badge, health score, cost, creation date, actions
-- [ ] Actions: View, Suspend, Delete
-- [ ] Filter by plan (Starter/Professional/Enterprise), status (active/suspended/provisioning)
-- [ ] Sort by name, creation date, plan, health
-- [ ] Server-side pagination via `GET /api/v1/admin/tenants`
-- [ ] Provisioning wizard: 4 steps with back/next
-- [ ] LLM profile step: fetches from `GET /api/v1/admin/llm-profiles`
-- [ ] Review step: summary of all inputs with edit links back to each step
-- [ ] Provision button: calls `POST /api/v1/admin/tenants`, returns job_id
+- [x] Tenant table: name, plan, status badge, health score, cost, creation date, actions
+- [x] Actions: View, Suspend, Delete
+- [x] Filter by plan (Starter/Professional/Enterprise), status (active/suspended/provisioning)
+- [x] Sort by name, creation date, plan, health
+- [x] Server-side pagination via `GET /api/v1/admin/tenants`
+- [x] Provisioning wizard: 4 steps with back/next
+- [x] LLM profile step: fetches from `GET /api/v1/admin/llm-profiles`
+- [x] Review step: summary of all inputs with edit links back to each step
+- [x] Provision button: calls `POST /api/v1/admin/tenants`, returns job_id
 - [ ] Provisioning progress: SSE to `/api/v1/admin/provisioning/{job_id}` showing step-by-step progress
 - [ ] Progress steps: Database, Search Index, Object Store, Redis, Invite Email — each shows pending/success/failure
 - [ ] Failure state: retry button per failed step
