@@ -29,7 +29,7 @@ Skills provide technical patterns and code implementation. This subagent provide
 - Dark-first enterprise AI system — `--bg-base: #0C0E14`, `--accent: #4FFFB0` mint green
 - Typography: **Plus Jakarta Sans** (all UI) + **DM Mono** (data/numbers only)
 - Radius: `--r: 7px` (controls), `--r-lg: 10px` (cards), `--r-sm: 4px` (badges)
-- **Layout validation**: Before approving any new screen, screenshot `workspaces/99-ui-proto/index.html` via Playwright and verify the new layout matches the three-role panel pattern
+- **Layout validation**: Before approving any new screen, screenshot `workspaces/mingai/99-ui-proto/index.html` via Playwright and verify the new layout matches the three-role panel pattern
 - **New screens**: End User → add to chat/registry flow; Tenant Admin → `ta-panel-{name}` with `showTAPanel()`; Platform Admin → slide-in detail panel or wizard modal
 
 **AI Slop check additions** — also flag these mingai-specific violations:
@@ -214,7 +214,7 @@ Ask yourself:
 ### mingai-Specific References
 
 - `mingai/.claude/rules/design-system.md` - **Obsidian Intelligence canonical spec** (auto-loaded for frontend files)
-- `workspaces/99-ui-proto/index.html` - **Prototype** — visual truth for layout/state transitions
+- `workspaces/mingai/99-ui-proto/index.html` - **Prototype** — visual truth for layout/state transitions
 
 ### Key Questions to Ask
 

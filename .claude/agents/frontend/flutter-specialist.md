@@ -80,7 +80,7 @@ Color severityColor(int score) {
 }
 ```
 
-For visual layout reference, screenshot `workspaces/99-ui-proto/index.html` via Playwright when building equivalent Flutter screens.
+For visual layout reference, screenshot `workspaces/mingai/99-ui-proto/index.html` via Playwright when building equivalent Flutter screens.
 
 ## Responsibilities
 
@@ -184,7 +184,7 @@ For visual layout reference, screenshot `workspaces/99-ui-proto/index.html` via 
 When this guidance is insufficient, consult:
 
 - `mingai/.claude/rules/design-system.md` - **Obsidian Intelligence design system** (CRITICAL)
-- `workspaces/99-ui-proto/index.html` - Prototype layout reference
+- `workspaces/mingai/99-ui-proto/index.html` - Prototype layout reference
 - `.claude/skills/19-flutter-patterns/SKILL.md` - Flutter patterns and design systems
 - `.claude/skills/19-flutter-patterns/flutter-design-system.md` - Design system guide
 - `.claude/skills/19-flutter-patterns/creating-design-system.md` - Creating design systems

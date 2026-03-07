@@ -8,7 +8,7 @@ These rules apply to ALL frontend files: `**/*.tsx`, `**/*.jsx`, `**/*.html`, `*
 
 **Obsidian Intelligence** — dark-first enterprise AI design system. Dark theme is the primary designed experience. Light mode is a supported alternative.
 
-**Visual reference**: For spatial/layout questions, screenshot `workspaces/99-ui-proto/index.html` via Playwright. The prototype is the ground truth for all layout relationships and state transitions.
+**Visual reference**: For spatial/layout questions, screenshot `workspaces/mingai/99-ui-proto/index.html` via Playwright. The prototype is the ground truth for all layout relationships and state transitions.
 
 ---
 

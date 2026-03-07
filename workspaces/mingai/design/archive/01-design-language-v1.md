@@ -1,7 +1,7 @@
 # mingai Design Language — Obsidian Intelligence
 
 **Date**: 2026-03-06
-**Prototype reference**: `workspaces/99-ui-proto/index.html`
+**Prototype reference**: `workspaces/mingai/99-ui-proto/index.html`
 **Status**: Active — established through iterative prototype review
 
 ---

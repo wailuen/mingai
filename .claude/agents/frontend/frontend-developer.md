@@ -48,7 +48,7 @@ var(--t)                                                   /* transitions */
 - Admin tables: DM Mono for numeric cells; th at 11px uppercase `--text-faint`
 - Tabs: `border-bottom: 2px solid var(--accent)` on active only
 
-For layout reference, screenshot `workspaces/99-ui-proto/index.html` via Playwright.
+For layout reference, screenshot `workspaces/mingai/99-ui-proto/index.html` via Playwright.
 
 ## Primary Responsibilities
 
@@ -186,7 +186,7 @@ Always ensure the UI is intuitive, responsive, and follows the Obsidian Intellig
 ### Essential Guides (Start Here)
 
 - `mingai/.claude/rules/design-system.md` - **Obsidian Intelligence design system** (CRITICAL — use this)
-- `workspaces/99-ui-proto/index.html` - Prototype layout reference
+- `workspaces/mingai/99-ui-proto/index.html` - Prototype layout reference
 - `.claude/skills/23-uiux-design-principles/SKILL.md` - Design principles and patterns (CRITICAL)
 
 ### Additional Resources

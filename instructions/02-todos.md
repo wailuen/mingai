@@ -1,8 +1,8 @@
-# Setup (If using parallel worktrees)
-1. Use 3 parallel processes (worktrees created from main branch)
-   - Backend worktree (sync to backend branch)
-   - Web worktree - React (sync to web branch)
-   - App worktree - Flutter for iOS and Android (sync to the app branch)
+# Setup
+1. Use 3 parallel agents (launched via the Agent tool from main branch)
+   - Backend agent (branch: feat/phase-1-backend)
+   - Web agent - React (branch: feat/phase-1-web)
+   - App agent - Flutter for iOS and Android (branch: feat/phase-1-app)
 2. Branch setup
    - Staging branch
    - Production branch (protected)
