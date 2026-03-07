@@ -232,7 +232,7 @@
 - [ ] No user identification information in output
       **Notes**: Layer 4b is only injected if the user has an active team assignment. Skip entirely if no active team.
 
-### AI-015: Team working memory unit tests (30 tests)
+### AI-015: Team working memory unit tests (30 tests) ✅ COMPLETED
 
 **Effort**: 5h
 **Depends on**: AI-013, AI-014
@@ -346,7 +346,7 @@
 - [ ] Handles source errors gracefully (log error, return empty context, do not fail query)
       **Notes**: This is the single entry point for the SystemPromptBuilder's Layer 2.
 
-### AI-022: Org context unit tests (15 per source, 45 total)
+### AI-022: Org context unit tests (15 per source, 45 total) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: AI-018, AI-019, AI-020, AI-021
@@ -561,14 +561,15 @@
 **Depends on**: AI-032
 **Completed**: 2026-03-07
 **Evidence**:
+
 - Implementation: `src/backend/app/modules/chat/orchestrator.py` — `profile_context_used` derived from `_PROFILE_LAYERS.intersection(layers_active)` set intersection, emitted in SSE metadata event
 - `_PROFILE_LAYERS = {"profile", "working_memory", "org_context", "team_memory"}` — the 4 personalisation layers
 - SSE metadata event now includes: `retrieval_confidence`, `glossary_expansions`, `profile_context_used` (bool), `layers_active` (list)
 - Tests: `src/backend/tests/unit/test_orchestrator.py` — class `TestProfileContextUsedFlag` (5 tests): `test_profile_context_used_true_when_profile_layer_active`, `test_profile_context_used_true_when_working_memory_active`, `test_profile_context_used_false_when_no_personalisation_layers`, `test_profile_context_used_true_any_personalisation_layer_sufficient`, `test_metadata_includes_profile_context_used_field`
 - All 5 tests pass (694 total unit tests passing)
 - Note: Frontend ProfileIndicator (FE-009) and dev-mode layers debug are FE scope, tracked in 04-frontend.md
-**Description**: Add SSE metadata flags to chat responses indicating when profile/memory layers contributed to the system prompt.
-**Acceptance criteria**:
+  **Description**: Add SSE metadata flags to chat responses indicating when profile/memory layers contributed to the system prompt.
+  **Acceptance criteria**:
 
 - [x] SSE metadata includes `profile_context_used: true` when any profile layer (Layer 2, 3, 4a, or 4b) contributed non-empty content
 - [ ] SSE `memory_saved` event emitted when "remember that" fast path creates a note (from AI-024)
@@ -596,7 +597,7 @@
 - [ ] **CRITICAL**: Working memory deletion MUST be included (fixes aihub2 GDPR bug where `clear_profile_data()` did NOT call `WorkingMemoryService.clear_memory()`)
       **Notes**: This is a GDPR critical path. The aihub2 bug (R04 from red team 13-05) caused working memory to persist 7 days after erasure request.
 
-### AI-036: System prompt builder integration tests (25 tests)
+### AI-036: System prompt builder tests (25 tests) ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: AI-032, AI-033, AI-034, AI-035
@@ -986,3 +987,32 @@
 - [ ] Error handling: skip unparseable documents, log error, continue with remaining
 - [ ] Rate limiting: respect embedding API rate limits during batch indexing
       **Notes**: GAP-055. HIGH. INFRA-025 syncs files but this pipeline makes them searchable. Without it, RAG returns no results.
+
+---
+
+## Phase 2 Sprint 2 — Backend Endpoints Completed
+
+The following backend API endpoints were implemented in Phase 2 Sprint 2 (2026-03-07/08):
+
+### Agent Templates API (new — Phase 2 Sprint 2)
+
+**Routes**: `src/backend/app/modules/agents/routes.py`
+
+- `GET /api/v1/agents/templates` — list all agent templates, supports `?category=` filter. Returns 4 seed templates (HR Assistant, IT Helpdesk, Procurement Assistant, Onboarding Guide) from `src/backend/app/modules/agents/__init__.py`.
+- `POST /api/v1/agents/templates/{template_id}/deploy` — deploy a template as a tenant agent. Accepts `name`, `access_control`, `variables`. Logs warning for unpersisted deploy config (persistence is Phase 2+ task).
+- **Tests**: `src/backend/tests/unit/test_agent_templates.py` — 19 unit tests covering list, filter, deploy, and error cases. All passing.
+
+### Glossary Export + Miss Signals (new — Phase 2 Sprint 2)
+
+**Routes**: `src/backend/app/modules/glossary/routes.py`
+
+- `GET /api/v1/glossary/export` — CSV download of all active glossary terms. Formula injection prevention per OWASP (strips leading `=`, `+`, `-`, `@` from cell values).
+- `GET /api/v1/glossary/miss-signals` — returns top uncovered terms aggregated from query logs (terms appearing in user queries without glossary coverage). Returns `[{term, count}]` sorted by count descending.
+
+### SharePoint Integrations List (new — Phase 2 Sprint 2)
+
+**Routes**: `src/backend/app/modules/documents/sharepoint.py`
+
+- `GET /api/v1/documents/sharepoint` — lists SharePoint integrations for the tenant with last sync status. Returns `[{id, site_url, library_name, last_sync_at, last_sync_status, document_count}]`. Used by FE-034 sync health dashboard.
+
+**Router**: `src/backend/app/api/router.py` updated to include all new route modules.

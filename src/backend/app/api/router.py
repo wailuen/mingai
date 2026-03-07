@@ -85,6 +85,11 @@ from app.modules.notifications.routes import router as notifications_router
 
 router.include_router(notifications_router)
 
+# Agent templates endpoints (API-110 to API-115)
+from app.modules.agents.routes import router as agents_router
+
+router.include_router(agents_router)
+
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.
 # Cloud deployments (aws/azure/gcp) never receive requests at these routes.

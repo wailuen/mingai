@@ -100,6 +100,52 @@ export function useDeleteTerm() {
   });
 }
 
+export interface MissSignal {
+  term: string;
+  occurrence_count: number;
+  last_seen: string;
+}
+
+export function useMissSignals(limit = 20) {
+  const params = new URLSearchParams({ limit: String(limit) });
+
+  return useQuery({
+    queryKey: [GLOSSARY_KEY, "miss-signals", limit],
+    queryFn: () =>
+      apiGet<{ items: MissSignal[] }>(
+        `/api/v1/glossary/miss-signals?${params.toString()}`,
+      ),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useExportGlossary() {
+  const token = getStoredToken();
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+  return useMutation({
+    mutationFn: async (): Promise<void> => {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${API_URL}/api/v1/glossary/export`, {
+        headers,
+      });
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "glossary.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+  });
+}
+
 export function useImportGlossary() {
   const queryClient = useQueryClient();
   const API_URL = process.env.NEXT_PUBLIC_API_URL;

@@ -6,7 +6,9 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { TermList } from "./elements/TermList";
 import { TermForm } from "./elements/TermForm";
 import { BulkImportDialog } from "./elements/BulkImportDialog";
-import { Search, Plus, Upload } from "lucide-react";
+import { MissSignalsPanel } from "./elements/MissSignalsPanel";
+import { Search, Plus, Upload, Download, Loader2 } from "lucide-react";
+import { useExportGlossary } from "@/lib/hooks/useGlossary";
 import type { GlossaryTerm } from "@/lib/hooks/useGlossary";
 
 /**
@@ -23,6 +25,15 @@ export default function GlossaryPage() {
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [prefillTerm, setPrefillTerm] = useState("");
+
+  const exportMutation = useExportGlossary();
+
+  function handleAddFromMissSignal(term: string) {
+    setPrefillTerm(term);
+    setEditingTerm(null);
+    setShowAddForm(true);
+  }
 
   function handleEdit(term: GlossaryTerm) {
     setEditingTerm(term);
@@ -32,6 +43,7 @@ export default function GlossaryPage() {
   function handleCloseForm() {
     setShowAddForm(false);
     setEditingTerm(null);
+    setPrefillTerm("");
   }
 
   return (
@@ -82,6 +94,20 @@ export default function GlossaryPage() {
           {/* Spacer */}
           <div className="flex-1" />
 
+          {/* Export CSV */}
+          <button
+            onClick={() => exportMutation.mutate()}
+            disabled={exportMutation.isPending}
+            className="flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
+          >
+            {exportMutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            Export CSV
+          </button>
+
           {/* Import CSV */}
           <button
             onClick={() => setShowImport(true)}
@@ -115,9 +141,18 @@ export default function GlossaryPage() {
           />
         </ErrorBoundary>
 
+        {/* Miss Signals */}
+        <ErrorBoundary>
+          <MissSignalsPanel onAddTerm={handleAddFromMissSignal} />
+        </ErrorBoundary>
+
         {/* Modals */}
         {showAddForm && (
-          <TermForm term={editingTerm} onClose={handleCloseForm} />
+          <TermForm
+            term={editingTerm}
+            onClose={handleCloseForm}
+            prefillTerm={prefillTerm}
+          />
         )}
         {showImport && (
           <BulkImportDialog onClose={() => setShowImport(false)} />

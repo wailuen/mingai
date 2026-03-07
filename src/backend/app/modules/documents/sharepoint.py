@@ -174,9 +174,71 @@ async def list_sync_jobs_db(
     return {"jobs": jobs, "total": total}
 
 
+async def list_integrations_db(
+    tenant_id: str,
+    db: AsyncSession,
+) -> dict:
+    """
+    List all SharePoint integrations for a tenant with last sync status.
+
+    Performs a LEFT JOIN on sync_jobs to get the most recent sync job per integration
+    using a lateral subquery for the latest sync job per integration.
+    """
+    result = await db.execute(
+        text(
+            "SELECT i.id, i.name, i.status, i.config, "
+            "sj.created_at AS last_sync_at, sj.status AS last_sync_status "
+            "FROM integrations i "
+            "LEFT JOIN LATERAL ("
+            "  SELECT sj2.created_at, sj2.status "
+            "  FROM sync_jobs sj2 "
+            "  WHERE sj2.integration_id = i.id "
+            "  ORDER BY sj2.created_at DESC LIMIT 1"
+            ") sj ON true "
+            "WHERE i.tenant_id = :tenant_id AND i.type = 'sharepoint' "
+            "ORDER BY i.created_at DESC"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    items = []
+    for row in result.mappings():
+        config_val = row["config"]
+        if isinstance(config_val, str):
+            config_val = json.loads(config_val)
+
+        last_sync_at = row["last_sync_at"]
+        if isinstance(last_sync_at, datetime):
+            last_sync_at = last_sync_at.isoformat()
+
+        items.append(
+            {
+                "id": str(row["id"]),
+                "name": row["name"],
+                "status": row["status"],
+                "site_url": config_val.get("site_url", ""),
+                "library_name": config_val.get("library_name", ""),
+                "last_sync_at": str(last_sync_at) if last_sync_at else None,
+                "last_sync_status": row["last_sync_status"],
+            }
+        )
+    return {"items": items}
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+@router.get("/sharepoint")
+async def list_sharepoint_integrations(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """API-056: List all SharePoint integrations for the tenant."""
+    return await list_integrations_db(
+        tenant_id=current_user.tenant_id,
+        db=db,
+    )
 
 
 @router.post(

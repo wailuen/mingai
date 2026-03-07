@@ -24,6 +24,7 @@ from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from sqlalchemy import text
@@ -321,6 +322,59 @@ async def bulk_import_glossary(
     return {"imported": imported, "skipped": skipped, "errors": errors}
 
 
+async def export_glossary_terms_db(tenant_id: str, db) -> list:
+    """Fetch all glossary terms for a tenant (no pagination) for CSV export."""
+    result = await db.execute(
+        text(
+            "SELECT term, full_form, aliases FROM glossary_terms "
+            "WHERE tenant_id = :tenant_id ORDER BY term ASC"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    rows = result.fetchall()
+    return [
+        {
+            "term": r[0],
+            "full_form": r[1],
+            "aliases": r[2] or [],
+        }
+        for r in rows
+    ]
+
+
+async def list_miss_signals_db(tenant_id: str, limit: int, db) -> dict:
+    """
+    Aggregate glossary miss signals: group by unresolved_term, sum occurrence_count.
+
+    Returns top N terms ordered by total occurrences descending.
+    """
+    result = await db.execute(
+        text(
+            "SELECT unresolved_term, SUM(occurrence_count) AS total_count, "
+            "MAX(last_seen_at) AS last_seen "
+            "FROM glossary_miss_signals "
+            "WHERE tenant_id = :tenant_id "
+            "GROUP BY unresolved_term "
+            "ORDER BY total_count DESC "
+            "LIMIT :limit"
+        ),
+        {"tenant_id": tenant_id, "limit": limit},
+    )
+    items = []
+    for row in result.mappings():
+        last_seen = row["last_seen"]
+        if hasattr(last_seen, "isoformat"):
+            last_seen = last_seen.isoformat()
+        items.append(
+            {
+                "term": row["unresolved_term"],
+                "occurrence_count": int(row["total_count"]),
+                "last_seen": str(last_seen) if last_seen else None,
+            }
+        )
+    return {"items": items}
+
+
 # ---------------------------------------------------------------------------
 # Route handlers (note: /import BEFORE /{id} to avoid path collision)
 # ---------------------------------------------------------------------------
@@ -347,6 +401,64 @@ async def import_glossary_csv(
         db=session,
     )
     await _invalidate_glossary_cache(current_user.tenant_id)
+    return result
+
+
+@router.get("/export")
+async def export_glossary_csv(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-076: Export all glossary terms as CSV download."""
+    terms = await export_glossary_terms_db(
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+
+    # Prefix formula-starting values to prevent CSV formula injection (OWASP).
+    # Values beginning with =, +, -, @, tab, or carriage return are prefixed with a tab.
+    _FORMULA_CHARS = ("=", "+", "-", "@", "\t", "\r")
+
+    def _safe_cell(value: str) -> str:
+        if value and value[0] in _FORMULA_CHARS:
+            return "\t" + value
+        return value
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["term", "full_form", "aliases"])
+    for term in terms:
+        aliases_str = "|".join(term["aliases"]) if term["aliases"] else ""
+        writer.writerow(
+            [
+                _safe_cell(term["term"]),
+                _safe_cell(term["full_form"] or ""),
+                _safe_cell(aliases_str),
+            ]
+        )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="glossary.csv"',
+        },
+    )
+
+
+@router.get("/miss-signals")
+async def list_miss_signals(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-077: List top uncovered terms from miss signals."""
+    result = await list_miss_signals_db(
+        tenant_id=current_user.tenant_id,
+        limit=limit,
+        db=session,
+    )
     return result
 
 

@@ -14,15 +14,16 @@ import {
 interface TermFormProps {
   term: GlossaryTerm | null;
   onClose: () => void;
+  prefillTerm?: string;
 }
 
 const MAX_DEFINITION_LENGTH = 200;
 const WARN_THRESHOLD = 180;
 
-export function TermForm({ term, onClose }: TermFormProps) {
+export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
   const isEdit = term !== null;
 
-  const [termValue, setTermValue] = useState(term?.term ?? "");
+  const [termValue, setTermValue] = useState(term?.term ?? prefillTerm ?? "");
   const [fullForm, setFullForm] = useState(term?.full_form ?? "");
   const [definition, setDefinition] = useState(term?.definition ?? "");
   const [aliasInput, setAliasInput] = useState("");

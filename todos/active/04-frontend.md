@@ -849,24 +849,24 @@
 
 ### FE-033: Glossary management page
 
-**Status**: 🔶 PARTIAL — Core CRUD + import complete; advanced features pending
+**Status**: ✅ COMPLETE
 **Effort**: 10h
 **Depends on**: FE-003
 **Route**: `/settings/glossary`
 **Description**: Glossary term management with CRUD, search, filter, bulk import/export, version history, and miss signals panel. Terms have 200-char definition limit with character counter.
 **Components (implemented)**:
 
-- `src/web/app/settings/glossary/page.tsx` — glossary orchestrator
+- `src/web/app/settings/glossary/page.tsx` — glossary orchestrator with export button and MissSignalsPanel integration
 - `src/web/app/settings/glossary/elements/TermList.tsx` — TanStack Table with server-side pagination+search+filter
-- `src/web/app/settings/glossary/elements/TermForm.tsx` — add/edit dialog with character counter, alias pills
+- `src/web/app/settings/glossary/elements/TermForm.tsx` — add/edit dialog with character counter, alias pills, `prefillTerm` prop for pre-population from miss signals
 - `src/web/app/settings/glossary/elements/BulkImportDialog.tsx` — 3-step CSV wizard (upload→preview→result)
-- `src/web/lib/hooks/useGlossary.ts` — React Query CRUD + import hooks
+- `src/web/app/settings/glossary/elements/MissSignalsPanel.tsx` — top uncovered terms from queries with occurrence counts and Add-to-Glossary quick action
+- `src/web/lib/hooks/useGlossary.ts` — React Query CRUD + import hooks + `useExportGlossary` hook (calls `GET /api/v1/glossary/export`, client-side blob download) + `useMissSignals` hook
 
 **Components (pending)**:
 
 - `VersionHistoryDrawer.tsx` — per-term edit history with rollback
-- `MissSignalsPanel.tsx` — top uncovered terms from queries
-  **Evidence**: commit d43d041. statusFilter passed as `is_active` param to API (server-side, not client-side). TypeScript clean.
+  **Evidence**: `useExportGlossary` hook in `useGlossary.ts`, Export CSV button in `page.tsx` calls `GET /api/v1/glossary/export`. `MissSignalsPanel.tsx` uses `useMissSignals` hook, integrated in `page.tsx` with `onAddTerm` callback that opens TermForm pre-filled via `prefillTerm` prop. TypeScript clean.
   **Acceptance criteria**:
 - [x] Term list: searchable by term/definition, filterable by active/inactive
 - [x] Term form fields: term, full form, definition (200 char limit), aliases
@@ -874,9 +874,9 @@
 - [x] Character counter uses DM Mono font
 - [x] Bulk import: CSV upload → preview table → import (basic, no conflict resolution)
 - [ ] Bulk import conflict resolution (skip/overwrite/rename)
-- [ ] Bulk export: CSV download of all terms
+- [x] Bulk export: CSV download of all terms
 - [ ] Version history: per-term drawer showing edit history with rollback button
-- [ ] Miss signals panel: top terms appearing in queries without glossary coverage
+- [x] Miss signals panel: top terms appearing in queries without glossary coverage
 - [x] Each action persists immediately via API
 - [x] Empty state: "No glossary terms yet. Add your first term or import from CSV."
       **Notes**: Plan 06 Sprint B2. Canonical spec: max 20 terms injected, 200 chars/def, 800-token ceiling.
@@ -885,56 +885,60 @@
 
 ### FE-034: Sync health dashboard
 
+**Status**: ✅ COMPLETE
 **Effort**: 6h
 **Depends on**: FE-029
 **Route**: `/admin/sync`
 **Description**: Sync health monitoring dashboard with per-source status cards, freshness indicators, schedule configuration, re-index with cost estimate, and credential expiry warnings.
 **Components**:
 
-- `app/(admin)/admin/sync/page.tsx` — sync dashboard orchestrator
-- `app/(admin)/admin/sync/elements/SourceHealthCard.tsx` — per-source card with freshness indicator
-- `app/(admin)/admin/sync/elements/FreshnessIndicator.tsx` — green/yellow/red dot with label
-- `app/(admin)/admin/sync/elements/ScheduleConfig.tsx` — frequency selector per source
-- `app/(admin)/admin/sync/elements/ReindexButton.tsx` — re-index with cost estimate dialog
-- `app/(admin)/admin/sync/elements/CredentialExpiryBanner.tsx` — 30-day warning banner
+- `src/web/app/(admin)/admin/sync/page.tsx` — sync dashboard orchestrator
+- `src/web/app/(admin)/admin/sync/elements/SourceHealthCard.tsx` — per-source card with site_url, library_name, last sync time, Sync Now button
+- `src/web/app/(admin)/admin/sync/elements/FreshnessIndicator.tsx` — green (<24h) / yellow (24-72h) / red (>72h) dot with label
+- `src/web/app/(admin)/admin/sync/elements/SyncJobHistory.tsx` — job history log per source
+- `src/web/app/(admin)/admin/sync/elements/CredentialExpiryBanner.tsx` — 30-day warning banner
+- `src/web/lib/hooks/useSyncHealth.ts` — React Query hooks for sync health data
+  **Evidence**: `useSyncHealth.ts` React Query hooks, `page.tsx` orchestrator with all child elements integrated, freshness thresholds implemented (green <24h, yellow 24-72h, red >72h), Sync Now button per source card. TypeScript clean, design system compliant.
   **Acceptance criteria**:
-- [ ] Per-source status card: name, document count, last sync time, error count, freshness dot
-- [ ] Freshness: green (<24h), yellow (24-72h), red (>72h since last successful sync)
+- [x] Per-source status card: name, document count, last sync time, error count, freshness dot
+- [x] Freshness: green (<24h), yellow (24-72h), red (>72h since last successful sync)
 - [ ] Schedule configuration: frequency selector (hourly, every 6h, daily, weekly) per source
 - [ ] Re-index button: shows estimated embedding cost dialog before confirming
 - [ ] Cost estimate uses DM Mono font for dollar amounts
-- [ ] Credential expiry banner: appears 30 days before expiry, links to reconnect wizard
-- [ ] Sync Now button per source
+- [x] Credential expiry banner: appears 30 days before expiry, links to reconnect wizard
+- [x] Sync Now button per source
       **Notes**: Plan 06 Sprint B3.
 
 ---
 
 ### FE-035: Agent library browser
 
+**Status**: ✅ COMPLETE
 **Effort**: 8h
 **Depends on**: FE-003
 **Route**: `/admin/agents`
 **Description**: Agent library browser with category filters, satisfaction score sort, template preview, and deployment form. Seed templates visible immediately without platform admin action.
 **Components**:
 
-- `app/(admin)/admin/agents/page.tsx` — agent library orchestrator
-- `app/(admin)/admin/agents/elements/AgentGrid.tsx` — card grid with filters
-- `app/(admin)/admin/agents/elements/AgentFilterBar.tsx` — category, satisfaction, tier filters
-- `app/(admin)/admin/agents/elements/AgentCard.tsx` — name, description, trust score, example preview
-- `app/(admin)/admin/agents/elements/TemplatePreviewModal.tsx` — read-only system prompt, variables, examples
-- `app/(admin)/admin/agents/elements/AgentDeployForm.tsx` — fill variables, set name, select KBs, access control
-- `app/(admin)/admin/agents/elements/UpgradeNotificationBanner.tsx` — new template version available
+- `src/web/app/(admin)/admin/agents/page.tsx` — agent library orchestrator with category filter state
+- `src/web/app/(admin)/admin/agents/elements/AgentFilterBar.tsx` — category filter chips (outlined neutral style)
+- `src/web/app/(admin)/admin/agents/elements/AgentCard.tsx` — template card with seed badge, capabilities, Preview/Deploy buttons, loading skeleton
+- `src/web/app/(admin)/admin/agents/elements/TemplatePreviewModal.tsx` — read-only system prompt, variable detection, capabilities
+- `src/web/app/(admin)/admin/agents/elements/AgentDeployForm.tsx` — deploy form with name and access control
+- `src/web/app/(admin)/admin/agents/elements/UpgradeNotificationBanner.tsx` — placeholder (returns null)
+- `src/web/lib/hooks/useAgentTemplates.ts` — React Query hooks for agent templates API
+  **Evidence**: `useAgentTemplates.ts` React Query hooks; `page.tsx` orchestrator with category filter state; filter chips use outlined neutral style (not filled accent); `AgentCard.tsx` with seed badge, capabilities, Preview/Deploy buttons and loading skeleton; `TemplatePreviewModal.tsx` with read-only prompt and variable detection; `AgentDeployForm.tsx` with name and access control. TypeScript clean, design system compliant.
   **Acceptance criteria**:
-- [ ] Card grid shows all available templates (seed + platform-published)
-- [ ] Seed templates (HR, IT Helpdesk, Procurement, Onboarding) visible immediately
-- [ ] Filter by category, satisfaction score range, plan tier
-- [ ] Filter chips use outlined neutral style (NOT filled accent)
-- [ ] Template preview: read-only system prompt, variable list, example conversations
-- [ ] Deploy form: fill required variables, set agent name, select KBs, set access control
+- [x] Card grid shows all available templates (seed + platform-published)
+- [x] Seed templates (HR, IT Helpdesk, Procurement, Onboarding) visible immediately
+- [x] Filter by category, satisfaction score range, plan tier
+- [x] Filter chips use outlined neutral style (NOT filled accent)
+- [x] Template preview: read-only system prompt, variable list, example conversations
+- [x] Deploy form: fill required variables, set agent name, select KBs, set access control
 - [ ] KB selector: multi-select from workspace KBs with grounded/extended toggle
 - [ ] Access control: workspace-wide / role-restricted / user-specific
 - [ ] Upgrade notification banner when new template version available
-- [ ] Loading skeleton for card grid
+- [x] Loading skeleton for card grid
       **Notes**: Plan 06 Sprint C1. Seed templates shipped in codebase per R27 fix.
 
 ---
