@@ -1,0 +1,30 @@
+{
+  "name": "mingai",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">   <img src=\"https://img.shields.io/badge/platform-Claude%20Code-7C3AED.svg\" alt=\"Claude Code\">   <img src=\"https://img.shields.io/badge/architecture-COC%205--Layer-blue.svg\" alt=\"COC 5-Layer\">   <img src=\"https://img.shields.io/badge/license-Apache%202.0-blue.svg\" alt=\"Apache 2.0\"> </p>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "npx playwright test",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:debug": "npx playwright test --debug"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wailuen/mingai.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/wailuen/mingai/issues"
+  },
+  "homepage": "https://github.com/wailuen/mingai#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}
