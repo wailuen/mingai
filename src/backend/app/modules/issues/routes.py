@@ -768,28 +768,34 @@ async def list_admin_issues_db(
     offset = (page - 1) * page_size
     params.update({"limit": page_size, "offset": offset})
 
-    count_result = await db.execute(
-        text(f"SELECT COUNT(*) FROM issue_reports ir WHERE {where}"),
-        params,
+    # Build SQL via concatenation — only allowlisted/hardcoded fragments enter the
+    # query string; user-supplied VALUES are always passed as bind parameters.
+    select_cols = (
+        "ir.id, ir.user_id, ir.title, ir.type, ir.status, ir.severity, "
+        "ir.ai_classification, ir.created_at, "
+        "u.name AS reporter_name"  # reporter_name intentionally returned for admin UI
     )
+    join_clause = "LEFT JOIN users u ON u.id = ir.user_id"
+    order_clause = "ORDER BY ir." + col + " " + order  # col/order are allowlisted above
+
+    count_sql = "SELECT COUNT(*) FROM issue_reports ir WHERE " + where
+    list_sql = (
+        "SELECT " + select_cols
+        + " FROM issue_reports ir "
+        + join_clause
+        + " WHERE " + where
+        + " " + order_clause + " LIMIT :limit OFFSET :offset"
+    )
+
+    count_result = await db.execute(text(count_sql), params)
     total = count_result.scalar() or 0
 
-    rows_result = await db.execute(
-        text(
-            f"SELECT ir.id, ir.user_id, ir.title, ir.type, ir.status, ir.severity, "
-            f"ir.ai_classification, ir.created_at, "
-            f"u.name AS reporter_name "
-            f"FROM issue_reports ir "
-            f"LEFT JOIN users u ON u.id = ir.user_id "
-            f"WHERE {where} "
-            f"ORDER BY ir.{col} {order} LIMIT :limit OFFSET :offset"
-        ),
-        params,
-    )
+    rows_result = await db.execute(text(list_sql), params)
     rows = rows_result.fetchall()
     items = [
         {
             "id": str(r[0]),
+            # reporter name is intentional — this is a tenant-admin-only endpoint
             "reporter": {"id": str(r[1]), "name": r[8]},
             "title": r[2],
             "type": r[3],
@@ -927,32 +933,39 @@ async def list_platform_issues_db(
     offset = (page - 1) * page_size
     params.update({"limit": page_size, "offset": offset})
 
-    count_result = await db.execute(
-        text(f"SELECT COUNT(*) FROM issue_reports ir {where}"),
-        params,
+    # Build SQL via concatenation — only allowlisted/hardcoded fragments enter the
+    # query string; user-supplied VALUES are always passed as bind parameters.
+    select_cols = (
+        "ir.id, ir.tenant_id, ir.user_id, ir.title, ir.type, ir.status, "
+        "ir.severity, ir.ai_classification, ir.created_at, "
+        "t.name AS tenant_name, u.name AS reporter_name"
     )
+    join_clause = (
+        "LEFT JOIN tenants t ON t.id = ir.tenant_id "
+        "LEFT JOIN users u ON u.id = ir.user_id"
+    )
+    order_clause = "ORDER BY ir." + col + " DESC"  # col is allowlisted above
+    where_clause = where + " " if where else ""
+
+    count_sql = "SELECT COUNT(*) FROM issue_reports ir " + where_clause
+    list_sql = (
+        "SELECT " + select_cols
+        + " FROM issue_reports ir "
+        + join_clause
+        + " " + where_clause
+        + order_clause + " LIMIT :limit OFFSET :offset"
+    )
+    severity_sql = (
+        "SELECT severity, COUNT(*) FROM issue_reports ir "
+        + where_clause + "GROUP BY severity"
+    )
+
+    count_result = await db.execute(text(count_sql), params)
     total = count_result.scalar() or 0
 
-    rows_result = await db.execute(
-        text(
-            f"SELECT ir.id, ir.tenant_id, ir.user_id, ir.title, ir.type, ir.status, "
-            f"ir.severity, ir.ai_classification, ir.created_at, "
-            f"t.name AS tenant_name, u.name AS reporter_name "
-            f"FROM issue_reports ir "
-            f"LEFT JOIN tenants t ON t.id = ir.tenant_id "
-            f"LEFT JOIN users u ON u.id = ir.user_id "
-            f"{where} "
-            f"ORDER BY ir.{col} DESC LIMIT :limit OFFSET :offset"
-        ),
-        params,
-    )
+    rows_result = await db.execute(text(list_sql), params)
 
-    by_severity_result = await db.execute(
-        text(
-            f"SELECT severity, COUNT(*) FROM issue_reports ir {where} GROUP BY severity"
-        ),
-        params,
-    )
+    by_severity_result = await db.execute(text(severity_sql), params)
     by_severity = {r[0]: r[1] for r in by_severity_result.fetchall() if r[0]}
 
     rows = rows_result.fetchall()
@@ -1362,7 +1375,8 @@ async def github_webhook(
     event_type = request.headers.get("X-GitHub-Event", "")
     try:
         payload = _json.loads(body)
-    except Exception:
+    except Exception as exc:
+        logger.warning("github_webhook_invalid_json", error_type=type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid JSON payload",
