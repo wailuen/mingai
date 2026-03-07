@@ -693,3 +693,171 @@ async def get_platform_stats(
     """API-036: Get platform-wide statistics."""
     result = await get_platform_stats_db(db=session)
     return result
+
+
+async def get_tenant_health_components_db(tenant_id: str, db) -> dict:
+    """
+    Query all raw health score component data for a tenant from the DB.
+
+    Returns values in the units that calculate_health_score() expects:
+      usage_trend_pct  — growth rate fraction (0.0 = flat, -0.25 = 25% decline)
+      feature_breadth  — 0.0-1.0 fraction of 5 core features active
+      satisfaction_pct — 0-100 positive-feedback percentage
+      error_rate_pct   — 0-100 error occurrence percentage (0 = no errors)
+    Plus raw DB counts for the response detail fields.
+    """
+    # --- Usage trend: query volume this 30 days vs prior 30 days ---
+    usage_result = await db.execute(
+        text(
+            "SELECT "
+            "  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS recent, "
+            "  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '60 days' "
+            "    AND created_at < NOW() - INTERVAL '30 days') AS prior "
+            "FROM messages "
+            "WHERE tenant_id = :tenant_id"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    usage_row = usage_result.fetchone()
+    recent_queries = usage_row[0] or 0
+    prior_queries = usage_row[1] or 0
+    # Growth rate: (recent / prior) - 1; -1.0 when no activity at all
+    if prior_queries > 0:
+        usage_trend_pct = (recent_queries / prior_queries) - 1.0
+    elif recent_queries > 0:
+        usage_trend_pct = 0.0  # new usage, treat as flat
+    else:
+        usage_trend_pct = -1.0  # no activity = maximum decline signal
+
+    # --- Feature breadth: fraction of 5 core features active in past 30 days ---
+    # Features: conversations, feedback, teams, glossary terms, memory notes
+    breadth_result = await db.execute(
+        text(
+            "SELECT "
+            "  (SELECT COUNT(*) > 0 FROM conversations WHERE tenant_id = :t AND created_at >= NOW() - INTERVAL '30 days')::int, "
+            "  (SELECT COUNT(*) > 0 FROM user_feedback WHERE tenant_id = :t AND created_at >= NOW() - INTERVAL '30 days')::int, "
+            "  (SELECT COUNT(*) > 0 FROM teams WHERE tenant_id = :t)::int, "
+            "  (SELECT COUNT(*) > 0 FROM glossary_terms WHERE tenant_id = :t)::int, "
+            "  (SELECT COUNT(*) > 0 FROM memory_notes WHERE tenant_id = :t AND created_at >= NOW() - INTERVAL '30 days')::int"
+        ),
+        {"t": tenant_id},
+    )
+    breadth_row = breadth_result.fetchone()
+    # Guard against None elements (e.g. asyncpg returning None for a cast)
+    features_active = sum(int(x or 0) for x in breadth_row) if breadth_row else 0
+    feature_breadth = features_active / 5.0
+
+    # --- Satisfaction: positive feedback percentage (0-100) in past 30 days ---
+    satisfaction_result = await db.execute(
+        text(
+            "SELECT "
+            "  COUNT(*) FILTER (WHERE rating = 'up') AS positive, "
+            "  COUNT(*) AS total "
+            "FROM user_feedback "
+            "WHERE tenant_id = :tenant_id AND created_at >= NOW() - INTERVAL '30 days'"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    sat_row = satisfaction_result.fetchone()
+    positive = sat_row[0] or 0
+    total_feedback = sat_row[1] or 0
+    # Percentage 0-100; default to 70 (neutral) when no feedback
+    satisfaction_pct = (
+        (positive / total_feedback * 100.0) if total_feedback > 0 else 70.0
+    )
+
+    # --- Error rate percentage (0-100): 0 issues → 0%, 10+ issues → 100% ---
+    error_result = await db.execute(
+        text(
+            "SELECT COUNT(*) FROM issue_reports "
+            "WHERE tenant_id = :tenant_id AND status = 'open' "
+            "AND created_at >= NOW() - INTERVAL '30 days'"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    open_issues = error_result.scalar() or 0
+    error_rate_pct = min(100.0, open_issues * 10.0)
+
+    return {
+        "usage_trend_pct": usage_trend_pct,
+        "feature_breadth": feature_breadth,
+        "satisfaction_pct": satisfaction_pct,
+        "error_rate_pct": error_rate_pct,
+        "recent_queries": recent_queries,
+        "prior_queries": prior_queries,
+        "features_active": features_active,
+        "positive_feedback": positive,
+        "total_feedback": total_feedback,
+        "open_issues": open_issues,
+    }
+
+
+@router.get("/tenants/{tenant_id}/health")
+async def get_tenant_health_score(
+    tenant_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-029: Compute and return the health score for a tenant.
+
+    Returns 4 weighted component scores (usage_trend 30%, feature_breadth 20%,
+    satisfaction 35%, error_rate 15%) plus overall score, category, and at_risk flag.
+    Component data is derived from live DB queries over the past 30/60 days.
+    """
+    from app.modules.platform.health_score import calculate_health_score
+
+    # Verify tenant exists
+    tenant = await get_tenant_db(tenant_id=tenant_id, db=session)
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tenant '{tenant_id}' not found",
+        )
+
+    components = await get_tenant_health_components_db(tenant_id=tenant_id, db=session)
+
+    health = calculate_health_score(
+        usage_trend_pct=components["usage_trend_pct"],
+        feature_breadth=components["feature_breadth"],
+        satisfaction_pct=components["satisfaction_pct"],
+        error_rate_pct=components["error_rate_pct"],
+    )
+
+    return {
+        "tenant_id": tenant_id,
+        "overall_score": health.score,
+        "category": health.category,
+        "at_risk": health.category in ("warning", "critical"),
+        "components": {
+            "usage_trend": {
+                "score": health.components.get("usage_trend", 0),
+                "weight": 0.30,
+                "details": {
+                    "recent_queries": components["recent_queries"],
+                    "prior_queries": components["prior_queries"],
+                },
+            },
+            "feature_breadth": {
+                "score": health.components.get("feature_breadth", 0),
+                "weight": 0.20,
+                "details": {
+                    "features_active": components["features_active"],
+                    "features_total": 5,
+                },
+            },
+            "satisfaction": {
+                "score": health.components.get("satisfaction", 0),
+                "weight": 0.35,
+                "details": {
+                    "positive_feedback": components["positive_feedback"],
+                    "total_feedback": components["total_feedback"],
+                },
+            },
+            "error_rate": {
+                "score": health.components.get("error_rate", 0),
+                "weight": 0.15,
+                "details": {"open_issues": components["open_issues"]},
+            },
+        },
+    }

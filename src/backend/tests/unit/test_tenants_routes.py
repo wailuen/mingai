@@ -357,3 +357,188 @@ class TestPlatformStats:
         assert resp.status_code == 200
         data = resp.json()
         assert "total_tenants" in data
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/platform/tenants/{tenant_id}/health — API-029
+# ---------------------------------------------------------------------------
+
+_MOCK_HEALTH_COMPONENTS = {
+    "usage_trend_pct": -0.15,  # 15% decline (850 recent vs 1000 prior)
+    "feature_breadth": 0.60,  # 3 of 5 features active
+    "satisfaction_pct": 90.0,  # 45/50 positive feedback
+    "error_rate_pct": 0.0,  # 0 open issues
+    "recent_queries": 850,
+    "prior_queries": 1000,
+    "features_active": 3,
+    "positive_feedback": 45,
+    "total_feedback": 50,
+    "open_issues": 0,
+}
+
+_MOCK_TENANT = {
+    "id": TEST_TENANT_ID,
+    "name": "Acme Corp",
+    "slug": "acme-corp-12345678",
+    "plan": "professional",
+    "status": "active",
+    "primary_contact_email": "admin@acme.com",
+    "created_at": "2025-01-01T00:00:00",
+}
+
+
+class TestGetTenantHealthScore:
+    """GET /api/v1/platform/tenants/{tenant_id}/health (API-029)"""
+
+    def test_health_requires_auth(self, client):
+        """Unauthenticated request returns 401."""
+        resp = client.get(f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health")
+        assert resp.status_code == 401
+
+    def test_health_requires_platform_admin(self, client, tenant_headers):
+        """Tenant admin (non-platform admin) is rejected with 403."""
+        resp = client.get(
+            f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+            headers=tenant_headers,
+        )
+        assert resp.status_code == 403
+
+    def test_health_returns_404_for_unknown_tenant(self, client, platform_headers):
+        """Returns 404 when tenant does not exist."""
+        with patch(
+            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = None
+            resp = client.get(
+                "/api/v1/platform/tenants/nonexistent/health",
+                headers=platform_headers,
+            )
+        assert resp.status_code == 404
+
+    def test_health_returns_all_required_fields(self, client, platform_headers):
+        """200 response includes overall_score, category, at_risk, and 4 components."""
+        with patch(
+            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+        ) as mock_get, patch(
+            "app.modules.tenants.routes.get_tenant_health_components_db",
+            new_callable=AsyncMock,
+        ) as mock_components:
+            mock_get.return_value = _MOCK_TENANT
+            mock_components.return_value = _MOCK_HEALTH_COMPONENTS
+            resp = client.get(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                headers=platform_headers,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "overall_score" in data
+        assert "category" in data
+        assert "at_risk" in data
+        assert "tenant_id" in data
+        assert data["tenant_id"] == TEST_TENANT_ID
+
+        components = data["components"]
+        assert "usage_trend" in components
+        assert "feature_breadth" in components
+        assert "satisfaction" in components
+        assert "error_rate" in components
+
+    def test_health_component_weights_are_correct(self, client, platform_headers):
+        """Each component carries the correct weight (30/20/35/15)."""
+        with patch(
+            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+        ) as mock_get, patch(
+            "app.modules.tenants.routes.get_tenant_health_components_db",
+            new_callable=AsyncMock,
+        ) as mock_components:
+            mock_get.return_value = _MOCK_TENANT
+            mock_components.return_value = _MOCK_HEALTH_COMPONENTS
+            resp = client.get(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                headers=platform_headers,
+            )
+
+        data = resp.json()["components"]
+        assert data["usage_trend"]["weight"] == 0.30
+        assert data["feature_breadth"]["weight"] == 0.20
+        assert data["satisfaction"]["weight"] == 0.35
+        assert data["error_rate"]["weight"] == 0.15
+
+    def test_health_at_risk_flag_set_for_low_score(self, client, platform_headers):
+        """at_risk is True when overall score falls below the 61-point threshold."""
+        low_components = {
+            **_MOCK_HEALTH_COMPONENTS,
+            "usage_trend_pct": -1.0,  # maximum decline
+            "feature_breadth": 0.0,
+            "satisfaction_pct": 0.0,
+            "error_rate_pct": 100.0,  # maximum errors
+        }
+        with patch(
+            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+        ) as mock_get, patch(
+            "app.modules.tenants.routes.get_tenant_health_components_db",
+            new_callable=AsyncMock,
+        ) as mock_components:
+            mock_get.return_value = _MOCK_TENANT
+            mock_components.return_value = low_components
+            resp = client.get(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                headers=platform_headers,
+            )
+
+        data = resp.json()
+        assert data["at_risk"] is True
+        assert data["overall_score"] < 61.0
+
+    def test_health_at_risk_false_for_healthy_tenant(self, client, platform_headers):
+        """at_risk is False when all health components are at maximum."""
+        high_components = {
+            **_MOCK_HEALTH_COMPONENTS,
+            "usage_trend_pct": 0.0,  # flat growth (full score)
+            "feature_breadth": 1.0,
+            "satisfaction_pct": 100.0,
+            "error_rate_pct": 0.0,
+        }
+        with patch(
+            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+        ) as mock_get, patch(
+            "app.modules.tenants.routes.get_tenant_health_components_db",
+            new_callable=AsyncMock,
+        ) as mock_components:
+            mock_get.return_value = _MOCK_TENANT
+            mock_components.return_value = high_components
+            resp = client.get(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                headers=platform_headers,
+            )
+
+        data = resp.json()
+        assert data["at_risk"] is False
+        assert data["overall_score"] >= 61.0
+
+    def test_health_component_details_include_raw_counts(
+        self, client, platform_headers
+    ):
+        """Each component includes a details dict with raw DB count data."""
+        with patch(
+            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+        ) as mock_get, patch(
+            "app.modules.tenants.routes.get_tenant_health_components_db",
+            new_callable=AsyncMock,
+        ) as mock_components:
+            mock_get.return_value = _MOCK_TENANT
+            mock_components.return_value = _MOCK_HEALTH_COMPONENTS
+            resp = client.get(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                headers=platform_headers,
+            )
+
+        data = resp.json()["components"]
+        assert "recent_queries" in data["usage_trend"]["details"]
+        assert "prior_queries" in data["usage_trend"]["details"]
+        assert "features_active" in data["feature_breadth"]["details"]
+        assert data["feature_breadth"]["details"]["features_total"] == 5
+        assert "positive_feedback" in data["satisfaction"]["details"]
+        assert "total_feedback" in data["satisfaction"]["details"]
+        assert "open_issues" in data["error_rate"]["details"]

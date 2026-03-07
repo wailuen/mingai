@@ -1,13 +1,16 @@
 """
-Issue Reports API routes (API-013, API-014).
+Issue Reports API routes (API-013, API-014, API-015, API-016, API-017).
 
 Endpoints:
-- GET    /issue-reports/presign       — Get presigned upload URL (API-014, any user)
-- GET    /issues                      — List tenant issues (tenant admin only)
-- POST   /issues                      — Create issue (any authenticated user)
-- GET    /issues/{issue_id}           — Get issue (tenant admin or issue owner)
-- PATCH  /issues/{issue_id}/status    — Update status (tenant admin only)
-- POST   /issues/{issue_id}/events    — Add event/comment (tenant admin only)
+- GET    /issue-reports/presign               — Presigned upload URL (API-014, any user)
+- GET    /my-reports                          — List current user's reports (API-015)
+- GET    /my-reports/{id}                     — Get own report detail (API-016)
+- POST   /issue-reports/{id}/still-happening  — Still happening confirmation (API-017)
+- GET    /issues                              — List tenant issues (tenant admin only)
+- POST   /issues                              — Create issue (any authenticated user)
+- GET    /issues/{issue_id}                   — Get issue (tenant admin or issue owner)
+- PATCH  /issues/{issue_id}/status            — Update status (tenant admin only)
+- POST   /issues/{issue_id}/events            — Add event/comment (tenant admin only)
 
 Schema: issue_reports(id, tenant_id, user_id, title, description,
         screenshot_url, status, blur_acknowledged, created_at)
@@ -20,7 +23,7 @@ from enum import Enum
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from sqlalchemy import text
@@ -59,6 +62,11 @@ class UpdateIssueStatusRequest(BaseModel):
 
 class AddIssueEventRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+
+
+class StillHappeningRequest(BaseModel):
+    additional_context: Optional[str] = Field(None, max_length=2000)
+    fix_deployment_id: Optional[str] = Field(None, max_length=200)
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +290,189 @@ async def add_issue_event_db(
 # ---------------------------------------------------------------------------
 
 
+async def list_my_issues_db(
+    user_id: str,
+    tenant_id: str,
+    page: int,
+    page_size: int,
+    status_filter: Optional[str],
+    db,
+) -> dict:
+    """List issue reports submitted by the current user."""
+    offset = (page - 1) * page_size
+
+    if status_filter:
+        count_result = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM issue_reports "
+                "WHERE user_id = :user_id AND tenant_id = :tenant_id AND status = :status"
+            ),
+            {"user_id": user_id, "tenant_id": tenant_id, "status": status_filter},
+        )
+    else:
+        count_result = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM issue_reports "
+                "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+            ),
+            {"user_id": user_id, "tenant_id": tenant_id},
+        )
+    total = count_result.scalar() or 0
+
+    if status_filter:
+        rows_result = await db.execute(
+            text(
+                "SELECT id, title, description, screenshot_url, status, "
+                "blur_acknowledged, created_at, updated_at FROM issue_reports "
+                "WHERE user_id = :user_id AND tenant_id = :tenant_id AND status = :status "
+                "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+            ),
+            {
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "status": status_filter,
+                "limit": page_size,
+                "offset": offset,
+            },
+        )
+    else:
+        rows_result = await db.execute(
+            text(
+                "SELECT id, title, description, screenshot_url, status, "
+                "blur_acknowledged, created_at, updated_at FROM issue_reports "
+                "WHERE user_id = :user_id AND tenant_id = :tenant_id "
+                "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+            ),
+            {
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "limit": page_size,
+                "offset": offset,
+            },
+        )
+
+    rows = rows_result.fetchall()
+    items = [
+        {
+            "id": str(r[0]),
+            "title": r[1],
+            "description": r[2],
+            "screenshot_url": r[3],
+            "status": r[4],
+            "blur_acknowledged": r[5],
+            "created_at": str(r[6]),
+            "updated_at": str(r[7]) if r[7] else None,
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+async def get_my_issue_db(
+    issue_id: str, user_id: str, tenant_id: str, db
+) -> Optional[dict]:
+    """Get a single issue report owned by the current user."""
+    result = await db.execute(
+        text(
+            "SELECT id, title, description, screenshot_url, status, "
+            "blur_acknowledged, created_at FROM issue_reports "
+            "WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id"
+        ),
+        {"id": issue_id, "user_id": user_id, "tenant_id": tenant_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        return None
+
+    # Fetch timeline events for this issue
+    events_result = await db.execute(
+        text(
+            "SELECT id, content, created_at FROM issue_events "
+            "WHERE issue_id = :issue_id ORDER BY created_at ASC"
+        ),
+        {"issue_id": issue_id},
+    )
+    timeline = [
+        {"id": str(e[0]), "event": e[1], "timestamp": str(e[2])}
+        for e in events_result.fetchall()
+    ]
+
+    return {
+        "id": str(row[0]),
+        "title": row[1],
+        "description": row[2],
+        "screenshot_url": row[3],
+        "status": row[4],
+        "blur_acknowledged": row[5],
+        "created_at": str(row[6]),
+        "timeline": timeline,
+    }
+
+
+async def record_still_happening_db(
+    issue_id: str,
+    user_id: str,
+    tenant_id: str,
+    additional_context: Optional[str],
+    fix_deployment_id: str,
+    db,
+) -> dict:
+    """
+    Record a 'still happening' occurrence and create a regression report.
+
+    Creates a new issue report linked to the original, records the occurrence
+    in the rate limiter, and returns routing decision + new report ID.
+
+    The issue existence check runs BEFORE the rate-limiter UPSERT to avoid
+    incrementing an orphaned counter for a non-existent issue.
+    """
+    from app.modules.issues.still_happening import StillHappeningRateLimiter
+
+    # Verify original issue exists BEFORE touching the rate-limiter counter.
+    # This prevents orphaned counter rows that would prematurely route valid
+    # future reports to human_review instead of auto_escalate.
+    orig = await get_issue_db(issue_id, tenant_id, db)
+    if orig is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue '{issue_id}' not found",
+        )
+
+    # Record occurrence in rate limiter
+    limiter = StillHappeningRateLimiter(db=db)
+    routing = await limiter.record_occurrence(issue_id, fix_deployment_id)
+
+    # Create a regression report linked to the original issue
+    regression_title = f"[REGRESSION] {orig['title']}"
+    regression_desc = (
+        f"User reports issue is still occurring after fix deployment '{fix_deployment_id}'.\n"
+        f"Original issue: {issue_id}\n"
+        f"Additional context: {additional_context or 'None'}"
+    )
+    new_report = await create_issue_db(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        title=regression_title,
+        description=regression_desc,
+        screenshot_url=None,
+        blur_acknowledged=False,
+        db=db,
+    )
+
+    logger.info(
+        "still_happening_recorded",
+        original_issue_id=issue_id,
+        new_report_id=new_report["id"],
+        routing=routing,
+        fix_deployment_id=fix_deployment_id,
+    )
+    return {
+        "status": "regression_reported",
+        "new_report_id": new_report["id"],
+        "routing": routing,
+    }
+
+
 @router.get("/issue-reports/presign")
 async def presign_screenshot_upload(
     filename: str = Query(..., min_length=1, max_length=255),
@@ -328,6 +519,76 @@ async def presign_screenshot_upload(
     }
 
 
+@router.get("/my-reports")
+async def list_my_reports(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: Optional[IssueStatus] = Query(None, alias="status"),
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-015: List current user's own submitted issue reports (paginated)."""
+    result = await list_my_issues_db(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        page=page,
+        page_size=page_size,
+        status_filter=status_filter.value if status_filter else None,
+        db=session,
+    )
+    return result
+
+
+@router.get("/my-reports/{report_id}")
+async def get_my_report(
+    report_id: str = Path(..., max_length=36),
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-016: Get detail of one of the current user's own issue reports."""
+    result = await get_my_issue_db(
+        issue_id=report_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue report '{report_id}' not found",
+        )
+    return result
+
+
+@router.post(
+    "/issue-reports/{issue_id}/still-happening", status_code=status.HTTP_201_CREATED
+)
+async def still_happening(
+    issue_id: str = Path(..., max_length=36),
+    request: StillHappeningRequest = ...,
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-017: Confirm issue is still occurring after a fix was deployed.
+
+    Rate limited: max 1 auto-escalation per fix deployment. Second occurrence
+    triggers human review. Creates a linked regression report.
+    """
+    # Use provided fix_deployment_id or fall back to the original issue_id as a proxy
+    fix_deployment_id = request.fix_deployment_id or f"fix-for-{issue_id}"
+
+    result = await record_still_happening_db(
+        issue_id=issue_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        additional_context=request.additional_context,
+        fix_deployment_id=fix_deployment_id,
+        db=session,
+    )
+    return result
+
+
 @router.get("/issues")
 async def list_issues(
     page: int = Query(1, ge=1),
@@ -341,7 +602,7 @@ async def list_issues(
         tenant_id=current_user.tenant_id,
         page=page,
         page_size=page_size,
-        status_filter=status_filter,
+        status_filter=status_filter.value if status_filter else None,
         db=session,
     )
     return result

@@ -487,3 +487,266 @@ class TestPresignScreenshotUpload:
                 headers=user_headers,
             )
         assert resp.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/my-reports — List current user's own reports (API-015)
+# ---------------------------------------------------------------------------
+
+
+class TestListMyReports:
+    """GET /api/v1/my-reports (API-015)"""
+
+    def test_list_my_reports_requires_auth(self, client):
+        """Unauthenticated request returns 401."""
+        resp = client.get("/api/v1/my-reports")
+        assert resp.status_code == 401
+
+    def test_list_my_reports_returns_paginated(self, client, user_headers):
+        """Returns paginated list with items/total/page/page_size."""
+        with patch(
+            "app.modules.issues.routes.list_my_issues_db", new_callable=AsyncMock
+        ) as mock_list:
+            mock_list.return_value = {
+                "items": [
+                    {
+                        "id": "report-1",
+                        "title": "Login broken",
+                        "status": "open",
+                        "created_at": "2026-01-01T00:00:00",
+                        "updated_at": None,
+                    }
+                ],
+                "total": 1,
+                "page": 1,
+                "page_size": 20,
+            }
+            resp = client.get("/api/v1/my-reports", headers=user_headers)
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert "total" in data
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == "report-1"
+
+    def test_list_my_reports_scoped_to_current_user(self, client, user_headers):
+        """DB helper is called with the current user's user_id, not someone else's."""
+        captured = {}
+
+        async def capture(user_id, tenant_id, page, page_size, status_filter, db):
+            captured["user_id"] = user_id
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+
+        with patch("app.modules.issues.routes.list_my_issues_db", side_effect=capture):
+            client.get("/api/v1/my-reports", headers=user_headers)
+
+        assert captured["user_id"] == TEST_USER_ID
+
+    def test_list_my_reports_accepts_status_filter(self, client, user_headers):
+        """status=open query param is passed through to DB helper."""
+        captured = {}
+
+        async def capture(user_id, tenant_id, page, page_size, status_filter, db):
+            captured["status_filter"] = status_filter
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+
+        with patch("app.modules.issues.routes.list_my_issues_db", side_effect=capture):
+            client.get(
+                "/api/v1/my-reports",
+                params={"status": "open"},
+                headers=user_headers,
+            )
+
+        assert captured["status_filter"] == "open"
+
+    def test_list_my_reports_invalid_status_returns_422(self, client, user_headers):
+        """An unknown status value is rejected by pydantic enum validation."""
+        resp = client.get(
+            "/api/v1/my-reports",
+            params={"status": "invalid_status"},
+            headers=user_headers,
+        )
+        assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/my-reports/{report_id} — Get own report detail (API-016)
+# ---------------------------------------------------------------------------
+
+
+class TestGetMyReport:
+    """GET /api/v1/my-reports/{report_id} (API-016)"""
+
+    def test_get_my_report_requires_auth(self, client):
+        """Unauthenticated request returns 401."""
+        resp = client.get("/api/v1/my-reports/report-1")
+        assert resp.status_code == 401
+
+    def test_get_my_report_returns_detail_with_timeline(self, client, user_headers):
+        """200 response includes timeline field listing issue events."""
+        with patch(
+            "app.modules.issues.routes.get_my_issue_db", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = {
+                "id": "report-1",
+                "title": "Login broken",
+                "description": "Cannot log in after password reset.",
+                "screenshot_url": None,
+                "status": "investigating",
+                "blur_acknowledged": False,
+                "created_at": "2026-01-01T00:00:00",
+                "timeline": [
+                    {
+                        "id": "event-1",
+                        "event": "Investigation started",
+                        "timestamp": "2026-01-02T10:00:00",
+                    }
+                ],
+            }
+            resp = client.get("/api/v1/my-reports/report-1", headers=user_headers)
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == "report-1"
+        assert "timeline" in data
+        assert len(data["timeline"]) == 1
+        assert data["timeline"][0]["event"] == "Investigation started"
+
+    def test_get_my_report_returns_404_when_not_found(self, client, user_headers):
+        """Returns 404 when the report does not exist or belongs to another user."""
+        with patch(
+            "app.modules.issues.routes.get_my_issue_db", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = None
+            resp = client.get("/api/v1/my-reports/nonexistent", headers=user_headers)
+
+        assert resp.status_code == 404
+
+    def test_get_my_report_scoped_to_current_user(self, client, user_headers):
+        """DB helper is called with the current user's ID — cross-user access not possible."""
+        captured = {}
+
+        async def capture(issue_id, user_id, tenant_id, db):
+            captured["user_id"] = user_id
+            return None  # triggers 404, but we only care about the arg
+
+        with patch("app.modules.issues.routes.get_my_issue_db", side_effect=capture):
+            client.get("/api/v1/my-reports/report-1", headers=user_headers)
+
+        assert captured["user_id"] == TEST_USER_ID
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/issue-reports/{issue_id}/still-happening — API-017
+# ---------------------------------------------------------------------------
+
+
+class TestStillHappening:
+    """POST /api/v1/issue-reports/{issue_id}/still-happening (API-017)"""
+
+    def test_still_happening_requires_auth(self, client):
+        """Unauthenticated request returns 401."""
+        resp = client.post(
+            "/api/v1/issue-reports/issue-1/still-happening",
+            json={},
+        )
+        assert resp.status_code == 401
+
+    def test_still_happening_returns_201_with_routing(self, client, user_headers):
+        """Returns 201 with status, new_report_id, and routing field."""
+        with patch(
+            "app.modules.issues.routes.record_still_happening_db",
+            new_callable=AsyncMock,
+        ) as mock_record:
+            mock_record.return_value = {
+                "status": "regression_reported",
+                "new_report_id": "report-new",
+                "routing": "auto_escalate",
+            }
+            resp = client.post(
+                "/api/v1/issue-reports/issue-1/still-happening",
+                json={"additional_context": "Still broken on mobile too"},
+                headers=user_headers,
+            )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["status"] == "regression_reported"
+        assert "new_report_id" in data
+        assert "routing" in data
+
+    def test_still_happening_uses_provided_fix_deployment_id(
+        self, client, user_headers
+    ):
+        """fix_deployment_id from request body is passed to the DB helper."""
+        captured = {}
+
+        async def capture(
+            issue_id, user_id, tenant_id, additional_context, fix_deployment_id, db
+        ):
+            captured["fix_deployment_id"] = fix_deployment_id
+            return {
+                "status": "regression_reported",
+                "new_report_id": "r",
+                "routing": "auto_escalate",
+            }
+
+        with patch(
+            "app.modules.issues.routes.record_still_happening_db",
+            side_effect=capture,
+        ):
+            client.post(
+                "/api/v1/issue-reports/issue-1/still-happening",
+                json={"fix_deployment_id": "deploy-v2.3.1"},
+                headers=user_headers,
+            )
+
+        assert captured["fix_deployment_id"] == "deploy-v2.3.1"
+
+    def test_still_happening_falls_back_fix_deployment_id_when_absent(
+        self, client, user_headers
+    ):
+        """When fix_deployment_id is not provided, falls back to 'fix-for-{issue_id}'."""
+        captured = {}
+
+        async def capture(
+            issue_id, user_id, tenant_id, additional_context, fix_deployment_id, db
+        ):
+            captured["fix_deployment_id"] = fix_deployment_id
+            return {
+                "status": "regression_reported",
+                "new_report_id": "r",
+                "routing": "auto_escalate",
+            }
+
+        with patch(
+            "app.modules.issues.routes.record_still_happening_db",
+            side_effect=capture,
+        ):
+            client.post(
+                "/api/v1/issue-reports/issue-42/still-happening",
+                json={},
+                headers=user_headers,
+            )
+
+        assert captured["fix_deployment_id"] == "fix-for-issue-42"
+
+    def test_still_happening_original_not_found_returns_404(self, client, user_headers):
+        """Returns 404 when the DB helper raises HTTPException(404)."""
+        from fastapi import HTTPException as FastAPIHTTPException
+
+        with patch(
+            "app.modules.issues.routes.record_still_happening_db",
+            new_callable=AsyncMock,
+        ) as mock_record:
+            mock_record.side_effect = FastAPIHTTPException(
+                status_code=404, detail="Issue 'issue-99' not found"
+            )
+            resp = client.post(
+                "/api/v1/issue-reports/issue-99/still-happening",
+                json={},
+                headers=user_headers,
+            )
+
+        assert resp.status_code == 404
