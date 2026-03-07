@@ -107,6 +107,12 @@ Key: `mingai:{tenant_id}:team_memory:{team_id}`
 
 `TeamWorkingMemoryService` stores anonymized team query topics. `user_id` is NEVER written here — only the string `"a team member asked: <truncated>"`. GDPR-isolated from individual user data.
 
+**4. Notification delivery (per-user Pub/Sub)**
+
+Channel: `mingai:{tenant_id}:notifications:{user_id}`
+
+`publish_notification()` in `modules/notifications/publisher.py` writes to this channel. The SSE route subscribes and streams events to the connected client. When the client disconnects, the subscription is released in a `finally` block. This is ephemeral — no persistence; missed messages while the client is offline are not replayed.
+
 **Redis key namespace convention**: `mingai:{tenant_id}:{service}:{id...}`
 
 **CacheService / @cached decorator**: Available in `core/cache.py` for route-level caching. Not currently used on hot paths — added for future optimization.
@@ -125,6 +131,38 @@ Flow:
 5. `ScreenshotBlurService` applies PIL Gaussian blur to the stored image (background task — Phase 1 inline, Phase 2 async worker).
 
 The blur acknowledgement is a user-consent signal, not a guarantee of blur completion at submission time. The service processes asynchronously.
+
+---
+
+## Async Issue Triage Pipeline (Redis Streams)
+
+INFRA-017/018. Issue reports flow through a Redis Stream for async triage by `IssueTriageAgent`.
+
+**Producer** (`modules/issues/stream.py`):
+
+- `publish_issue_to_stream(report_id, tenant_id, issue_type, severity_hint, redis)` — XADD to `issue_reports:incoming`, MAXLEN ~10,000.
+- Called from the issue create route after DB commit.
+
+**Consumer** (`modules/issues/worker.py`):
+
+- `run_triage_worker(worker_id)` — XREADGROUP loop, consumer group `issue_triage_workers`, 5s blocking read, 10 messages per batch.
+- `process_message(msg_id, fields, db_session, redis)` — calls IssueTriageAgent with 3-retry exponential backoff. XACK on success, NACK on permanent failure.
+- `reclaim_abandoned_messages(consumer_id, redis, db_session)` — XCLAIM for messages idle >5 min from dead consumers.
+
+Worker startup calls `ensure_stream_group(redis)` once (idempotent XGROUP CREATE MKSTREAM). The group must exist before any XREADGROUP call.
+
+Design constraints:
+- `STREAM_MAX_LEN = 10_000` keeps memory bounded (approximate trimming).
+- Consumer group name is a module constant — never construct it dynamically.
+- Workers are stateless; multiple instances share the same consumer group for horizontal scaling.
+
+---
+
+## GitHub Webhook Integration
+
+`POST /webhooks/github` receives GitHub events and updates `issue_reports` status to track the fix lifecycle. HMAC-SHA256 signature validation is mandatory — the endpoint returns 503 (not 401) when `GITHUB_WEBHOOK_SECRET` is unset (fail-closed).
+
+Event → status transitions update the linked `issue_reports` row. The mapping is a static dict in the route handler. Unrecognized events are acknowledged (200) without DB writes.
 
 ---
 

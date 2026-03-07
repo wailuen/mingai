@@ -36,8 +36,10 @@ src/backend/app/
       jwt.py               # decode_jwt_token(), decode_jwt_token_v1_compat(), JWTValidationError
       routes.py            # POST /auth/local/login, /auth/token/refresh, /auth/logout, GET /auth/current
     issues/
-      routes.py            # Full CRUD for issue_reports — blur gate enforced here
+      routes.py            # Full CRUD + admin/platform queues + GitHub webhook
       blur_service.py      # ScreenshotBlurService — PIL Gaussian blur pipeline
+      stream.py            # Redis Stream producer (XADD) — issue_reports:incoming
+      worker.py            # Redis Stream consumer (XREADGROUP) — triage worker loop
     chat/
       orchestrator.py      # ChatOrchestrationService — 8-stage RAG pipeline
       routes.py            # POST /chat/stream, /chat/feedback; GET/DELETE /conversations/...
@@ -63,6 +65,9 @@ src/backend/app/
     tenants/routes.py      # Platform admin — tenant CRUD
     platform/routes.py     # Platform admin dashboard
     profile/learning.py    # ProfileLearningService — async learning from queries
+    notifications/
+      publisher.py         # publish_notification() — Redis Pub/Sub producer
+      routes.py            # GET /notifications/stream — SSE delivery via StreamingResponse
 ```
 
 ---
@@ -229,6 +234,86 @@ INSERT INTO t (col) VALUES (CAST(:val AS jsonb))
 INSERT INTO t (col) VALUES (:val::jsonb)
 ```
 
+### 11. Notification Channel Naming and SSE Pattern
+
+Redis Pub/Sub channel for per-user notifications:
+
+```
+mingai:{tenant_id}:notifications:{user_id}
+```
+
+`publisher.py` publishes JSON to this channel. The route subscribes and forwards events as SSE:
+
+```python
+# notifications/routes.py — the SSE generator pattern
+async def event_generator(pubsub):
+    try:
+        while True:
+            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=30.0)
+            if msg:
+                yield f"data: {msg['data']}\n\n"
+            else:
+                yield ": keepalive\n\n"  # every 30s to prevent proxy timeouts
+    finally:
+        await pubsub.unsubscribe()
+
+# Route uses StreamingResponse with media_type="text/event-stream"
+return StreamingResponse(event_generator(pubsub), media_type="text/event-stream")
+```
+
+`publish_notification(user_id, tenant_id, notification_type, title, body, link=None, redis=None)` is the sole write path. Never publish directly to the channel outside this function.
+
+### 12. Redis Stream Constants and Patterns
+
+Stream key and consumer group are module-level constants in `issues/stream.py`:
+
+```python
+STREAM_KEY = "issue_reports:incoming"
+CONSUMER_GROUP = "issue_triage_workers"
+STREAM_MAX_LEN = 10_000  # MAXLEN ~ applied on XADD
+```
+
+`ensure_stream_group(redis)` is idempotent — uses `XGROUP CREATE ... MKSTREAM` with `SETID 0`. Call once at worker startup; safe to call repeatedly.
+
+`publish_issue_to_stream(report_id, tenant_id, issue_type, severity_hint, redis)` does XADD with `maxlen=STREAM_MAX_LEN, approximate=True`.
+
+Worker (`issues/worker.py`) uses `XREADGROUP GROUP ... COUNT 10 BLOCK 5000`. On failure it applies exponential backoff with 3 retries before NACK. `reclaim_abandoned_messages` uses XCLAIM to recover messages idle >5 min from any dead consumer.
+
+### 13. Issue Action Allowlists — State Machine Enforcement
+
+Both admin and platform issue action endpoints enforce transitions through a module-level allowlist. Never accept arbitrary action strings.
+
+Tenant admin actions (`POST /admin/issues/{id}/action`):
+
+```python
+_ADMIN_ISSUE_ACTIONS = {"assign", "resolve", "escalate", "request_info", "close_duplicate"}
+```
+
+Platform admin actions (`POST /platform/issues/{id}/action`):
+
+```python
+_PLATFORM_ISSUE_ACTIONS = {"override_severity", "route_to_tenant", "assign_sprint", "close_wontfix"}
+```
+
+Both follow the same route pattern as other PATCH endpoints: validate action against allowlist, then execute parameterized SQL. Reject unknown actions with 422.
+
+### 14. GitHub Webhook — HMAC-SHA256, Fail-Closed
+
+`POST /webhooks/github` validates the `X-Hub-Signature-256` header using HMAC-SHA256 over the raw request body. The secret comes from `GITHUB_WEBHOOK_SECRET` in env.
+
+Fail-closed rule: if `GITHUB_WEBHOOK_SECRET` is not set, the endpoint returns 503 immediately. Never process an unverified webhook payload.
+
+Event-to-status mapping (applied to `issue_reports`):
+
+| GitHub event | New status |
+|---|---|
+| `issues.labeled` | `triaged` |
+| `pull_request.opened` | `fix_in_progress` |
+| `pull_request.merged` | `fix_merged` |
+| `release.published` | `fix_deployed` |
+
+Unrecognized events return 200 with `{"processed": false}` — do not raise errors for unknown event types.
+
 ---
 
 ## Test Patterns
@@ -302,6 +387,10 @@ No mocking. Requires full running stack. Uses Playwright.
 8. **`GlossaryExpander(db=None)` is valid** — returns [] from `_get_terms()` with debug log. For unit tests only.
 9. **Issues router must be registered BEFORE chat router** — prevents chat router's wildcard paths from shadowing `/issues`.
 10. **`on_event` in main.py is deprecated** — migrate to `lifespan` when refactoring startup.
+11. **SSE connections hold Redis subscriptions open** — always `await pubsub.unsubscribe()` in a `finally` block on disconnect.
+12. **`ensure_stream_group` must run before the worker's XREADGROUP loop** — if the group doesn't exist the XREADGROUP call raises a Redis error.
+13. **`GITHUB_WEBHOOK_SECRET` unset → 503, not 401** — fail-closed; never fall through to processing.
+14. **`_SAFE_SEGMENT_RE` in `redis_client.py` now validates both `tenant_id` and `key_type` and all `*parts`** — any segment with a colon raises ValueError immediately.
 
 ---
 
@@ -321,6 +410,7 @@ No mocking. Requires full running stack. Uses Playwright.
 | `AZURE_PLATFORM_OPENAI_API_KEY`  | If azure | Required when `CLOUD_PROVIDER=azure`          |
 | `AZURE_PLATFORM_OPENAI_ENDPOINT` | If azure | Required when `CLOUD_PROVIDER=azure`          |
 | `DEBUG`                          | No       | `true` exposes exception details in responses |
+| `GITHUB_WEBHOOK_SECRET`          | If webhooks | HMAC-SHA256 secret for GitHub webhook. Endpoint returns 503 if unset. |
 
 ---
 
@@ -336,3 +426,5 @@ No mocking. Requires full running stack. Uses Playwright.
 8. Glossary definitions sanitized against injection patterns before storage.
 9. Error responses never leak internal config in production (`DEBUG=false`).
 10. Logs never record passwords, tokens, or full API keys.
+11. GitHub webhook payload rejected (503) when `GITHUB_WEBHOOK_SECRET` is unset — never process unverified payloads.
+12. Redis key segments (`tenant_id`, `key_type`, all `*parts`) validated against `_SAFE_SEGMENT_RE` — colons in any segment raise ValueError before key construction.

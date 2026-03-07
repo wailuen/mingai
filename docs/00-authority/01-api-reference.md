@@ -35,17 +35,50 @@ Login body: `{ "email": str, "password": str }`. Returns `{ "access_token", "tok
 
 ## Issues
 
+### End-User Issue Reporting
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/issues` | tenant_admin | List tenant issues (paginated, filterable by `status`). |
 | POST | `/issues` | Any | Create issue. `screenshot_url` requires `blur_acknowledged=true`. |
 | GET | `/issues/{id}` | Any | Get issue. Admin sees all; others see own only. |
-| PATCH | `/issues/{id}/status` | tenant_admin | Update status: `open`, `investigating`, `resolved`, `closed`. |
-| POST | `/issues/{id}/events` | tenant_admin | Add comment/event to issue log. |
 | GET | `/issue-reports/presign` | Any | Get presigned upload URL. Query params: `filename`, `content_type` (image/png or image/jpeg). |
 | GET | `/my-reports` | Any | Current user's own reports (paginated). |
 | GET | `/my-reports/{id}` | Any | Detail of own report with timeline. |
 | POST | `/issue-reports/{id}/still-happening` | Any | Report regression. Creates linked report; auto-escalates or routes to human review. |
+
+### Tenant Admin Issue Queue (API-019/020)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/admin/issues` | tenant_admin | List tenant issues. Query params: `status`, `severity`, `page`, `page_size`. Results scoped to caller's tenant via RLS. |
+| PATCH | `/issues/{id}/status` | tenant_admin | Update status: `open`, `investigating`, `resolved`, `closed`. |
+| POST | `/issues/{id}/events` | tenant_admin | Add comment/event to issue log. |
+| POST | `/admin/issues/{id}/action` | tenant_admin | State machine action. Body: `{ "action": "assign"\|"resolve"\|"escalate"\|"request_info"\|"close_duplicate", "payload"?: {} }`. Unknown actions → 422. |
+
+### Platform Issue Queue (API-021/022/023)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/platform/issues` | platform_admin | Cross-tenant issue list. Query params: `tenant_id`?, `severity`, `status`, `page`, `page_size`. |
+| POST | `/platform/issues/{id}/action` | platform_admin | Triage action. Body: `{ "action": "override_severity"\|"route_to_tenant"\|"assign_sprint"\|"close_wontfix", "payload"?: {} }`. Unknown actions → 422. |
+| GET | `/platform/issues/stats` | platform_admin | Aggregated issue stats. Query param: `period=7d\|30d\|90d`. Returns counts by severity and status across all tenants. |
+
+### GitHub Webhook (API-018)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/webhooks/github` | HMAC-SHA256 | GitHub event ingestion. Validates `X-Hub-Signature-256` header. Returns 503 if `GITHUB_WEBHOOK_SECRET` not configured. |
+
+Supported events → status transitions:
+
+| Event | Status applied |
+|---|---|
+| `issues.labeled` | `triaged` |
+| `pull_request.opened` | `fix_in_progress` |
+| `pull_request.merged` | `fix_merged` |
+| `release.published` | `fix_deployed` |
+
+Unrecognized events return `{ "processed": false }` with status 200.
 
 ---
 
@@ -69,6 +102,9 @@ All require `scope=platform` (i.e. `platform_admin` role).
 | PATCH | `/platform/llm-profiles/{id}` | platform_admin | Update LLM profile fields. |
 | DELETE | `/platform/llm-profiles/{id}` | platform_admin | Delete profile. 409 if assigned to a tenant. |
 | GET | `/platform/stats` | platform_admin | Platform stats: total_tenants, active_tenants, total_users, queries_today. |
+| GET | `/platform/issues` | platform_admin | Cross-tenant issue list. See Issues → Platform Issue Queue above. |
+| POST | `/platform/issues/{id}/action` | platform_admin | Triage action. See Issues → Platform Issue Queue above. |
+| GET | `/platform/issues/stats` | platform_admin | Issue stats with period filter. See Issues → Platform Issue Queue above. |
 
 ---
 
@@ -163,6 +199,16 @@ Available when `CLOUD_PROVIDER=local`. Internal endpoints, not part of the exter
 |--------|------|-------------|
 | PUT | `/storage/upload` | HMAC-signed upload target for local dev. |
 | GET | `/storage/serve/{path}` | Serve stored file. |
+
+---
+
+## Notifications (API-012)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/notifications/stream` | Any | SSE notification stream. `Content-Type: text/event-stream`. Keepalive comment every 30s. Closes when client disconnects. |
+
+The stream delivers JSON payloads published to `mingai:{tenant_id}:notifications:{user_id}` via Redis Pub/Sub. Each event line: `data: {json}\n\n`. Keepalives: `: keepalive\n\n`.
 
 ---
 

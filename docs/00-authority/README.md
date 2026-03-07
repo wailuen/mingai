@@ -2,6 +2,8 @@
 
 Read these before touching any backend code. They contain non-negotiable architecture decisions and the constraints that keep the system consistent.
 
+Last updated: 2026-03-07. Reflects Phase 1 + Phase 2 implementation.
+
 ## What is mingai
 
 mingai is a multi-tenant enterprise AI assistant platform. End users query a RAG-backed AI agent. Tenant admins manage their workspace — users, documents, glossary, issues. Platform admins operate the platform — tenants, LLM profiles, dashboards.
@@ -14,7 +16,14 @@ This repository (`src/backend/`) is the FastAPI backend. Port 8022. All endpoint
 |---|---|---|
 | `CLAUDE.md` | Stack, patterns, gotchas, security invariants | Start of every backend session |
 | `01-api-reference.md` | All endpoints — method, path, auth requirement | Adding or changing endpoints |
-| `02-architecture.md` | Multi-tenancy, JWT, storage, caching decisions | Touching core infrastructure |
+| `02-architecture.md` | Multi-tenancy, JWT, storage, caching, streams decisions | Touching core infrastructure |
+
+## Phase Coverage
+
+| Phase | Modules |
+|---|---|
+| Phase 1 | Auth, Chat, Issues (CRUD), Memory, Admin, Glossary, Documents, Users, Teams, Tenants, Platform, Profile |
+| Phase 2 | Notifications (SSE), Issues (triage stream, worker, admin queue, platform queue, GitHub webhook), Redis key security hardening |
 
 ## Ship-Stopper Gates
 
@@ -29,3 +38,6 @@ These must pass before any feature is merged.
 | Dynamic PATCH columns through allowlist | SQL injection prevention |
 | `FRONTEND_URL != "*"` | CORS lockdown |
 | Secrets from env only | No hardcoded keys or model names |
+| GitHub webhook HMAC-SHA256 verified; 503 if secret unset | Webhook endpoint |
+| Issue action validated against module-level allowlist | Admin and platform action endpoints |
+| Redis key segments validated against `_SAFE_SEGMENT_RE` | All Redis key construction |
