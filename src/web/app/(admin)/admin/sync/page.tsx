@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { SourceHealthCard } from "./elements/SourceHealthCard";
 import { SyncJobHistory } from "./elements/SyncJobHistory";
+import { SyncFailureList } from "./elements/SyncFailureList";
 import { useIntegrations } from "@/lib/hooks/useSyncHealth";
 import { Loader2 } from "lucide-react";
 
@@ -75,6 +76,11 @@ export default function SyncHealthPage() {
         {/* Sync Job History */}
         <ErrorBoundary>
           <SyncJobHistory integrationId={effectiveSelectedId} />
+        </ErrorBoundary>
+
+        {/* FE-031: Sync Failure List */}
+        <ErrorBoundary>
+          <SyncFailureList integrationId={effectiveSelectedId ?? undefined} />
         </ErrorBoundary>
       </div>
     </AppShell>
