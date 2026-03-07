@@ -37,18 +37,18 @@ def client():
 class TestHealthEndpoints:
     """INFRA-043: Health check endpoint tests."""
 
-    def test_health_at_root_returns_200(self, client):
-        """GET /health returns 200 with status."""
+    def test_health_at_root_returns_valid_response(self, client):
+        """GET /health returns 200 (healthy) or 503 (degraded/unhealthy) with status."""
         response = client.get("/health")
-        assert response.status_code == 200
+        assert response.status_code in (200, 503)
         data = response.json()
         assert "status" in data
         assert data["status"] in ("healthy", "degraded", "unhealthy")
 
-    def test_health_at_api_prefix_returns_200(self, client):
+    def test_health_at_api_prefix_returns_valid_response(self, client):
         """GET /api/v1/health returns same health response."""
         response = client.get("/api/v1/health")
-        assert response.status_code == 200
+        assert response.status_code in (200, 503)
         data = response.json()
         assert "status" in data
 

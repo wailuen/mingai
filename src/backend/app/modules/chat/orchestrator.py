@@ -14,6 +14,7 @@ Wires all AI services into a streaming SSE response pipeline:
 Memory fast path: "Remember that..." / "Note that..." queries bypass RAG
 and save directly to working memory notes.
 """
+import os
 import re
 from typing import AsyncGenerator
 
@@ -52,6 +53,7 @@ class ChatOrchestrationService:
         persistence_service,
         confidence_calculator,
         team_memory_service=None,
+        llm_service=None,
     ):
         self._embedding = embedding_service
         self._vector_search = vector_search_service
@@ -63,6 +65,7 @@ class ChatOrchestrationService:
         self._persistence = persistence_service
         self._confidence = confidence_calculator
         self._team_memory = team_memory_service
+        self._llm_service = llm_service
 
     async def stream_response(
         self,
@@ -202,12 +205,12 @@ class ChatOrchestrationService:
 
         system_prompt, layers_active = await self._prompt_builder.build(
             agent_id=agent_id,
-            expanded_query=expanded_query,
-            search_results=search_results,
+            tenant_id=tenant_id,
+            org_context=org_context_dict,
             profile_context=profile_context,
             working_memory=working_memory_context,
-            org_context=org_context_dict,
             team_memory=team_memory_context,
+            rag_context=search_results,
         )
 
         logger.info(
@@ -217,22 +220,18 @@ class ChatOrchestrationService:
             tenant_id=tenant_id,
         )
 
-        # --- Stage 7: LLM Streaming ---
+        # --- Stage 7: LLM Streaming (real call) ---
         yield {"event": "status", "data": {"stage": "llm_streaming"}}
 
-        # Assemble the full response from the LLM
-        # In production, this would stream from OpenAI/Azure and yield chunks
-        # For the orchestrator, we produce the response text for persistence
-        response_text = self._generate_response_from_context(
-            query=expanded_query,
-            search_results=search_results,
+        response_chunks = []
+        async for chunk in self._stream_llm(
             system_prompt=system_prompt,
-        )
-
-        yield {
-            "event": "response_chunk",
-            "data": {"chunk": response_text},
-        }
+            query=expanded_query,
+            tenant_id=tenant_id,
+        ):
+            response_chunks.append(chunk)
+            yield {"event": "response_chunk", "data": {"chunk": chunk}}
+        response_text = "".join(response_chunks)
 
         # --- Stage 8: Post-processing ---
         yield {"event": "status", "data": {"stage": "post_processing"}}
@@ -253,14 +252,14 @@ class ChatOrchestrationService:
             tenant_id=tenant_id,
             agent_id=agent_id,
             query=query,
+            response=response_text,
         )
 
         # Trigger profile learning
         await self._profile.on_query_completed(
             user_id=user_id,
             tenant_id=tenant_id,
-            query=query,
-            response=response_text,
+            agent_id=agent_id,
         )
 
         logger.info(
@@ -353,33 +352,83 @@ class ChatOrchestrationService:
             },
         }
 
-    @staticmethod
-    def _generate_response_from_context(
+    async def _stream_llm(
+        self,
         *,
-        query: str,
-        search_results: list,
         system_prompt: str,
-    ) -> str:
+        query: str,
+        tenant_id: str,
+    ) -> AsyncGenerator[str, None]:
         """
-        Generate a response using the assembled context.
+        Stream LLM response chunks from the configured provider.
 
-        In production, this calls the LLM API (OpenAI/Azure) with streaming.
-        For Phase 1, this assembles a context-grounded response from search results.
-        The actual LLM integration is wired in Phase 2 when LLM Profiles are
-        configured via Platform Admin.
+        If an llm_service was injected (has a `stream` async generator method),
+        delegates to it. Otherwise, reads PRIMARY_MODEL from env (raises
+        ValueError if not set) and selects client based on CLOUD_PROVIDER:
+          - 'azure': AsyncAzureOpenAI with AZURE_PLATFORM_OPENAI_API_KEY/ENDPOINT
+          - otherwise: AsyncOpenAI (reads OPENAI_API_KEY from env)
+
+        Yields:
+            String chunks of the LLM response.
         """
-        if not search_results:
-            return (
-                "I could not find relevant information in the knowledge base "
-                "to answer your question. Please try rephrasing your query or "
-                "contact your administrator for assistance."
+        # If an LLM service was injected (e.g., for testing), delegate to it
+        if self._llm_service is not None:
+            async for chunk in self._llm_service.stream(
+                system_prompt=system_prompt,
+                query=query,
+                tenant_id=tenant_id,
+            ):
+                yield chunk
+            return
+
+        model = os.environ.get("PRIMARY_MODEL", "").strip()
+        if not model:
+            raise ValueError(
+                "PRIMARY_MODEL environment variable is required for LLM streaming. "
+                "Set it in .env to the deployment/model name."
             )
 
-        # Build a grounded response from search results
-        context_parts = []
-        for result in search_results:
-            title = result.title if hasattr(result, "title") else str(result)
-            content = result.content if hasattr(result, "content") else ""
-            context_parts.append(f"Based on '{title}': {content}")
+        cloud_provider = os.environ.get("CLOUD_PROVIDER", "local").strip()
 
-        return " ".join(context_parts)
+        if cloud_provider == "azure":
+            from openai import AsyncAzureOpenAI
+
+            api_key = os.environ.get("AZURE_PLATFORM_OPENAI_API_KEY", "").strip()
+            endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "").strip()
+            if not api_key:
+                raise ValueError(
+                    "AZURE_PLATFORM_OPENAI_API_KEY is required when CLOUD_PROVIDER=azure."
+                )
+            if not endpoint:
+                raise ValueError(
+                    "AZURE_PLATFORM_OPENAI_ENDPOINT is required when CLOUD_PROVIDER=azure."
+                )
+            client = AsyncAzureOpenAI(
+                api_key=api_key,
+                azure_endpoint=endpoint,
+                api_version="2024-02-01",
+            )
+        else:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI()
+
+        logger.info(
+            "llm_stream_start",
+            model=model,
+            cloud_provider=cloud_provider,
+            tenant_id=tenant_id,
+        )
+
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query},
+            ],
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content

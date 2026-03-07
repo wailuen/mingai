@@ -11,6 +11,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+async def _fake_stream_llm(self, system_prompt, query, tenant_id):
+    """Fake _stream_llm that yields a single chunk without touching OpenAI."""
+    yield "Test LLM response."
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_stream(monkeypatch):
+    """Patch ChatOrchestrationService._stream_llm for all orchestrator unit tests.
+
+    _stream_llm reads PRIMARY_MODEL and CLOUD_PROVIDER from env and makes a real
+    OpenAI/Azure call — inappropriate for Tier 1 unit tests. This fixture replaces
+    it with a deterministic fake async generator so tests remain fast and isolated.
+    """
+    from app.modules.chat import orchestrator as _orch_module
+
+    monkeypatch.setattr(
+        _orch_module.ChatOrchestrationService, "_stream_llm", _fake_stream_llm
+    )
+
+
 def _make_mock_services():
     """Create all mock services for the orchestrator."""
     from app.modules.chat.vector_search import SearchResult
@@ -26,9 +46,7 @@ def _make_mock_services():
     vector_search.search = AsyncMock(return_value=search_results)
 
     profile = AsyncMock()
-    profile.get_profile_context = AsyncMock(
-        return_value={"technical_level": "expert"}
-    )
+    profile.get_profile_context = AsyncMock(return_value={"technical_level": "expert"})
     profile.on_query_completed = AsyncMock()
 
     working_memory = AsyncMock()
@@ -38,24 +56,30 @@ def _make_mock_services():
     working_memory.update = AsyncMock()
 
     org_context = AsyncMock()
-    org_context.get = AsyncMock(return_value=MagicMock(
-        to_dict=MagicMock(return_value={"department": "Engineering"})
-    ))
+    org_context.get = AsyncMock(
+        return_value=MagicMock(
+            to_dict=MagicMock(return_value={"department": "Engineering"})
+        )
+    )
 
     glossary = AsyncMock()
     glossary.expand = AsyncMock(
-        return_value=("What is AWS (Amazon Web Services)?", ["AWS -> Amazon Web Services"])
+        return_value=(
+            "What is AWS (Amazon Web Services)?",
+            ["AWS -> Amazon Web Services"],
+        )
     )
 
     prompt_builder = AsyncMock()
     prompt_builder.build = AsyncMock(
-        return_value=("You are an AI assistant...\n\n---\n\nContext...", ["profile", "org_context"])
+        return_value=(
+            "You are an AI assistant...\n\n---\n\nContext...",
+            ["profile", "org_context"],
+        )
     )
 
     persistence = AsyncMock()
-    persistence.save_exchange = AsyncMock(
-        return_value=("msg-123", "conv-456")
-    )
+    persistence.save_exchange = AsyncMock(return_value=("msg-123", "conv-456"))
 
     confidence = MagicMock()
     confidence.calculate = MagicMock(return_value=0.88)
@@ -448,7 +472,10 @@ class TestEmbeddingUseOriginalQuery:
 
         mocks = _make_mock_services()
         mocks["glossary_expander"].expand = AsyncMock(
-            return_value=("What is AWS (Amazon Web Services)?", ["AWS -> Amazon Web Services"])
+            return_value=(
+                "What is AWS (Amazon Web Services)?",
+                ["AWS -> Amazon Web Services"],
+            )
         )
         service = ChatOrchestrationService(**mocks)
 

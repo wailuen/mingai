@@ -45,7 +45,7 @@ def _get_jwt_settings() -> tuple[str, str]:
     if not secret:
         raise HTTPException(
             status_code=500,
-            detail="JWT_SECRET_KEY not configured - server misconfiguration",
+            detail="Authentication service unavailable",
         )
 
     algorithm = os.environ.get("JWT_ALGORITHM", "HS256")

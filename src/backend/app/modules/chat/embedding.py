@@ -9,7 +9,6 @@ import json
 import os
 
 import structlog
-from openai import AsyncOpenAI
 
 from app.core.redis_client import get_redis
 
@@ -37,7 +36,30 @@ class EmbeddingService:
                 "(e.g., 'text-embedding-3-small')."
             )
         self._model = model
-        self._client = AsyncOpenAI()  # Reads API key from env
+
+        cloud_provider = os.environ.get("CLOUD_PROVIDER", "local").strip()
+        if cloud_provider == "azure":
+            from openai import AsyncAzureOpenAI
+
+            api_key = os.environ.get("AZURE_PLATFORM_OPENAI_API_KEY", "").strip()
+            endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "").strip()
+            if not api_key:
+                raise ValueError(
+                    "AZURE_PLATFORM_OPENAI_API_KEY is required when CLOUD_PROVIDER=azure."
+                )
+            if not endpoint:
+                raise ValueError(
+                    "AZURE_PLATFORM_OPENAI_ENDPOINT is required when CLOUD_PROVIDER=azure."
+                )
+            self._client = AsyncAzureOpenAI(
+                api_key=api_key,
+                azure_endpoint=endpoint,
+                api_version="2024-02-01",
+            )
+        else:
+            from openai import AsyncOpenAI
+
+            self._client = AsyncOpenAI()
 
     async def embed(self, text: str, tenant_id: str | None = None) -> list[float]:
         """

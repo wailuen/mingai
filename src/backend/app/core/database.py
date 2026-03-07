@@ -53,8 +53,7 @@ def validate_tenant_id(tenant_id: str) -> str:
     """
     if tenant_id is None:
         raise ValueError(
-            "tenant_id is None - UUID required. "
-            "Ensure JWT contains tenant_id claim."
+            "tenant_id is None - UUID required. " "Ensure JWT contains tenant_id claim."
         )
 
     if not isinstance(tenant_id, str) or not tenant_id.strip():
@@ -74,7 +73,7 @@ def validate_tenant_id(tenant_id: str) -> str:
     return tenant_id
 
 
-def get_set_tenant_sql(tenant_id: str) -> str:
+def get_set_tenant_sql(tenant_id: str) -> tuple[str, dict]:
     """
     Generate SQL to set tenant context for RLS.
 
@@ -82,7 +81,13 @@ def get_set_tenant_sql(tenant_id: str) -> str:
     The tenant_id MUST be pre-validated via validate_tenant_id().
     """
     validated = validate_tenant_id(tenant_id)
-    return f"SELECT set_config('app.current_tenant_id', '{validated}', true)"
+    # validated is always a UUID (no SQL metacharacters), but we use a parameterized
+    # form defensively to prevent any future relaxation of validate_tenant_id from
+    # introducing injection.
+    return (
+        "SELECT set_config('app.current_tenant_id', :tid, true)",
+        {"tid": validated},
+    )
 
 
 def get_rls_column_for_table(table_name: str) -> str:

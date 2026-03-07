@@ -224,6 +224,20 @@ class TestUpdateUser:
             )
         assert resp.status_code == 200
 
+    def test_update_user_returns_404_when_not_found(self, client, admin_headers):
+        """PATCH on a non-existent user returns 404 (rowcount == 0)."""
+        with patch(
+            "app.modules.users.routes.update_user_db", new_callable=AsyncMock
+        ) as mock_update:
+            mock_update.return_value = None
+            resp = client.patch(
+                "/api/v1/users/nonexistent-user",
+                json={"role": "tenant_admin"},
+                headers=admin_headers,
+            )
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
+
 
 class TestDeactivateUser:
     """DELETE /api/v1/users/{id} - soft deactivate."""

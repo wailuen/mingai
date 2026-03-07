@@ -91,11 +91,11 @@ def build_orchestrator(db, redis):
 
     return ChatOrchestrationService(
         embedding_service=EmbeddingService(),
-        vector_search_service=VectorSearchService(db_session=db),
+        vector_search_service=VectorSearchService(),
         profile_service=ProfileLearningService(db_session=db),
         working_memory_service=WorkingMemoryService(),
-        org_context_service=OrgContextService(db_session=db),
-        glossary_expander=GlossaryExpander(),
+        org_context_service=OrgContextService(),
+        glossary_expander=GlossaryExpander(db=db),
         prompt_builder=SystemPromptBuilder(),
         persistence_service=ConversationPersistenceService(db_session=db),
         confidence_calculator=_ConfidenceCalc(),
@@ -293,6 +293,7 @@ async def get_issue(
 async def stream_chat(
     request: ChatRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-007: SSE streaming chat endpoint.
@@ -313,7 +314,7 @@ async def stream_chat(
         "plan": current_user.plan,
     }
 
-    orchestrator = build_orchestrator(db=None, redis=None)
+    orchestrator = build_orchestrator(db=session, redis=None)
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:

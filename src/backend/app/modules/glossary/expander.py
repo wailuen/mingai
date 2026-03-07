@@ -14,12 +14,19 @@ Rules:
 - Max 20 terms per tenant
 - Max 200 chars per definition
 """
+import json
 import re
 import unicodedata
 
 import structlog
+from sqlalchemy import text
+
+from app.core.redis_client import get_redis
 
 logger = structlog.get_logger()
+
+# Redis cache TTL for glossary terms: 1 hour
+GLOSSARY_CACHE_TTL_SECONDS = 3600
 
 # Security constraints
 MAX_TERMS_PER_TENANT = 20
@@ -28,11 +35,35 @@ MAX_FULL_FORM_LENGTH = 50
 MAX_EXPANSIONS_PER_QUERY = 10
 
 # Stop-word exclusion list (platform config - never expanded)
-STOP_WORDS = frozenset({
-    "as", "it", "or", "by", "at", "be", "do", "go", "in",
-    "is", "on", "to", "up", "us", "we", "no", "so", "an",
-    "am", "my", "of", "if", "me", "he", "ok",
-})
+STOP_WORDS = frozenset(
+    {
+        "as",
+        "it",
+        "or",
+        "by",
+        "at",
+        "be",
+        "do",
+        "go",
+        "in",
+        "is",
+        "on",
+        "to",
+        "up",
+        "us",
+        "we",
+        "no",
+        "so",
+        "an",
+        "am",
+        "my",
+        "of",
+        "if",
+        "me",
+        "he",
+        "ok",
+    }
+)
 
 # Prompt injection patterns to strip from definitions
 INJECTION_PATTERNS = [
@@ -44,8 +75,12 @@ INJECTION_PATTERNS = [
     re.compile(r"###\s*New\s+Instructions\s*###", re.IGNORECASE),
     re.compile(r"<\|endoftext\|>"),
     re.compile(r"\\n\\n(Human|Assistant|System)\s*:", re.IGNORECASE),
-    re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL),  # Script tags + content
-    re.compile(r"<style[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL),  # Style tags + content
+    re.compile(
+        r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL
+    ),  # Script tags + content
+    re.compile(
+        r"<style[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL
+    ),  # Style tags + content
     re.compile(r"<[^>]+>"),  # Remaining HTML tags
 ]
 
@@ -83,12 +118,23 @@ class GlossaryExpander:
     Inline glossary expansion for query pre-processing.
 
     Usage:
-        expander = GlossaryExpander()
+        expander = GlossaryExpander(db=session)
         expanded_query, expansions = await expander.expand(query, tenant_id)
 
     The expanded_query goes to the LLM.
     The original query goes to the embedding/vector search.
     """
+
+    def __init__(self, db=None):
+        """
+        Initialize with optional database session.
+
+        Args:
+            db: Async database session for PostgreSQL glossary queries.
+                If None (e.g., unit tests), _get_terms returns [] with a
+                debug log.
+        """
+        self._db = db
 
     async def expand(
         self,
@@ -168,7 +214,7 @@ class GlossaryExpander:
         # Uppercase-only rule for short acronyms (<=3 chars)
         if len(term) <= 3:
             # Must be ALL CAPS in the original text to expand
-            pattern = rf'\b{re.escape(term.upper())}\b'
+            pattern = rf"\b{re.escape(term.upper())}\b"
             if not re.search(pattern, text):
                 return text, False
 
@@ -178,14 +224,14 @@ class GlossaryExpander:
 
         # Find first occurrence (case-insensitive for long terms, exact for short)
         if len(term) <= 3:
-            pattern = rf'\b{re.escape(term.upper())}\b'
+            pattern = rf"\b{re.escape(term.upper())}\b"
         else:
-            pattern = rf'\b{re.escape(term)}\b'
+            pattern = rf"\b{re.escape(term)}\b"
 
         match = re.search(pattern, text, re.IGNORECASE if len(term) > 3 else 0)
         if match:
             replacement = f"{match.group(0)} {open_p}{full_form}{close_p}"
-            text = text[:match.start()] + replacement + text[match.end():]
+            text = text[: match.start()] + replacement + text[match.end() :]
             return text, True
 
         return text, False
@@ -200,15 +246,94 @@ class GlossaryExpander:
     async def _get_terms(self, tenant_id: str) -> list[dict]:
         """
         Fetch glossary terms from Redis cache (1h TTL).
-        Fallback to PostgreSQL.
+        Falls back to PostgreSQL on cache miss.
 
-        Override in tests with mock data.
+        If no database session is configured (e.g., unit tests),
+        returns [] with a debug log.
         """
-        # This is the production implementation - relies on Redis + DB
-        # For unit tests, this method is mocked
-        logger.warning(
-            "glossary_terms_not_loaded",
-            tenant_id=tenant_id,
-            reason="Production _get_terms requires Redis and DB connections",
-        )
-        return []
+        if self._db is None:
+            logger.debug(
+                "glossary_terms_no_db",
+                tenant_id=tenant_id,
+                reason="No database session configured; returning empty terms",
+            )
+            return []
+
+        cache_key = f"mingai:{tenant_id}:glossary_terms"
+
+        # Check Redis cache first
+        try:
+            redis = get_redis()
+            cached = await redis.get(cache_key)
+            if cached:
+                logger.debug(
+                    "glossary_terms_cache_hit",
+                    tenant_id=tenant_id,
+                )
+                return json.loads(cached)
+        except Exception as exc:
+            logger.error(
+                "glossary_terms_redis_error",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+
+        # Cache miss -- query PostgreSQL
+        try:
+            result = await self._db.execute(
+                text(
+                    "SELECT term, full_form, aliases "
+                    "FROM glossary_terms "
+                    "WHERE tenant_id = :tenant_id "
+                    "ORDER BY term ASC"
+                ),
+                {"tenant_id": tenant_id},
+            )
+            rows = result.fetchall()
+
+            terms = []
+            for row in rows[:MAX_TERMS_PER_TENANT]:
+                aliases_raw = row[2]
+                if isinstance(aliases_raw, str):
+                    aliases = json.loads(aliases_raw)
+                elif isinstance(aliases_raw, list):
+                    aliases = aliases_raw
+                else:
+                    aliases = []
+
+                terms.append(
+                    {
+                        "term": row[0],
+                        "full_form": row[1],
+                        "aliases": aliases,
+                    }
+                )
+
+            # Store in Redis cache
+            try:
+                await redis.setex(
+                    cache_key,
+                    GLOSSARY_CACHE_TTL_SECONDS,
+                    json.dumps(terms),
+                )
+                logger.debug(
+                    "glossary_terms_cached",
+                    tenant_id=tenant_id,
+                    term_count=len(terms),
+                )
+            except Exception as exc:
+                logger.error(
+                    "glossary_terms_cache_store_error",
+                    tenant_id=tenant_id,
+                    error=str(exc),
+                )
+
+            return terms
+
+        except Exception as exc:
+            logger.error(
+                "glossary_terms_db_error",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+            return []

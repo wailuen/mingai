@@ -5,7 +5,10 @@ Saves conversations and messages to PostgreSQL.
 Handles conversation creation, message insertion, and title generation.
 All operations are tenant-scoped via RLS.
 """
+import json
+
 import structlog
+from sqlalchemy import text
 
 logger = structlog.get_logger()
 
@@ -77,7 +80,7 @@ class ConversationPersistenceService:
         if conversation_id is None:
             title = self._generate_title(query)
             result = await self._db.execute(
-                self._insert_conversation_sql(),
+                text(self._insert_conversation_sql()),
                 {
                     "tenant_id": tenant_id,
                     "user_id": user_id,
@@ -95,7 +98,7 @@ class ConversationPersistenceService:
 
         # Insert user message
         result = await self._db.execute(
-            self._insert_message_sql(),
+            text(self._insert_message_sql()),
             {
                 "tenant_id": tenant_id,
                 "conversation_id": conversation_id,
@@ -115,13 +118,13 @@ class ConversationPersistenceService:
         ]
 
         result = await self._db.execute(
-            self._insert_message_sql(),
+            text(self._insert_assistant_message_sql()),
             {
                 "tenant_id": tenant_id,
                 "conversation_id": conversation_id,
                 "role": "assistant",
                 "content": response,
-                "metadata": {"sources": source_metadata},
+                "metadata": json.dumps({"sources": source_metadata}),
             },
         )
         assistant_msg_id = result.scalar_one()
@@ -167,9 +170,18 @@ class ConversationPersistenceService:
 
     @staticmethod
     def _insert_message_sql() -> str:
-        """SQL template for inserting a message."""
+        """SQL template for inserting a message (no metadata)."""
         return (
             "INSERT INTO messages (tenant_id, conversation_id, role, content) "
             "VALUES (:tenant_id, :conversation_id, :role, :content) "
+            "RETURNING id"
+        )
+
+    @staticmethod
+    def _insert_assistant_message_sql() -> str:
+        """SQL template for inserting an assistant message with metadata."""
+        return (
+            "INSERT INTO messages (tenant_id, conversation_id, role, content, metadata) "
+            "VALUES (:tenant_id, :conversation_id, :role, :content, CAST(:metadata AS jsonb)) "
             "RETURNING id"
         )

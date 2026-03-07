@@ -38,14 +38,9 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 class InviteUserRequest(BaseModel):
-    email: str = Field(..., description="Valid email address")
+    email: EmailStr = Field(..., description="Valid RFC 5322 email address")
     role: str = Field(..., min_length=1, max_length=50)
     name: Optional[str] = Field(None, max_length=200)
-
-    def validate_email(self) -> str:
-        if "@" not in self.email or not self.email.strip():
-            raise ValueError("Valid email address required")
-        return self.email.lower().strip()
 
 
 class UpdateUserRequest(BaseModel):
@@ -147,22 +142,41 @@ async def get_user_db(user_id: str, tenant_id: str, db) -> Optional[dict]:
     }
 
 
+_USER_UPDATE_ALLOWLIST = {"role", "name", "is_active"}
+
+
 async def update_user_db(
     user_id: str,
     tenant_id: str,
     updates: dict,
     db,
 ) -> Optional[dict]:
-    """Update user fields."""
-    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
-    params = {"id": user_id, "tenant_id": tenant_id, **updates}
-    await db.execute(
+    """Update user fields with column allowlist enforcement."""
+    invalid = set(updates) - _USER_UPDATE_ALLOWLIST
+    if invalid:
+        raise ValueError(f"Invalid user update fields: {invalid}")
+
+    # Map is_active boolean to status column value
+    db_updates = {}
+    for k, v in updates.items():
+        if k == "is_active":
+            db_updates["status"] = "active" if v else "suspended"
+        else:
+            db_updates[k] = v
+
+    set_clauses = ", ".join(f"{k} = :{k}" for k in db_updates)
+    params = {"id": user_id, "tenant_id": tenant_id, **db_updates}
+    result = await db.execute(
         text(
             f"UPDATE users SET {set_clauses} WHERE id = :id AND tenant_id = :tenant_id"
         ),
         params,
     )
     await db.commit()
+
+    if (result.rowcount or 0) == 0:
+        return None
+
     return await get_user_db(user_id, tenant_id, db)
 
 
@@ -428,15 +442,10 @@ async def invite_user(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-042: Invite a new user to the tenant."""
-    # Validate email format
-    if "@" not in request.email or not request.email.strip():
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Valid email address required",
-        )
+    # email is validated by Pydantic EmailStr before reaching this handler
     result = await invite_user_db(
         tenant_id=current_user.tenant_id,
-        email=request.email.lower().strip(),
+        email=str(request.email).lower().strip(),
         role=request.role,
         name=request.name,
         db=session,
@@ -484,6 +493,11 @@ async def update_user(
         updates=updates,
         db=session,
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User '{user_id}' not found",
+        )
     return result
 
 

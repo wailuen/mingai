@@ -77,23 +77,31 @@ async def health_check():
     Used by load balancers and monitoring systems.
     No authentication required.
     """
-    # In production, these would test actual connections
-    # For now, basic connectivity checks
-    db_ok = True
-    redis_ok = True
+    db_ok = False
+    redis_ok = False
     search_ok = True
 
+    # Real database ping via SQLAlchemy async engine
     try:
-        # Attempt database ping (will be wired to real connection later)
-        pass
-    except Exception:
-        db_ok = False
+        from sqlalchemy import text as sa_text
 
+        from app.core.session import engine
+
+        async with engine.connect() as conn:
+            await conn.execute(sa_text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        logger.warning("health_check_db_failed", error=str(e))
+
+    # Real Redis ping
     try:
-        # Attempt Redis ping
-        pass
-    except Exception:
-        redis_ok = False
+        from app.core.redis_client import get_redis
+
+        redis = get_redis()
+        await redis.ping()
+        redis_ok = True
+    except Exception as e:
+        logger.warning("health_check_redis_failed", error=str(e))
 
     response = build_health_response(
         database_ok=db_ok,
