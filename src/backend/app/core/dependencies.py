@@ -97,8 +97,7 @@ async def require_platform_admin(
     if user.scope != "platform":
         raise HTTPException(
             status_code=403,
-            detail="Platform admin access required. Your scope is "
-            f"'{user.scope}' but 'platform' is needed.",
+            detail="Platform admin access required.",
         )
     return user
 
@@ -110,7 +109,6 @@ async def require_tenant_admin(
     if "tenant_admin" not in user.roles:
         raise HTTPException(
             status_code=403,
-            detail="Tenant admin role required. Your roles are "
-            f"{user.roles} but 'tenant_admin' is needed.",
+            detail="Tenant admin role required.",
         )
     return user

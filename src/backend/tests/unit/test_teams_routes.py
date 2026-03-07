@@ -176,6 +176,18 @@ class TestUpdateTeam:
             )
         assert resp.status_code == 200
 
+    def test_update_team_returns_404_when_not_found(self, client, admin_headers):
+        with patch(
+            "app.modules.teams.routes.update_team_db", new_callable=AsyncMock
+        ) as mock_update:
+            mock_update.return_value = None
+            resp = client.patch(
+                "/api/v1/teams/nonexistent",
+                json={"name": "Updated Team"},
+                headers=admin_headers,
+            )
+        assert resp.status_code == 404
+
 
 class TestDeleteTeam:
     """DELETE /api/v1/teams/{id}"""

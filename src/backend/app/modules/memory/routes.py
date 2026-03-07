@@ -16,7 +16,11 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.dependencies import CurrentUser, get_current_user
+from app.core.session import get_async_session
 from app.modules.memory.notes import MAX_NOTE_CONTENT_LENGTH
 
 logger = structlog.get_logger()
@@ -43,13 +47,15 @@ class CreateNoteRequest(BaseModel):
 async def list_notes_db(user_id: str, tenant_id: str, db) -> list:
     """List all memory notes for the user."""
     result = await db.execute(
-        "SELECT id, content, source, created_at FROM memory_notes "
-        "WHERE user_id = :user_id AND tenant_id = :tenant_id "
-        "ORDER BY created_at DESC",
+        text(
+            "SELECT id, content, source, created_at FROM memory_notes "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id "
+            "ORDER BY created_at DESC"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     return [
-        {"id": r[0], "content": r[1], "source": r[2], "created_at": str(r[3])}
+        {"id": str(r[0]), "content": r[1], "source": r[2], "created_at": str(r[3])}
         for r in result.fetchall()
     ]
 
@@ -63,10 +69,13 @@ async def create_note_db(
     """Insert a new memory note."""
     note_id = str(uuid.uuid4())
     await db.execute(
-        "INSERT INTO memory_notes (id, user_id, tenant_id, content, source) "
-        "VALUES (:id, :user_id, :tenant_id, :content, 'user_directed')",
+        text(
+            "INSERT INTO memory_notes (id, user_id, tenant_id, content, source) "
+            "VALUES (:id, :user_id, :tenant_id, :content, 'user_directed')"
+        ),
         {"id": note_id, "user_id": user_id, "tenant_id": tenant_id, "content": content},
     )
+    await db.commit()
     logger.info("memory_note_created", note_id=note_id, user_id=user_id)
     return {"id": note_id, "content": content, "source": "user_directed"}
 
@@ -74,10 +83,13 @@ async def create_note_db(
 async def delete_note_db(note_id: str, user_id: str, tenant_id: str, db) -> bool:
     """Delete a memory note owned by the user."""
     result = await db.execute(
-        "DELETE FROM memory_notes "
-        "WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "DELETE FROM memory_notes "
+            "WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"id": note_id, "user_id": user_id, "tenant_id": tenant_id},
     )
+    await db.commit()
     return (result.rowcount or 0) > 0
 
 
@@ -139,12 +151,13 @@ async def clear_working_memory_data(
 @router.get("/notes")
 async def list_memory_notes(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-099: List all memory notes for the current user."""
     result = await list_notes_db(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -153,6 +166,7 @@ async def list_memory_notes(
 async def create_memory_note(
     request: CreateNoteRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-100: Create a new memory note (max 200 characters).
@@ -177,7 +191,7 @@ async def create_memory_note(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         content=clean_content,
-        db=None,
+        db=session,
     )
     return result
 
@@ -186,13 +200,14 @@ async def create_memory_note(
 async def delete_memory_note(
     note_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-101: Delete a memory note by ID."""
     deleted = await delete_note_db(
         note_id=note_id,
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if not deleted:
         raise HTTPException(
@@ -205,12 +220,13 @@ async def delete_memory_note(
 @router.get("/profile")
 async def get_user_profile(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-102: Get the current user's learned profile."""
     result = await get_profile_data(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -219,6 +235,7 @@ async def get_user_profile(
 async def get_working_memory(
     agent_id: Optional[str] = None,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-103: Get working memory summary for current user (optionally filtered by agent)."""
     effective_agent_id = agent_id or "default"
@@ -226,7 +243,7 @@ async def get_working_memory(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         agent_id=effective_agent_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -234,11 +251,12 @@ async def get_working_memory(
 @router.delete("/working", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_working_memory(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-104: Clear all working memory for the current user across all agents."""
     await clear_working_memory_data(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return None

@@ -19,7 +19,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends as _Depends
+
 from app.core.dependencies import CurrentUser, get_current_user
+from app.core.session import get_async_session
 
 logger = structlog.get_logger()
 
@@ -108,8 +113,10 @@ async def save_feedback(
     """Persist user feedback to user_feedback table."""
     feedback_id = str(uuid.uuid4())
     await db.execute(
-        "INSERT INTO user_feedback (id, message_id, user_id, tenant_id, rating, comment) "
-        "VALUES (:id, :message_id, :user_id, :tenant_id, :rating, :comment)",
+        text(
+            "INSERT INTO user_feedback (id, message_id, user_id, tenant_id, rating, comment) "
+            "VALUES (:id, :message_id, :user_id, :tenant_id, :rating, :comment)"
+        ),
         {
             "id": feedback_id,
             "message_id": message_id,
@@ -119,6 +126,7 @@ async def save_feedback(
             "comment": comment,
         },
     )
+    await db.commit()
     logger.info("feedback_saved", feedback_id=feedback_id, rating=rating)
     return {"id": feedback_id, "rating": rating}
 
@@ -133,15 +141,19 @@ async def list_conversations(
     """List conversations for user, newest first."""
     offset = (page - 1) * page_size
     count_result = await db.execute(
-        "SELECT COUNT(*) FROM conversations WHERE user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "SELECT COUNT(*) FROM conversations WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     total = count_result.scalar() or 0
 
     rows_result = await db.execute(
-        "SELECT id, title, created_at, updated_at FROM conversations "
-        "WHERE user_id = :user_id AND tenant_id = :tenant_id "
-        "ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+        text(
+            "SELECT id, title, created_at, updated_at FROM conversations "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id "
+            "ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+        ),
         {
             "user_id": user_id,
             "tenant_id": tenant_id,
@@ -151,7 +163,12 @@ async def list_conversations(
     )
     rows = rows_result.fetchall()
     items = [
-        {"id": r[0], "title": r[1], "created_at": str(r[2]), "updated_at": str(r[3])}
+        {
+            "id": str(r[0]),
+            "title": r[1],
+            "created_at": str(r[2]),
+            "updated_at": str(r[3]),
+        }
         for r in rows
     ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -165,8 +182,10 @@ async def get_conversation(
 ) -> Optional[dict]:
     """Get a conversation with all messages."""
     conv_result = await db.execute(
-        "SELECT id, title, created_at FROM conversations "
-        "WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "SELECT id, title, created_at FROM conversations "
+            "WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"id": conversation_id, "user_id": user_id, "tenant_id": tenant_id},
     )
     row = conv_result.fetchone()
@@ -174,16 +193,18 @@ async def get_conversation(
         return None
 
     msgs_result = await db.execute(
-        "SELECT id, role, content, created_at FROM messages "
-        "WHERE conversation_id = :conv_id ORDER BY created_at ASC",
+        text(
+            "SELECT id, role, content, created_at FROM messages "
+            "WHERE conversation_id = :conv_id ORDER BY created_at ASC"
+        ),
         {"conv_id": conversation_id},
     )
     messages = [
-        {"id": m[0], "role": m[1], "content": m[2], "created_at": str(m[3])}
+        {"id": str(m[0]), "role": m[1], "content": m[2], "created_at": str(m[3])}
         for m in msgs_result.fetchall()
     ]
     return {
-        "id": row[0],
+        "id": str(row[0]),
         "title": row[1],
         "created_at": str(row[2]),
         "messages": messages,
@@ -198,9 +219,12 @@ async def delete_conversation(
 ) -> bool:
     """Delete a conversation. Returns True if deleted, False if not found."""
     result = await db.execute(
-        "DELETE FROM conversations WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "DELETE FROM conversations WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"id": conversation_id, "user_id": user_id, "tenant_id": tenant_id},
     )
+    await db.commit()
     return (result.rowcount or 0) > 0
 
 
@@ -215,9 +239,11 @@ async def create_issue(
     """Create an issue report."""
     issue_id = str(uuid.uuid4())
     await db.execute(
-        "INSERT INTO issue_reports (id, tenant_id, user_id, title, description, "
-        "source_message_id, status) "
-        "VALUES (:id, :tenant_id, :user_id, :title, :description, :message_id, 'open')",
+        text(
+            "INSERT INTO issue_reports (id, tenant_id, user_id, title, description, "
+            "source_message_id, status) "
+            "VALUES (:id, :tenant_id, :user_id, :title, :description, :message_id, 'open')"
+        ),
         {
             "id": issue_id,
             "tenant_id": tenant_id,
@@ -227,6 +253,7 @@ async def create_issue(
             "message_id": message_id,
         },
     )
+    await db.commit()
     logger.info("issue_created", issue_id=issue_id, user_id=user_id)
     return {"id": issue_id, "status": "open", "title": title}
 
@@ -239,15 +266,17 @@ async def get_issue(
 ) -> Optional[dict]:
     """Get an issue report."""
     result = await db.execute(
-        "SELECT id, title, description, status, created_at FROM issue_reports "
-        "WHERE id = :id AND tenant_id = :tenant_id AND user_id = :user_id",
+        text(
+            "SELECT id, title, description, status, created_at FROM issue_reports "
+            "WHERE id = :id AND tenant_id = :tenant_id AND user_id = :user_id"
+        ),
         {"id": issue_id, "tenant_id": tenant_id, "user_id": user_id},
     )
     row = result.fetchone()
     if row is None:
         return None
     return {
-        "id": row[0],
+        "id": str(row[0]),
         "title": row[1],
         "description": row[2],
         "status": row[3],
@@ -321,6 +350,7 @@ async def stream_chat(
 async def submit_feedback(
     request: FeedbackRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-008: Submit thumbs up/down feedback on an AI response.
@@ -331,7 +361,7 @@ async def submit_feedback(
         comment=request.comment,
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -341,6 +371,7 @@ async def list_user_conversations(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-009: List conversations for the authenticated user (paginated).
@@ -350,7 +381,7 @@ async def list_user_conversations(
         tenant_id=current_user.tenant_id,
         page=page,
         page_size=page_size,
-        db=None,
+        db=session,
     )
     return result
 
@@ -359,6 +390,7 @@ async def list_user_conversations(
 async def get_conversation_detail(
     conversation_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-010: Get a conversation with all messages.
@@ -367,7 +399,7 @@ async def get_conversation_detail(
         conversation_id=conversation_id,
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if result is None:
         raise HTTPException(
@@ -383,6 +415,7 @@ async def get_conversation_detail(
 async def delete_user_conversation(
     conversation_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-011: Delete a conversation and all its messages.
@@ -391,7 +424,7 @@ async def delete_user_conversation(
         conversation_id=conversation_id,
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if not deleted:
         raise HTTPException(
@@ -405,6 +438,7 @@ async def delete_user_conversation(
 async def submit_issue(
     request: IssueRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-012: Submit an issue report linked to a chat message.
@@ -415,7 +449,7 @@ async def submit_issue(
         message_id=request.message_id,
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -424,6 +458,7 @@ async def submit_issue(
 async def get_issue_detail(
     issue_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-013: Get an issue report by ID.
@@ -432,7 +467,7 @@ async def get_issue_detail(
         issue_id=issue_id,
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if result is None:
         raise HTTPException(

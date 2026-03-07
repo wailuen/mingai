@@ -138,12 +138,18 @@ class TestCreateTenant:
             mock_create.return_value = {
                 "id": "tenant-new",
                 "name": "Acme Corp",
+                "slug": "acme-corp-12345678",
                 "plan": "professional",
                 "status": "active",
+                "primary_contact_email": "admin@acme.com",
             }
             resp = client.post(
                 "/api/v1/platform/tenants",
-                json={"name": "Acme Corp", "plan": "professional"},
+                json={
+                    "name": "Acme Corp",
+                    "plan": "professional",
+                    "primary_contact_email": "admin@acme.com",
+                },
                 headers=platform_headers,
             )
         assert resp.status_code == 201
@@ -153,7 +159,11 @@ class TestCreateTenant:
     def test_create_tenant_rejects_empty_name(self, client, platform_headers):
         resp = client.post(
             "/api/v1/platform/tenants",
-            json={"name": "", "plan": "professional"},
+            json={
+                "name": "",
+                "plan": "professional",
+                "primary_contact_email": "a@b.com",
+            },
             headers=platform_headers,
         )
         assert resp.status_code == 422
@@ -215,6 +225,18 @@ class TestUpdateTenant:
             )
         assert resp.status_code == 200
 
+    def test_update_tenant_returns_404_when_not_found(self, client, platform_headers):
+        with patch(
+            "app.modules.tenants.routes.update_tenant_db", new_callable=AsyncMock
+        ) as mock_update:
+            mock_update.return_value = None
+            resp = client.patch(
+                "/api/v1/platform/tenants/nonexistent",
+                json={"plan": "enterprise"},
+                headers=platform_headers,
+            )
+        assert resp.status_code == 404
+
 
 class TestSuspendActivateTenant:
     """POST /api/v1/platform/tenants/{id}/suspend and activate."""
@@ -274,9 +296,12 @@ class TestLLMProfiles:
         resp = client.post(
             "/api/v1/platform/llm-profiles",
             json={
+                "tenant_id": TEST_TENANT_ID,
                 "name": "Primary",
                 "provider": "azure",
-                "deployment_name": "agentic-worker",
+                "primary_model": "agentic-worker",
+                "intent_model": "agentic-router",
+                "embedding_model": "text-embedding-3-small",
             },
             headers=tenant_headers,
         )
@@ -288,16 +313,22 @@ class TestLLMProfiles:
         ) as mock_create:
             mock_create.return_value = {
                 "id": "profile-1",
+                "tenant_id": TEST_TENANT_ID,
                 "name": "Primary",
                 "provider": "azure",
-                "deployment_name": "agentic-worker",
+                "primary_model": "agentic-worker",
+                "intent_model": "agentic-router",
+                "embedding_model": "text-embedding-3-small",
             }
             resp = client.post(
                 "/api/v1/platform/llm-profiles",
                 json={
+                    "tenant_id": TEST_TENANT_ID,
                     "name": "Primary",
                     "provider": "azure",
-                    "deployment_name": "agentic-worker",
+                    "primary_model": "agentic-worker",
+                    "intent_model": "agentic-router",
+                    "embedding_model": "text-embedding-3-small",
                 },
                 headers=platform_headers,
             )

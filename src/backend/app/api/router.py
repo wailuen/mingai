@@ -41,3 +41,8 @@ router.include_router(glossary_router)
 from app.modules.teams.routes import router as teams_router
 
 router.include_router(teams_router)
+
+# Platform admin dashboard endpoint
+from app.modules.platform.routes import router as platform_router
+
+router.include_router(platform_router)

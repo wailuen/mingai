@@ -21,7 +21,11 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.dependencies import CurrentUser, get_current_user, require_tenant_admin
+from app.core.session import get_async_session
 
 logger = structlog.get_logger()
 
@@ -36,7 +40,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 class InviteUserRequest(BaseModel):
     email: str = Field(..., description="Valid email address")
     role: str = Field(..., min_length=1, max_length=50)
-    display_name: Optional[str] = Field(None, max_length=200)
+    name: Optional[str] = Field(None, max_length=200)
 
     def validate_email(self) -> str:
         if "@" not in self.email or not self.email.strip():
@@ -46,12 +50,12 @@ class InviteUserRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     role: Optional[str] = Field(None, max_length=50)
-    display_name: Optional[str] = Field(None, max_length=200)
+    name: Optional[str] = Field(None, max_length=200)
     is_active: Optional[bool] = None
 
 
 class UpdateProfileRequest(BaseModel):
-    display_name: Optional[str] = Field(None, max_length=200)
+    name: Optional[str] = Field(None, max_length=200)
     preferences: Optional[dict] = None
 
 
@@ -64,25 +68,29 @@ async def list_users_db(tenant_id: str, page: int, page_size: int, db) -> dict:
     """List users for a tenant, paginated."""
     offset = (page - 1) * page_size
     count_result = await db.execute(
-        "SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id AND is_active = true",
+        text(
+            "SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id AND status = 'active'"
+        ),
         {"tenant_id": tenant_id},
     )
     total = count_result.scalar() or 0
 
     rows_result = await db.execute(
-        "SELECT id, email, display_name, role, is_active, created_at FROM users "
-        "WHERE tenant_id = :tenant_id AND is_active = true "
-        "ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+        text(
+            "SELECT id, email, name, role, status, created_at FROM users "
+            "WHERE tenant_id = :tenant_id AND status = 'active' "
+            "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+        ),
         {"tenant_id": tenant_id, "limit": page_size, "offset": offset},
     )
     rows = rows_result.fetchall()
     items = [
         {
-            "id": r[0],
+            "id": str(r[0]),
             "email": r[1],
-            "display_name": r[2],
+            "name": r[2],
             "role": r[3],
-            "is_active": r[4],
+            "status": r[4],
             "created_at": str(r[5]),
         }
         for r in rows
@@ -94,22 +102,25 @@ async def invite_user_db(
     tenant_id: str,
     email: str,
     role: str,
-    display_name: Optional[str],
+    name: Optional[str],
     db,
 ) -> dict:
     """Insert a new invited user record."""
     user_id = str(uuid.uuid4())
     await db.execute(
-        "INSERT INTO users (id, tenant_id, email, display_name, role, is_active, status) "
-        "VALUES (:id, :tenant_id, :email, :display_name, :role, true, 'invited')",
+        text(
+            "INSERT INTO users (id, tenant_id, email, name, role, status) "
+            "VALUES (:id, :tenant_id, :email, :name, :role, 'invited')"
+        ),
         {
             "id": user_id,
             "tenant_id": tenant_id,
             "email": email,
-            "display_name": display_name,
+            "name": name,
             "role": role,
         },
     )
+    await db.commit()
     logger.info("user_invited", user_id=user_id, email=email, tenant_id=tenant_id)
     return {"id": user_id, "email": email, "status": "invited", "role": role}
 
@@ -117,19 +128,21 @@ async def invite_user_db(
 async def get_user_db(user_id: str, tenant_id: str, db) -> Optional[dict]:
     """Fetch a single user by ID within the tenant."""
     result = await db.execute(
-        "SELECT id, email, display_name, role, is_active, created_at FROM users "
-        "WHERE id = :id AND tenant_id = :tenant_id",
+        text(
+            "SELECT id, email, name, role, status, created_at FROM users "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
         {"id": user_id, "tenant_id": tenant_id},
     )
     row = result.fetchone()
     if row is None:
         return None
     return {
-        "id": row[0],
+        "id": str(row[0]),
         "email": row[1],
-        "display_name": row[2],
+        "name": row[2],
         "role": row[3],
-        "is_active": row[4],
+        "status": row[4],
         "created_at": str(row[5]),
     }
 
@@ -144,39 +157,47 @@ async def update_user_db(
     set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
     params = {"id": user_id, "tenant_id": tenant_id, **updates}
     await db.execute(
-        f"UPDATE users SET {set_clauses} WHERE id = :id AND tenant_id = :tenant_id",
+        text(
+            f"UPDATE users SET {set_clauses} WHERE id = :id AND tenant_id = :tenant_id"
+        ),
         params,
     )
+    await db.commit()
     return await get_user_db(user_id, tenant_id, db)
 
 
 async def deactivate_user_db(user_id: str, tenant_id: str, db) -> bool:
     """Soft-delete user by setting is_active=false."""
     result = await db.execute(
-        "UPDATE users SET is_active = false WHERE id = :id AND tenant_id = :tenant_id",
+        text(
+            "UPDATE users SET status = 'suspended' WHERE id = :id AND tenant_id = :tenant_id"
+        ),
         {"id": user_id, "tenant_id": tenant_id},
     )
+    await db.commit()
     return (result.rowcount or 0) > 0
 
 
 async def get_user_profile_db(user_id: str, tenant_id: str, db) -> dict:
     """Get full user profile including preferences."""
     result = await db.execute(
-        "SELECT u.id, u.email, u.display_name, u.role, u.is_active, "
-        "up.technical_level, up.communication_style, up.interests "
-        "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id "
-        "WHERE u.id = :id AND u.tenant_id = :tenant_id",
+        text(
+            "SELECT u.id, u.email, u.name, u.role, u.status, "
+            "up.technical_level, up.communication_style, up.interests "
+            "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id "
+            "WHERE u.id = :id AND u.tenant_id = :tenant_id"
+        ),
         {"id": user_id, "tenant_id": tenant_id},
     )
     row = result.fetchone()
     if row is None:
         return {"id": user_id, "tenant_id": tenant_id}
     return {
-        "id": row[0],
+        "id": str(row[0]),
         "email": row[1],
-        "display_name": row[2],
+        "name": row[2],
         "role": row[3],
-        "is_active": row[4],
+        "status": row[4],
         "tenant_id": tenant_id,
         "technical_level": row[5],
         "communication_style": row[6],
@@ -188,16 +209,19 @@ async def update_user_profile_db(
     user_id: str, tenant_id: str, updates: dict, db
 ) -> dict:
     """Update user profile fields."""
-    if "display_name" in updates and updates["display_name"] is not None:
+    if "name" in updates and updates["name"] is not None:
         await db.execute(
-            "UPDATE users SET display_name = :display_name "
-            "WHERE id = :id AND tenant_id = :tenant_id",
+            text(
+                "UPDATE users SET name = :name "
+                "WHERE id = :id AND tenant_id = :tenant_id"
+            ),
             {
-                "display_name": updates["display_name"],
+                "name": updates["name"],
                 "id": user_id,
                 "tenant_id": tenant_id,
             },
         )
+        await db.commit()
     return {"id": user_id, **updates}
 
 
@@ -206,22 +230,26 @@ async def export_user_data(user_id: str, tenant_id: str, db) -> dict:
     user = await get_user_profile_db(user_id, tenant_id, db)
 
     conv_result = await db.execute(
-        "SELECT id, title, created_at FROM conversations "
-        "WHERE user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "SELECT id, title, created_at FROM conversations "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     conversations = [
-        {"id": r[0], "title": r[1], "created_at": str(r[2])}
+        {"id": str(r[0]), "title": r[1], "created_at": str(r[2])}
         for r in conv_result.fetchall()
     ]
 
     notes_result = await db.execute(
-        "SELECT id, content, created_at FROM memory_notes "
-        "WHERE user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "SELECT id, content, created_at FROM memory_notes "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     notes = [
-        {"id": r[0], "content": r[1], "created_at": str(r[2])}
+        {"id": str(r[0]), "content": r[1], "created_at": str(r[2])}
         for r in notes_result.fetchall()
     ]
 
@@ -250,24 +278,33 @@ async def erase_user_data(user_id: str, tenant_id: str, db) -> dict:
 
     # Clear PostgreSQL data
     await db.execute(
-        "DELETE FROM memory_notes WHERE user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "DELETE FROM memory_notes WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     await db.execute(
-        "DELETE FROM user_profiles WHERE user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "DELETE FROM user_profiles WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     await db.execute(
-        "UPDATE conversations SET title = '[deleted]' "
-        "WHERE user_id = :user_id AND tenant_id = :tenant_id",
+        text(
+            "UPDATE conversations SET title = '[deleted]' "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
     await db.execute(
-        "DELETE FROM messages WHERE conversation_id IN ("
-        "SELECT id FROM conversations "
-        "WHERE user_id = :user_id AND tenant_id = :tenant_id)",
+        text(
+            "DELETE FROM messages WHERE conversation_id IN ("
+            "SELECT id FROM conversations "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id)"
+        ),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
+    await db.commit()
 
     # Clear L1 in-process cache
     await profile_service.clear_l1_cache(user_id)
@@ -306,12 +343,13 @@ async def erase_user_data(user_id: str, tenant_id: str, db) -> dict:
 @router.get("/me")
 async def get_current_user_profile(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-046: Get current user's full profile."""
     result = await get_user_profile_db(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -320,6 +358,7 @@ async def get_current_user_profile(
 async def update_current_user_profile(
     request: UpdateProfileRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-047: Update current user's profile."""
     updates = request.model_dump(exclude_none=True)
@@ -327,7 +366,7 @@ async def update_current_user_profile(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         updates=updates,
-        db=None,
+        db=session,
     )
     return result
 
@@ -335,12 +374,13 @@ async def update_current_user_profile(
 @router.post("/me/gdpr/export")
 async def gdpr_export(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-048: Export all personal data for the current user (GDPR Article 20)."""
     result = await export_user_data(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -348,6 +388,7 @@ async def gdpr_export(
 @router.post("/me/gdpr/erase")
 async def gdpr_erase(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     API-049: GDPR erase (Right to be Forgotten).
@@ -358,7 +399,7 @@ async def gdpr_erase(
     result = await erase_user_data(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -368,13 +409,14 @@ async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-041: List all users in the tenant (tenant admin only)."""
     result = await list_users_db(
         tenant_id=current_user.tenant_id,
         page=page,
         page_size=page_size,
-        db=None,
+        db=session,
     )
     return result
 
@@ -383,6 +425,7 @@ async def list_users(
 async def invite_user(
     request: InviteUserRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-042: Invite a new user to the tenant."""
     # Validate email format
@@ -395,8 +438,8 @@ async def invite_user(
         tenant_id=current_user.tenant_id,
         email=request.email.lower().strip(),
         role=request.role,
-        display_name=request.display_name,
-        db=None,
+        name=request.name,
+        db=session,
     )
     return result
 
@@ -405,12 +448,13 @@ async def invite_user(
 async def get_user(
     user_id: str,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-043: Get a user by ID (tenant admin only)."""
     result = await get_user_db(
         user_id=user_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if result is None:
         raise HTTPException(
@@ -425,6 +469,7 @@ async def update_user(
     user_id: str,
     request: UpdateUserRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-044: Update user role or status (tenant admin only)."""
     updates = request.model_dump(exclude_none=True)
@@ -437,7 +482,7 @@ async def update_user(
         user_id=user_id,
         tenant_id=current_user.tenant_id,
         updates=updates,
-        db=None,
+        db=session,
     )
     return result
 
@@ -446,12 +491,13 @@ async def update_user(
 async def deactivate_user(
     user_id: str,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-045: Soft-deactivate a user (tenant admin only)."""
     deactivated = await deactivate_user_db(
         user_id=user_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if not deactivated:
         raise HTTPException(

@@ -21,7 +21,11 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.dependencies import CurrentUser, get_current_user, require_tenant_admin
+from app.core.session import get_async_session
 
 logger = structlog.get_logger()
 
@@ -55,17 +59,19 @@ class AddMemberRequest(BaseModel):
 async def list_teams_db(tenant_id: str, db) -> list:
     """List all teams for the tenant."""
     result = await db.execute(
-        "SELECT t.id, t.name, t.description, COUNT(m.user_id) as member_count, t.created_at "
-        "FROM tenant_teams t "
-        "LEFT JOIN team_memberships m ON m.team_id = t.id "
-        "WHERE t.tenant_id = :tenant_id "
-        "GROUP BY t.id, t.name, t.description, t.created_at "
-        "ORDER BY t.name ASC",
+        text(
+            "SELECT t.id, t.name, t.description, COUNT(m.user_id) as member_count, t.created_at "
+            "FROM tenant_teams t "
+            "LEFT JOIN team_memberships m ON m.team_id = t.id "
+            "WHERE t.tenant_id = :tenant_id "
+            "GROUP BY t.id, t.name, t.description, t.created_at "
+            "ORDER BY t.name ASC"
+        ),
         {"tenant_id": tenant_id},
     )
     return [
         {
-            "id": r[0],
+            "id": str(r[0]),
             "name": r[1],
             "description": r[2],
             "member_count": r[3],
@@ -81,8 +87,10 @@ async def create_team_db(
     """Create a new team."""
     team_id = str(uuid.uuid4())
     await db.execute(
-        "INSERT INTO tenant_teams (id, tenant_id, name, description) "
-        "VALUES (:id, :tenant_id, :name, :description)",
+        text(
+            "INSERT INTO tenant_teams (id, tenant_id, name, description) "
+            "VALUES (:id, :tenant_id, :name, :description)"
+        ),
         {
             "id": team_id,
             "tenant_id": tenant_id,
@@ -90,6 +98,7 @@ async def create_team_db(
             "description": description,
         },
     )
+    await db.commit()
     logger.info("team_created", team_id=team_id, name=name, tenant_id=tenant_id)
     return {
         "id": team_id,
@@ -102,18 +111,20 @@ async def create_team_db(
 async def get_team_db(team_id: str, tenant_id: str, db) -> Optional[dict]:
     """Get team details with member count."""
     result = await db.execute(
-        "SELECT t.id, t.name, t.description, COUNT(m.user_id) as member_count, t.created_at "
-        "FROM tenant_teams t "
-        "LEFT JOIN team_memberships m ON m.team_id = t.id "
-        "WHERE t.id = :id AND t.tenant_id = :tenant_id "
-        "GROUP BY t.id, t.name, t.description, t.created_at",
+        text(
+            "SELECT t.id, t.name, t.description, COUNT(m.user_id) as member_count, t.created_at "
+            "FROM tenant_teams t "
+            "LEFT JOIN team_memberships m ON m.team_id = t.id "
+            "WHERE t.id = :id AND t.tenant_id = :tenant_id "
+            "GROUP BY t.id, t.name, t.description, t.created_at"
+        ),
         {"id": team_id, "tenant_id": tenant_id},
     )
     row = result.fetchone()
     if row is None:
         return None
     return {
-        "id": row[0],
+        "id": str(row[0]),
         "name": row[1],
         "description": row[2],
         "member_count": row[3],
@@ -121,29 +132,41 @@ async def get_team_db(team_id: str, tenant_id: str, db) -> Optional[dict]:
     }
 
 
+_TEAM_UPDATE_ALLOWLIST = {"name", "description"}
+
+
 async def update_team_db(
     team_id: str, tenant_id: str, updates: dict, db
 ) -> Optional[dict]:
     """Update team fields."""
+    invalid = set(updates) - _TEAM_UPDATE_ALLOWLIST
+    if invalid:
+        raise ValueError(f"Invalid team update fields: {invalid}")
     set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
     params = {"id": team_id, "tenant_id": tenant_id, **updates}
-    await db.execute(
-        f"UPDATE tenant_teams SET {set_clauses} WHERE id = :id AND tenant_id = :tenant_id",
+    result = await db.execute(
+        text(
+            f"UPDATE tenant_teams SET {set_clauses} WHERE id = :id AND tenant_id = :tenant_id"
+        ),
         params,
     )
+    await db.commit()
+    if (result.rowcount or 0) == 0:
+        return None
     return await get_team_db(team_id, tenant_id, db)
 
 
 async def delete_team_db(team_id: str, tenant_id: str, db) -> bool:
     """Delete a team and its memberships."""
     await db.execute(
-        "DELETE FROM team_memberships WHERE team_id = :team_id",
+        text("DELETE FROM team_memberships WHERE team_id = :team_id"),
         {"team_id": team_id},
     )
     result = await db.execute(
-        "DELETE FROM tenant_teams WHERE id = :id AND tenant_id = :tenant_id",
+        text("DELETE FROM tenant_teams WHERE id = :id AND tenant_id = :tenant_id"),
         {"id": team_id, "tenant_id": tenant_id},
     )
+    await db.commit()
     return (result.rowcount or 0) > 0
 
 
@@ -154,12 +177,19 @@ async def add_team_member_db(
     added_by: str,
     db,
 ) -> dict:
-    """Add a user to a team."""
+    """Add a user to a team (scoped to caller's tenant)."""
+    # Verify team belongs to caller's tenant before inserting membership
+    team = await get_team_db(team_id, tenant_id, db)
+    if team is None:
+        return {}  # Route layer raises 404 on empty result
+
     membership_id = str(uuid.uuid4())
     await db.execute(
-        "INSERT INTO team_memberships (id, team_id, user_id, added_by) "
-        "VALUES (:id, :team_id, :user_id, :added_by) "
-        "ON CONFLICT (team_id, user_id) DO NOTHING",
+        text(
+            "INSERT INTO team_memberships (id, team_id, user_id, added_by) "
+            "VALUES (:id, :team_id, :user_id, :added_by) "
+            "ON CONFLICT (team_id, user_id) DO NOTHING"
+        ),
         {
             "id": membership_id,
             "team_id": team_id,
@@ -167,6 +197,7 @@ async def add_team_member_db(
             "added_by": added_by,
         },
     )
+    await db.commit()
     logger.info(
         "team_member_added", team_id=team_id, user_id=user_id, added_by=added_by
     )
@@ -179,11 +210,18 @@ async def remove_team_member_db(
     tenant_id: str,
     db,
 ) -> bool:
-    """Remove a user from a team."""
+    """Remove a user from a team (scoped to caller's tenant)."""
     result = await db.execute(
-        "DELETE FROM team_memberships WHERE team_id = :team_id AND user_id = :user_id",
-        {"team_id": team_id, "user_id": user_id},
+        text(
+            "DELETE FROM team_memberships "
+            "WHERE team_id = :team_id AND user_id = :user_id "
+            "AND team_id IN ("
+            "  SELECT id FROM tenant_teams WHERE id = :team_id AND tenant_id = :tenant_id"
+            ")"
+        ),
+        {"team_id": team_id, "user_id": user_id, "tenant_id": tenant_id},
     )
+    await db.commit()
     removed = (result.rowcount or 0) > 0
     if removed:
         logger.info("team_member_removed", team_id=team_id, user_id=user_id)
@@ -218,11 +256,12 @@ async def get_team_memory_data(team_id: str, tenant_id: str, db) -> dict:
 @router.get("/")
 async def list_teams(
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-051: List all teams in the tenant."""
     result = await list_teams_db(
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -231,13 +270,14 @@ async def list_teams(
 async def create_team(
     request: CreateTeamRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-052: Create a new team (tenant admin only)."""
     result = await create_team_db(
         tenant_id=current_user.tenant_id,
         name=request.name,
         description=request.description,
-        db=None,
+        db=session,
     )
     return result
 
@@ -246,12 +286,13 @@ async def create_team(
 async def get_team_memory(
     team_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-060: Get team working memory."""
     result = await get_team_memory_data(
         team_id=team_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     return result
 
@@ -261,6 +302,7 @@ async def add_team_member(
     team_id: str,
     request: AddMemberRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-056: Add a user to a team (tenant admin only)."""
     result = await add_team_member_db(
@@ -268,8 +310,13 @@ async def add_team_member(
         user_id=request.user_id,
         tenant_id=current_user.tenant_id,
         added_by=current_user.id,
-        db=None,
+        db=session,
     )
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_id}' not found",
+        )
     return result
 
 
@@ -278,13 +325,14 @@ async def remove_team_member(
     team_id: str,
     user_id: str,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-057: Remove a user from a team (tenant admin only)."""
     removed = await remove_team_member_db(
         team_id=team_id,
         user_id=user_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if not removed:
         raise HTTPException(
@@ -298,12 +346,13 @@ async def remove_team_member(
 async def get_team(
     team_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-053: Get team details."""
     result = await get_team_db(
         team_id=team_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if result is None:
         raise HTTPException(
@@ -318,6 +367,7 @@ async def update_team(
     team_id: str,
     request: UpdateTeamRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-054: Update team name or description (tenant admin only)."""
     updates = request.model_dump(exclude_none=True)
@@ -330,8 +380,13 @@ async def update_team(
         team_id=team_id,
         tenant_id=current_user.tenant_id,
         updates=updates,
-        db=None,
+        db=session,
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_id}' not found",
+        )
     return result
 
 
@@ -339,12 +394,13 @@ async def update_team(
 async def delete_team(
     team_id: str,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-055: Delete a team and all memberships (tenant admin only)."""
     deleted = await delete_team_db(
         team_id=team_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if not deleted:
         raise HTTPException(

@@ -10,17 +10,27 @@ Endpoints:
 - POST   /glossary/import       — Bulk CSV import (tenant admin only)
 
 Note: /import must be registered BEFORE /{id} to avoid path collision.
+
+Schema: glossary_terms(id, tenant_id, term, full_form, aliases JSONB, created_at)
+- term: the abbreviation/acronym (e.g. "HR")
+- full_form: the expansion injected into queries (e.g. "Human Resources") — NOT NULL
+- aliases: additional abbreviations that expand to the same full_form
 """
 import csv
 import io
+import json
 import uuid
-from typing import Optional
+from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.dependencies import CurrentUser, get_current_user, require_tenant_admin
+from app.core.session import get_async_session
 from app.modules.glossary.expander import (
     MAX_DEFINITION_LENGTH,
     MAX_TERMS_PER_TENANT,
@@ -39,14 +49,14 @@ router = APIRouter(prefix="/glossary", tags=["glossary"])
 
 class CreateTermRequest(BaseModel):
     term: str = Field(..., min_length=1, max_length=100)
-    definition: Optional[str] = Field(None, max_length=MAX_DEFINITION_LENGTH)
-    full_form: Optional[str] = Field(None, max_length=200)
+    full_form: str = Field(..., min_length=1, max_length=MAX_DEFINITION_LENGTH)
+    aliases: Optional[List[str]] = Field(default_factory=list)
 
 
 class UpdateTermRequest(BaseModel):
     term: Optional[str] = Field(None, max_length=100)
-    definition: Optional[str] = Field(None, max_length=MAX_DEFINITION_LENGTH)
-    full_form: Optional[str] = Field(None, max_length=200)
+    full_form: Optional[str] = Field(None, max_length=MAX_DEFINITION_LENGTH)
+    aliases: Optional[List[str]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -58,24 +68,26 @@ async def list_glossary_db(tenant_id: str, page: int, page_size: int, db) -> dic
     """List glossary terms for a tenant, paginated."""
     offset = (page - 1) * page_size
     count_result = await db.execute(
-        "SELECT COUNT(*) FROM glossary_terms WHERE tenant_id = :tenant_id",
+        text("SELECT COUNT(*) FROM glossary_terms WHERE tenant_id = :tenant_id"),
         {"tenant_id": tenant_id},
     )
     total = count_result.scalar() or 0
 
     rows_result = await db.execute(
-        "SELECT id, term, definition, full_form, created_at FROM glossary_terms "
-        "WHERE tenant_id = :tenant_id "
-        "ORDER BY term ASC LIMIT :limit OFFSET :offset",
+        text(
+            "SELECT id, term, full_form, aliases, created_at FROM glossary_terms "
+            "WHERE tenant_id = :tenant_id "
+            "ORDER BY term ASC LIMIT :limit OFFSET :offset"
+        ),
         {"tenant_id": tenant_id, "limit": page_size, "offset": offset},
     )
     rows = rows_result.fetchall()
     items = [
         {
-            "id": r[0],
+            "id": str(r[0]),
             "term": r[1],
-            "definition": r[2],
-            "full_form": r[3],
+            "full_form": r[2],
+            "aliases": r[3] or [],
             "created_at": str(r[4]),
         }
         for r in rows
@@ -86,50 +98,56 @@ async def list_glossary_db(tenant_id: str, page: int, page_size: int, db) -> dic
 async def create_glossary_term_db(
     tenant_id: str,
     term: str,
-    definition: Optional[str],
-    full_form: Optional[str],
+    full_form: str,
+    aliases: Optional[List[str]],
     db,
 ) -> dict:
     """Insert a new glossary term."""
     term_id = str(uuid.uuid4())
-    safe_definition = sanitize_glossary_definition(definition) if definition else None
+    safe_full_form = sanitize_glossary_definition(full_form)
+    aliases_json = json.dumps(aliases or [])
     await db.execute(
-        "INSERT INTO glossary_terms (id, tenant_id, term, definition, full_form) "
-        "VALUES (:id, :tenant_id, :term, :definition, :full_form)",
+        text(
+            "INSERT INTO glossary_terms (id, tenant_id, term, full_form, aliases) "
+            "VALUES (:id, :tenant_id, :term, :full_form, CAST(:aliases AS jsonb))"
+        ),
         {
             "id": term_id,
             "tenant_id": tenant_id,
             "term": term,
-            "definition": safe_definition,
-            "full_form": full_form,
+            "full_form": safe_full_form,
+            "aliases": aliases_json,
         },
     )
+    await db.commit()
     logger.info(
         "glossary_term_created", term_id=term_id, term=term, tenant_id=tenant_id
     )
     return {
         "id": term_id,
         "term": term,
-        "definition": safe_definition,
-        "full_form": full_form,
+        "full_form": safe_full_form,
+        "aliases": aliases or [],
     }
 
 
 async def get_glossary_term_db(term_id: str, tenant_id: str, db) -> Optional[dict]:
     """Get a glossary term by ID."""
     result = await db.execute(
-        "SELECT id, term, definition, full_form, created_at FROM glossary_terms "
-        "WHERE id = :id AND tenant_id = :tenant_id",
+        text(
+            "SELECT id, term, full_form, aliases, created_at FROM glossary_terms "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
         {"id": term_id, "tenant_id": tenant_id},
     )
     row = result.fetchone()
     if row is None:
         return None
     return {
-        "id": row[0],
+        "id": str(row[0]),
         "term": row[1],
-        "definition": row[2],
-        "full_form": row[3],
+        "full_form": row[2],
+        "aliases": row[3] or [],
         "created_at": str(row[4]),
     }
 
@@ -141,23 +159,44 @@ async def update_glossary_term_db(
     db,
 ) -> Optional[dict]:
     """Update glossary term fields."""
-    if "definition" in updates and updates["definition"]:
-        updates["definition"] = sanitize_glossary_definition(updates["definition"])
-    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
+    if "full_form" in updates and updates["full_form"]:
+        updates["full_form"] = sanitize_glossary_definition(updates["full_form"])
+    if "aliases" in updates:
+        updates["aliases"] = json.dumps(updates["aliases"] or [])
+
+    _GLOSSARY_UPDATE_ALLOWLIST = {"term", "full_form", "aliases"}
+    invalid = set(updates) - _GLOSSARY_UPDATE_ALLOWLIST
+    if invalid:
+        raise ValueError(f"Invalid glossary term update fields: {invalid}")
+
+    set_parts = []
+    for k in updates:
+        if k == "aliases":
+            set_parts.append(f"aliases = CAST(:{k} AS jsonb)")
+        else:
+            set_parts.append(f"{k} = :{k}")
+
     params = {"id": term_id, "tenant_id": tenant_id, **updates}
-    await db.execute(
-        f"UPDATE glossary_terms SET {set_clauses} WHERE id = :id AND tenant_id = :tenant_id",
+    result = await db.execute(
+        text(
+            f"UPDATE glossary_terms SET {', '.join(set_parts)} "
+            f"WHERE id = :id AND tenant_id = :tenant_id"
+        ),
         params,
     )
+    await db.commit()
+    if (result.rowcount or 0) == 0:
+        return None
     return await get_glossary_term_db(term_id, tenant_id, db)
 
 
 async def delete_glossary_term_db(term_id: str, tenant_id: str, db) -> bool:
     """Delete a glossary term."""
     result = await db.execute(
-        "DELETE FROM glossary_terms WHERE id = :id AND tenant_id = :tenant_id",
+        text("DELETE FROM glossary_terms WHERE id = :id AND tenant_id = :tenant_id"),
         {"id": term_id, "tenant_id": tenant_id},
     )
+    await db.commit()
     return (result.rowcount or 0) > 0
 
 
@@ -169,7 +208,7 @@ async def bulk_import_glossary(
     """
     Bulk import glossary terms from CSV.
 
-    Expected columns: term, definition (optional: full_form)
+    Expected columns: term, full_form (optional: aliases as pipe-separated)
     Returns summary with counts of imported, skipped, and errors.
     """
     reader = csv.DictReader(io.StringIO(csv_content))
@@ -183,13 +222,29 @@ async def bulk_import_glossary(
             detail="CSV must have a 'term' column",
         )
 
+    if "full_form" not in (reader.fieldnames or []):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="CSV must have a 'full_form' column",
+        )
+
     for i, row in enumerate(reader, start=2):  # Row 1 is header
         term = (row.get("term") or "").strip()
-        definition = (row.get("definition") or "").strip() or None
-        full_form = (row.get("full_form") or "").strip() or None
+        full_form = (row.get("full_form") or "").strip()
+        aliases_raw = (row.get("aliases") or "").strip()
+        aliases = (
+            [a.strip() for a in aliases_raw.split("|") if a.strip()]
+            if aliases_raw
+            else []
+        )
 
         if not term:
             errors.append({"row": i, "error": "term is empty"})
+            skipped += 1
+            continue
+
+        if not full_form:
+            errors.append({"row": i, "error": "full_form is empty"})
             skipped += 1
             continue
 
@@ -200,29 +255,35 @@ async def bulk_import_glossary(
             skipped += 1
             continue
 
-        if definition and len(definition) > MAX_DEFINITION_LENGTH:
-            definition = definition[:MAX_DEFINITION_LENGTH]
+        if len(full_form) > MAX_DEFINITION_LENGTH:
+            full_form = full_form[:MAX_DEFINITION_LENGTH]
 
         try:
-            safe_def = sanitize_glossary_definition(definition) if definition else None
+            safe_full_form = sanitize_glossary_definition(full_form)
             term_id = str(uuid.uuid4())
             await db.execute(
-                "INSERT INTO glossary_terms (id, tenant_id, term, definition, full_form) "
-                "VALUES (:id, :tenant_id, :term, :definition, :full_form) "
-                "ON CONFLICT (tenant_id, term) DO UPDATE SET "
-                "definition = EXCLUDED.definition, full_form = EXCLUDED.full_form",
+                text(
+                    "INSERT INTO glossary_terms (id, tenant_id, term, full_form, aliases) "
+                    "VALUES (:id, :tenant_id, :term, :full_form, CAST(:aliases AS jsonb)) "
+                    "ON CONFLICT (tenant_id, term) DO UPDATE SET "
+                    "full_form = EXCLUDED.full_form, aliases = EXCLUDED.aliases"
+                ),
                 {
                     "id": term_id,
                     "tenant_id": tenant_id,
                     "term": term,
-                    "definition": safe_def,
-                    "full_form": full_form,
+                    "full_form": safe_full_form,
+                    "aliases": json.dumps(aliases),
                 },
             )
             imported += 1
         except Exception as e:
-            errors.append({"row": i, "error": str(e)})
+            logger.exception("glossary_bulk_import_row_error", row=i, term=term[:20])
+            errors.append({"row": i, "error": f"Failed to import row {i}"})
             skipped += 1
+
+    if imported > 0:
+        await db.commit()
 
     logger.info(
         "glossary_bulk_import",
@@ -242,14 +303,21 @@ async def bulk_import_glossary(
 async def import_glossary_csv(
     file: UploadFile = File(...),
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-075: Bulk import glossary terms from a CSV file."""
-    content = await file.read()
+    MAX_UPLOAD_BYTES = 1_048_576  # 1 MB limit for glossary CSVs
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="CSV file exceeds 1 MB limit",
+        )
     csv_content = content.decode("utf-8", errors="replace")
     result = await bulk_import_glossary(
         tenant_id=current_user.tenant_id,
         csv_content=csv_content,
-        db=None,
+        db=session,
     )
     return result
 
@@ -259,13 +327,14 @@ async def list_glossary(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-066: List glossary terms for the tenant (all authenticated users)."""
     result = await list_glossary_db(
         tenant_id=current_user.tenant_id,
         page=page,
         page_size=page_size,
-        db=None,
+        db=session,
     )
     return result
 
@@ -274,14 +343,15 @@ async def list_glossary(
 async def create_glossary_term(
     request: CreateTermRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-067: Create a new glossary term (tenant admin only)."""
     result = await create_glossary_term_db(
         tenant_id=current_user.tenant_id,
         term=request.term,
-        definition=request.definition,
         full_form=request.full_form,
-        db=None,
+        aliases=request.aliases,
+        db=session,
     )
     return result
 
@@ -290,12 +360,13 @@ async def create_glossary_term(
 async def get_glossary_term(
     term_id: str,
     current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-068: Get a glossary term by ID."""
     result = await get_glossary_term_db(
         term_id=term_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if result is None:
         raise HTTPException(
@@ -310,6 +381,7 @@ async def update_glossary_term(
     term_id: str,
     request: UpdateTermRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-069: Update a glossary term (tenant admin only)."""
     updates = request.model_dump(exclude_none=True)
@@ -322,8 +394,13 @@ async def update_glossary_term(
         term_id=term_id,
         tenant_id=current_user.tenant_id,
         updates=updates,
-        db=None,
+        db=session,
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Glossary term '{term_id}' not found",
+        )
     return result
 
 
@@ -331,12 +408,13 @@ async def update_glossary_term(
 async def delete_glossary_term(
     term_id: str,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """API-070: Delete a glossary term (tenant admin only)."""
     deleted = await delete_glossary_term_db(
         term_id=term_id,
         tenant_id=current_user.tenant_id,
-        db=None,
+        db=session,
     )
     if not deleted:
         raise HTTPException(

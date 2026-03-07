@@ -115,14 +115,14 @@ class TestCreateGlossaryTerm:
 
     def test_create_term_requires_auth(self, client):
         resp = client.post(
-            "/api/v1/glossary", json={"term": "HR", "definition": "Human Resources"}
+            "/api/v1/glossary", json={"term": "HR", "full_form": "Human Resources"}
         )
         assert resp.status_code == 401
 
     def test_create_term_requires_tenant_admin(self, client, user_headers):
         resp = client.post(
             "/api/v1/glossary",
-            json={"term": "HR", "definition": "Human Resources"},
+            json={"term": "HR", "full_form": "Human Resources"},
             headers=user_headers,
         )
         assert resp.status_code == 403
@@ -135,11 +135,12 @@ class TestCreateGlossaryTerm:
             mock_create.return_value = {
                 "id": "term-1",
                 "term": "HR",
-                "definition": "Human Resources",
+                "full_form": "Human Resources",
+                "aliases": [],
             }
             resp = client.post(
                 "/api/v1/glossary",
-                json={"term": "HR", "definition": "Human Resources"},
+                json={"term": "HR", "full_form": "Human Resources"},
                 headers=admin_headers,
             )
         assert resp.status_code == 201
@@ -149,15 +150,15 @@ class TestCreateGlossaryTerm:
     def test_create_term_rejects_empty_term(self, client, admin_headers):
         resp = client.post(
             "/api/v1/glossary",
-            json={"term": "", "definition": "Some definition"},
+            json={"term": "", "full_form": "Some definition"},
             headers=admin_headers,
         )
         assert resp.status_code == 422
 
-    def test_create_term_rejects_definition_over_200_chars(self, client, admin_headers):
+    def test_create_term_rejects_full_form_over_200_chars(self, client, admin_headers):
         resp = client.post(
             "/api/v1/glossary",
-            json={"term": "HR", "definition": "x" * 201},
+            json={"term": "HR", "full_form": "x" * 201},
             headers=admin_headers,
         )
         assert resp.status_code == 422
@@ -198,7 +199,7 @@ class TestUpdateGlossaryTerm:
     def test_update_term_requires_tenant_admin(self, client, user_headers):
         resp = client.patch(
             "/api/v1/glossary/term-1",
-            json={"definition": "Updated definition"},
+            json={"full_form": "Updated definition"},
             headers=user_headers,
         )
         assert resp.status_code == 403
@@ -210,11 +211,11 @@ class TestUpdateGlossaryTerm:
         ) as mock_update:
             mock_update.return_value = {
                 "id": "term-1",
-                "definition": "Updated definition",
+                "full_form": "Updated Human Resources",
             }
             resp = client.patch(
                 "/api/v1/glossary/term-1",
-                json={"definition": "Updated definition"},
+                json={"full_form": "Updated Human Resources"},
                 headers=admin_headers,
             )
         assert resp.status_code == 200
