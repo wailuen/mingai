@@ -132,33 +132,49 @@ async def list_transactions_db(
             detail=f"Invalid state '{state_filter}'. Valid states: {ALL_STATES}",
         )
     offset = (page - 1) * page_size
-    params: dict = {"tenant_id": tenant_id, "limit": page_size, "offset": offset}
-    state_clause = ""
-    if state_filter:
-        state_clause = "AND state = :state"
-        params["state"] = state_filter
+    base_params: dict = {"tenant_id": tenant_id, "limit": page_size, "offset": offset}
 
-    count_result = await db.execute(
-        text(
-            f"SELECT COUNT(*) FROM har_transactions "
-            f"WHERE tenant_id = :tenant_id {state_clause}"
-        ),
-        params,
-    )
+    if state_filter:
+        count_result = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM har_transactions "
+                "WHERE tenant_id = :tenant_id AND state = :state"
+            ),
+            {**base_params, "state": state_filter},
+        )
+    else:
+        count_result = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM har_transactions " "WHERE tenant_id = :tenant_id"
+            ),
+            base_params,
+        )
     total = count_result.scalar() or 0
 
-    rows_result = await db.execute(
-        text(
-            f"SELECT id, tenant_id, initiator_agent_id, counterparty_agent_id, "
-            f"state, amount, currency, payload, requires_human_approval, "
-            f"human_approved_at, human_approved_by, approval_deadline, "
-            f"chain_head_hash, created_at, updated_at "
-            f"FROM har_transactions "
-            f"WHERE tenant_id = :tenant_id {state_clause} "
-            f"ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
-        ),
-        params,
+    _cols = (
+        "id, tenant_id, initiator_agent_id, counterparty_agent_id, "
+        "state, amount, currency, payload, requires_human_approval, "
+        "human_approved_at, human_approved_by, approval_deadline, "
+        "chain_head_hash, created_at, updated_at"
     )
+    if state_filter:
+        rows_result = await db.execute(
+            text(
+                f"SELECT {_cols} FROM har_transactions "
+                "WHERE tenant_id = :tenant_id AND state = :state "
+                "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+            ),
+            {**base_params, "state": state_filter},
+        )
+    else:
+        rows_result = await db.execute(
+            text(
+                f"SELECT {_cols} FROM har_transactions "
+                "WHERE tenant_id = :tenant_id "
+                "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+            ),
+            base_params,
+        )
     items = []
     for row in rows_result.mappings():
         payload = row["payload"]

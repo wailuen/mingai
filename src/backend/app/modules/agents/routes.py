@@ -211,12 +211,13 @@ async def deploy_agent_template_db(
             text(
                 "UPDATE agent_cards "
                 "SET public_key = :public_key, private_key_enc = :private_key_enc "
-                "WHERE id = :id"
+                "WHERE id = :id AND tenant_id = :tenant_id"
             ),
             {
                 "public_key": public_key,
                 "private_key_enc": private_key_enc,
                 "id": agent_id,
+                "tenant_id": tenant_id,
             },
         )
         await db.commit()

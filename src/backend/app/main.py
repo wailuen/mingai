@@ -124,6 +124,14 @@ async def startup():
     """Application startup: validate configuration and initialize connections."""
     logger.info("application_starting", version="1.0.0")
 
+    # Dispose stale pool connections so all new connections belong to this
+    # event loop. This is a no-op in production (pool is fresh) but prevents
+    # asyncpg "another operation in progress" errors in tests where multiple
+    # TestClient instances are created in different event loops.
+    from app.core.session import engine as _engine
+
+    await _engine.dispose()
+
     # Validate critical env vars are set
     required_vars = ["DATABASE_URL", "REDIS_URL", "JWT_SECRET_KEY", "FRONTEND_URL"]
     missing = [v for v in required_vars if not os.environ.get(v)]

@@ -107,9 +107,10 @@ class DocumentIndexingPipeline:
                     "UPDATE sync_jobs "
                     "SET files_synced = files_synced + 1 "
                     "WHERE integration_id = :integration_id "
+                    "AND tenant_id = :tenant_id "
                     "AND status IN ('running', 'pending')"
                 ),
-                {"integration_id": integration_id},
+                {"integration_id": integration_id, "tenant_id": tenant_id},
             )
         else:
             await db.execute(
@@ -117,9 +118,10 @@ class DocumentIndexingPipeline:
                     "UPDATE sync_jobs "
                     "SET files_failed = files_failed + 1 "
                     "WHERE integration_id = :integration_id "
+                    "AND tenant_id = :tenant_id "
                     "AND status IN ('running', 'pending')"
                 ),
-                {"integration_id": integration_id},
+                {"integration_id": integration_id, "tenant_id": tenant_id},
             )
 
         logger.info(
