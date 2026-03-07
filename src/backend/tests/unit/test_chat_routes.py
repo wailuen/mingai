@@ -343,15 +343,19 @@ class TestIssuesEndpoints:
 
     def test_submit_issue_returns_created(self, client, auth_headers):
         with patch(
-            "app.modules.chat.routes.create_issue", new_callable=AsyncMock
+            "app.modules.issues.routes.create_issue_db", new_callable=AsyncMock
         ) as mock_create:
-            mock_create.return_value = {"id": "issue-1", "status": "open"}
+            mock_create.return_value = {
+                "id": "issue-1",
+                "title": "Problem",
+                "description": "Details",
+                "status": "open",
+            }
             resp = client.post(
                 "/api/v1/issues",
                 json={
                     "title": "Problem",
                     "description": "Details",
-                    "message_id": "msg-1",
                 },
                 headers=auth_headers,
             )
@@ -373,10 +377,11 @@ class TestIssuesEndpoints:
 
     def test_get_issue_returns_data(self, client, auth_headers):
         with patch(
-            "app.modules.chat.routes.get_issue", new_callable=AsyncMock
+            "app.modules.issues.routes.get_issue_db", new_callable=AsyncMock
         ) as mock_get:
             mock_get.return_value = {
                 "id": "issue-1",
+                "user_id": TEST_USER_ID,
                 "status": "open",
                 "title": "Problem",
             }
@@ -386,7 +391,7 @@ class TestIssuesEndpoints:
 
     def test_get_issue_returns_404_if_not_found(self, client, auth_headers):
         with patch(
-            "app.modules.chat.routes.get_issue", new_callable=AsyncMock
+            "app.modules.issues.routes.get_issue_db", new_callable=AsyncMock
         ) as mock_get:
             mock_get.return_value = None
             resp = client.get("/api/v1/issues/nonexistent", headers=auth_headers)

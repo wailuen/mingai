@@ -10,7 +10,7 @@
 
 ## Plan 01 — Foundation Phase 1
 
-### API-001: JWT v2 validation middleware
+### API-001: JWT v2 validation middleware ✅ COMPLETED
 
 **Effort**: 8h
 **Depends on**: none
@@ -31,7 +31,7 @@
 
 ---
 
-### API-002: Platform health check
+### API-002: Platform health check ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: none
@@ -50,7 +50,7 @@
 
 ---
 
-### API-003: Auth local login
+### API-003: Auth local login ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -70,7 +70,7 @@
 
 ---
 
-### API-004: Token refresh
+### API-004: Token refresh ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -89,7 +89,7 @@
 
 ---
 
-### API-005: Logout
+### API-005: Logout ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -107,7 +107,7 @@
 
 ---
 
-### API-006: Get current user
+### API-006: Get current user ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -125,7 +125,7 @@
 
 ---
 
-### API-007: Response feedback
+### API-007: Response feedback ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -253,7 +253,7 @@
 
 ## Plan 04 — Issue Reporting
 
-### API-013: Submit issue report
+### API-013: Submit issue report ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-001
@@ -474,7 +474,7 @@
 
 ## Plan 05 — Platform Admin
 
-### API-024: Provision new tenant
+### API-024: Provision new tenant ✅ COMPLETED
 
 **Effort**: 12h
 **Depends on**: API-001
@@ -496,7 +496,7 @@
 
 ---
 
-### API-025: Get provisioning job status (SSE)
+### API-025: Get provisioning job status (SSE) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-024
@@ -514,7 +514,7 @@
 
 ---
 
-### API-026: List all tenants
+### API-026: List all tenants ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -533,7 +533,7 @@
 
 ---
 
-### API-027: Get tenant detail
+### API-027: Get tenant detail ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-026
@@ -551,7 +551,7 @@
 
 ---
 
-### API-028: Update tenant status
+### API-028: Update tenant status ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-027
@@ -591,7 +591,7 @@
 
 ---
 
-### API-030: Get tenant quota
+### API-030: Get tenant quota ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-027
@@ -608,7 +608,7 @@
 
 ---
 
-### API-031: Update tenant quota
+### API-031: Update tenant quota ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-030
@@ -626,7 +626,7 @@
 
 ---
 
-### API-032: Create LLM profile
+### API-032: Create LLM profile ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-001
@@ -645,7 +645,7 @@
 
 ---
 
-### API-033: List LLM profiles
+### API-033: List LLM profiles ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-032
@@ -663,7 +663,7 @@
 
 ---
 
-### API-034: Update LLM profile
+### API-034: Update LLM profile ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-032
@@ -839,7 +839,7 @@
 
 ## Plan 06 — Tenant Admin
 
-### API-043: Invite user (single)
+### API-043: Invite user (single) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001

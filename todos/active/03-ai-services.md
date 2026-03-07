@@ -9,7 +9,7 @@
 
 ## Profile Learning Service
 
-### AI-001: Port ProfileLRUCache (in-process LRU)
+### AI-001: Port ProfileLRUCache (in-process LRU) ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: none
@@ -23,7 +23,7 @@
 - [ ] Cache hit/miss counters exposed for observability
       **Notes**: No external dependencies. Single-process only in Phase 1. Phase 2 will add Redis L2 with write-through; design the interface to accept a backend swap.
 
-### AI-002: Port ProfileLearningService with PostgreSQL backend
+### AI-002: Port ProfileLearningService with PostgreSQL backend ✅ COMPLETED
 
 **Effort**: 8h
 **Depends on**: AI-001, data layer models (user_profiles, profile_learning_events tables must exist)
@@ -40,7 +40,7 @@
 - [ ] Handles empty conversation history gracefully (no-op, no error)
       **Notes**: The extraction prompt is ported separately in AI-003. Conversation fetch requires the conversations table/service to exist.
 
-### AI-003: Port EXTRACTION_PROMPT template
+### AI-003: Port EXTRACTION_PROMPT template ✅ COMPLETED
 
 **Effort**: 0.5h
 **Depends on**: none
@@ -54,7 +54,7 @@
 - [ ] Prompt stored as module constant, not hardcoded inline
       **Notes**: Data minimization fix from red team R-critique: aihub2 sent full conversation (user + AI) to extraction LLM. mingai must send user queries only.
 
-### AI-004: Tenant LLM profile selection for intent model slot
+### AI-004: Tenant LLM profile selection for intent model slot ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: AI-002
@@ -68,7 +68,7 @@
 - [ ] Model name never hardcoded; always resolved from tenant config or env
       **Notes**: Replaces aihub2's hardcoded `get_intent_openai_client()` call.
 
-### AI-005: Tenant-scoped Redis keys for profile learning
+### AI-005: Tenant-scoped Redis keys for profile learning ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: AI-002
@@ -82,7 +82,7 @@
 - [ ] Integration test confirms two tenants with same user_id have isolated data
       **Notes**: Phase 2 adds agent suffix to query counter key.
 
-### AI-006: Query counter with Redis hot counter and PostgreSQL write-back
+### AI-006: Query counter with Redis hot counter and PostgreSQL write-back ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: AI-005
@@ -96,7 +96,7 @@
 - [ ] Write-back uses a single UPDATE with atomic increment (not read-modify-write)
       **Notes**: Phase 1 counter is global (cross-agent). Phase 2 Sprint 9 switches to per-agent counter with key `{tenant_id}:profile_learning:query_count:{user_id}:{agent_id}`.
 
-### AI-007: on_query_completed hook
+### AI-007: on_query_completed hook ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: AI-006
@@ -132,7 +132,7 @@
 
 ## Working Memory Service
 
-### AI-009: Port WorkingMemoryService with agent-scoped Redis keys
+### AI-009: Port WorkingMemoryService with agent-scoped Redis keys ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: none
@@ -147,7 +147,7 @@
 - [ ] Redis key TTL refreshed on every `update()` call
       **Notes**: Unlike aihub2 which used a global key, mingai scopes to agent from Day 1 per plan 08 Sprint 3.
 
-### AI-010: Working memory topic extraction
+### AI-010: Working memory topic extraction ✅ COMPLETED
 
 **Effort**: 1h
 **Depends on**: AI-009
@@ -162,7 +162,7 @@
 - [ ] No external NLP library required (simple tokenization + stop-word filter)
       **Notes**: English-only in Phase 1. Known gap for multinational deployments; semantic upgrade planned for Phase 3.
 
-### AI-011: Working memory format_for_prompt
+### AI-011: Working memory format_for_prompt ✅ COMPLETED
 
 **Effort**: 0.5h
 **Depends on**: AI-009
@@ -177,7 +177,7 @@
 - [ ] Recent queries truncated to 100 chars each
       **Notes**: Direct port from aihub2. No changes to logic.
 
-### AI-012: Working memory unit tests (50 tests)
+### AI-012: Working memory unit tests (50 tests) ✅ COMPLETED
 
 **Effort**: 5h
 **Depends on**: AI-009, AI-010, AI-011
@@ -199,8 +199,9 @@
 
 ## Team Working Memory Service
 
-### AI-013: TeamWorkingMemoryService core
+### AI-013: TeamWorkingMemoryService core ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 8h
 **Depends on**: AI-009
 **Description**: Implement `TeamWorkingMemoryService` for shared team-level working memory. Team members' queries contribute to a shared context pool, anonymized to protect individual privacy.
@@ -215,8 +216,9 @@
 - [ ] Topics union-merge: combine new topics with existing, deduplicate, cap at 10
       **Notes**: team_id sourced from Azure AD Groups (design documented in Plan 08 Sprint 10). For Phase 1, team_id is passed from the caller; team identity resolution is a separate task.
 
-### AI-014: Team working memory format_for_prompt
+### AI-014: Team working memory format_for_prompt ✅ COMPLETED
 
+**Completed**: 2026-03-07
 **Effort**: 1h
 **Depends on**: AI-013
 **Description**: Implement `format_for_prompt(team_memory)` that formats team working memory for Layer 4b injection.

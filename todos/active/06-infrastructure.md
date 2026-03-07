@@ -9,7 +9,7 @@
 
 ## Plan 02 — Database Migration (Alembic)
 
-### INFRA-001: Alembic migration — add tenant_id to 19 existing tables
+### INFRA-001: Alembic migration — add tenant_id to 19 existing tables ✅ COMPLETED
 
 **Effort**: 8h
 **Depends on**: none
@@ -23,7 +23,7 @@
 - [ ] Migration is reversible via `alembic downgrade`
       **Notes**: Use `pgvector/pgvector:pg16` Docker image for local dev. Batch backfill in migration 003.
 
-### INFRA-002: Alembic migration — create tenants, tenant_configs, user_feedback tables
+### INFRA-002: Alembic migration — create tenants, tenant_configs, user_feedback tables ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: INFRA-001
@@ -36,7 +36,7 @@
 - [ ] Migration reversible
       **Notes**: `tenant_configs.api_key_ref` stores a secrets manager URI (e.g. `secretsmanager://mingai/acme-corp/openai-key`), never a raw key.
 
-### INFRA-003: Alembic migration — backfill default tenant
+### INFRA-003: Alembic migration — backfill default tenant ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: INFRA-002
@@ -50,7 +50,7 @@
 - [ ] Batch size of 100 rows per UPDATE
       **Notes**: Run validation query after: `SELECT table_name, COUNT(*) FROM information_schema... WHERE tenant_id IS NULL` returns zero rows.
 
-### INFRA-004: Alembic migration — enable RLS policies on all 22 tables
+### INFRA-004: Alembic migration — enable RLS policies on all 22 tables ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: INFRA-003
@@ -65,7 +65,7 @@
 - [ ] Cross-tenant isolation integration test passes: tenant A data invisible to tenant B
       **Notes**: The application database user must NOT be a superuser (superusers bypass RLS). Create a dedicated `mingai_app` role.
 
-### INFRA-005: Alembic migration — platform RBAC (scope column + platform roles)
+### INFRA-005: Alembic migration — platform RBAC (scope column + platform roles) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: INFRA-004
@@ -106,7 +106,7 @@
 - [ ] No duplicate indexes
       **Notes**: Some indexes may already be created in INFRA-001 table-level specs. Deduplicate before running.
 
-### INFRA-008: JWT v1 to v2 dual-acceptance middleware
+### INFRA-008: JWT v1 to v2 dual-acceptance middleware ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: INFRA-005
@@ -282,7 +282,7 @@
 - [ ] Feature request type routed to product backlog channel, not bug triage
       **Notes**: Feature requests (`type=feature`) skip severity classification and route to product backlog.
 
-### INFRA-019: Screenshot blur service
+### INFRA-019: Screenshot blur service ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: none
@@ -624,7 +624,7 @@
 
 ## General DevOps
 
-### INFRA-039: Docker Compose for local development
+### INFRA-039: Docker Compose for local development ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: none
@@ -642,7 +642,7 @@
 - [ ] Health checks configured for postgres and redis
       **Notes**: Backend network should be internal (no external access to postgres/redis).
 
-### INFRA-040: Dockerfile for backend (FastAPI)
+### INFRA-040: Dockerfile for backend (FastAPI) ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: none
@@ -659,7 +659,7 @@
 - [ ] Container starts and responds to /health
       **Notes**: Use `--no-cache-dir` for pip to reduce image size.
 
-### INFRA-041: Dockerfile for frontend (Next.js)
+### INFRA-041: Dockerfile for frontend (Next.js) ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: none
@@ -676,7 +676,7 @@
 - [ ] Container starts and serves pages
       **Notes**: Use Next.js `output: 'standalone'` in next.config.js.
 
-### INFRA-042: Environment variable configuration (.env.example)
+### INFRA-042: Environment variable configuration (.env.example) ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: none
@@ -692,7 +692,7 @@
 - [ ] Frontend `.env.example` at `src/web/.env.example` with NEXT_PUBLIC_API_URL
       **Notes**: CRITICAL: `.env` must be in `.gitignore`. Never commit real secrets.
 
-### INFRA-043: Health check endpoints (/health and /ready)
+### INFRA-043: Health check endpoints (/health and /ready) ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: none
@@ -709,7 +709,7 @@
 - [ ] Response time < 100ms for /health, < 500ms for /ready
       **Notes**: Kubernetes uses liveness for restart decisions and readiness for traffic routing.
 
-### INFRA-044: Structured logging (JSON format)
+### INFRA-044: Structured logging (JSON format) ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: none
@@ -741,7 +741,7 @@
 - [ ] Metrics endpoint bypasses authentication
       **Notes**: These metrics feed into the cache analytics dashboard (Plan 03 Phase C4) and platform admin cost monitoring (Plan 05 Phase B3).
 
-### INFRA-046: CI pipeline configuration
+### INFRA-046: CI pipeline configuration ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: INFRA-040, INFRA-041
