@@ -735,7 +735,7 @@
 
 ---
 
-### API-035: Delete (deprecate) LLM profile
+### API-035: Delete (deprecate) LLM profile ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-034
@@ -753,7 +753,7 @@
 
 ---
 
-### API-036: Cross-tenant cost analytics
+### API-036: Cross-tenant cost analytics ✅ COMPLETED
 
 **Effort**: 8h
 **Depends on**: API-001
@@ -773,7 +773,7 @@
 
 ---
 
-### API-037: Tenant health scores dashboard
+### API-037: Tenant health scores dashboard ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-029
@@ -792,7 +792,7 @@
 
 ---
 
-### API-038: Publish agent template to library
+### API-038: Publish agent template to library ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-001
@@ -812,7 +812,7 @@
 
 ---
 
-### API-039: List agent templates
+### API-039: List agent templates ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-038
@@ -831,7 +831,7 @@
 
 ---
 
-### API-040: Update/version agent template
+### API-040: Update/version agent template ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-038
@@ -850,7 +850,7 @@
 
 ---
 
-### API-041: List tool catalog
+### API-041: List tool catalog ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -869,7 +869,7 @@
 
 ---
 
-### API-042: Register new tool
+### API-042: Register new tool ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-041
@@ -1150,7 +1150,7 @@
 
 ---
 
-### API-056: Sync failures
+### API-056: Sync failures ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-055
@@ -1265,7 +1265,7 @@
 
 ---
 
-### API-062: Export glossary
+### API-062: Export glossary ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-057
@@ -1283,7 +1283,7 @@
 
 ---
 
-### API-063: Glossary miss analytics
+### API-063: Glossary miss analytics ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-057
@@ -1395,7 +1395,7 @@
 
 ---
 
-### API-069: List workspace agents
+### API-069: List workspace agents ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1413,7 +1413,7 @@
 
 ---
 
-### API-070: Create agent (Agent Studio)
+### API-070: Create agent (Agent Studio) ✅ COMPLETED
 
 **Effort**: 8h
 **Depends on**: API-001
@@ -1433,7 +1433,7 @@
 
 ---
 
-### API-071: Update agent
+### API-071: Update agent ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-070
@@ -1452,7 +1452,7 @@
 
 ---
 
-### API-072: Update agent status
+### API-072: Update agent status ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-070
@@ -1471,7 +1471,7 @@
 
 ---
 
-### API-073: Deploy agent from template library
+### API-073: Deploy agent from template library ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-039, API-070
@@ -1491,7 +1491,7 @@
 
 ---
 
-### API-074: Satisfaction dashboard data
+### API-074: Satisfaction dashboard data ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-007
@@ -1511,7 +1511,7 @@
 
 ---
 
-### API-075: Engagement analytics
+### API-075: Engagement analytics ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -1530,7 +1530,7 @@
 
 ---
 
-### API-076: Get tenant memory policy
+### API-076: Get tenant memory policy ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -1547,7 +1547,7 @@
 
 ---
 
-### API-077: Update tenant memory policy
+### API-077: Update tenant memory policy ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-076
@@ -1729,7 +1729,7 @@
 
 ---
 
-### API-087: Workspace audit log
+### API-087: Workspace audit log ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -1748,7 +1748,7 @@
 
 ---
 
-### API-088: User directory list
+### API-088: User directory list ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -2107,7 +2107,7 @@
 
 ## Plan 03 — Cache Analytics
 
-### API-106: Cache analytics summary
+### API-106: Cache analytics summary ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
@@ -2126,7 +2126,7 @@
 
 ---
 
-### API-107: Cache analytics by index
+### API-107: Cache analytics by index ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-106
@@ -2144,7 +2144,7 @@
 
 ---
 
-### API-108: Cache cost savings
+### API-108: Cache cost savings ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-106
@@ -2162,7 +2162,7 @@
 
 ---
 
-### API-109: Set per-index cache TTL
+### API-109: Set per-index cache TTL ✅ COMPLETED
 
 **Effort**: 2h
 **Depends on**: API-001
@@ -2223,7 +2223,7 @@
 
 ## Cross-Plan — Platform Admin Additional
 
-### API-112: Platform admin audit log
+### API-112: Platform admin audit log ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-001
