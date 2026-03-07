@@ -1,5 +1,5 @@
 """
-Users API routes (API-041 to API-050).
+Users API routes (API-041 to API-050), bulk invite (API-044), and GDPR data export (API-104).
 
 Endpoints:
 - GET    /users           — List users (tenant admin only, paginated)
@@ -11,14 +11,20 @@ Endpoints:
 - DELETE /users/{id}      — Deactivate user (tenant admin only)
 - POST   /users/me/gdpr/export — Export user data
 - POST   /users/me/gdpr/erase  — GDPR erase (clears all 3 stores)
+- POST   /admin/users/bulk-invite — CSV bulk user invite (tenant admin)
+- GET    /me/data-export  — GDPR profile data export (any authenticated user)
 
 Note: /me routes must be registered BEFORE /{id} routes to avoid path collision.
 """
+import csv
+import io
+import re
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
 
 from sqlalchemy import text
@@ -30,6 +36,10 @@ from app.core.session import get_async_session
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+# Separate routers for /admin/users and /me prefixes
+admin_users_router = APIRouter(prefix="/admin/users", tags=["admin-users"])
+me_router = APIRouter(prefix="/me", tags=["me"])
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +62,22 @@ class UpdateUserRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     preferences: Optional[dict] = None
+
+
+class BulkInviteResult(BaseModel):
+    total: int
+    successful: int
+    failed: int
+    errors: list[dict]
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_VALID_BULK_INVITE_ROLES = {"end_user", "tenant_admin"}
+_EMAIL_PATTERN = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
+_MAX_BULK_INVITE_ROWS = 500
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +376,178 @@ async def erase_user_data(user_id: str, tenant_id: str, db) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Bulk invite DB helpers (API-044)
+# ---------------------------------------------------------------------------
+
+
+async def bulk_invite_check_quota(tenant_id: str, db) -> int:
+    """Return the remaining user quota for the tenant (users_max - current count).
+
+    Reads users_max from tenant_configs where config_type='limits'.
+    If no limit is configured, returns 500 (default max).
+    """
+    # Get configured limit
+    config_result = await db.execute(
+        text(
+            "SELECT config_data FROM tenant_configs "
+            "WHERE tenant_id = :tenant_id AND config_type = 'limits'"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    config_row = config_result.fetchone()
+    users_max = 500  # default max
+    if config_row and config_row[0]:
+        config_data = config_row[0]
+        if isinstance(config_data, dict) and "users_max" in config_data:
+            users_max = config_data["users_max"]
+
+    # Count existing users (active + invited)
+    count_result = await db.execute(
+        text(
+            "SELECT COUNT(*) FROM users "
+            "WHERE tenant_id = :tenant_id AND status IN ('active', 'invited')"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    current_count = count_result.scalar() or 0
+
+    remaining = users_max - current_count
+    return max(remaining, 0)
+
+
+async def bulk_invite_check_existing(tenant_id: str, emails: list[str], db) -> set[str]:
+    """Return set of emails that already exist in users or invitations for this tenant."""
+    if not emails:
+        return set()
+    # Use parameterized IN clause via ANY
+    result = await db.execute(
+        text(
+            "SELECT LOWER(email) FROM users "
+            "WHERE tenant_id = :tenant_id AND LOWER(email) = ANY(:emails)"
+        ),
+        {"tenant_id": tenant_id, "emails": [e.lower() for e in emails]},
+    )
+    return {row[0] for row in result.fetchall()}
+
+
+async def bulk_invite_insert_db(
+    tenant_id: str,
+    email: str,
+    name: Optional[str],
+    role: str,
+    invited_by: str,
+    db,
+) -> int:
+    """Insert a single invitation record. Returns 1 on success."""
+    invitation_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO users (id, tenant_id, email, name, role, status) "
+            "VALUES (:id, :tenant_id, :email, :name, :role, 'invited')"
+        ),
+        {
+            "id": invitation_id,
+            "tenant_id": tenant_id,
+            "email": email.lower().strip(),
+            "name": name,
+            "role": role,
+        },
+    )
+    await db.commit()
+    logger.info(
+        "bulk_invite_user_created",
+        invitation_id=invitation_id,
+        email=email,
+        tenant_id=tenant_id,
+        invited_by=invited_by,
+    )
+    return 1
+
+
+# ---------------------------------------------------------------------------
+# GDPR data export helper (API-104)
+# ---------------------------------------------------------------------------
+
+
+async def export_user_data_db(user_id: str, tenant_id: str, db) -> dict:
+    """Collect all user data for GDPR data export (API-104).
+
+    Queries:
+    - user_profiles table for profile data
+    - memory_notes table for memory notes
+    - working_memory_snapshots table for latest working memory snapshot
+    - org_context: empty dict (per-session, not persisted)
+    """
+    # Profile
+    profile_result = await db.execute(
+        text(
+            "SELECT u.id, u.email, u.name, u.role, u.status, "
+            "up.technical_level, up.communication_style, up.interests "
+            "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id "
+            "WHERE u.id = :user_id AND u.tenant_id = :tenant_id"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    profile_row = profile_result.fetchone()
+    if profile_row:
+        profile = {
+            "id": str(profile_row[0]),
+            "email": profile_row[1],
+            "name": profile_row[2],
+            "role": profile_row[3],
+            "status": profile_row[4],
+            "technical_level": profile_row[5],
+            "communication_style": profile_row[6],
+            "interests": profile_row[7] or [],
+        }
+    else:
+        profile = {"id": user_id}
+
+    # Memory notes
+    notes_result = await db.execute(
+        text(
+            "SELECT id, content, source, created_at FROM memory_notes "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id "
+            "ORDER BY created_at DESC"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    memory_notes = [
+        {
+            "id": str(r[0]),
+            "content": r[1],
+            "source": r[2],
+            "created_at": str(r[3]),
+        }
+        for r in notes_result.fetchall()
+    ]
+
+    # Working memory (latest snapshot)
+    wm_result = await db.execute(
+        text(
+            "SELECT snapshot_data, created_at FROM working_memory_snapshots "
+            "WHERE user_id = :user_id AND tenant_id = :tenant_id "
+            "ORDER BY created_at DESC LIMIT 1"
+        ),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    )
+    wm_row = wm_result.fetchone()
+    working_memory = wm_row[0] if wm_row else {}
+
+    exported_at = datetime.now(timezone.utc).isoformat()
+
+    logger.info("gdpr_data_export", user_id=user_id, tenant_id=tenant_id)
+
+    return {
+        "profile": profile,
+        "memory_notes": memory_notes,
+        "working_memory": working_memory,
+        "org_context": {},
+        "exported_at": exported_at,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Route handlers (note: /me routes BEFORE /{id} to avoid path collision)
 # ---------------------------------------------------------------------------
 
@@ -519,3 +717,178 @@ async def deactivate_user(
             detail=f"User '{user_id}' not found",
         )
     return None
+
+
+# ---------------------------------------------------------------------------
+# Admin users route handlers
+# ---------------------------------------------------------------------------
+
+
+@admin_users_router.post("/bulk-invite", status_code=status.HTTP_200_OK)
+async def bulk_invite_users(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-044: Bulk invite users via CSV. Validates all rows before any invite is sent."""
+    # Validate file type
+    filename = file.filename or ""
+    if not filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File must be a CSV file (.csv extension required)",
+        )
+
+    # Read and parse CSV
+    content = await file.read()
+    try:
+        decoded = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"CSV file must be UTF-8 encoded: {exc}",
+        )
+
+    reader = csv.DictReader(io.StringIO(decoded))
+
+    # Validate CSV has required headers
+    if not reader.fieldnames or not {"email", "name", "role"}.issubset(
+        set(reader.fieldnames)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="CSV must have headers: email, name, role",
+        )
+
+    # Read all rows
+    rows = []
+    for row in reader:
+        rows.append(row)
+        if len(rows) > _MAX_BULK_INVITE_ROWS:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"CSV exceeds maximum of {_MAX_BULK_INVITE_ROWS} rows",
+            )
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="CSV file contains no data rows",
+        )
+
+    # Phase 1: Validate all rows before any inserts
+    errors: list[dict] = []
+    valid_rows: list[dict] = []
+    seen_emails: set[str] = set()
+
+    # Check quota
+    remaining_quota = await bulk_invite_check_quota(
+        tenant_id=current_user.tenant_id, db=session
+    )
+
+    # Check existing emails in bulk
+    all_emails = [row.get("email", "").strip().lower() for row in rows]
+    existing_emails = await bulk_invite_check_existing(
+        tenant_id=current_user.tenant_id,
+        emails=all_emails,
+        db=session,
+    )
+
+    for idx, row in enumerate(rows, start=2):  # Row 2 is first data row (after header)
+        email = row.get("email", "").strip().lower()
+        name = row.get("name", "").strip()
+        role = row.get("role", "").strip().lower()
+
+        # Email validation
+        if not email or not _EMAIL_PATTERN.match(email):
+            errors.append(
+                {"row": idx, "email": email, "reason": "Invalid email format"}
+            )
+            continue
+
+        # Role validation
+        if role not in _VALID_BULK_INVITE_ROLES:
+            errors.append(
+                {
+                    "row": idx,
+                    "email": email,
+                    "reason": f"Invalid role '{role}'. Must be one of: {', '.join(sorted(_VALID_BULK_INVITE_ROLES))}",
+                }
+            )
+            continue
+
+        # Duplicate within CSV
+        if email in seen_emails:
+            errors.append(
+                {"row": idx, "email": email, "reason": "Duplicate email in CSV"}
+            )
+            continue
+        seen_emails.add(email)
+
+        # Already exists in database
+        if email in existing_emails:
+            errors.append(
+                {
+                    "row": idx,
+                    "email": email,
+                    "reason": "Email already exists for this tenant",
+                }
+            )
+            continue
+
+        valid_rows.append({"email": email, "name": name or None, "role": role})
+
+    # Check quota against valid rows
+    if len(valid_rows) > remaining_quota:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Insufficient user quota. Remaining: {remaining_quota}, requested: {len(valid_rows)}",
+        )
+
+    # Phase 2: Insert valid rows
+    successful = 0
+    for vrow in valid_rows:
+        inserted = await bulk_invite_insert_db(
+            tenant_id=current_user.tenant_id,
+            email=vrow["email"],
+            name=vrow["name"],
+            role=vrow["role"],
+            invited_by=current_user.id,
+            db=session,
+        )
+        successful += inserted
+
+    logger.info(
+        "bulk_invite_completed",
+        tenant_id=current_user.tenant_id,
+        total=len(rows),
+        successful=successful,
+        failed=len(errors),
+        invited_by=current_user.id,
+    )
+
+    return BulkInviteResult(
+        total=len(rows),
+        successful=successful,
+        failed=len(errors),
+        errors=errors,
+    )
+
+
+# ---------------------------------------------------------------------------
+# /me route handlers
+# ---------------------------------------------------------------------------
+
+
+@me_router.get("/data-export")
+async def gdpr_data_export(
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-104: Export all personal data for GDPR compliance (Article 20 data portability)."""
+    result = await export_user_data_db(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        db=session,
+    )
+    return result

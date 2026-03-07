@@ -28,6 +28,16 @@ from app.modules.users.routes import router as users_router
 
 router.include_router(users_router)
 
+# Admin users endpoints (API-044 bulk invite)
+from app.modules.users.routes import admin_users_router
+
+router.include_router(admin_users_router)
+
+# /me endpoints (API-104 GDPR data export)
+from app.modules.users.routes import me_router
+
+router.include_router(me_router)
+
 # Memory endpoints (API-099 to API-105)
 from app.modules.memory.routes import router as memory_router
 
