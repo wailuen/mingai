@@ -22,7 +22,7 @@ Critical constraints:
 - `validate_tenant_id()` rejects non-UUID strings before the SET executes.
 - Tables with special RLS (e.g. `tenants` self-references `id`; `team_memberships` joins through `tenant_teams`) are listed in `SPECIAL_RLS_TABLES` in `core/database.py`.
 
-RLS-scoped tables (as of Phase 1): users, conversations, messages, user_feedback, user_profiles, memory_notes, profile_learning_events, working_memory_snapshots, tenant_configs, llm_profiles, tenant_teams, team_memberships, glossary_terms, integrations, sync_jobs, issue_reports, issue_events, agent_cards, audit_log.
+RLS-scoped tables (as of Phase 1): users, conversations, messages, user_feedback, user_profiles, memory_notes, profile_learning_events, working_memory_snapshots, tenant_configs, llm_profiles, tenant_teams, team_memberships, glossary_terms, integrations, sync_jobs, issue_reports, issue_events, agent_cards, audit_log, har_transactions, har_transaction_events.
 
 ---
 
@@ -221,3 +221,59 @@ FastAPI matches routes in registration order. Specific path segments must always
 ```
 
 This applies in: issues, users, teams, glossary (`/import` before `/{id}`), documents.
+
+---
+
+## HAR A2A Protocol — Agent-to-Agent Transactions
+
+HAR (Human-Augmented Reasoning, Agent-to-Agent) enables cryptographically-signed transactions between agents with a human approval gate for high-value commitments.
+
+### Key Components
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Keypair generation | `har/crypto.py` | Ed25519 keypair per agent, Fernet-encrypted private key at rest |
+| Signed events | `har/signing.py` | Create/verify signed events; nonce replay protection; hash chain |
+| State machine | `har/state_machine.py` | Strict state transitions; unsigned events for human actions |
+| API routes | `har/routes.py` | CRUD + transition + approve/reject |
+| Trust scoring | `har/trust.py` | KYB points + completed transactions − disputed penalty |
+| Health monitor | `har/health_monitor.py` | Background asyncio task, hourly recomputation |
+
+### Cryptographic Chain
+
+1. **Keypair**: `generate_agent_keypair()` → Ed25519 via `cryptography` library. Private key seed encrypted with Fernet (key derived from `JWT_SECRET_KEY` via PBKDF2HMAC, 200k iterations).
+
+2. **Signing**: Each event gets a `nonce` (64 hex chars), a canonical JSON payload (sorted keys), Ed25519 signature, and `event_hash = SHA256(canonical_bytes + signature)`.
+
+3. **Chain**: Each event's `prev_event_hash` must equal the previous event's `event_hash`. `verify_event_chain()` validates the full chain. `har_transactions.chain_head_hash` tracks the latest hash.
+
+4. **Nonce replay**: Redis SETNX with key `{tenant_id}:nonce:{nonce}` and TTL=600s. Duplicate nonce → rejected.
+
+### State Machine
+
+```
+DRAFT → OPEN → NEGOTIATING → COMMITTED → EXECUTING → COMPLETED
+                     ↓            ↓           ↓
+                 ABANDONED    ABANDONED   DISPUTED → RESOLVED
+```
+
+All transitions validated against `VALID_TRANSITIONS` dict. Invalid transitions raise HTTP 400.
+
+### Human Approval Gate
+
+Transactions with `amount ≥ 5000.0` set `requires_human_approval=true` and `approval_deadline = NOW() + 48h`. The COMMITTED state is only reachable via `POST /har/transactions/{id}/approve` for these transactions.
+
+### Trust Score
+
+```
+score = max(0, min(100, kyb_pts + min(30, completed_count) - min(30, disputed_count × 10)))
+kyb_pts: {0→0, 1→15, 2→30, 3→40}
+```
+
+`AgentHealthMonitor` runs every 3600s via `asyncio.create_task()` at startup, recomputing scores for all published agents.
+
+### RLS Tables Added
+
+`har_transactions` and `har_transaction_events` both have:
+- `tenant_isolation` policy: `tenant_id = current_setting('app.current_tenant_id')::uuid`
+- `platform_admin_bypass` policy: `current_setting('app.scope', true) = 'platform'`

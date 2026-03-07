@@ -95,6 +95,11 @@ from app.modules.agents.routes import router as agents_router
 
 router.include_router(agents_router)
 
+# HAR A2A transaction endpoints (AI-043 to AI-045)
+from app.modules.har.routes import router as har_router
+
+router.include_router(har_router)
+
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.
 # Cloud deployments (aws/azure/gcp) never receive requests at these routes.

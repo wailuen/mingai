@@ -60,6 +60,14 @@ src/backend/app/
       routes.py            # CRUD for glossary_terms, bulk import
     documents/
       sharepoint.py        # SharePoint connection, test, sync trigger, sync status
+      indexing.py          # DocumentIndexingPipeline — PDF/DOCX/PPTX/TXT → chunks → embeddings → vector index
+    har/
+      crypto.py            # Ed25519 keypair generation, Fernet private-key encryption, sign/verify
+      signing.py           # create_signed_event(), verify_event_signature(), check_nonce_replay(), verify_event_chain()
+      state_machine.py     # HAR transaction state machine (DRAFT→OPEN→NEGOTIATING→COMMITTED→EXECUTING→COMPLETED)
+      routes.py            # POST/GET /har/transactions — create, list, get, transition, approve, reject
+      trust.py             # compute_trust_score(agent_id, tenant_id, db) — KYB + completed − disputed formula
+      health_monitor.py    # AgentHealthMonitor — asyncio background task, hourly trust score recomputation
     users/routes.py        # User management — invite, GDPR erase, profile
     teams/routes.py        # Team management — create, members, working memory
     tenants/routes.py      # Platform admin — tenant CRUD
@@ -297,7 +305,61 @@ _PLATFORM_ISSUE_ACTIONS = {"override_severity", "route_to_tenant", "assign_sprin
 
 Both follow the same route pattern as other PATCH endpoints: validate action against allowlist, then execute parameterized SQL. Reject unknown actions with 422.
 
-### 14. GitHub Webhook — HMAC-SHA256, Fail-Closed
+### 14. HAR A2A Cryptography — Ed25519 + Fernet
+
+Ed25519 keypairs are generated per agent on deploy. Private keys are stored Fernet-encrypted using PBKDF2HMAC derived from `JWT_SECRET_KEY` (200k iterations, SHA256, fixed salt `b"mingai-har-v1"`).
+
+```python
+from app.modules.har.crypto import generate_agent_keypair, sign_payload, verify_signature
+
+# Generate (returns base64-encoded strings)
+public_key_b64, private_key_enc_b64 = generate_agent_keypair()
+
+# Sign (private_key_enc_b64 = Fernet-encrypted seed, payload = bytes)
+signature_b64 = sign_payload(private_key_enc_b64, canonical_bytes)
+
+# Verify (never raises — returns False on any error)
+ok = verify_signature(public_key_b64, canonical_bytes, signature_b64)
+```
+
+### 15. HAR Signed Events — Canonical Payload Format
+
+Every signed event is created via `create_signed_event()`. The canonical payload is always:
+
+```python
+canonical_dict = {
+    "transaction_id": str,
+    "event_type": str,
+    "actor_agent_id": str,
+    "payload": dict,
+    "nonce": secrets.token_hex(32),   # 64 hex chars
+    "timestamp": datetime.now(UTC).isoformat(),  # ISO 8601 with T separator
+}
+canonical_bytes = json.dumps(canonical_dict, sort_keys=True).encode()
+event_hash = sha256(canonical_bytes + signature.encode()).hexdigest()
+```
+
+**Critical**: `created_at` passed to asyncpg INSERT must be a `datetime` object, NOT `isoformat()` string.
+`verify_event_signature()` must use `.isoformat()` (T-separated), NOT `str()` (space-separated) to match.
+
+### 16. Nonce Replay Protection — Redis SETNX TTL=600
+
+```python
+key = f"{tenant_id}:nonce:{nonce}"
+was_set = await redis.set(key, "1", nx=True, ex=600)
+# True = fresh, False = replay
+```
+
+### 17. Trust Score Formula
+
+```
+trust_score = max(0, min(100, kyb_pts + min(30, completed_count) - min(30, disputed_count * 10)))
+kyb_pts: {0:0, 1:15, 2:30, 3:40}
+```
+
+Called by `compute_trust_score(agent_id, tenant_id, db)` which does NOT commit — caller commits.
+
+### 18. GitHub Webhook — HMAC-SHA256, Fail-Closed
 
 `POST /webhooks/github` validates the `X-Hub-Signature-256` header using HMAC-SHA256 over the raw request body. The secret comes from `GITHUB_WEBHOOK_SECRET` in env.
 
@@ -305,12 +367,12 @@ Fail-closed rule: if `GITHUB_WEBHOOK_SECRET` is not set, the endpoint returns 50
 
 Event-to-status mapping (applied to `issue_reports`):
 
-| GitHub event | New status |
-|---|---|
-| `issues.labeled` | `triaged` |
+| GitHub event          | New status        |
+| --------------------- | ----------------- |
+| `issues.labeled`      | `triaged`         |
 | `pull_request.opened` | `fix_in_progress` |
-| `pull_request.merged` | `fix_merged` |
-| `release.published` | `fix_deployed` |
+| `pull_request.merged` | `fix_merged`      |
+| `release.published`   | `fix_deployed`    |
 
 Unrecognized events return 200 with `{"processed": false}` — do not raise errors for unknown event types.
 
@@ -380,8 +442,8 @@ No mocking. Requires full running stack. Uses Playwright.
 1. **`get_set_tenant_sql()` returns a tuple** — never pass directly to `text()`. Always `sql, params = ...`.
 2. **`_stream_llm` makes real API calls** — `autouse=True` monkeypatch fixture required in test_orchestrator.py.
 3. **Route order matters** — specific paths (`/issues/{id}/status`) before parameterized (`/issues/{id}`).
-4. **`logout()` is a no-op in Phase 1** — no token revocation. Known limitation.
-5. **Bootstrap login compares passwords in plaintext** — intentional for bootstrap admin only. Never replicate.
+4. **`logout()` revokes the Redis session key** — `build_redis_key(tenant_id, "session", user_id)` deleted on logout. `local_login()` writes the same key via `_write_session_to_redis()` (fire-and-forget, non-fatal if Redis down).
+5. **Bootstrap login uses `hmac.compare_digest()` for plaintext fallback** — constant-time to prevent timing attacks even on non-hashed bootstrap passwords. Never use `==` for password comparison.
 6. **Module-level engine in session.py** — integration tests must use a single session-scoped TestClient.
 7. **`EmbeddingService.__init__` reads env vars** — instantiation raises ValueError if env vars absent.
 8. **`GlossaryExpander(db=None)` is valid** — returns [] from `_get_terms()` with debug log. For unit tests only.
@@ -391,25 +453,31 @@ No mocking. Requires full running stack. Uses Playwright.
 12. **`ensure_stream_group` must run before the worker's XREADGROUP loop** — if the group doesn't exist the XREADGROUP call raises a Redis error.
 13. **`GITHUB_WEBHOOK_SECRET` unset → 503, not 401** — fail-closed; never fall through to processing.
 14. **`_SAFE_SEGMENT_RE` in `redis_client.py` now validates both `tenant_id` and `key_type` and all `*parts`** — any segment with a colon raises ValueError immediately.
+15. **asyncpg event loop binding in integration tests** — module-scoped SQLAlchemy engines bind to the first event loop. Each integration test that needs a DB session must create and dispose a fresh engine (function-scoped fixture). Module-scoped engine = "Future attached to a different loop" error.
+16. **`generate_bootstrap_sql()` returns `list[tuple[text_obj, dict]]`** — each tuple is `(sqlalchemy.text(...), params_dict)`. Call `await session.execute(sql, params)` not `await session.execute(text(sql))`. Raw SQL strings are never returned.
+17. **asyncpg TIMESTAMPTZ needs a `datetime` object** — passing `datetime.isoformat()` string to a TIMESTAMPTZ column raises `DataError: invalid input for query argument $N (expected datetime)`. Always pass `datetime.now(timezone.utc)` directly.
+18. **HAR `verify_event_signature()` uses `.isoformat()` not `str()`** — `str(datetime)` produces space-separated format (`"2026-03-08 05:11:41+00:00"`); `.isoformat()` produces T-separator (`"2026-03-08T05:11:41+00:00"`). Signing and verification must match.
+19. **Redis singleton across `asyncio.run()` calls causes "readline waiting" errors** — if integration tests call `asyncio.run()` multiple times, reset `app.core.redis_client._redis_pool = None` before each call to force a fresh connection in the new event loop.
+20. **`AgentHealthMonitor.start()` is an infinite loop** — it must be launched as an `asyncio.create_task()` in `app.main:startup()`. Never `await` it directly.
 
 ---
 
 ## Environment Variables Reference
 
-| Variable                         | Required | Description                                   |
-| -------------------------------- | -------- | --------------------------------------------- |
-| `DATABASE_URL`                   | Yes      | `postgresql+asyncpg://user:pass@host:port/db` |
-| `REDIS_URL`                      | Yes      | `redis://host:port/db`                        |
-| `CLOUD_PROVIDER`                 | Yes      | `aws` / `azure` / `gcp` / `local`             |
-| `PRIMARY_MODEL`                  | Yes      | LLM deployment name for chat responses        |
-| `INTENT_MODEL`                   | Yes      | LLM deployment name for intent routing        |
-| `EMBEDDING_MODEL`                | Yes      | Embedding model name                          |
-| `JWT_SECRET_KEY`                 | Yes      | Min 32 chars                                  |
-| `JWT_ALGORITHM`                  | No       | Default `HS256`                               |
-| `FRONTEND_URL`                   | Yes      | Must not be `*`. Used for CORS.               |
-| `AZURE_PLATFORM_OPENAI_API_KEY`  | If azure | Required when `CLOUD_PROVIDER=azure`          |
-| `AZURE_PLATFORM_OPENAI_ENDPOINT` | If azure | Required when `CLOUD_PROVIDER=azure`          |
-| `DEBUG`                          | No       | `true` exposes exception details in responses |
+| Variable                         | Required    | Description                                                           |
+| -------------------------------- | ----------- | --------------------------------------------------------------------- |
+| `DATABASE_URL`                   | Yes         | `postgresql+asyncpg://user:pass@host:port/db`                         |
+| `REDIS_URL`                      | Yes         | `redis://host:port/db`                                                |
+| `CLOUD_PROVIDER`                 | Yes         | `aws` / `azure` / `gcp` / `local`                                     |
+| `PRIMARY_MODEL`                  | Yes         | LLM deployment name for chat responses                                |
+| `INTENT_MODEL`                   | Yes         | LLM deployment name for intent routing                                |
+| `EMBEDDING_MODEL`                | Yes         | Embedding model name                                                  |
+| `JWT_SECRET_KEY`                 | Yes         | Min 32 chars                                                          |
+| `JWT_ALGORITHM`                  | No          | Default `HS256`                                                       |
+| `FRONTEND_URL`                   | Yes         | Must not be `*`. Used for CORS.                                       |
+| `AZURE_PLATFORM_OPENAI_API_KEY`  | If azure    | Required when `CLOUD_PROVIDER=azure`                                  |
+| `AZURE_PLATFORM_OPENAI_ENDPOINT` | If azure    | Required when `CLOUD_PROVIDER=azure`                                  |
+| `DEBUG`                          | No          | `true` exposes exception details in responses                         |
 | `GITHUB_WEBHOOK_SECRET`          | If webhooks | HMAC-SHA256 secret for GitHub webhook. Endpoint returns 503 if unset. |
 
 ---
@@ -428,3 +496,8 @@ No mocking. Requires full running stack. Uses Playwright.
 10. Logs never record passwords, tokens, or full API keys.
 11. GitHub webhook payload rejected (503) when `GITHUB_WEBHOOK_SECRET` is unset — never process unverified payloads.
 12. Redis key segments (`tenant_id`, `key_type`, all `*parts`) validated against `_SAFE_SEGMENT_RE` — colons in any segment raise ValueError before key construction.
+13. Ed25519 private keys encrypted at rest with Fernet (`private_key_enc` column) — never store raw private keys.
+14. `verify_signature()` never raises — returns False on any error (malformed key, bad signature, etc.).
+15. HAR transaction routes require `require_tenant_admin` — never expose to end users.
+16. Nonce replay attack prevention: every signed event nonce is recorded in Redis with 600s TTL. Duplicate nonce → reject.
+17. `compute_trust_score()` does not commit — caller must `await db.commit()` after calling it.

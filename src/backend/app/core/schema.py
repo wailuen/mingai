@@ -9,6 +9,7 @@ the alembic runtime dependency.
 """
 
 # All table names created in the initial migration (DB-001 to DB-022)
+# + HAR A2A tables (DB-023 to DB-024) added in Phase 1 Sprint 5
 TABLE_NAMES = [
     "tenants",
     "users",
@@ -32,6 +33,8 @@ TABLE_NAMES = [
     "issue_report_events",
     "agent_cards",
     "audit_log",
+    "har_transactions",
+    "har_transaction_events",
 ]
 
 # All tables requiring RLS (standard tenant_id + special cases)
@@ -270,6 +273,10 @@ TABLE_DEFINITIONS = {
         "status VARCHAR(50) NOT NULL DEFAULT 'draft', "
         "version INTEGER NOT NULL DEFAULT 1, "
         "created_by UUID REFERENCES users(id), "
+        "public_key TEXT, "
+        "private_key_enc TEXT, "
+        "trust_score INTEGER DEFAULT 0, "
+        "kyb_level INTEGER DEFAULT 0, "
         "created_at TIMESTAMPTZ DEFAULT NOW(), "
         "updated_at TIMESTAMPTZ DEFAULT NOW()"
     ),
@@ -282,6 +289,38 @@ TABLE_DEFINITIONS = {
         "resource_id UUID, "
         "details JSONB DEFAULT '{}', "
         "ip_address VARCHAR(45), "
+        "created_at TIMESTAMPTZ DEFAULT NOW()"
+    ),
+    "har_transactions": (
+        "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, "
+        "initiator_agent_id UUID NOT NULL REFERENCES agent_cards(id), "
+        "counterparty_agent_id UUID NOT NULL REFERENCES agent_cards(id), "
+        "state VARCHAR(50) NOT NULL DEFAULT 'DRAFT' "
+        "CHECK (state IN ('DRAFT','OPEN','NEGOTIATING','COMMITTED','EXECUTING','COMPLETED','ABANDONED','DISPUTED','RESOLVED')), "
+        "amount NUMERIC(18,6), "
+        "currency VARCHAR(10), "
+        "payload JSONB DEFAULT '{}', "
+        "requires_human_approval BOOLEAN DEFAULT false, "
+        "human_approved_at TIMESTAMPTZ, "
+        "human_approved_by UUID REFERENCES users(id), "
+        "approval_deadline TIMESTAMPTZ, "
+        "chain_head_hash TEXT, "
+        "created_at TIMESTAMPTZ DEFAULT NOW(), "
+        "updated_at TIMESTAMPTZ DEFAULT NOW()"
+    ),
+    "har_transaction_events": (
+        "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, "
+        "transaction_id UUID NOT NULL REFERENCES har_transactions(id) ON DELETE CASCADE, "
+        "event_type VARCHAR(100) NOT NULL, "
+        "actor_agent_id UUID REFERENCES agent_cards(id), "
+        "actor_user_id UUID REFERENCES users(id), "
+        "payload JSONB DEFAULT '{}', "
+        "signature TEXT, "
+        "nonce VARCHAR(64), "
+        "prev_event_hash TEXT, "
+        "event_hash TEXT, "
         "created_at TIMESTAMPTZ DEFAULT NOW()"
     ),
 }

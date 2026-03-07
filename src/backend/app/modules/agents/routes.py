@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_tenant_admin
 from app.core.session import get_async_session
+from app.modules.har.crypto import generate_agent_keypair
 
 logger = structlog.get_logger()
 
@@ -203,7 +204,35 @@ async def deploy_agent_template_db(
             "created_by": created_by,
         },
     )
-    await db.commit()
+    # Generate Ed25519 keypair and store encrypted private key (AI-040)
+    try:
+        public_key, private_key_enc = generate_agent_keypair()
+        await db.execute(
+            text(
+                "UPDATE agent_cards "
+                "SET public_key = :public_key, private_key_enc = :private_key_enc "
+                "WHERE id = :id"
+            ),
+            {
+                "public_key": public_key,
+                "private_key_enc": private_key_enc,
+                "id": agent_id,
+            },
+        )
+        await db.commit()
+        logger.info(
+            "agent_keypair_generated",
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "agent_keypair_generation_failed",
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            error=str(exc),
+        )
+
     logger.info(
         "agent_template_deployed",
         agent_id=agent_id,
@@ -320,7 +349,7 @@ async def deploy_agent_template(
         db=session,
     )
 
-    # Log access_control and kb_ids received — these fields are not yet persisted
+    # Log access_control and kb_ids received — these fields are not yet fully persisted
     # to the agent_cards schema (columns pending in next migration). They are accepted
     # in the API contract so the frontend deploy form works without changes once the
     # schema is extended. Without this log, the values would be silently discarded.
@@ -335,3 +364,56 @@ async def deploy_agent_template(
         )
 
     return result
+
+
+@router.get("/templates/{agent_id}/public-key")
+async def get_agent_public_key(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """AI-040: Get the Ed25519 public key for an agent (for signature verification)."""
+    result = await session.execute(
+        text(
+            "SELECT id, public_key FROM agent_cards "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+    if not row["public_key"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' does not have a public key (keypair not yet generated)",
+        )
+    return {"agent_id": str(row["id"]), "public_key": row["public_key"]}
+
+
+@router.post("/templates/{agent_id}/compute-trust-score")
+async def compute_agent_trust_score(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """AI-046: Trigger trust score recomputation for an agent."""
+    from app.modules.har.trust import compute_trust_score
+
+    # Verify agent exists and belongs to this tenant
+    exists_result = await session.execute(
+        text("SELECT id FROM agent_cards WHERE id = :id AND tenant_id = :tenant_id"),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    if exists_result.mappings().first() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    trust_score = await compute_trust_score(agent_id, current_user.tenant_id, session)
+    await session.commit()
+    return {"agent_id": agent_id, "trust_score": trust_score}

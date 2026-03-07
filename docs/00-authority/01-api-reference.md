@@ -191,6 +191,30 @@ All writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
 
 ---
 
+## HAR A2A Transactions (AI-040 to AI-051)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/har/transactions` | tenant_admin | Create HAR transaction. Body: `{initiator_agent_id, counterparty_agent_id, amount?, currency?, payload?}`. Sets `requires_human_approval=true` and 48h deadline if amount ≥ $5,000. Returns 201 with `{id, state, requires_human_approval}`. |
+| GET | `/har/transactions` | tenant_admin | List transactions. Query: `?state=DRAFT\|OPEN\|...&page=1&page_size=20`. |
+| GET | `/har/transactions/{txn_id}` | tenant_admin | Get transaction detail with all fields. |
+| POST | `/har/transactions/{txn_id}/transition` | tenant_admin | Advance state machine. Body: `{new_state}`. Returns updated transaction. 400 on invalid transition. |
+| POST | `/har/transactions/{txn_id}/approve` | tenant_admin | Human approval for high-value transactions. Sets `human_approved_at`, transitions to COMMITTED. 400 if approval not required. |
+| POST | `/har/transactions/{txn_id}/reject` | tenant_admin | Human rejection. Transitions to ABANDONED. 400 if approval not required. |
+
+### Agents — Keypair & Trust (AI-040, AI-046)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/agents/templates/{agent_id}/public-key` | tenant_admin | Get Ed25519 public key for signature verification. 404 if keypair not yet generated. |
+| POST | `/agents/templates/{agent_id}/compute-trust-score` | tenant_admin | Recompute and persist trust score for an agent. Returns `{agent_id, trust_score}`. |
+
+### HAR State Transitions
+
+Valid transitions: `DRAFT→OPEN→NEGOTIATING→COMMITTED→EXECUTING→COMPLETED`. Also: `OPEN|NEGOTIATING|COMMITTED→ABANDONED`, `EXECUTING→DISPUTED`, `DISPUTED→RESOLVED`. Terminal: COMPLETED, ABANDONED, RESOLVED.
+
+---
+
 ## Storage (Local Dev Only)
 
 Available when `CLOUD_PROVIDER=local`. Internal endpoints, not part of the external API contract.

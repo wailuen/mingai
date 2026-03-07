@@ -35,6 +35,8 @@ TENANT_SCOPED_TABLES = [
     "issue_report_events",
     "agent_cards",
     "audit_log",
+    "har_transactions",
+    "har_transaction_events",
 ]
 
 # Tables with special RLS (not standard tenant_id column)

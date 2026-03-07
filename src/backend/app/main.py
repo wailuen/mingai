@@ -134,6 +134,25 @@ async def startup():
             hint="Check .env file and .env.example for required variables",
         )
 
+    # AI-048: Start agent health monitor background job.
+    # Recomputes trust scores for all published agents every hour.
+    try:
+        import asyncio
+
+        from app.core.session import async_session_factory
+        from app.modules.har.health_monitor import AgentHealthMonitor
+
+        monitor = AgentHealthMonitor(
+            db_session_factory=async_session_factory, interval_seconds=3600
+        )
+        asyncio.create_task(monitor.start())
+        logger.info("agent_health_monitor_scheduled", interval_seconds=3600)
+    except Exception as exc:
+        logger.warning(
+            "agent_health_monitor_startup_failed",
+            error=str(exc),
+        )
+
     # INFRA-026: Warm up glossary cache for all active tenants.
     # Lazy import to avoid import errors if Redis/DB not ready at module load.
     # Failure never blocks startup.
