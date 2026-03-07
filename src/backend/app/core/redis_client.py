@@ -17,10 +17,9 @@ logger = structlog.get_logger()
 
 _redis_pool: Optional[object] = None
 
-# Allowlist for structured key segments (tenant_id and key_type only).
-# Key parts (suffix) allow colons so compound sub-keys still work, but
-# tenant_id and key_type must never contain colons — that would break
-# the namespace boundary and allow cross-tenant key collision.
+# Allowlist for structural key segments (tenant_id and key_type).
+# These must match a safe character set to prevent namespace injection.
+# Suffix *parts are validated for colons only — they may contain hyphens, etc.
 _SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_.@/-]+$")
 
 
@@ -45,16 +44,24 @@ def build_redis_key(tenant_id: str, key_type: str, *parts: str) -> str:
     if not key_type:
         raise ValueError("key_type is required for Redis key construction.")
 
-    # Prevent colon injection in structural segments — a colon in tenant_id
-    # or key_type would break the namespace boundary between tenants.
-    if ":" in tenant_id:
+    # Validate structural segments — a colon or other disallowed character in
+    # tenant_id or key_type would break the namespace boundary between tenants.
+    if not _SAFE_SEGMENT_RE.match(tenant_id):
         raise ValueError(
-            f"tenant_id must not contain colons to prevent namespace injection: {tenant_id!r}"
+            f"tenant_id contains invalid characters (only A-Z, a-z, 0-9, _, ., @, /, - allowed): {tenant_id!r}"
         )
-    if ":" in key_type:
+    if not _SAFE_SEGMENT_RE.match(key_type):
         raise ValueError(
-            f"key_type must not contain colons to prevent namespace injection: {key_type!r}"
+            f"key_type contains invalid characters (only A-Z, a-z, 0-9, _, ., @, /, - allowed): {key_type!r}"
         )
+
+    # Validate suffix parts — user_id and other parts should also not contain
+    # colons to prevent accidental namespace boundary violations.
+    for part in parts:
+        if ":" in part:
+            raise ValueError(
+                f"Key part must not contain colons to prevent namespace injection: {part!r}"
+            )
 
     key_parts = ["mingai", tenant_id, key_type] + list(parts)
     return ":".join(key_parts)

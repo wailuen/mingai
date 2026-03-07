@@ -708,3 +708,671 @@ async def get_issue(
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Admin issue queues (API-019, 020) + Platform admin (API-021, 022, 023)
+# + GitHub webhook (API-018)
+# ---------------------------------------------------------------------------
+
+import hashlib
+import hmac as _hmac
+import os
+from datetime import datetime, timezone
+
+from app.core.dependencies import require_platform_admin
+
+# Sub-routers registered in api/router.py
+admin_issues_router = APIRouter(prefix="/admin/issues", tags=["admin-issues"])
+platform_issues_router = APIRouter(prefix="/platform/issues", tags=["platform-issues"])
+webhooks_router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+# ---------------------------------------------------------------------------
+# Admin issue queue DB helpers (API-019)
+# ---------------------------------------------------------------------------
+
+_VALID_SORT_COLUMNS = {"created_at", "severity", "status"}
+
+
+async def list_admin_issues_db(
+    tenant_id: str,
+    page: int,
+    page_size: int,
+    status_filter: Optional[str],
+    severity_filter: Optional[str],
+    type_filter: Optional[str],
+    sort_by: str,
+    sort_order: str,
+    db,
+) -> dict:
+    """List issues for a tenant with full filtering (API-019)."""
+    # Allowlist sort column and order to prevent injection
+    col = sort_by if sort_by in _VALID_SORT_COLUMNS else "created_at"
+    order = "DESC" if sort_order.upper() != "ASC" else "ASC"
+
+    conditions = ["ir.tenant_id = :tenant_id"]
+    params: dict = {"tenant_id": tenant_id}
+
+    if status_filter:
+        conditions.append("ir.status = :status")
+        params["status"] = status_filter
+    if severity_filter:
+        conditions.append("ir.severity = :severity")
+        params["severity"] = severity_filter
+    if type_filter:
+        conditions.append("ir.type = :type")
+        params["type"] = type_filter
+
+    where = " AND ".join(conditions)
+    offset = (page - 1) * page_size
+    params.update({"limit": page_size, "offset": offset})
+
+    count_result = await db.execute(
+        text(f"SELECT COUNT(*) FROM issue_reports ir WHERE {where}"),
+        params,
+    )
+    total = count_result.scalar() or 0
+
+    rows_result = await db.execute(
+        text(
+            f"SELECT ir.id, ir.user_id, ir.title, ir.type, ir.status, ir.severity, "
+            f"ir.ai_classification, ir.created_at, "
+            f"u.name AS reporter_name "
+            f"FROM issue_reports ir "
+            f"LEFT JOIN users u ON u.id = ir.user_id "
+            f"WHERE {where} "
+            f"ORDER BY ir.{col} {order} LIMIT :limit OFFSET :offset"
+        ),
+        params,
+    )
+    rows = rows_result.fetchall()
+    items = [
+        {
+            "id": str(r[0]),
+            "reporter": {"id": str(r[1]), "name": r[8]},
+            "title": r[2],
+            "type": r[3],
+            "status": r[4],
+            "severity": r[5],
+            "ai_classification": r[6],
+            "created_at": str(r[7]),
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+# ---------------------------------------------------------------------------
+# Admin issue action DB helper (API-020)
+# ---------------------------------------------------------------------------
+
+_VALID_ADMIN_ACTIONS = {
+    "assign",
+    "resolve",
+    "escalate",
+    "request_info",
+    "close_duplicate",
+}
+
+# State machine: action → new status
+_ACTION_STATUS_MAP = {
+    "assign": "assigned",
+    "resolve": "resolved",
+    "escalate": "escalated",
+    "request_info": "awaiting_info",
+    "close_duplicate": "closed",
+}
+
+
+async def admin_issue_action_db(
+    issue_id: str,
+    tenant_id: str,
+    action: str,
+    actor_id: str,
+    assignee_id: Optional[str],
+    note: Optional[str],
+    duplicate_of: Optional[str],
+    db,
+) -> Optional[dict]:
+    """Perform a state-machine action on an issue (API-020)."""
+    if action not in _VALID_ADMIN_ACTIONS:
+        raise ValueError(f"Invalid action: {action}")
+
+    new_status = _ACTION_STATUS_MAP[action]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Build update with allowlisted columns only — no user-controlled strings in SQL
+    update_params: dict = {
+        "id": issue_id,
+        "tenant_id": tenant_id,
+        "status": new_status,
+    }
+    set_parts = ["status = :status", "updated_at = NOW()"]
+
+    if assignee_id and action == "assign":
+        set_parts.append("assignee_id = :assignee_id")
+        update_params["assignee_id"] = assignee_id
+
+    if duplicate_of and action == "close_duplicate":
+        set_parts.append("duplicate_of = :duplicate_of")
+        update_params["duplicate_of"] = duplicate_of
+
+    set_clause = ", ".join(set_parts)
+    result = await db.execute(
+        text(
+            f"UPDATE issue_reports SET {set_clause} "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        update_params,
+    )
+    if (result.rowcount or 0) == 0:
+        return None
+
+    event_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO issue_events (id, issue_id, user_id, content) "
+            "VALUES (:id, :issue_id, :user_id, :content)"
+        ),
+        {
+            "id": event_id,
+            "issue_id": issue_id,
+            "user_id": actor_id,
+            "content": f"Action: {action}" + (f" — {note}" if note else ""),
+        },
+    )
+    await db.commit()
+
+    logger.info(
+        "admin_issue_action",
+        issue_id=issue_id,
+        action=action,
+        new_status=new_status,
+        actor_id=actor_id,
+    )
+    return {"id": issue_id, "status": new_status, "updated_at": now}
+
+
+# ---------------------------------------------------------------------------
+# Platform admin issue queue DB helpers (API-021, 022, 023)
+# ---------------------------------------------------------------------------
+
+
+async def list_platform_issues_db(
+    page: int,
+    page_size: int,
+    status_filter: Optional[str],
+    severity_filter: Optional[str],
+    tenant_id_filter: Optional[str],
+    sort_by: str,
+    db,
+) -> dict:
+    """Cross-tenant issue list for platform admin (API-021)."""
+    col = sort_by if sort_by in _VALID_SORT_COLUMNS else "created_at"
+
+    conditions = []
+    params: dict = {}
+    if status_filter:
+        conditions.append("ir.status = :status")
+        params["status"] = status_filter
+    if severity_filter:
+        conditions.append("ir.severity = :severity")
+        params["severity"] = severity_filter
+    if tenant_id_filter:
+        conditions.append("ir.tenant_id = :tenant_id")
+        params["tenant_id"] = tenant_id_filter
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    offset = (page - 1) * page_size
+    params.update({"limit": page_size, "offset": offset})
+
+    count_result = await db.execute(
+        text(f"SELECT COUNT(*) FROM issue_reports ir {where}"),
+        params,
+    )
+    total = count_result.scalar() or 0
+
+    rows_result = await db.execute(
+        text(
+            f"SELECT ir.id, ir.tenant_id, ir.user_id, ir.title, ir.type, ir.status, "
+            f"ir.severity, ir.ai_classification, ir.created_at, "
+            f"t.name AS tenant_name, u.name AS reporter_name "
+            f"FROM issue_reports ir "
+            f"LEFT JOIN tenants t ON t.id = ir.tenant_id "
+            f"LEFT JOIN users u ON u.id = ir.user_id "
+            f"{where} "
+            f"ORDER BY ir.{col} DESC LIMIT :limit OFFSET :offset"
+        ),
+        params,
+    )
+
+    by_severity_result = await db.execute(
+        text(
+            f"SELECT severity, COUNT(*) FROM issue_reports ir {where} GROUP BY severity"
+        ),
+        params,
+    )
+    by_severity = {r[0]: r[1] for r in by_severity_result.fetchall() if r[0]}
+
+    rows = rows_result.fetchall()
+    items = [
+        {
+            "id": str(r[0]),
+            "tenant": {"id": str(r[1]), "name": r[9]},
+            "reporter": {"name": r[10]},
+            "title": r[3],
+            "type": r[4],
+            "status": r[5],
+            "severity": r[6],
+            "ai_classification": r[7],
+            "created_at": str(r[8]),
+        }
+        for r in rows
+    ]
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "stats": {"by_severity": by_severity},
+    }
+
+
+_VALID_SEVERITIES = {"P0", "P1", "P2", "P3", "P4"}
+
+_VALID_PLATFORM_ACTIONS = {
+    "override_severity",
+    "route_to_tenant",
+    "assign_sprint",
+    "close_wontfix",
+}
+_PLATFORM_ACTION_STATUS_MAP = {
+    "override_severity": None,  # severity update only, no status change
+    "route_to_tenant": "routed",
+    "assign_sprint": "in_progress",
+    "close_wontfix": "closed",
+}
+
+
+async def platform_issue_action_db(
+    issue_id: str,
+    action: str,
+    actor_id: str,
+    severity: Optional[str],
+    sprint: Optional[str],
+    note: str,
+    db,
+) -> Optional[dict]:
+    """Platform admin triage action on any issue (API-022)."""
+    if action not in _VALID_PLATFORM_ACTIONS:
+        raise ValueError(f"Invalid platform action: {action}")
+
+    # Allowlisted SET fragments — no user-controlled strings in SQL column names
+    set_parts = ["updated_at = NOW()"]
+    update_params: dict = {"id": issue_id}
+
+    new_status = _PLATFORM_ACTION_STATUS_MAP[action]
+    if new_status:
+        set_parts.append("status = :status")
+        update_params["status"] = new_status
+
+    if severity and action == "override_severity":
+        if severity not in _VALID_SEVERITIES:
+            raise ValueError(
+                f"Invalid severity {severity!r}. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}"
+            )
+        set_parts.append("severity = :severity")
+        update_params["severity"] = severity
+
+    set_clause = ", ".join(set_parts)
+    # NOTE: No tenant_id scoping here — platform admins operate cross-tenant by design.
+    # Access is gated by require_platform_admin which validates the platform scope JWT claim.
+    result = await db.execute(
+        text(f"UPDATE issue_reports SET {set_clause} WHERE id = :id"),
+        update_params,
+    )
+    if (result.rowcount or 0) == 0:
+        return None
+
+    event_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO issue_events (id, issue_id, user_id, content) "
+            "VALUES (:id, :issue_id, :user_id, :content)"
+        ),
+        {
+            "id": event_id,
+            "issue_id": issue_id,
+            "user_id": actor_id,
+            "content": f"Platform action: {action}" + (f" — {note}" if note else ""),
+        },
+    )
+    await db.commit()
+
+    now = datetime.now(timezone.utc).isoformat()
+    logger.info(
+        "platform_issue_action", issue_id=issue_id, action=action, actor_id=actor_id
+    )
+    return {"id": issue_id, "status": new_status or "unchanged", "updated_at": now}
+
+
+async def get_platform_issue_stats_db(period_days: int, db) -> dict:
+    """Aggregated stats for platform admin dashboard (API-023)."""
+    # Use PostgreSQL interval arithmetic with parameterized value
+    params = {"days": period_days}
+
+    total_open = (
+        await db.execute(
+            text(
+                "SELECT COUNT(*) FROM issue_reports "
+                "WHERE status NOT IN ('resolved', 'closed') "
+                "AND created_at >= NOW() - (:days || ' days')::INTERVAL"
+            ),
+            params,
+        )
+    ).scalar() or 0
+
+    by_severity = {
+        r[0]: r[1]
+        for r in (
+            await db.execute(
+                text(
+                    "SELECT severity, COUNT(*) FROM issue_reports "
+                    "WHERE created_at >= NOW() - (:days || ' days')::INTERVAL "
+                    "GROUP BY severity"
+                ),
+                params,
+            )
+        ).fetchall()
+        if r[0]
+    }
+
+    by_tenant = {
+        str(r[0]): r[1]
+        for r in (
+            await db.execute(
+                text(
+                    "SELECT tenant_id, COUNT(*) FROM issue_reports "
+                    "WHERE created_at >= NOW() - (:days || ' days')::INTERVAL "
+                    "GROUP BY tenant_id ORDER BY COUNT(*) DESC LIMIT 10"
+                ),
+                params,
+            )
+        ).fetchall()
+        if r[0]
+    }
+
+    return {
+        "total_open": total_open,
+        "by_severity": by_severity,
+        "by_tenant": by_tenant,
+        "period_days": period_days,
+    }
+
+
+# ---------------------------------------------------------------------------
+# GitHub webhook helpers (API-018)
+# ---------------------------------------------------------------------------
+
+_GITHUB_WEBHOOK_EVENT_TO_STATUS = {
+    "issues.labeled": "triaged",
+    "pull_request.opened": "fix_in_progress",
+    "pull_request.merged": "fix_merged",
+    "release.published": "fix_deployed",
+}
+
+
+def _verify_github_signature(body: bytes, signature_header: str, secret: str) -> bool:
+    """Validate X-Hub-Signature-256 HMAC-SHA256 header."""
+    if not signature_header.startswith("sha256="):
+        return False
+    expected = "sha256=" + _hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return _hmac.compare_digest(expected, signature_header)
+
+
+async def process_github_webhook_db(
+    event_type: str,
+    action: str,
+    payload: dict,
+    db,
+) -> dict:
+    """Map GitHub webhook event to issue report status update."""
+    composite_event = f"{event_type}.{action}"
+    new_status = _GITHUB_WEBHOOK_EVENT_TO_STATUS.get(composite_event)
+    if not new_status:
+        return {"processed": False, "reason": f"no mapping for {composite_event}"}
+
+    number = (
+        payload.get("issue", {}).get("number")
+        or payload.get("pull_request", {}).get("number")
+        or payload.get("release", {}).get("id")
+    )
+
+    if number is not None:
+        await db.execute(
+            text(
+                "UPDATE issue_reports SET status = :status, updated_at = NOW() "
+                "WHERE github_issue_number = :number"
+            ),
+            {"status": new_status, "number": number},
+        )
+        await db.commit()
+
+    logger.info(
+        "github_webhook_processed",
+        event=composite_event,
+        new_status=new_status,
+        github_number=number,
+    )
+    return {"processed": True, "new_status": new_status}
+
+
+# ---------------------------------------------------------------------------
+# Route handlers: Admin issue queue (API-019, 020)
+# ---------------------------------------------------------------------------
+
+
+class AdminIssueActionRequest(BaseModel):
+    action: str = Field(
+        ..., description="assign|resolve|escalate|request_info|close_duplicate"
+    )
+    assignee_id: Optional[str] = Field(None, max_length=64)
+    note: Optional[str] = Field(None, max_length=2000)
+    duplicate_of: Optional[str] = Field(None, max_length=64)
+
+
+@admin_issues_router.get("")
+async def admin_list_issues(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status", max_length=50),
+    severity_filter: Optional[str] = Query(None, alias="severity", max_length=10),
+    type_filter: Optional[str] = Query(None, alias="type", max_length=50),
+    sort_by: str = Query("created_at", max_length=20),
+    sort_order: str = Query("desc", max_length=4),
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-019: Tenant admin issue queue — filtered and sorted."""
+    result = await list_admin_issues_db(
+        tenant_id=current_user.tenant_id,
+        page=page,
+        page_size=page_size,
+        status_filter=status_filter,
+        severity_filter=severity_filter,
+        type_filter=type_filter,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        db=session,
+    )
+    return result
+
+
+@admin_issues_router.patch("/{issue_id}")
+async def admin_issue_action(
+    issue_id: str = Path(..., max_length=64),
+    request: AdminIssueActionRequest = ...,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-020: Tenant admin issue action."""
+    if request.action not in _VALID_ADMIN_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"action must be one of: {', '.join(sorted(_VALID_ADMIN_ACTIONS))}",
+        )
+    result = await admin_issue_action_db(
+        issue_id=issue_id,
+        tenant_id=current_user.tenant_id,
+        action=request.action,
+        actor_id=current_user.id,
+        assignee_id=request.assignee_id,
+        note=request.note,
+        duplicate_of=request.duplicate_of,
+        db=session,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue '{issue_id}' not found",
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Route handlers: Platform admin issue queue (API-021, 022, 023)
+# NOTE: /stats must be registered BEFORE /{issue_id} to avoid path collision
+# ---------------------------------------------------------------------------
+
+
+class PlatformIssueActionRequest(BaseModel):
+    action: str = Field(
+        ...,
+        description="override_severity|route_to_tenant|assign_sprint|close_wontfix",
+    )
+    severity: Optional[str] = Field(None, pattern=r"^P[0-4]$")
+    sprint: Optional[str] = Field(None, max_length=100)
+    note: str = Field("", max_length=2000)
+
+
+@platform_issues_router.get("/stats")
+async def platform_issue_stats(
+    period: str = Query("30d", pattern=r"^(7d|30d|90d)$"),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-023: Aggregated issue statistics for platform admin dashboard."""
+    period_map = {"7d": 7, "30d": 30, "90d": 90}
+    days = period_map[period]
+    return await get_platform_issue_stats_db(days, session)
+
+
+@platform_issues_router.get("")
+async def platform_list_issues(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status", max_length=50),
+    severity_filter: Optional[str] = Query(None, alias="severity", max_length=10),
+    tenant_id_filter: Optional[str] = Query(None, alias="tenant_id", max_length=64),
+    sort_by: str = Query("created_at", max_length=20),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-021: Platform admin global issue queue (cross-tenant)."""
+    return await list_platform_issues_db(
+        page=page,
+        page_size=page_size,
+        status_filter=status_filter,
+        severity_filter=severity_filter,
+        tenant_id_filter=tenant_id_filter,
+        sort_by=sort_by,
+        db=session,
+    )
+
+
+@platform_issues_router.patch("/{issue_id}")
+async def platform_issue_action(
+    issue_id: str = Path(..., max_length=64),
+    request: PlatformIssueActionRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-022: Platform admin triage action."""
+    if request.action not in _VALID_PLATFORM_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"action must be one of: {', '.join(sorted(_VALID_PLATFORM_ACTIONS))}",
+        )
+    if request.severity is not None and request.action == "override_severity":
+        if request.severity not in _VALID_SEVERITIES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"severity must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
+            )
+    result = await platform_issue_action_db(
+        issue_id=issue_id,
+        action=request.action,
+        actor_id=current_user.id,
+        severity=request.severity,
+        sprint=request.sprint,
+        note=request.note,
+        db=session,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue '{issue_id}' not found",
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Route handlers: GitHub webhook (API-018)
+# ---------------------------------------------------------------------------
+
+import json as _json
+
+from fastapi import Request as FastAPIRequest
+
+
+@webhooks_router.post("/github")
+async def github_webhook(
+    request: FastAPIRequest,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-018: GitHub webhook handler — validates HMAC-SHA256 and updates issue status."""
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
+    if not secret:
+        # Webhook is inoperable without a secret — fail closed rather than
+        # accepting unauthenticated payloads that could mutate issue status.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service unavailable",
+        )
+
+    body = await request.body()
+    sig = request.headers.get("X-Hub-Signature-256", "")
+    if not _verify_github_signature(body, sig, secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook signature",
+        )
+
+    event_type = request.headers.get("X-GitHub-Event", "")
+    try:
+        payload = _json.loads(body)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload",
+        )
+
+    action = payload.get("action", "")
+    result = await process_github_webhook_db(
+        event_type=event_type,
+        action=action,
+        payload=payload,
+        db=session,
+    )
+    return result

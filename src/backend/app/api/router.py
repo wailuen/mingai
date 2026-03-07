@@ -12,11 +12,18 @@ from app.modules.auth.routes import router as auth_router
 
 router.include_router(auth_router)
 
-# Issue reports endpoints (API-013) — must be before chat to avoid route collision
-# Chat module has legacy /issues endpoint; this module provides the full CRUD
-from app.modules.issues.routes import router as issues_router
+# Issue reports endpoints (API-013 to API-023) — must be before chat to avoid route collision
+from app.modules.issues.routes import (
+    admin_issues_router,
+    platform_issues_router,
+    router as issues_router,
+    webhooks_router,
+)
 
 router.include_router(issues_router)
+router.include_router(admin_issues_router)  # GET/PATCH /api/v1/admin/issues/...
+router.include_router(platform_issues_router)  # GET/PATCH /api/v1/platform/issues/...
+router.include_router(webhooks_router)  # POST /api/v1/webhooks/github
 
 # Chat endpoints (API-007 to API-014)
 from app.modules.chat.routes import router as chat_router
@@ -72,6 +79,11 @@ router.include_router(admin_workspace_router)
 from app.modules.documents.sharepoint import router as sharepoint_router
 
 router.include_router(sharepoint_router)
+
+# Notification SSE stream (API-012)
+from app.modules.notifications.routes import router as notifications_router
+
+router.include_router(notifications_router)
 
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.

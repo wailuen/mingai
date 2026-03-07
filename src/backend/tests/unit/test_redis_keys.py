@@ -100,3 +100,18 @@ class TestRedisKeyBuilder:
         assert key_a != key_b
         assert "tenant-a" in key_a
         assert "tenant-b" in key_b
+
+    def test_colon_in_parts_raises_error(self):
+        """Colons in suffix *parts must raise ValueError (namespace injection prevention)."""
+        from app.core.redis_client import build_redis_key
+
+        with pytest.raises(ValueError, match="colon"):
+            build_redis_key("tenant-1", "working_memory", "user:injected", "agent-1")
+
+    def test_colon_in_tenant_id_raises_error(self):
+        """Colons in tenant_id must raise ValueError."""
+        from app.core.redis_client import build_redis_key
+
+        with pytest.raises(ValueError, match="invalid characters"):
+            build_redis_key("tenant:evil", "working_memory", "user-1")
+

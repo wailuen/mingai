@@ -184,7 +184,7 @@ class TestCacheServiceKeyValidation:
         from app.core.cache import CacheService
 
         svc = CacheService()
-        with pytest.raises(ValueError, match="colon"):
+        with pytest.raises(ValueError, match="invalid characters"):
             svc._make_key("tenant-a:profile:admin", "profile", "key-1")
 
     def test_colon_in_cache_type_raises_error(self):
