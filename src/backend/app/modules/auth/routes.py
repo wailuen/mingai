@@ -145,7 +145,7 @@ async def local_login(request: LoginRequest):
     seed_tenant = os.environ.get("SEED_TENANT_NAME", "default")
 
     token, expires_in = _create_access_token(
-        user_id="platform-admin-bootstrap",
+        user_id="00000000-0000-0000-0000-000000000001",
         tenant_id="default",
         roles=["platform_admin"],
         scope="platform",

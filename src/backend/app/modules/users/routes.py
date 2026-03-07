@@ -627,6 +627,20 @@ async def get_current_user_profile(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-046: Get current user's full profile."""
+    # Platform-scope users (tenant_id='default') are not in the users table.
+    # Return a synthetic profile from JWT claims.
+    try:
+        uuid.UUID(current_user.tenant_id)
+    except (ValueError, AttributeError):
+        return {
+            "id": current_user.id,
+            "email": current_user.email,
+            "name": "Platform Admin",
+            "role": "platform_admin",
+            "status": "active",
+            "tenant_id": current_user.tenant_id,
+            "scope": current_user.scope,
+        }
     result = await get_user_profile_db(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,

@@ -26,9 +26,10 @@ interface ChecklistResponse {
  * Completed items shown with green checkmark.
  */
 export function SetupChecklist() {
-  const { data, isLoading } = useQuery<ChecklistResponse>({
+  const { data, isLoading, isError } = useQuery<ChecklistResponse>({
     queryKey: ["setup-checklist"],
     queryFn: () => apiGet<ChecklistResponse>("/api/v1/admin/setup-checklist"),
+    retry: false,
   });
 
   if (isLoading) {
@@ -44,7 +45,7 @@ export function SetupChecklist() {
     );
   }
 
-  if (!data || data.completed_count === data.total_count) {
+  if (isError || !data || data.completed_count === data.total_count) {
     return null;
   }
 

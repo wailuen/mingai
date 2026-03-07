@@ -75,18 +75,18 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Operations",
     items: [
-      { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-      { label: "Tenants", href: "/admin/tenants", icon: Building2 },
-      { label: "Issue Queue", href: "/admin/issue-queue", icon: AlertCircle },
+      { label: "Dashboard", href: "/settings/dashboard", icon: LayoutDashboard },
+      { label: "Tenants", href: "/settings/tenants", icon: Building2 },
+      { label: "Issue Queue", href: "/settings/issue-queue", icon: AlertCircle },
     ],
   },
   {
     title: "Intelligence",
     items: [
-      { label: "LLM Profiles", href: "/admin/llm-profiles", icon: Cpu },
-      { label: "Agent Templates", href: "/admin/agent-templates", icon: Bot },
-      { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-      { label: "Tool Catalog", href: "/admin/tool-catalog", icon: Boxes },
+      { label: "LLM Profiles", href: "/settings/llm-profiles", icon: Cpu },
+      { label: "Agent Templates", href: "/settings/agent-templates", icon: Bot },
+      { label: "Analytics", href: "/settings/analytics-platform", icon: BarChart3 },
+      { label: "Tool Catalog", href: "/settings/tool-catalog", icon: Boxes },
     ],
   },
   {
@@ -94,7 +94,7 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
     items: [
       {
         label: "Cost Analytics",
-        href: "/admin/cost-analytics",
+        href: "/settings/cost-analytics",
         icon: DollarSign,
       },
     ],

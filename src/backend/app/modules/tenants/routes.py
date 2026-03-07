@@ -155,7 +155,7 @@ async def create_tenant_db(
     db,
 ) -> dict:
     """
-    Insert a new tenant record with status 'provisioning'.
+    Insert a new tenant record with status 'active'.
 
     The caller is responsible for launching run_tenant_provisioning() as a
     background task which will execute the remaining 7 steps and flip the
@@ -170,7 +170,7 @@ async def create_tenant_db(
     await db.execute(
         text(
             "INSERT INTO tenants (id, name, slug, plan, primary_contact_email, status) "
-            "VALUES (:id, :name, :slug, :plan, :primary_contact_email, 'provisioning')"
+            "VALUES (:id, :name, :slug, :plan, :primary_contact_email, 'active')"
         ),
         {
             "id": tenant_id,
@@ -187,7 +187,7 @@ async def create_tenant_db(
         "name": name,
         "slug": effective_slug,
         "plan": plan,
-        "status": "provisioning",
+        "status": "active",
         "primary_contact_email": primary_contact_email,
     }
 
@@ -474,7 +474,7 @@ async def get_platform_stats_db(db) -> dict:
         await db.execute(text("SELECT COUNT(*) FROM users WHERE status = 'active'"))
     ).scalar() or 0
 
-    today = datetime.date.today().isoformat()
+    today = datetime.date.today()
     queries_today = (
         await db.execute(
             text(
@@ -706,7 +706,7 @@ async def create_tenant(
 
     Creates the tenant record synchronously and enqueues the full 8-step
     provisioning workflow as a FastAPI background task. Returns immediately
-    with status='provisioning' and a job_id the client can use with
+    with status='active' and a job_id the client can use with
     GET /platform/provisioning/{job_id} (SSE) to track progress.
     """
     result = await create_tenant_db(

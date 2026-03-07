@@ -285,6 +285,11 @@ async def list_memory_notes(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-099: List all memory notes for the current user."""
+    # Platform-scope users have no tenant UUID — return empty notes list
+    try:
+        uuid.UUID(current_user.tenant_id)
+    except (ValueError, AttributeError):
+        return []
     result = await list_notes_db(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,

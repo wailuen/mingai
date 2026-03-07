@@ -222,3 +222,60 @@ async def update_workspace_settings(
         db=session,
     )
     return result
+
+
+@router.get("/setup-checklist")
+async def get_setup_checklist(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Setup checklist for tenant onboarding wizard."""
+    from sqlalchemy import text
+
+    # Check what's configured for this tenant
+    users_result = await session.execute(
+        text("SELECT COUNT(*) FROM users WHERE tenant_id = :tid"),
+        {"tid": current_user.tenant_id},
+    )
+    user_count = users_result.scalar() or 0
+
+    agents_result = await session.execute(
+        text("SELECT COUNT(*) FROM agent_cards WHERE tenant_id = :tid AND status = 'active'"),
+        {"tid": current_user.tenant_id},
+    )
+    agent_count = agents_result.scalar() or 0
+
+    integrations_result = await session.execute(
+        text("SELECT COUNT(*) FROM integrations WHERE tenant_id = :tid"),
+        {"tid": current_user.tenant_id},
+    )
+    integration_count = integrations_result.scalar() or 0
+
+    return {
+        "items": [
+            {
+                "id": "invite_users",
+                "label": "Invite your team members",
+                "completed": user_count > 1,
+                "action_href": "/settings/users",
+            },
+            {
+                "id": "connect_knowledge_base",
+                "label": "Connect a knowledge base",
+                "completed": integration_count > 0,
+                "action_href": "/settings/knowledge-base",
+            },
+            {
+                "id": "configure_agent",
+                "label": "Configure an AI agent",
+                "completed": agent_count > 0,
+                "action_href": "/settings/workspace",
+            },
+        ],
+        "completed_count": sum([
+            user_count > 1,
+            integration_count > 0,
+            agent_count > 0,
+        ]),
+        "total_count": 3,
+    }

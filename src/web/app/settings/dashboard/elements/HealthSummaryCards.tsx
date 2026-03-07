@@ -16,13 +16,13 @@ import { cn } from "@/lib/utils";
 
 interface DashboardMetrics {
   active_users: number;
-  active_users_trend: number;
+  active_users_trend?: number;
   documents_indexed: number;
-  documents_indexed_trend: number;
+  documents_indexed_trend?: number;
   queries_today: number;
-  queries_today_trend: number;
-  satisfaction_score: number;
-  satisfaction_score_trend: number;
+  queries_today_trend?: number;
+  satisfaction_pct: number;
+  satisfaction_score_trend?: number;
 }
 
 /**
@@ -56,9 +56,9 @@ export function HealthSummaryCards() {
   }
 
   const satisfactionColor =
-    (metrics?.satisfaction_score ?? 0) >= 80
+    (metrics?.satisfaction_pct ?? 0) >= 80
       ? "accent"
-      : (metrics?.satisfaction_score ?? 0) >= 70
+      : (metrics?.satisfaction_pct ?? 0) >= 70
         ? "warn"
         : "alert";
 
@@ -88,7 +88,7 @@ export function HealthSummaryCards() {
       <KPICard
         icon={ThumbsUp}
         label="Satisfaction"
-        value={metrics?.satisfaction_score ?? 0}
+        value={metrics?.satisfaction_pct ?? 0}
         trend={metrics?.satisfaction_score_trend ?? 0}
         suffix="%"
         color={satisfactionColor}

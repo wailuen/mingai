@@ -358,6 +358,11 @@ async def list_glossary(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-066: List glossary terms for the tenant (all authenticated users)."""
+    # Platform-scope users have no tenant UUID — return empty glossary
+    try:
+        uuid.UUID(current_user.tenant_id)
+    except (ValueError, AttributeError):
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
     result = await list_glossary_db(
         tenant_id=current_user.tenant_id,
         page=page,

@@ -49,7 +49,7 @@ class ChatRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     """POST /api/v1/chat/feedback request body."""
 
-    message_id: str = Field(..., min_length=1, max_length=200)
+    message_id: uuid.UUID
     rating: Literal["up", "down"]
     comment: Optional[str] = Field(None, max_length=2000)
 
@@ -259,7 +259,13 @@ async def stream_chat(
     # Import inline to allow mocking in tests
     from app.core.database import validate_tenant_id
 
-    validate_tenant_id(current_user.tenant_id)
+    try:
+        validate_tenant_id(current_user.tenant_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chat is not available for platform-scope users. Use a tenant account to access the chat.",
+        )
 
     jwt_claims = {
         "sub": current_user.id,
@@ -314,7 +320,7 @@ async def submit_feedback(
     API-008: Submit thumbs up/down feedback on an AI response.
     """
     result = await save_feedback(
-        message_id=request.message_id,
+        message_id=str(request.message_id),
         rating=request.rating,
         comment=request.comment,
         user_id=current_user.id,
@@ -333,7 +339,13 @@ async def list_user_conversations(
 ):
     """
     API-009: List conversations for the authenticated user (paginated).
+    Platform-scope users (tenant_id='default') have no tenant conversations.
     """
+    try:
+        uuid.UUID(current_user.tenant_id)
+    except (ValueError, AttributeError):
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+
     result = await list_conversations(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,

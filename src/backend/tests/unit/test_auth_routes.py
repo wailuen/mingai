@@ -21,7 +21,7 @@ TEST_PLATFORM_PASS = "test-secure-password-123"
 
 
 def _make_test_token(
-    user_id: str = "platform-admin-bootstrap",
+    user_id: str = "00000000-0000-0000-0000-000000000001",
     tenant_id: str = "default",
     roles: list[str] | None = None,
     scope: str = "platform",
@@ -110,7 +110,7 @@ class TestLocalLogin:
         token = response.json()["access_token"]
         payload = jwt.decode(token, TEST_JWT_SECRET, algorithms=[TEST_JWT_ALGORITHM])
 
-        assert payload["sub"] == "platform-admin-bootstrap"
+        assert payload["sub"] == "00000000-0000-0000-0000-000000000001"
         assert payload["tenant_id"] == "default"
         assert payload["roles"] == ["platform_admin"]
         assert payload["scope"] == "platform"
@@ -266,7 +266,7 @@ class TestGetCurrentUser:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == "platform-admin-bootstrap"
+        assert data["id"] == "00000000-0000-0000-0000-000000000001"
         assert data["tenant_id"] == "default"
         assert data["roles"] == ["platform_admin"]
         assert data["scope"] == "platform"

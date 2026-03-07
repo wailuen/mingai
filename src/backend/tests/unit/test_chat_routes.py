@@ -135,7 +135,7 @@ class TestChatStreamSSE:
     def test_chat_stream_returns_event_stream(self, client, auth_headers):
         async def mock_stream(**kwargs):
             yield {"type": "token", "content": "Hello"}
-            yield {"type": "done", "conversation_id": "conv-1", "message_id": "msg-1"}
+            yield {"type": "done", "conversation_id": "conv-1", "message_id": "00000000-0000-0000-0000-000000000001"}
 
         with patch("app.modules.chat.routes.build_orchestrator") as mock_build:
             mock_orch = MagicMock()
@@ -181,7 +181,7 @@ class TestFeedbackEndpoint:
     def test_feedback_requires_auth(self, client):
         resp = client.post(
             "/api/v1/chat/feedback",
-            json={"message_id": "msg-1", "rating": "up"},
+            json={"message_id": "00000000-0000-0000-0000-000000000001", "rating": "up"},
         )
         assert resp.status_code == 401
 
@@ -192,7 +192,7 @@ class TestFeedbackEndpoint:
             mock_save.return_value = {"id": "fb-1"}
             resp = client.post(
                 "/api/v1/chat/feedback",
-                json={"message_id": "msg-1", "rating": "up"},
+                json={"message_id": "00000000-0000-0000-0000-000000000001", "rating": "up"},
                 headers=auth_headers,
             )
         assert resp.status_code == 200
@@ -207,7 +207,7 @@ class TestFeedbackEndpoint:
             resp = client.post(
                 "/api/v1/chat/feedback",
                 json={
-                    "message_id": "msg-1",
+                    "message_id": "00000000-0000-0000-0000-000000000001",
                     "rating": "down",
                     "comment": "Not helpful",
                 },
@@ -218,7 +218,7 @@ class TestFeedbackEndpoint:
     def test_feedback_rejects_invalid_rating(self, client, auth_headers):
         resp = client.post(
             "/api/v1/chat/feedback",
-            json={"message_id": "msg-1", "rating": "sideways"},
+            json={"message_id": "00000000-0000-0000-0000-000000000001", "rating": "sideways"},
             headers=auth_headers,
         )
         assert resp.status_code == 422
@@ -337,7 +337,7 @@ class TestIssuesEndpoints:
     def test_submit_issue_requires_auth(self, client):
         resp = client.post(
             "/api/v1/issues",
-            json={"title": "Problem", "description": "Details", "message_id": "msg-1"},
+            json={"title": "Problem", "description": "Details", "message_id": "00000000-0000-0000-0000-000000000001"},
         )
         assert resp.status_code == 401
 
@@ -366,7 +366,7 @@ class TestIssuesEndpoints:
     def test_submit_issue_rejects_empty_title(self, client, auth_headers):
         resp = client.post(
             "/api/v1/issues",
-            json={"title": "", "description": "Details", "message_id": "msg-1"},
+            json={"title": "", "description": "Details", "message_id": "00000000-0000-0000-0000-000000000001"},
             headers=auth_headers,
         )
         assert resp.status_code == 422

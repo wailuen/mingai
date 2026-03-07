@@ -12,8 +12,9 @@ Endpoints:
 - PATCH  /issues/{issue_id}/status            — Update status (tenant admin only)
 - POST   /issues/{issue_id}/events            — Add event/comment (tenant admin only)
 
-Schema: issue_reports(id, tenant_id, user_id, title, description,
-        screenshot_url, status, blur_acknowledged, created_at)
+Schema: issue_reports(id, tenant_id, reporter_id, conversation_id, message_id,
+        issue_type, description, severity, status, screenshot_url,
+        blur_acknowledged, metadata, created_at)
 
 Note: /issues/{issue_id}/status and /issues/{issue_id}/events routes must
 be registered BEFORE /{issue_id} to avoid path collision.
@@ -49,8 +50,16 @@ class IssueStatus(str, Enum):
     closed = "closed"
 
 
+class IssueType(str, Enum):
+    bug = "bug"
+    performance = "performance"
+    ux = "ux"
+    feature_request = "feature_request"
+
+
 class CreateIssueRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
+    issue_type: IssueType = Field(IssueType.bug)
     description: str = Field(..., min_length=1, max_length=2000)
     screenshot_url: Optional[str] = Field(None, max_length=500)
     blur_acknowledged: bool = Field(False)
@@ -102,7 +111,7 @@ async def list_issues_db(
     if status_filter:
         rows_result = await db.execute(
             text(
-                "SELECT id, user_id, title, description, screenshot_url, status, "
+                "SELECT id, reporter_id, issue_type, description, screenshot_url, status, "
                 "blur_acknowledged, created_at FROM issue_reports "
                 "WHERE tenant_id = :tenant_id AND status = :status "
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
@@ -117,7 +126,7 @@ async def list_issues_db(
     else:
         rows_result = await db.execute(
             text(
-                "SELECT id, user_id, title, description, screenshot_url, status, "
+                "SELECT id, reporter_id, issue_type, description, screenshot_url, status, "
                 "blur_acknowledged, created_at FROM issue_reports "
                 "WHERE tenant_id = :tenant_id "
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
@@ -129,8 +138,8 @@ async def list_issues_db(
     items = [
         {
             "id": str(r[0]),
-            "user_id": str(r[1]),
-            "title": r[2],
+            "reporter_id": str(r[1]),
+            "issue_type": r[2],
             "description": r[3],
             "screenshot_url": r[4],
             "status": r[5],
@@ -144,7 +153,8 @@ async def list_issues_db(
 
 async def create_issue_db(
     tenant_id: str,
-    user_id: str,
+    reporter_id: str,
+    issue_type: str,
     title: str,
     description: str,
     screenshot_url: Optional[str],
@@ -156,18 +166,19 @@ async def create_issue_db(
     await db.execute(
         text(
             "INSERT INTO issue_reports "
-            "(id, tenant_id, user_id, title, description, screenshot_url, status, blur_acknowledged) "
-            "VALUES (:id, :tenant_id, :user_id, :title, :description, :screenshot_url, :status, :blur_acknowledged)"
+            "(id, tenant_id, reporter_id, issue_type, description, screenshot_url, status, blur_acknowledged, metadata) "
+            "VALUES (:id, :tenant_id, :reporter_id, :issue_type, :description, :screenshot_url, :status, :blur_acknowledged, :metadata)"
         ),
         {
             "id": issue_id,
             "tenant_id": tenant_id,
-            "user_id": user_id,
-            "title": title,
+            "reporter_id": reporter_id,
+            "issue_type": issue_type,
             "description": description,
             "screenshot_url": screenshot_url,
             "status": "open",
             "blur_acknowledged": blur_acknowledged,
+            "metadata": __import__("json").dumps({"title": title}),
         },
     )
     await db.commit()
@@ -191,19 +202,19 @@ async def create_issue_db(
     logger.info(
         "issue_created",
         issue_id=issue_id,
-        title=title,
+        issue_type=issue_type,
         tenant_id=tenant_id,
-        user_id=user_id,
+        reporter_id=reporter_id,
     )
     return {
         "id": issue_id,
-        "title": title,
+        "issue_type": issue_type,
         "description": description,
         "screenshot_url": screenshot_url,
         "status": "open",
         "blur_acknowledged": blur_acknowledged,
         "tenant_id": tenant_id,
-        "user_id": user_id,
+        "reporter_id": reporter_id,
     }
 
 
@@ -211,7 +222,7 @@ async def get_issue_db(issue_id: str, tenant_id: str, db) -> Optional[dict]:
     """Get an issue report by ID, scoped to tenant."""
     result = await db.execute(
         text(
-            "SELECT id, user_id, title, description, screenshot_url, status, "
+            "SELECT id, reporter_id, issue_type, description, screenshot_url, status, "
             "blur_acknowledged, created_at FROM issue_reports "
             "WHERE id = :id AND tenant_id = :tenant_id"
         ),
@@ -222,8 +233,8 @@ async def get_issue_db(issue_id: str, tenant_id: str, db) -> Optional[dict]:
         return None
     return {
         "id": str(row[0]),
-        "user_id": str(row[1]),
-        "title": row[2],
+        "reporter_id": str(row[1]),
+        "issue_type": row[2],
         "description": row[3],
         "screenshot_url": row[4],
         "status": row[5],
@@ -264,8 +275,8 @@ async def add_issue_event_db(
     event_id = str(uuid.uuid4())
     await db.execute(
         text(
-            "INSERT INTO issue_events (id, issue_id, user_id, content) "
-            "VALUES (:id, :issue_id, :user_id, :content)"
+            "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, data) "
+            "VALUES (:id, :issue_id, :tenant_id, :event_type, :data)"
         ),
         {
             "id": event_id,
@@ -312,17 +323,17 @@ async def list_my_issues_db(
         count_result = await db.execute(
             text(
                 "SELECT COUNT(*) FROM issue_reports "
-                "WHERE user_id = :user_id AND tenant_id = :tenant_id AND status = :status"
+                "WHERE reporter_id = :reporter_id AND tenant_id = :tenant_id AND status = :status"
             ),
-            {"user_id": user_id, "tenant_id": tenant_id, "status": status_filter},
+            {"reporter_id": user_id, "tenant_id": tenant_id, "status": status_filter},
         )
     else:
         count_result = await db.execute(
             text(
                 "SELECT COUNT(*) FROM issue_reports "
-                "WHERE user_id = :user_id AND tenant_id = :tenant_id"
+                "WHERE reporter_id = :reporter_id AND tenant_id = :tenant_id"
             ),
-            {"user_id": user_id, "tenant_id": tenant_id},
+            {"reporter_id": user_id, "tenant_id": tenant_id},
         )
     total = count_result.scalar() or 0
 
@@ -331,7 +342,7 @@ async def list_my_issues_db(
             text(
                 "SELECT id, title, description, screenshot_url, status, "
                 "blur_acknowledged, created_at, updated_at FROM issue_reports "
-                "WHERE user_id = :user_id AND tenant_id = :tenant_id AND status = :status "
+                "WHERE reporter_id = :reporter_id AND tenant_id = :tenant_id AND status = :status "
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
             ),
             {
@@ -347,7 +358,7 @@ async def list_my_issues_db(
             text(
                 "SELECT id, title, description, screenshot_url, status, "
                 "blur_acknowledged, created_at, updated_at FROM issue_reports "
-                "WHERE user_id = :user_id AND tenant_id = :tenant_id "
+                "WHERE reporter_id = :reporter_id AND tenant_id = :tenant_id "
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
             ),
             {
@@ -383,9 +394,9 @@ async def get_my_issue_db(
         text(
             "SELECT id, title, description, screenshot_url, status, "
             "blur_acknowledged, created_at FROM issue_reports "
-            "WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id"
+            "WHERE id = :id AND reporter_id = :reporter_id AND tenant_id = :tenant_id"
         ),
-        {"id": issue_id, "user_id": user_id, "tenant_id": tenant_id},
+        {"id": issue_id, "reporter_id": user_id, "tenant_id": tenant_id},
     )
     row = result.fetchone()
     if row is None:
@@ -394,7 +405,7 @@ async def get_my_issue_db(
     # Fetch timeline events for this issue
     events_result = await db.execute(
         text(
-            "SELECT id, content, created_at FROM issue_events "
+            "SELECT id, data, created_at FROM issue_report_events "
             "WHERE issue_id = :issue_id ORDER BY created_at ASC"
         ),
         {"issue_id": issue_id},
@@ -458,7 +469,8 @@ async def record_still_happening_db(
     )
     new_report = await create_issue_db(
         tenant_id=tenant_id,
-        user_id=user_id,
+        reporter_id=user_id,
+        issue_type="bug",
         title=regression_title,
         description=regression_desc,
         screenshot_url=None,
@@ -535,6 +547,15 @@ async def list_my_reports(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-015: List current user's own submitted issue reports (paginated)."""
+    # Platform admins operate cross-tenant and cannot access per-tenant my-reports
+    try:
+        import uuid as _uuid
+        _uuid.UUID(current_user.tenant_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not available for platform scope users",
+        )
     result = await list_my_issues_db(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
@@ -630,7 +651,8 @@ async def create_issue(
         )
     result = await create_issue_db(
         tenant_id=current_user.tenant_id,
-        user_id=current_user.id,
+        reporter_id=current_user.id,
+        issue_type=request.issue_type.value,
         title=request.title,
         description=request.description,
         screenshot_url=request.screenshot_url,
@@ -771,11 +793,11 @@ async def list_admin_issues_db(
     # Build SQL via concatenation — only allowlisted/hardcoded fragments enter the
     # query string; user-supplied VALUES are always passed as bind parameters.
     select_cols = (
-        "ir.id, ir.user_id, ir.title, ir.type, ir.status, ir.severity, "
+        "ir.id, ir.reporter_id, ir.issue_type, ir.status, ir.severity, "
         "ir.ai_classification, ir.created_at, "
         "u.name AS reporter_name"  # reporter_name intentionally returned for admin UI
     )
-    join_clause = "LEFT JOIN users u ON u.id = ir.user_id"
+    join_clause = "LEFT JOIN users u ON u.id = ir.reporter_id"
     order_clause = "ORDER BY ir." + col + " " + order  # col/order are allowlisted above
 
     count_sql = "SELECT COUNT(*) FROM issue_reports ir WHERE " + where
@@ -878,8 +900,8 @@ async def admin_issue_action_db(
     event_id = str(uuid.uuid4())
     await db.execute(
         text(
-            "INSERT INTO issue_events (id, issue_id, user_id, content) "
-            "VALUES (:id, :issue_id, :user_id, :content)"
+            "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, data) "
+            "VALUES (:id, :issue_id, :tenant_id, :event_type, :data)"
         ),
         {
             "id": event_id,
@@ -936,13 +958,13 @@ async def list_platform_issues_db(
     # Build SQL via concatenation — only allowlisted/hardcoded fragments enter the
     # query string; user-supplied VALUES are always passed as bind parameters.
     select_cols = (
-        "ir.id, ir.tenant_id, ir.user_id, ir.title, ir.type, ir.status, "
-        "ir.severity, ir.ai_classification, ir.created_at, "
+        "ir.id, ir.tenant_id, ir.reporter_id, ir.issue_type, ir.status, "
+        "ir.severity, ir.created_at, "
         "t.name AS tenant_name, u.name AS reporter_name"
     )
     join_clause = (
         "LEFT JOIN tenants t ON t.id = ir.tenant_id "
-        "LEFT JOIN users u ON u.id = ir.user_id"
+        "LEFT JOIN users u ON u.id = ir.reporter_id"
     )
     order_clause = "ORDER BY ir." + col + " DESC"  # col is allowlisted above
     where_clause = where + " " if where else ""
@@ -1051,8 +1073,8 @@ async def platform_issue_action_db(
     event_id = str(uuid.uuid4())
     await db.execute(
         text(
-            "INSERT INTO issue_events (id, issue_id, user_id, content) "
-            "VALUES (:id, :issue_id, :user_id, :content)"
+            "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, data) "
+            "VALUES (:id, :issue_id, :tenant_id, :event_type, :data)"
         ),
         {
             "id": event_id,
@@ -1080,7 +1102,7 @@ async def get_platform_issue_stats_db(period_days: int, db) -> dict:
             text(
                 "SELECT COUNT(*) FROM issue_reports "
                 "WHERE status NOT IN ('resolved', 'closed') "
-                "AND created_at >= NOW() - (:days || ' days')::INTERVAL"
+                "AND created_at >= NOW() - MAKE_INTERVAL(days => :days)"
             ),
             params,
         )
@@ -1092,7 +1114,7 @@ async def get_platform_issue_stats_db(period_days: int, db) -> dict:
             await db.execute(
                 text(
                     "SELECT severity, COUNT(*) FROM issue_reports "
-                    "WHERE created_at >= NOW() - (:days || ' days')::INTERVAL "
+                    "WHERE created_at >= NOW() - MAKE_INTERVAL(days => :days) "
                     "GROUP BY severity"
                 ),
                 params,
@@ -1107,7 +1129,7 @@ async def get_platform_issue_stats_db(period_days: int, db) -> dict:
             await db.execute(
                 text(
                     "SELECT tenant_id, COUNT(*) FROM issue_reports "
-                    "WHERE created_at >= NOW() - (:days || ' days')::INTERVAL "
+                    "WHERE created_at >= NOW() - MAKE_INTERVAL(days => :days) "
                     "GROUP BY tenant_id ORDER BY COUNT(*) DESC LIMIT 10"
                 ),
                 params,
