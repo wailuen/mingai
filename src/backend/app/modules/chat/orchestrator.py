@@ -211,6 +211,13 @@ class ChatOrchestrationService:
         # --- Stage 6: System Prompt Build ---
         yield {"event": "status", "data": {"stage": "prompt_build"}}
 
+        # AI-033: resolve per-tenant token budget before building the prompt
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        query_budget = await get_tenant_token_budget(
+            db_session=self._db_session, tenant_id=tenant_id
+        )
+
         system_prompt, layers_active = await self._prompt_builder.build(
             agent_id=agent_id,
             tenant_id=tenant_id,
@@ -219,6 +226,7 @@ class ChatOrchestrationService:
             working_memory=working_memory_context,
             team_memory=team_memory_context,
             rag_context=search_results,
+            query_budget=query_budget,
             db_session=self._db_session,
         )
 

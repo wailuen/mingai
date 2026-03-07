@@ -401,3 +401,118 @@ class TestBulkImportIntegration:
             headers=user_headers,
         )
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Tests: API-062 Export Glossary CSV
+# ---------------------------------------------------------------------------
+
+
+class TestGlossaryExportCSV:
+    """GET /api/v1/glossary/export — real DB integration tests."""
+
+    def test_export_glossary_csv(self, client, tenant_id):
+        """
+        API-062: Export returns text/csv with UTF-8 BOM and correct columns.
+
+        Verifies: Content-Type header, Content-Disposition, BOM, column headers.
+        Auth: tenant_admin required.
+        """
+        admin_headers = {"Authorization": f"Bearer {_make_admin_token(tenant_id)}"}
+
+        resp = client.get(
+            "/api/v1/glossary/export",
+            headers=admin_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        content_type = resp.headers.get("content-type", "")
+        assert "text/csv" in content_type
+        disposition = resp.headers.get("content-disposition", "")
+        assert "attachment" in disposition
+        assert "glossary.csv" in disposition
+
+        # Verify content can be decoded
+        content_bytes = resp.content
+        # Strip BOM if present and decode
+        if content_bytes.startswith(b"\xef\xbb\xbf"):
+            content_bytes = content_bytes[3:]
+        content_str = content_bytes.decode("utf-8")
+
+        # Must have the header row matching API-062 spec
+        first_line = content_str.splitlines()[0]
+        assert "term" in first_line
+        assert "full_form" in first_line
+
+    def test_export_requires_tenant_admin(self, client, tenant_id):
+        """Export endpoint rejects end_user role."""
+        user_headers = {"Authorization": f"Bearer {_make_user_token(tenant_id)}"}
+        resp = client.get("/api/v1/glossary/export", headers=user_headers)
+        assert resp.status_code == 403
+
+    def test_export_requires_auth(self, client, tenant_id):
+        """Export endpoint returns 401 without auth."""
+        resp = client.get("/api/v1/glossary/export")
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Tests: API-063 Glossary Miss Analytics
+# ---------------------------------------------------------------------------
+
+
+class TestGlossaryMissAnalytics:
+    """GET /api/v1/glossary/analytics/misses — real DB integration tests."""
+
+    def test_glossary_miss_analytics_empty(self, client, tenant_id):
+        """
+        API-063: Returns empty terms list when no miss signals exist for tenant.
+
+        Verifies response schema: {terms: [], period: "30d"}.
+        Auth: tenant_admin required.
+        """
+        admin_headers = {"Authorization": f"Bearer {_make_admin_token(tenant_id)}"}
+
+        resp = client.get(
+            "/api/v1/glossary/analytics/misses",
+            headers=admin_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert "terms" in data, "Response must have 'terms' key"
+        assert "period" in data, "Response must have 'period' key"
+        assert isinstance(data["terms"], list)
+        assert data["period"] == "30d"  # default period
+
+    def test_glossary_miss_analytics_accepts_7d_period(self, client, tenant_id):
+        """period=7d is accepted and reflected in the response."""
+        admin_headers = {"Authorization": f"Bearer {_make_admin_token(tenant_id)}"}
+
+        resp = client.get(
+            "/api/v1/glossary/analytics/misses?period=7d",
+            headers=admin_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["period"] == "7d"
+
+    def test_glossary_miss_analytics_rejects_invalid_period(self, client, tenant_id):
+        """Invalid period value returns 422."""
+        admin_headers = {"Authorization": f"Bearer {_make_admin_token(tenant_id)}"}
+
+        resp = client.get(
+            "/api/v1/glossary/analytics/misses?period=99d",
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_glossary_miss_analytics_requires_tenant_admin(self, client, tenant_id):
+        """End-user role is rejected with 403."""
+        user_headers = {"Authorization": f"Bearer {_make_user_token(tenant_id)}"}
+        resp = client.get(
+            "/api/v1/glossary/analytics/misses",
+            headers=user_headers,
+        )
+        assert resp.status_code == 403

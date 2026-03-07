@@ -362,7 +362,8 @@ async def get_llm_profile_db(profile_id: str, db) -> Optional[dict]:
     result = await db.execute(
         text(
             "SELECT id, tenant_id, name, provider, primary_model, intent_model, "
-            "embedding_model, endpoint_url, is_default, created_at, updated_at "
+            "embedding_model, endpoint_url, is_default, created_at, updated_at, "
+            "COALESCE(status, 'active') AS status "
             "FROM llm_profiles WHERE id = :id"
         ),
         {"id": profile_id},
@@ -382,6 +383,7 @@ async def get_llm_profile_db(profile_id: str, db) -> Optional[dict]:
         "is_default": row[8],
         "created_at": str(row[9]),
         "updated_at": str(row[10]),
+        "status": row[11],
     }
 
 
@@ -458,6 +460,36 @@ async def delete_llm_profile_db(profile_id: str, db) -> dict:
 
     logger.info("llm_profile_deleted", profile_id=profile_id)
     return {"deleted": True, "id": profile_id}
+
+
+async def deprecate_llm_profile_db(profile_id: str, db) -> Optional[dict]:
+    """
+    API-035: Soft-delete an LLM profile by setting status to 'deprecated'.
+
+    Returns {"id": profile_id, "status": "deprecated"} on success.
+    Raises LookupError if the profile does not exist.
+    Raises ValueError if the profile is already deprecated.
+    """
+    profile = await get_llm_profile_db(profile_id, db)
+    if profile is None:
+        raise LookupError(f"LLM profile '{profile_id}' not found")
+
+    if profile.get("status") == "deprecated":
+        raise ValueError(f"LLM profile '{profile_id}' is already deprecated.")
+
+    result = await db.execute(
+        text(
+            "UPDATE llm_profiles SET status = 'deprecated', updated_at = NOW() "
+            "WHERE id = :id"
+        ),
+        {"id": profile_id},
+    )
+    await db.commit()
+    if (result.rowcount or 0) == 0:
+        raise LookupError(f"LLM profile '{profile_id}' not found")
+
+    logger.info("llm_profile_deprecated", profile_id=profile_id)
+    return {"id": profile_id, "status": "deprecated"}
 
 
 async def get_platform_stats_db(db) -> dict:
@@ -972,9 +1004,13 @@ async def delete_llm_profile(
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """API-035: Delete (hard-delete) an unused LLM profile."""
+    """API-035: Soft-delete (deprecate) an LLM profile.
+
+    Sets status to 'deprecated'. Cannot delete an already-deprecated profile.
+    Returns {"id": "uuid", "status": "deprecated"} on success.
+    """
     try:
-        result = await delete_llm_profile_db(profile_id=profile_id, db=session)
+        result = await deprecate_llm_profile_db(profile_id=profile_id, db=session)
     except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -982,7 +1018,7 @@ async def delete_llm_profile(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
     return result

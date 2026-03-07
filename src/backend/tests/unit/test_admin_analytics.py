@@ -126,20 +126,82 @@ class TestSatisfactionAuth:
         assert resp.status_code == 403
 
 
+def _mock_all_satisfaction(
+    mock_trend_return=None,
+    mock_7d_return=85.0,
+    mock_overall_return=(85.0, 100),
+    mock_per_agent_return=None,
+    mock_trend_period_return=None,
+):
+    """
+    Context manager that mocks all five DB functions called by GET /analytics/satisfaction.
+
+    The endpoint calls (in order):
+    - get_satisfaction_overall_db
+    - get_satisfaction_per_agent_db
+    - get_satisfaction_trend_period_db   <- new "trend" field
+    - get_satisfaction_trend_db          <- legacy "trend_30d" field
+    - get_satisfaction_7d_db             <- legacy "satisfaction_7d" field
+    """
+    from contextlib import ExitStack
+    from unittest.mock import AsyncMock, patch
+
+    if mock_trend_return is None:
+        mock_trend_return = SAMPLE_TREND
+    if mock_per_agent_return is None:
+        mock_per_agent_return = []
+    if mock_trend_period_return is None:
+        mock_trend_period_return = SAMPLE_TREND
+
+    stack = ExitStack()
+    stack.enter_context(
+        patch(
+            "app.modules.admin.analytics.get_satisfaction_overall_db",
+            new_callable=AsyncMock,
+            return_value=mock_overall_return,
+        )
+    )
+    stack.enter_context(
+        patch(
+            "app.modules.admin.analytics.get_satisfaction_per_agent_db",
+            new_callable=AsyncMock,
+            return_value=mock_per_agent_return,
+        )
+    )
+    stack.enter_context(
+        patch(
+            "app.modules.admin.analytics.get_satisfaction_trend_period_db",
+            new_callable=AsyncMock,
+            return_value=mock_trend_period_return,
+        )
+    )
+    stack.enter_context(
+        patch(
+            "app.modules.admin.analytics.get_satisfaction_trend_db",
+            new_callable=AsyncMock,
+            return_value=mock_trend_return,
+        )
+    )
+    stack.enter_context(
+        patch(
+            "app.modules.admin.analytics.get_satisfaction_7d_db",
+            new_callable=AsyncMock,
+            return_value=mock_7d_return,
+        )
+    )
+    return stack
+
+
 class TestSatisfactionResponse:
     """GET /admin/analytics/satisfaction - response structure."""
 
     def test_returns_trend_list(self, client, admin_headers):
         """Returns 'trend' as a list of date/satisfaction/total items."""
-        with patch(
-            "app.modules.admin.analytics.get_satisfaction_trend_db",
-            new_callable=AsyncMock,
-        ) as mock_trend, patch(
-            "app.modules.admin.analytics.get_satisfaction_7d_db",
-            new_callable=AsyncMock,
-        ) as mock_7d:
-            mock_trend.return_value = SAMPLE_TREND
-            mock_7d.return_value = 85.0
+        with _mock_all_satisfaction(
+            mock_trend_period_return=SAMPLE_TREND,
+            mock_trend_return=SAMPLE_TREND,
+            mock_7d_return=85.0,
+        ):
             resp = client.get(
                 "/api/v1/admin/analytics/satisfaction", headers=admin_headers
             )
@@ -156,15 +218,7 @@ class TestSatisfactionResponse:
 
     def test_satisfaction_7d_is_float(self, client, admin_headers):
         """satisfaction_7d is a float between 0 and 100."""
-        with patch(
-            "app.modules.admin.analytics.get_satisfaction_trend_db",
-            new_callable=AsyncMock,
-        ) as mock_trend, patch(
-            "app.modules.admin.analytics.get_satisfaction_7d_db",
-            new_callable=AsyncMock,
-        ) as mock_7d:
-            mock_trend.return_value = SAMPLE_TREND
-            mock_7d.return_value = 85.0
+        with _mock_all_satisfaction(mock_7d_return=85.0):
             resp = client.get(
                 "/api/v1/admin/analytics/satisfaction", headers=admin_headers
             )
@@ -177,15 +231,12 @@ class TestSatisfactionResponse:
 
     def test_empty_trend_returns_empty_list(self, client, admin_headers):
         """When no feedback data exists, trend is empty list."""
-        with patch(
-            "app.modules.admin.analytics.get_satisfaction_trend_db",
-            new_callable=AsyncMock,
-        ) as mock_trend, patch(
-            "app.modules.admin.analytics.get_satisfaction_7d_db",
-            new_callable=AsyncMock,
-        ) as mock_7d:
-            mock_trend.return_value = []
-            mock_7d.return_value = 0.0
+        with _mock_all_satisfaction(
+            mock_trend_period_return=[],
+            mock_trend_return=[],
+            mock_7d_return=0.0,
+            mock_overall_return=(0.0, 0),
+        ):
             resp = client.get(
                 "/api/v1/admin/analytics/satisfaction", headers=admin_headers
             )

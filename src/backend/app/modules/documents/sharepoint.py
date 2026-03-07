@@ -27,6 +27,7 @@ from app.core.session import get_async_session
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+admin_sync_router = APIRouter(prefix="/admin", tags=["admin", "documents"])
 
 
 # ---------------------------------------------------------------------------
@@ -396,5 +397,165 @@ async def get_sharepoint_sync_status(
     return await list_sync_jobs_db(
         integration_id=integration_id,
         tenant_id=current_user.tenant_id,
+        db=db,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sync failure error type mapping
+# ---------------------------------------------------------------------------
+
+_ERROR_TYPE_MAPPINGS = [
+    (
+        ("permission", "403"),
+        "permission_denied",
+        "Access denied to this file or folder",
+        "Check SharePoint permissions for the integration service account",
+    ),
+    (
+        ("format", "unsupported"),
+        "format_unsupported",
+        "File format not supported for indexing",
+        "Exclude this file type in sync settings or convert to a supported format",
+    ),
+    (
+        ("size", "too large", "413"),
+        "too_large",
+        "File exceeds maximum size limit",
+        "Files over 50MB cannot be indexed. Add to exclusion list or split the document",
+    ),
+]
+
+_ERROR_TYPE_DEFAULT = (
+    "api_error",
+    "Sync API error",
+    "Check integration credentials and retry sync",
+)
+
+
+def _classify_sync_error(error_message: str) -> tuple[str, str, str]:
+    """
+    Map a raw error message to (error_type, diagnosis, fix_suggestion).
+
+    Checks each keyword group in order; falls back to api_error if none match.
+    """
+    lowered = (error_message or "").lower()
+    for keywords, error_type, diagnosis, fix_suggestion in _ERROR_TYPE_MAPPINGS:
+        if any(kw in lowered for kw in keywords):
+            return error_type, diagnosis, fix_suggestion
+    return _ERROR_TYPE_DEFAULT
+
+
+# ---------------------------------------------------------------------------
+# Sync failures DB helper
+# ---------------------------------------------------------------------------
+
+
+async def list_sync_failures_db(
+    tenant_id: str,
+    source_id: Optional[str],
+    page: int,
+    page_size: int,
+    db: AsyncSession,
+) -> dict:
+    """
+    List failed sync jobs for a tenant, joined with integrations for file metadata.
+
+    Tenant-scoped via tenant_id filter (RLS also enforced at DB level).
+    Returns paginated items with human-readable error classification.
+    """
+    offset = (page - 1) * page_size
+
+    base_where = "sj.tenant_id = :tenant_id AND sj.status = 'failed'"
+    params: dict = {"tenant_id": tenant_id}
+
+    if source_id is not None:
+        base_where += " AND sj.integration_id = :source_id"
+        params["source_id"] = source_id
+
+    count_result = await db.execute(
+        text("SELECT COUNT(*) FROM sync_jobs sj " f"WHERE {base_where}"),
+        params,
+    )
+    total = count_result.scalar() or 0
+
+    rows_result = await db.execute(
+        text(
+            "SELECT sj.id, sj.integration_id, sj.error_message, sj.created_at, "
+            "i.name AS source_name "
+            "FROM sync_jobs sj "
+            "LEFT JOIN integrations i ON i.id = sj.integration_id "
+            f"WHERE {base_where} "
+            "ORDER BY sj.created_at DESC "
+            "LIMIT :limit OFFSET :offset"
+        ),
+        {**params, "limit": page_size, "offset": offset},
+    )
+
+    items = []
+    for row in rows_result.mappings():
+        error_message = row.get("error_message") or ""
+        error_type, diagnosis, fix_suggestion = _classify_sync_error(error_message)
+
+        first_failed_at = row.get("created_at")
+        if hasattr(first_failed_at, "isoformat"):
+            first_failed_at = first_failed_at.isoformat()
+
+        items.append(
+            {
+                "file_name": "",
+                "file_path": "",
+                "error_type": error_type,
+                "diagnosis": diagnosis,
+                "fix_suggestion": fix_suggestion,
+                "first_failed_at": str(first_failed_at) if first_failed_at else None,
+                "retry_count": 0,
+            }
+        )
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin sync failures route
+# ---------------------------------------------------------------------------
+
+
+@admin_sync_router.get("/sync/failures")
+async def list_sync_failures(
+    source_id: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-056: List sync failures for the tenant.
+
+    Returns paginated failed sync job records with human-readable error
+    classification (permission_denied, format_unsupported, too_large, api_error).
+
+    Query params:
+        source_id  — filter by integration ID (optional)
+        page       — page number, 1-based (default 1)
+        page_size  — items per page, 1-100 (default 20)
+    """
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    elif page_size > 100:
+        page_size = 100
+
+    return await list_sync_failures_db(
+        tenant_id=current_user.tenant_id,
+        source_id=source_id,
+        page=page,
+        page_size=page_size,
         db=db,
     )

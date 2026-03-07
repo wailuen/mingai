@@ -94,8 +94,12 @@ class TestListAgentTemplates:
         with patch(
             "app.modules.agents.routes.list_agent_templates_db",
             new_callable=AsyncMock,
-        ) as mock_list:
+        ) as mock_list, patch(
+            "app.modules.agents.routes.list_platform_templates_db",
+            new_callable=AsyncMock,
+        ) as mock_platform:
             mock_list.return_value = {"items": [], "total": 0}
+            mock_platform.return_value = []
             resp = client.get("/api/v1/agents/templates", headers=admin_headers)
         assert resp.status_code == 200
         data = resp.json()
@@ -122,12 +126,16 @@ class TestListAgentTemplates:
         with patch(
             "app.modules.agents.routes.list_agent_templates_db",
             new_callable=AsyncMock,
-        ) as mock_list:
+        ) as mock_list, patch(
+            "app.modules.agents.routes.list_platform_templates_db",
+            new_callable=AsyncMock,
+        ) as mock_platform:
             mock_list.return_value = {"items": [db_agent], "total": 1}
+            mock_platform.return_value = []
             resp = client.get("/api/v1/agents/templates", headers=admin_headers)
         assert resp.status_code == 200
         data = resp.json()
-        # 4 seed + 1 DB = 5 items
+        # 4 seed + 0 platform + 1 DB = 5 items
         assert len(data["items"]) == 5
         assert data["total"] == 5
 
@@ -136,8 +144,12 @@ class TestListAgentTemplates:
         with patch(
             "app.modules.agents.routes.list_agent_templates_db",
             new_callable=AsyncMock,
-        ) as mock_list:
+        ) as mock_list, patch(
+            "app.modules.agents.routes.list_platform_templates_db",
+            new_callable=AsyncMock,
+        ) as mock_platform:
             mock_list.return_value = {"items": [], "total": 0}
+            mock_platform.return_value = []
             resp = client.get(
                 "/api/v1/agents/templates?category=HR", headers=admin_headers
             )
@@ -153,8 +165,12 @@ class TestListAgentTemplates:
         with patch(
             "app.modules.agents.routes.list_agent_templates_db",
             new_callable=AsyncMock,
-        ) as mock_list:
+        ) as mock_list, patch(
+            "app.modules.agents.routes.list_platform_templates_db",
+            new_callable=AsyncMock,
+        ) as mock_platform:
             mock_list.return_value = {"items": [], "total": 0}
+            mock_platform.return_value = []
             resp = client.get(
                 "/api/v1/agents/templates?category=it", headers=admin_headers
             )

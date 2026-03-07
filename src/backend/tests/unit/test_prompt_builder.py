@@ -457,3 +457,100 @@ class TestFormatHelpers:
         result = builder._format_org_context({"department": "Engineering"})
         assert result.startswith("[Organization Context]")
         assert "Engineering" in result
+
+
+class TestGetTenantTokenBudget:
+    """Unit tests for get_tenant_token_budget() — AI-033."""
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_token_budget_from_config(self):
+        """Returns the integer budget from tenant_configs when present and valid."""
+        from unittest.mock import MagicMock
+
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = ({"budget": 4096},)
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        budget = await get_tenant_token_budget(
+            db_session=mock_db, tenant_id="tenant-123"
+        )
+        assert budget == 4096
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_token_budget_fallback_when_missing(self):
+        """Falls back to 2048 when config_type row is not found in DB."""
+        from unittest.mock import MagicMock
+
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = None
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        budget = await get_tenant_token_budget(
+            db_session=mock_db, tenant_id="tenant-456"
+        )
+        assert budget == 2048
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_token_budget_fallback_when_invalid(self):
+        """Falls back to 2048 when budget value in config_data is not a valid integer."""
+        from unittest.mock import MagicMock
+
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = ({"budget": "not-a-number"},)
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        budget = await get_tenant_token_budget(
+            db_session=mock_db, tenant_id="tenant-789"
+        )
+        assert budget == 2048
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_token_budget_fallback_when_out_of_range(self):
+        """Falls back to 2048 when budget value is outside [1024, 8192]."""
+        from unittest.mock import MagicMock
+
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = ({"budget": 99},)  # below minimum 1024
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        budget = await get_tenant_token_budget(
+            db_session=mock_db, tenant_id="tenant-000"
+        )
+        assert budget == 2048
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_token_budget_fallback_when_no_session(self):
+        """Falls back to 2048 when db_session is None."""
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        budget = await get_tenant_token_budget(db_session=None, tenant_id="tenant-001")
+        assert budget == 2048
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_token_budget_fallback_on_db_error(self):
+        """Falls back to 2048 when the DB query raises an exception."""
+        from app.modules.chat.prompt_builder import get_tenant_token_budget
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(side_effect=Exception("connection refused"))
+
+        budget = await get_tenant_token_budget(
+            db_session=mock_db, tenant_id="tenant-err"
+        )
+        assert budget == 2048

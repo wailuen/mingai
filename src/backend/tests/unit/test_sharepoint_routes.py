@@ -337,3 +337,103 @@ class TestSharePointSyncStatus:
         assert "total" in data
         assert len(data["jobs"]) == 1
         assert data["jobs"][0]["id"] == "job-0001"
+
+
+# ---------------------------------------------------------------------------
+# API-056: GET /admin/sync/failures
+# ---------------------------------------------------------------------------
+
+
+class TestListSyncFailures:
+    """GET /api/v1/admin/sync/failures — unit tests (mocked DB)."""
+
+    def test_list_sync_failures_requires_auth(self, client):
+        """Unauthenticated request returns 401."""
+        resp = client.get("/api/v1/admin/sync/failures")
+        assert resp.status_code == 401
+
+    def test_list_sync_failures_requires_tenant_admin(self, client, user_headers):
+        """End-user (non-admin) request is rejected."""
+        with patch(
+            "app.modules.documents.sharepoint.list_sync_failures_db",
+            new_callable=AsyncMock,
+        ):
+            resp = client.get("/api/v1/admin/sync/failures", headers=user_headers)
+        assert resp.status_code == 403
+
+    def test_list_sync_failures_empty(self, client, admin_headers):
+        """Returns empty list when no failed sync jobs exist."""
+        with patch(
+            "app.modules.documents.sharepoint.list_sync_failures_db",
+            new_callable=AsyncMock,
+        ) as mock_list:
+            mock_list.return_value = {
+                "items": [],
+                "total": 0,
+                "page": 1,
+                "page_size": 20,
+            }
+            resp = client.get("/api/v1/admin/sync/failures", headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"] == []
+        assert data["total"] == 0
+        assert data["page"] == 1
+        assert data["page_size"] == 20
+
+    def test_list_sync_failures_with_results(self, client, admin_headers):
+        """Returns failure items with expected fields."""
+        mock_item = {
+            "file_name": "annual_report.pdf",
+            "file_path": "/Sites/Finance/Docs/annual_report.pdf",
+            "error_type": "permission_denied",
+            "diagnosis": "Access denied to this file or folder",
+            "fix_suggestion": "Check SharePoint permissions for the integration service account",
+            "first_failed_at": "2026-03-08T00:00:00+00:00",
+            "retry_count": 2,
+        }
+        with patch(
+            "app.modules.documents.sharepoint.list_sync_failures_db",
+            new_callable=AsyncMock,
+        ) as mock_list:
+            mock_list.return_value = {
+                "items": [mock_item],
+                "total": 1,
+                "page": 1,
+                "page_size": 20,
+            }
+            resp = client.get("/api/v1/admin/sync/failures", headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["items"]) == 1
+        item = data["items"][0]
+        assert item["file_name"] == "annual_report.pdf"
+        assert item["error_type"] == "permission_denied"
+        assert "diagnosis" in item
+        assert "fix_suggestion" in item
+        assert "first_failed_at" in item
+        assert "retry_count" in item
+
+    def test_list_sync_failures_filtered_by_source(self, client, admin_headers):
+        """source_id query param is passed to the DB helper."""
+        with patch(
+            "app.modules.documents.sharepoint.list_sync_failures_db",
+            new_callable=AsyncMock,
+        ) as mock_list:
+            mock_list.return_value = {
+                "items": [],
+                "total": 0,
+                "page": 1,
+                "page_size": 20,
+            }
+            resp = client.get(
+                f"/api/v1/admin/sync/failures?source_id={TEST_INTEGRATION_ID}",
+                headers=admin_headers,
+            )
+        assert resp.status_code == 200
+        call_kwargs = mock_list.call_args
+        # Verify source_id was passed to DB helper
+        passed_source_id = call_kwargs.kwargs.get("source_id") or (
+            call_kwargs.args[1] if len(call_kwargs.args) > 1 else None
+        )
+        assert passed_source_id == TEST_INTEGRATION_ID

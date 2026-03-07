@@ -1,0 +1,622 @@
+{
+  "id": "checkpoint_1772885357815",
+  "name": "pre-compact-1772885357815",
+  "created_at": "2026-03-07T12:09:17.815Z",
+  "observations": [
+    {
+      "id": "obs_1772884278543_g5qroiz1j",
+      "timestamp": "2026-03-07T11:51:18.543Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884290753_uj3f6w2ap",
+      "timestamp": "2026-03-07T11:51:30.753Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884295585_noaqvzr86",
+      "timestamp": "2026-03-07T11:51:35.585Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884327295_eb60kjo77",
+      "timestamp": "2026-03-07T11:52:07.295Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884336320_cvf9ygc52",
+      "timestamp": "2026-03-07T11:52:16.320Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884347066_4c93qockd",
+      "timestamp": "2026-03-07T11:52:27.066Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884361744_waw5kha8o",
+      "timestamp": "2026-03-07T11:52:41.744Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884403464_uh3j1lesf",
+      "timestamp": "2026-03-07T11:53:23.464Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884420070_20pcych5g",
+      "timestamp": "2026-03-07T11:53:40.070Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884423145_e7wh5fkri",
+      "timestamp": "2026-03-07T11:53:43.145Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884455602_akbk0ygoq",
+      "timestamp": "2026-03-07T11:54:15.602Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884462997_ufsesi8mx",
+      "timestamp": "2026-03-07T11:54:22.997Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884481183_7q9gkw1ad",
+      "timestamp": "2026-03-07T11:54:41.183Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884547138_6simnhply",
+      "timestamp": "2026-03-07T11:55:47.138Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884555620_15j8oh2dr",
+      "timestamp": "2026-03-07T11:55:55.620Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884578450_l7pkyhmuj",
+      "timestamp": "2026-03-07T11:56:18.450Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884594692_ynwgsbdxi",
+      "timestamp": "2026-03-07T11:56:34.692Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884606946_4jjoquepw",
+      "timestamp": "2026-03-07T11:56:46.946Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884613003_kp26ql15k",
+      "timestamp": "2026-03-07T11:56:53.003Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884625913_sq5ar2kjw",
+      "timestamp": "2026-03-07T11:57:05.913Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884654052_uup80v99a",
+      "timestamp": "2026-03-07T11:57:34.052Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884662997_8dfz61kea",
+      "timestamp": "2026-03-07T11:57:42.997Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884681080_uftfzf1h5",
+      "timestamp": "2026-03-07T11:58:01.080Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884715599_6qfrjnq5u",
+      "timestamp": "2026-03-07T11:58:35.599Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884723271_5ovebpt0l",
+      "timestamp": "2026-03-07T11:58:43.271Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884754809_1ndce1gtb",
+      "timestamp": "2026-03-07T11:59:14.809Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884763927_njgvraysm",
+      "timestamp": "2026-03-07T11:59:23.927Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884952404_khqqvorra",
+      "timestamp": "2026-03-07T12:02:32.404Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772884975683_f8xlbscsn",
+      "timestamp": "2026-03-07T12:02:55.683Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885106035_c5f2ir14k",
+      "timestamp": "2026-03-07T12:05:06.035Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885116438_l4jf04ign",
+      "timestamp": "2026-03-07T12:05:16.438Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885126448_tpah7ylol",
+      "timestamp": "2026-03-07T12:05:26.448Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885153596_370fs6lyo",
+      "timestamp": "2026-03-07T12:05:53.596Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885176123_wajvk77ue",
+      "timestamp": "2026-03-07T12:06:16.123Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885189253_zvvmo04ib",
+      "timestamp": "2026-03-07T12:06:29.253Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885204868_quk2otoio",
+      "timestamp": "2026-03-07T12:06:44.868Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885239422_84g97segh",
+      "timestamp": "2026-03-07T12:07:19.422Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885248286_k03jrvn57",
+      "timestamp": "2026-03-07T12:07:28.286Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885278191_w8wnod95h",
+      "timestamp": "2026-03-07T12:07:58.191Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885292658_iwjbpe9l8",
+      "timestamp": "2026-03-07T12:08:12.658Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885330122_b45l1cunn",
+      "timestamp": "2026-03-07T12:08:50.122Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772885357813_ui2ya5mp9",
+      "timestamp": "2026-03-07T12:09:17.813Z",
+      "type": "connection_pattern",
+      "data": {
+        "framework": "core-sdk",
+        "active_workflows": [],
+        "critical_patterns": {
+          "hasDataFlowModels": false,
+          "hasNexusApp": false,
+          "hasKaizenAgent": false,
+          "hasCyclicWorkflow": false,
+          "hasAsyncRuntime": false
+        },
+        "recently_modified_count": 0
+      },
+      "context": {
+        "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    }
+  ],
+  "instincts": {},
+  "identity": {
+    "system": "kailash-vibe-cc-setup",
+    "version": "2.0.0",
+    "created_at": "2026-03-07T11:51:18.541Z",
+    "learning_enabled": true,
+    "per_project": true,
+    "focus_areas": [
+      "workflow-patterns",
+      "error-fixes",
+      "dataflow-patterns",
+      "testing-patterns",
+      "framework-selection"
+    ]
+  },
+  "stats": {
+    "observation_count": 42,
+    "instinct_categories": 0
+  }
+}

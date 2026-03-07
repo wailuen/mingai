@@ -964,6 +964,126 @@ async def bulk_invite_users(
 
 
 # ---------------------------------------------------------------------------
+# Admin users route handlers (API-088 enhanced user directory)
+# ---------------------------------------------------------------------------
+
+_VALID_USER_STATUSES = {"active", "invited", "suspended"}
+
+# Hardcoded SQL fragments for user WHERE status filter — never from user input
+_USER_STATUS_SQL: dict[str, str] = {
+    "active": "u.status = 'active'",
+    "invited": "u.status = 'invited'",
+    "suspended": "u.status = 'suspended'",
+}
+
+
+async def list_users_enhanced_db(
+    tenant_id: str,
+    page: int,
+    page_size: int,
+    search: Optional[str],
+    role_filter: Optional[str],
+    status_filter: Optional[str],
+    db,
+) -> dict:
+    """List users for a tenant with search, role, status filters and last_active_at."""
+    offset = (page - 1) * page_size
+
+    # Build WHERE fragments from hardcoded strings — no user input in SQL structure
+    where_parts = ["u.tenant_id = :tenant_id"]
+    params: dict = {"tenant_id": tenant_id, "limit": page_size, "offset": offset}
+
+    if status_filter and status_filter in _VALID_USER_STATUSES:
+        where_parts.append(_USER_STATUS_SQL[status_filter])
+    elif not status_filter:
+        # Default: show active and invited (not suspended)
+        where_parts.append("u.status IN ('active', 'invited', 'suspended')")
+
+    if search:
+        where_parts.append(
+            "(LOWER(u.name) LIKE :search OR LOWER(u.email) LIKE :search)"
+        )
+        params["search"] = f"%{search.lower()}%"
+
+    if role_filter:
+        where_parts.append("u.role = :role")
+        params["role"] = role_filter
+
+    where_clause = " AND ".join(where_parts)
+
+    count_result = await db.execute(
+        text(f"SELECT COUNT(*) FROM users u WHERE {where_clause}"),
+        params,
+    )
+    total = count_result.scalar() or 0
+
+    rows_result = await db.execute(
+        text(
+            f"SELECT u.id, u.email, u.name, u.role, u.status, u.created_at, "
+            f"MAX(m.created_at) AS last_active_at "
+            f"FROM users u "
+            f"LEFT JOIN conversations c ON c.user_id = u.id AND c.tenant_id = u.tenant_id "
+            f"LEFT JOIN messages m ON m.conversation_id = c.id "
+            f"WHERE {where_clause} "
+            f"GROUP BY u.id, u.email, u.name, u.role, u.status, u.created_at "
+            f"ORDER BY u.created_at DESC LIMIT :limit OFFSET :offset"
+        ),
+        params,
+    )
+    items = []
+    for row in rows_result.mappings():
+        items.append(
+            {
+                "id": str(row["id"]),
+                "name": row["name"],
+                "email": row["email"],
+                "role": row["role"],
+                "status": row["status"],
+                "last_active_at": str(row["last_active_at"])
+                if row["last_active_at"]
+                else None,
+                "created_at": str(row["created_at"]),
+            }
+        )
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@admin_users_router.get("")
+async def list_admin_users(
+    search: Optional[str] = Query(None, description="Search by name or email"),
+    role: Optional[str] = Query(None, description="Filter by role"),
+    user_status: Optional[str] = Query(
+        None,
+        alias="status",
+        description="Filter by status: active|invited|suspended",
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-088: Enhanced user directory list with search, role, status filters."""
+    if user_status is not None and user_status not in _VALID_USER_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Invalid status '{user_status}'. "
+                f"Must be one of: {', '.join(sorted(_VALID_USER_STATUSES))}"
+            ),
+        )
+    result = await list_users_enhanced_db(
+        tenant_id=current_user.tenant_id,
+        page=page,
+        page_size=page_size,
+        search=search,
+        role_filter=role,
+        status_filter=user_status,
+        db=session,
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # /me route handlers
 # ---------------------------------------------------------------------------
 

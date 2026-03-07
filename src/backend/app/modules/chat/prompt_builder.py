@@ -15,8 +15,131 @@ Total overhead (2-4b): 550 tokens
 import json
 
 import structlog
+from sqlalchemy import text
 
 logger = structlog.get_logger()
+
+# AI-033: Per-tenant token budget range
+_BUDGET_MIN = 1024
+_BUDGET_MAX = 8192
+_BUDGET_DEFAULT = 2048
+
+
+async def get_tenant_token_budget(db_session, tenant_id: str) -> int:
+    """
+    AI-033: Read per-tenant system prompt token budget from tenant_configs.
+
+    Queries tenant_configs for config_type='system_prompt_budget' and reads
+    the 'budget' key from config_data JSONB. Returns the parsed integer value
+    if it is within the valid range [1024, 8192].
+    Falls back to 2048 on any error, missing row, or out-of-range value.
+
+    Args:
+        db_session: Async SQLAlchemy session (may be None).
+        tenant_id: Tenant UUID string.
+
+    Returns:
+        Integer token budget (1024-8192), defaulting to 2048.
+    """
+    if db_session is None:
+        logger.debug(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="no db_session",
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    try:
+        result = await db_session.execute(
+            text(
+                "SELECT config_data FROM tenant_configs "
+                "WHERE tenant_id = :tenant_id AND config_type = 'system_prompt_budget'"
+            ),
+            {"tenant_id": tenant_id},
+        )
+        row = result.fetchone()
+    except Exception as exc:
+        logger.warning(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="db_error",
+            error=str(exc),
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    if row is None:
+        logger.debug(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="config_not_found",
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    config_data = row[0]
+    # config_data may come back as a dict (asyncpg) or str (psycopg2)
+    if isinstance(config_data, str):
+        try:
+            config_data = json.loads(config_data)
+        except (ValueError, TypeError):
+            logger.warning(
+                "tenant_token_budget_fallback",
+                tenant_id=tenant_id,
+                reason="config_data_not_json",
+                budget=_BUDGET_DEFAULT,
+            )
+            return _BUDGET_DEFAULT
+
+    if not isinstance(config_data, dict):
+        logger.warning(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="config_data_not_dict",
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    raw_value = config_data.get("budget")
+    if raw_value is None:
+        logger.debug(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="budget_key_missing_in_config_data",
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    try:
+        budget = int(raw_value)
+    except (ValueError, TypeError):
+        logger.warning(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="invalid_value_not_int",
+            raw_value=str(raw_value)[:50],
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    if budget < _BUDGET_MIN or budget > _BUDGET_MAX:
+        logger.warning(
+            "tenant_token_budget_fallback",
+            tenant_id=tenant_id,
+            reason="out_of_range",
+            value=budget,
+            valid_range=f"{_BUDGET_MIN}-{_BUDGET_MAX}",
+            budget=_BUDGET_DEFAULT,
+        )
+        return _BUDGET_DEFAULT
+
+    logger.info(
+        "tenant_token_budget_loaded",
+        tenant_id=tenant_id,
+        budget=budget,
+    )
+    return budget
 
 
 class SystemPromptBuilder:

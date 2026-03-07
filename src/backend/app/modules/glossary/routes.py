@@ -342,6 +342,53 @@ async def export_glossary_terms_db(tenant_id: str, db) -> list:
     ]
 
 
+async def get_miss_analytics_db(tenant_id: str, interval: str, limit: int, db) -> list:
+    """
+    API-063: Aggregate glossary miss signals grouped by unresolved_term.
+
+    Returns top N terms ordered by frequency descending within the given time window.
+    interval must be a value from _VALID_MISS_PERIODS (hardcoded SQL fragment, not
+    user input) — asyncpg cannot bind a string to an INTERVAL parameter via CAST.
+    """
+    # _VALID_MISS_PERIODS maps query param to PostgreSQL interval literal.
+    # The interval value is taken from a hardcoded allowlist in the caller —
+    # it is never derived from raw user input, so direct string interpolation
+    # into the SQL fragment is safe here.
+    _SAFE_INTERVAL_FRAGMENTS = {
+        "7 days": "INTERVAL '7 days'",
+        "30 days": "INTERVAL '30 days'",
+    }
+    interval_sql = _SAFE_INTERVAL_FRAGMENTS.get(interval, "INTERVAL '30 days'")
+
+    result = await db.execute(
+        text(
+            "SELECT unresolved_term, COUNT(*) AS frequency, "
+            "array_agg(DISTINCT query_text) FILTER (WHERE query_text IS NOT NULL) "
+            "AS example_queries "
+            "FROM glossary_miss_signals "
+            "WHERE tenant_id = :tenant_id "
+            f"AND created_at >= NOW() - {interval_sql} "
+            "GROUP BY unresolved_term "
+            "ORDER BY frequency DESC "
+            "LIMIT :limit"
+        ),
+        {"tenant_id": tenant_id, "limit": limit},
+    )
+    items = []
+    for row in result.mappings():
+        examples = row.get("example_queries") or []
+        # Return only first 3 example queries
+        examples = list(examples)[:3]
+        items.append(
+            {
+                "term": row["unresolved_term"],
+                "frequency": int(row["frequency"]),
+                "example_queries": examples,
+            }
+        )
+    return items
+
+
 async def list_miss_signals_db(tenant_id: str, limit: int, db) -> dict:
     """
     Aggregate glossary miss signals: group by unresolved_term, sum occurrence_count.
@@ -409,38 +456,55 @@ async def export_glossary_csv(
     current_user: CurrentUser = Depends(require_tenant_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """API-076: Export all glossary terms as CSV download."""
+    """API-062: Export all glossary terms as CSV download.
+
+    Returns a UTF-8 BOM CSV (Excel-compatible) with columns:
+    term, full_form, definition, context_tags, scope
+
+    Formula injection prevention: any cell starting with =, +, -, @ is
+    prefixed with a single quote to neutralise spreadsheet formula execution.
+    """
     terms = await export_glossary_terms_db(
         tenant_id=current_user.tenant_id,
         db=session,
     )
 
-    # Prefix formula-starting values to prevent CSV formula injection (OWASP).
-    # Values beginning with =, +, -, @, tab, or carriage return are prefixed with a tab.
-    _FORMULA_CHARS = ("=", "+", "-", "@", "\t", "\r")
+    # OWASP CSV formula injection prevention.
+    # Prefix with single quote — Excel treats it as a text literal prefix.
+    _FORMULA_CHARS = ("=", "+", "-", "@")
 
     def _safe_cell(value: str) -> str:
         if value and value[0] in _FORMULA_CHARS:
-            return "\t" + value
+            return "'" + value
         return value
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["term", "full_form", "aliases"])
+    # Columns per API-062 spec: term, full_form, definition, context_tags, scope
+    writer.writerow(["term", "full_form", "definition", "context_tags", "scope"])
     for term in terms:
-        aliases_str = "|".join(term["aliases"]) if term["aliases"] else ""
+        # definition = full_form (same content — glossary_terms has no separate definition)
+        # context_tags = semicolon-separated aliases (analogous to tags)
+        # scope = empty (no scope column in schema)
+        context_tags = ";".join(term["aliases"]) if term["aliases"] else ""
         writer.writerow(
             [
                 _safe_cell(term["term"]),
                 _safe_cell(term["full_form"] or ""),
-                _safe_cell(aliases_str),
+                _safe_cell(term["full_form"] or ""),
+                _safe_cell(context_tags),
+                "",  # scope — not present in schema
             ]
         )
 
-    output.seek(0)
+    csv_content = output.getvalue()
+    # UTF-8 BOM for Excel compatibility (b'\xef\xbb\xbf')
+    bom = b"\xef\xbb\xbf"
+    encoded = bom + csv_content.encode("utf-8")
+
     return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
+        iter([encoded]),
+        media_type="text/csv; charset=utf-8-sig",
         headers={
             "Content-Disposition": 'attachment; filename="glossary.csv"',
         },
@@ -460,6 +524,34 @@ async def list_miss_signals(
         db=session,
     )
     return result
+
+
+_VALID_MISS_PERIODS = {"7d": "7 days", "30d": "30 days"}
+
+
+@router.get("/analytics/misses")
+async def get_miss_analytics(
+    period: str = Query("30d", pattern="^(7d|30d)$"),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-063: Glossary miss analytics — top unresolved terms by frequency.
+
+    Query params:
+        period — '7d' or '30d' (default '30d')
+        limit  — max results, 1-100 (default 20)
+
+    Returns anonymized miss signal aggregations with no user attribution.
+    """
+    interval = _VALID_MISS_PERIODS.get(period, "30 days")
+    terms = await get_miss_analytics_db(
+        tenant_id=current_user.tenant_id,
+        interval=interval,
+        limit=limit,
+        db=session,
+    )
+    return {"terms": terms, "period": period}
 
 
 @router.get("/")

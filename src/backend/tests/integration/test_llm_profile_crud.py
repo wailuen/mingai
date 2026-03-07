@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.modules.tenants.routes import (
     create_llm_profile_db,
     delete_llm_profile_db,
+    deprecate_llm_profile_db,
     get_llm_profile_db,
     list_llm_profiles_db,
     update_llm_profile_db,
@@ -474,3 +475,117 @@ class TestLLMProfileCRUD:
             f"primary_model stored as '{fetched['primary_model']}' but expected '{custom_model}'. "
             "Model names must be stored exactly as provided — no hardcoding."
         )
+
+    def test_deprecate_llm_profile_sets_deprecated_status(self, tenant_id):
+        """
+        API-035: deprecate_llm_profile_db soft-deletes a profile by setting
+        status='deprecated'. The profile record remains in the DB.
+        Returns {"id": profile_id, "status": "deprecated"}.
+        """
+
+        async def _run():
+            engine, factory = await _make_session()
+            try:
+                async with factory() as session:
+                    created = await create_llm_profile_db(
+                        tenant_id=tenant_id,
+                        name=f"Deprecate Test {uuid.uuid4().hex[:6]}",
+                        provider="azure_openai",
+                        primary_model="agentic-worker",
+                        intent_model="agentic-router",
+                        embedding_model="text-embedding-3-small",
+                        endpoint_url=None,
+                        api_key_ref=None,
+                        is_default=False,
+                        db=session,
+                    )
+                    profile_id = created["id"]
+
+                    result = await deprecate_llm_profile_db(
+                        profile_id=profile_id, db=session
+                    )
+
+                    # Verify the profile still exists but is deprecated
+                    after = await get_llm_profile_db(profile_id=profile_id, db=session)
+            finally:
+                await engine.dispose()
+            return result, after
+
+        result, after = asyncio.run(_run())
+
+        assert result["id"] is not None
+        assert result["status"] == "deprecated"
+        assert (
+            after is not None
+        ), "Profile must still exist after deprecation (soft-delete)"
+        assert after["status"] == "deprecated"
+
+    def test_deprecate_already_deprecated_raises_value_error(self, tenant_id):
+        """
+        deprecate_llm_profile_db raises ValueError when the profile is already
+        deprecated. The API converts this to 400 Bad Request.
+        """
+
+        async def _run():
+            engine, factory = await _make_session()
+            try:
+                async with factory() as session:
+                    created = await create_llm_profile_db(
+                        tenant_id=tenant_id,
+                        name=f"Double Deprecate {uuid.uuid4().hex[:6]}",
+                        provider="azure_openai",
+                        primary_model="agentic-worker",
+                        intent_model="agentic-router",
+                        embedding_model="text-embedding-3-small",
+                        endpoint_url=None,
+                        api_key_ref=None,
+                        is_default=False,
+                        db=session,
+                    )
+                    profile_id = created["id"]
+
+                    # First deprecation succeeds
+                    await deprecate_llm_profile_db(profile_id=profile_id, db=session)
+
+                    # Second deprecation should raise ValueError
+                    double_raised = False
+                    try:
+                        await deprecate_llm_profile_db(
+                            profile_id=profile_id, db=session
+                        )
+                    except ValueError:
+                        double_raised = True
+            finally:
+                await engine.dispose()
+            return double_raised
+
+        double_raised = asyncio.run(_run())
+        assert (
+            double_raised
+        ), "Deprecating an already-deprecated profile must raise ValueError"
+
+    def test_deprecate_nonexistent_profile_raises_lookup_error(self, tenant_id):
+        """
+        deprecate_llm_profile_db raises LookupError for a non-existent profile ID.
+        The API converts this to 404 Not Found.
+        """
+
+        async def _run():
+            engine, factory = await _make_session()
+            try:
+                async with factory() as session:
+                    lookup_raised = False
+                    try:
+                        await deprecate_llm_profile_db(
+                            profile_id=str(uuid.uuid4()), db=session
+                        )
+                    except LookupError:
+                        lookup_raised = True
+            finally:
+                await engine.dispose()
+            return lookup_raised
+
+        lookup_raised = asyncio.run(_run())
+        assert (
+            lookup_raised
+        ), "Deprecating a non-existent profile must raise LookupError"

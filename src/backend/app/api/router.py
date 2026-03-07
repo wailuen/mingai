@@ -65,25 +65,44 @@ from app.modules.teams.routes import router as teams_router
 
 router.include_router(teams_router)
 
-# Platform admin dashboard endpoint
+# Platform admin dashboard + agent templates + tool catalog (API-038 to API-042)
 from app.modules.platform.routes import router as platform_router
 
 router.include_router(platform_router)
+
+# Platform cache analytics endpoints (API-106 to API-109)
+from app.modules.platform.cache_analytics import router as cache_analytics_router
+
+router.include_router(cache_analytics_router)
 
 # Admin workspace settings endpoints (API-048/049)
 from app.modules.admin.workspace import router as admin_workspace_router
 
 router.include_router(admin_workspace_router)
 
-# Admin analytics endpoints (FE-037 feedback monitoring)
+# Admin memory policy endpoints (API-076/077)
+from app.modules.admin.memory_policy import router as memory_policy_router
+
+router.include_router(memory_policy_router)
+
+# Admin analytics endpoints (FE-037, API-074, API-075 feedback monitoring + engagement)
 from app.modules.admin.analytics import router as analytics_router
 
 router.include_router(analytics_router)
 
-# SharePoint document integration endpoints (API-050 to API-055)
-from app.modules.documents.sharepoint import router as sharepoint_router
+# Admin audit log endpoint (API-087)
+from app.modules.admin.audit_log import router as audit_log_router
+
+router.include_router(audit_log_router)
+
+# SharePoint document integration endpoints (API-050 to API-056)
+from app.modules.documents.sharepoint import (
+    admin_sync_router,
+    router as sharepoint_router,
+)
 
 router.include_router(sharepoint_router)
+router.include_router(admin_sync_router)
 
 # Notification SSE stream (API-012)
 from app.modules.notifications.routes import router as notifications_router
@@ -94,6 +113,11 @@ router.include_router(notifications_router)
 from app.modules.agents.routes import router as agents_router
 
 router.include_router(agents_router)
+
+# Agent Studio admin endpoints (API-069 to API-073)
+from app.modules.agents.routes import admin_router as agents_admin_router
+
+router.include_router(agents_admin_router)
 
 # HAR A2A transaction endpoints (AI-043 to AI-045)
 from app.modules.har.routes import router as har_router
