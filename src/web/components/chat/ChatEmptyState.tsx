@@ -4,8 +4,9 @@ import { Diamond } from "lucide-react";
 import { ChatInput } from "./ChatInput";
 
 interface ChatEmptyStateProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, mode: string) => void;
   agentId: string;
+  userName?: string;
 }
 
 const SUGGESTIONS = [
@@ -23,7 +24,16 @@ const SUGGESTIONS = [
  * - KB hint below input
  * - Suggestion chips
  */
-export function ChatEmptyState({ onSend }: ChatEmptyStateProps) {
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+export function ChatEmptyState({ onSend, userName }: ChatEmptyStateProps) {
+  const displayName = userName ?? "there";
+
   return (
     <div className="flex h-full flex-col items-center justify-center px-4">
       <div className="w-full max-w-[600px]">
@@ -36,7 +46,7 @@ export function ChatEmptyState({ onSend }: ChatEmptyStateProps) {
 
         {/* Greeting */}
         <h1 className="mb-1.5 text-center text-2xl font-bold text-text-muted">
-          Good morning, Sarah.
+          {getGreeting()}, {displayName}.
         </h1>
         <p className="mb-8 text-center text-sm text-text-faint">
           What would you like to know today?
@@ -56,7 +66,7 @@ export function ChatEmptyState({ onSend }: ChatEmptyStateProps) {
           {SUGGESTIONS.map((suggestion) => (
             <button
               key={suggestion}
-              onClick={() => onSend(suggestion)}
+              onClick={() => onSend(suggestion, "auto")}
               className="rounded-control border border-border px-3.5 py-2 text-sm text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary"
             >
               {suggestion}

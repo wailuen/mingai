@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, type KeyboardEvent } from "react";
 import { ArrowUp, Paperclip, ChevronDown } from "lucide-react";
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, mode: string) => void;
   disabled?: boolean;
   placeholder?: string;
   showModeSelector?: boolean;
@@ -29,7 +29,7 @@ export function ChatInput({
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed);
+    onSend(trimmed, mode);
     setValue("");
     if (inputRef.current) {
       inputRef.current.style.height = "auto";

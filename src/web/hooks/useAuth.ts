@@ -9,7 +9,7 @@ import {
   setTokenCookie,
   clearTokenCookie,
 } from "@/lib/auth";
-import { apiPost } from "@/lib/api";
+import { apiRequest } from "@/lib/api";
 
 interface AuthState {
   token: string | null;
@@ -58,9 +58,13 @@ export function useAuth() {
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    const response = await apiPost<LoginResponse>(
+    const response = await apiRequest<LoginResponse>(
       "/api/v1/auth/local/login",
-      credentials,
+      {
+        method: "POST",
+        body: JSON.stringify(credentials),
+        skipRedirectOn401: true,
+      },
     );
     const { access_token } = response;
     setTokenCookie(access_token);

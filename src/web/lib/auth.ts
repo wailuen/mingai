@@ -6,6 +6,7 @@ export interface JWTClaims {
   roles: string[];
   scope: "platform" | "tenant";
   plan: string;
+  email?: string;
   exp: number;
 }
 

@@ -8,13 +8,22 @@ import { cn } from "@/lib/utils";
 
 interface AppShellProps {
   children: ReactNode;
+  activeConversationId?: string | null;
+  onSelectConversation?: (id: string) => void;
+  onNewConversation?: () => void;
 }
 
 /**
  * Main app shell: topbar + sidebar + content area.
  * Sidebar collapses on mobile.
+ * Conversation props passed through to Sidebar for end-user history list.
  */
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({
+  children,
+  activeConversationId,
+  onSelectConversation,
+  onNewConversation,
+}: AppShellProps) {
   const { claims, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -32,7 +41,12 @@ export function AppShell({ children }: AppShellProps) {
             sidebarOpen ? "w-sidebar-w" : "w-0 overflow-hidden",
           )}
         >
-          <Sidebar claims={claims} />
+          <Sidebar
+            claims={claims}
+            activeConversationId={activeConversationId}
+            onSelectConversation={onSelectConversation}
+            onNewConversation={onNewConversation}
+          />
         </div>
         <main className="flex-1 overflow-auto">{children}</main>
       </div>

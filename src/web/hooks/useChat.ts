@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { streamChat, type SSEEvent, type Source } from "@/lib/sse";
+import { apiGet } from "@/lib/api";
 
 export interface ChatMessage {
   id: string;
@@ -16,6 +17,20 @@ export interface ChatMessage {
   feedbackValue?: 1 | -1 | null;
 }
 
+interface ConversationDetailMessage {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+interface ConversationDetail {
+  id: string;
+  title: string;
+  created_at: string;
+  messages: ConversationDetailMessage[];
+}
+
 interface UseChatState {
   messages: ChatMessage[];
   streaming: boolean;
@@ -27,6 +42,7 @@ interface UseChatState {
   conversationId: string | null;
   statusMessage: string | null;
   error: string | null;
+  currentMode: string;
 }
 
 export function useChat(agentId: string) {
@@ -41,12 +57,13 @@ export function useChat(agentId: string) {
     conversationId: null,
     statusMessage: null,
     error: null,
+    currentMode: "auto",
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
-    async (query: string) => {
+    async (query: string, mode?: string) => {
       // Add user message
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -67,6 +84,7 @@ export function useChat(agentId: string) {
         ...prev,
         messages: [...prev.messages, userMessage, assistantMessage],
         streaming: true,
+        currentMode: mode ?? "auto",
         error: null,
         statusMessage: null,
         sources: [],
@@ -214,13 +232,48 @@ export function useChat(agentId: string) {
       conversationId: null,
       statusMessage: null,
       error: null,
+      currentMode: "auto",
     });
+  }, []);
+
+  const loadConversation = useCallback(async (conversationId: string) => {
+    try {
+      const data = await apiGet<ConversationDetail>(
+        `/api/v1/conversations/${conversationId}`,
+      );
+      const loadedMessages: ChatMessage[] = data.messages.map((msg) => ({
+        id: msg.id,
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        timestamp: msg.created_at,
+      }));
+      setState({
+        messages: loadedMessages,
+        streaming: false,
+        sources: [],
+        retrievalConfidence: null,
+        glossaryExpansions: [],
+        profileContextUsed: false,
+        layersActive: [],
+        conversationId: data.id,
+        statusMessage: null,
+        error: null,
+        currentMode: "auto",
+      });
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error:
+          err instanceof Error ? err.message : "Failed to load conversation",
+      }));
+    }
   }, []);
 
   return {
     ...state,
     sendMessage,
     resetChat,
+    loadConversation,
     hasMessages: state.messages.length > 0,
   };
 }

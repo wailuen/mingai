@@ -26,19 +26,24 @@ export interface PaginatedResponse<T> {
   total_pages: number;
 }
 
+interface ApiRequestOptions extends RequestInit {
+  skipRedirectOn401?: boolean;
+}
+
 /**
  * Typed fetch wrapper with Bearer token injection from cookie.
- * 401 responses redirect to /login.
+ * 401 responses redirect to /login unless skipRedirectOn401 is true.
  */
 export async function apiRequest<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
 ): Promise<T> {
+  const { skipRedirectOn401, ...fetchOptions } = options;
   const token = getStoredToken();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...((options.headers as Record<string, string>) ?? {}),
+    ...((fetchOptions.headers as Record<string, string>) ?? {}),
   };
 
   if (token) {
@@ -46,19 +51,30 @@ export async function apiRequest<T>(
   }
 
   const res = await fetch(`${API_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers,
   });
 
   if (res.status === 401) {
-    if (typeof window !== "undefined") {
+    if (!skipRedirectOn401 && typeof window !== "undefined") {
       window.location.href = "/login";
     }
-    throw new ApiException(401, {
-      error: "unauthorized",
-      message: "Session expired. Redirecting to login.",
-      request_id: "",
-    });
+    let errorBody: ApiError;
+    try {
+      const raw = await res.json();
+      errorBody = {
+        error: "unauthorized",
+        message: raw.message ?? raw.detail ?? "Invalid credentials",
+        request_id: raw.request_id ?? "",
+      };
+    } catch {
+      errorBody = {
+        error: "unauthorized",
+        message: "Invalid credentials",
+        request_id: "",
+      };
+    }
+    throw new ApiException(401, errorBody);
   }
 
   if (!res.ok) {
@@ -103,6 +119,13 @@ export async function apiPatch<T>(
     method: "PATCH",
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * GET helper
+ */
+export async function apiGet<T>(path: string): Promise<T> {
+  return apiRequest<T>(path, { method: "GET" });
 }
 
 /**

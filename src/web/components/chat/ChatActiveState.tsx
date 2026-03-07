@@ -18,8 +18,9 @@ interface ChatActiveStateProps {
   profileContextUsed: boolean;
   layersActive: string[];
   error: string | null;
-  onSend: (message: string) => void;
+  onSend: (message: string, mode: string) => void;
   onViewSources?: () => void;
+  currentMode?: string;
 }
 
 /**
@@ -37,6 +38,7 @@ export function ChatActiveState({
   error,
   onSend,
   onViewSources,
+  currentMode = "auto",
 }: ChatActiveStateProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,7 @@ export function ChatActiveState({
                   }
                   layersActive={idx === messages.length - 1 ? layersActive : []}
                   onViewSources={onViewSources}
+                  currentMode={currentMode}
                 />
               )}
             </div>
@@ -145,6 +148,7 @@ function AIMessage({
   profileContextUsed,
   layersActive,
   onViewSources,
+  currentMode = "auto",
 }: {
   message: ChatMessage;
   isStreaming: boolean;
@@ -154,15 +158,17 @@ function AIMessage({
   profileContextUsed: boolean;
   layersActive: string[];
   onViewSources?: () => void;
+  currentMode?: string;
 }) {
   const hasSources = (message.sources?.length ?? 0) > 0;
+  const modeLabel = currentMode === "auto" ? "AUTO" : currentMode.toUpperCase();
 
   return (
     <div className="space-y-2">
       {/* Meta row: AGENT . MODE + confidence pill */}
       <div className="flex items-center gap-2">
         <span className="text-label-nav uppercase tracking-wider text-accent">
-          AUTO · RESPONSE
+          {modeLabel} · RESPONSE
         </span>
         {retrievalConfidence !== null && (
           <ConfidenceBar score={retrievalConfidence} />

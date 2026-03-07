@@ -5,34 +5,40 @@ import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+type FeedbackRating = "up" | "down";
+
 interface FeedbackWidgetProps {
   messageId: string;
 }
 
+interface FeedbackResponse {
+  id: string;
+  rating: string;
+}
+
 /**
  * Thumbs up/down feedback on AI responses.
- * Submits to POST /api/v1/feedback.
- * Only one selection per message (toggle behavior).
+ * Submits to POST /api/v1/chat/feedback with {message_id, rating: "up"|"down"}.
+ * Can change selection (toggles to other option, re-submits).
+ * Outlined neutral style until selected.
  */
 export function FeedbackWidget({ messageId }: FeedbackWidgetProps) {
-  const [value, setValue] = useState<1 | -1 | null>(null);
+  const [selected, setSelected] = useState<FeedbackRating | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
 
   const submit = useCallback(
-    async (rating: 1 | -1) => {
-      const newValue = value === rating ? null : rating;
-      setValue(newValue);
+    async (rating: FeedbackRating) => {
+      if (selected === rating) return;
 
-      if (newValue === null) return;
-
+      setSelected(rating);
       setSubmitting(true);
       setError(false);
 
       try {
-        await apiPost("/api/v1/feedback", {
+        await apiPost<FeedbackResponse>("/api/v1/chat/feedback", {
           message_id: messageId,
-          value: newValue,
+          rating,
         });
       } catch {
         setError(true);
@@ -41,17 +47,17 @@ export function FeedbackWidget({ messageId }: FeedbackWidgetProps) {
         setSubmitting(false);
       }
     },
-    [messageId, value],
+    [messageId, selected],
   );
 
   return (
     <div className="flex items-center gap-1.5">
       <button
-        onClick={() => submit(1)}
+        onClick={() => submit("up")}
         disabled={submitting}
         className={cn(
           "flex h-7 w-7 items-center justify-center rounded-control border transition-colors",
-          value === 1
+          selected === "up"
             ? "border-accent bg-accent-dim text-accent"
             : "border-transparent text-text-faint hover:border-border hover:text-text-muted",
         )}
@@ -60,11 +66,11 @@ export function FeedbackWidget({ messageId }: FeedbackWidgetProps) {
         <ThumbsUp size={14} />
       </button>
       <button
-        onClick={() => submit(-1)}
+        onClick={() => submit("down")}
         disabled={submitting}
         className={cn(
           "flex h-7 w-7 items-center justify-center rounded-control border transition-colors",
-          value === -1
+          selected === "down"
             ? "border-alert bg-alert-dim text-alert"
             : "border-transparent text-text-faint hover:border-border hover:text-text-muted",
         )}

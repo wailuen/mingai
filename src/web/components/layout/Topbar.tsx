@@ -21,10 +21,17 @@ const ROLE_LABELS: Record<RoleView, string> = {
 
 export function Topbar({
   claims,
-  tenantName = "Acme Corp",
+  tenantName,
   onToggleSidebar,
   onLogout,
 }: TopbarProps) {
+  const displayTenant =
+    tenantName ??
+    (claims?.tenant_id
+      ? claims.tenant_id
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      : "mingai");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -41,7 +48,9 @@ export function Topbar({
     document.documentElement.setAttribute("data-theme", next);
   }
 
-  const userInitials = claims ? claims.sub.slice(0, 2).toUpperCase() : "??";
+  const userInitials = claims?.email
+    ? claims.email.slice(0, 2).toUpperCase()
+    : (claims?.sub.slice(0, 2).toUpperCase() ?? "??");
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 flex h-topbar-h items-center gap-2 border-b border-border bg-bg-surface px-3.5">
@@ -64,7 +73,7 @@ export function Topbar({
             mingai
           </span>
           <span className="text-xs leading-tight text-text-muted">
-            {tenantName}
+            {displayTenant}
           </span>
         </div>
       </div>
@@ -102,10 +111,12 @@ export function Topbar({
           <div className="absolute right-0 top-full mt-1 w-48 rounded-card border border-border bg-bg-surface p-1 shadow-lg">
             <div className="border-b border-border-faint px-3 py-2">
               <p className="text-sm font-medium text-text-primary">
-                {claims?.sub ?? "Unknown"}
+                {claims?.email ?? claims?.sub ?? "Unknown"}
               </p>
               <p className="font-mono text-xs text-text-muted">
-                {claims?.tenant_id?.slice(0, 8) ?? ""}
+                {claims?.tenant_id
+                  ?.replace(/_/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase()) ?? ""}
               </p>
             </div>
             <button
