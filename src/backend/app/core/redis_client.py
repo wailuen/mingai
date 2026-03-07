@@ -7,6 +7,8 @@ All Redis keys MUST use the namespace pattern:
 NEVER create tenant-unscoped Redis keys for user data.
 """
 import os
+import re
+import urllib.parse
 from typing import Optional
 
 import structlog
@@ -15,6 +17,12 @@ logger = structlog.get_logger()
 
 _redis_pool: Optional[object] = None
 
+# Allowlist for structured key segments (tenant_id and key_type only).
+# Key parts (suffix) allow colons so compound sub-keys still work, but
+# tenant_id and key_type must never contain colons — that would break
+# the namespace boundary and allow cross-tenant key collision.
+_SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_.@/-]+$")
+
 
 def build_redis_key(tenant_id: str, key_type: str, *parts: str) -> str:
     """
@@ -22,7 +30,12 @@ def build_redis_key(tenant_id: str, key_type: str, *parts: str) -> str:
 
     Pattern: mingai:{tenant_id}:{key_type}:{...}
 
-    Raises ValueError if tenant_id is empty (prevents tenant-unscoped keys).
+    Security rules:
+    - tenant_id and key_type MUST NOT contain colons (namespace injection prevention).
+    - tenant_id MUST be non-empty.
+    - key_type MUST be non-empty.
+
+    Raises ValueError if any constraint is violated.
     """
     if not tenant_id:
         raise ValueError(
@@ -31,6 +44,17 @@ def build_redis_key(tenant_id: str, key_type: str, *parts: str) -> str:
         )
     if not key_type:
         raise ValueError("key_type is required for Redis key construction.")
+
+    # Prevent colon injection in structural segments — a colon in tenant_id
+    # or key_type would break the namespace boundary between tenants.
+    if ":" in tenant_id:
+        raise ValueError(
+            f"tenant_id must not contain colons to prevent namespace injection: {tenant_id!r}"
+        )
+    if ":" in key_type:
+        raise ValueError(
+            f"key_type must not contain colons to prevent namespace injection: {key_type!r}"
+        )
 
     key_parts = ["mingai", tenant_id, key_type] + list(parts)
     return ":".join(key_parts)
@@ -62,7 +86,10 @@ def get_redis():
             retry_on_timeout=True,
             decode_responses=True,
         )
-        logger.info("redis_pool_created", url=redis_url.split("@")[-1])
+        parsed = urllib.parse.urlparse(redis_url)
+        logger.info(
+            "redis_pool_created", host=parsed.hostname, port=parsed.port, db=parsed.path
+        )
 
     return _redis_pool
 
