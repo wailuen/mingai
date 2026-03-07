@@ -11,8 +11,8 @@ Wires all AI services into a streaming SSE response pipeline:
   Stage 7: LLM streaming (response generation)
   Stage 8: Post-processing (persistence, memory update, profile learning)
 
-Memory fast path: "Remember that..." / "Note that..." queries bypass RAG
-and save directly to working memory notes.
+Memory fast path: "Remember that..." / "Remember:..." / "Please remember..." /
+"Note that..." / "Save this:..." queries bypass RAG and save directly to memory notes.
 """
 import os
 import re
@@ -22,10 +22,16 @@ import structlog
 
 logger = structlog.get_logger()
 
-# Memory command patterns that trigger the fast path
+# Memory command patterns that trigger the fast path (AI-024)
+# Each pattern uses ^ to match only at the start of the query.
+# Note: "please remember" intentionally does not require "that" (colon-less short form);
+# bare "remember" without "that" or ":" does NOT trigger the fast path by design.
 _MEMORY_COMMAND_PATTERNS = [
     re.compile(r"^remember\s+that\s+", re.IGNORECASE),
+    re.compile(r"^remember\s*:\s*", re.IGNORECASE),
+    re.compile(r"^please\s+remember\s+", re.IGNORECASE),
     re.compile(r"^note\s+that\s+", re.IGNORECASE),
+    re.compile(r"^save\s+this\s*:\s*", re.IGNORECASE),
 ]
 
 # Maximum length for memory note content
@@ -308,9 +314,6 @@ class ChatOrchestrationService:
             match = pattern.search(query)
             if match:
                 content = query[match.end() :].strip()
-                # Truncate to MAX_MEMORY_NOTE_LENGTH
-                if len(content) > MAX_MEMORY_NOTE_LENGTH:
-                    content = content[:MAX_MEMORY_NOTE_LENGTH]
                 return content
         return None
 
@@ -334,6 +337,24 @@ class ChatOrchestrationService:
             user_id=user_id,
             tenant_id=tenant_id,
         )
+
+        # AI-024: If content exceeds 200 chars, return error SSE — do NOT truncate silently
+        if len(content) > MAX_MEMORY_NOTE_LENGTH:
+            yield {
+                "event": "error",
+                "data": {
+                    "code": "memory_note_too_long",
+                    "message": (
+                        f"Memory note too long ({len(content)} chars). "
+                        f"Maximum is {MAX_MEMORY_NOTE_LENGTH} characters."
+                    ),
+                },
+            }
+            yield {
+                "event": "done",
+                "data": {"conversation_id": conversation_id, "message_id": None},
+            }
+            return
 
         yield {"event": "status", "data": {"stage": "memory_save"}}
 

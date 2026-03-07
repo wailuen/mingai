@@ -403,8 +403,11 @@ class TestMemoryFastPath:
         assert "response_chunk" in event_types
 
     @pytest.mark.asyncio
-    async def test_memory_content_truncated_to_200_chars(self):
-        """Memory note content must be truncated to 200 characters."""
+    async def test_memory_content_over_200_chars_returns_error_sse(self):
+        """
+        Memory note content > 200 chars must return an error SSE event
+        — NOT silently truncate. The LLM pipeline must NOT be invoked.
+        """
         from app.modules.chat.orchestrator import ChatOrchestrationService
 
         mocks = _make_mock_services()
@@ -414,7 +417,7 @@ class TestMemoryFastPath:
         service = ChatOrchestrationService(**mocks)
 
         long_content = "x" * 300
-        await _collect_events(
+        events = await _collect_events(
             service.stream_response(
                 query=f"Remember that {long_content}",
                 user_id="u1",
@@ -426,9 +429,59 @@ class TestMemoryFastPath:
             )
         )
 
-        call_args = mocks["working_memory_service"].add_note.call_args
-        content = call_args.kwargs.get("content", call_args[1].get("content", ""))
-        assert len(content) <= 200
+        event_types = [e["event"] for e in events]
+        assert (
+            "error" in event_types
+        ), "Over-length content must emit an error SSE event"
+        error_events = [e for e in events if e["event"] == "error"]
+        assert error_events[0]["data"]["code"] == "memory_note_too_long"
+        # add_note must NOT be called — error short-circuits before save
+        mocks["working_memory_service"].add_note.assert_not_called()
+        # memory_saved must not appear — content was not saved
+        assert "memory_saved" not in event_types
+        # done must be the final event — stream always terminates cleanly
+        assert event_types[-1] == "done"
+
+    @pytest.mark.asyncio
+    async def test_all_memory_trigger_patterns_recognized(self):
+        """
+        All 5 trigger patterns from AI-024 must activate the memory fast path:
+        'remember that', 'remember:', 'please remember', 'note that', 'save this:'
+        """
+        from app.modules.chat.orchestrator import ChatOrchestrationService
+
+        patterns_and_queries = [
+            "Remember that I prefer dark mode",
+            "Remember: my team is Platform",
+            "Please remember I am in SGT timezone",
+            "Note that I like concise answers",
+            "Save this: project deadline is Q2",
+        ]
+
+        for query in patterns_and_queries:
+            mocks = _make_mock_services()
+            mocks["working_memory_service"].add_note = AsyncMock(
+                return_value=MagicMock(id="n", content="test")
+            )
+            service = ChatOrchestrationService(**mocks)
+
+            events = await _collect_events(
+                service.stream_response(
+                    query=query,
+                    user_id="u1",
+                    tenant_id="t1",
+                    agent_id="a1",
+                    conversation_id="c1",
+                    active_team_id=None,
+                    jwt_claims={},
+                )
+            )
+
+            event_types = [e["event"] for e in events]
+            assert (
+                "memory_saved" in event_types
+            ), f"Query '{query}' should trigger memory fast path but got: {event_types}"
+            mocks["embedding_service"].embed.assert_not_called()
 
 
 class TestTeamMemoryIntegration:
