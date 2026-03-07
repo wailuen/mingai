@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Moon, Sun, Menu, ChevronDown } from "lucide-react";
 import type { JWTClaims } from "@/lib/auth";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface TopbarProps {
   claims: JWTClaims | null;
@@ -87,6 +88,9 @@ export function Topbar({
         <span>{ROLE_LABELS[currentRole]}</span>
         <ChevronDown size={12} />
       </div>
+
+      {/* Notifications */}
+      <NotificationBell />
 
       {/* Theme toggle */}
       <button
