@@ -18,6 +18,7 @@ Note: /me routes must be registered BEFORE /{id} routes to avoid path collision.
 """
 import csv
 import io
+import json
 import re
 import uuid
 from datetime import datetime, timezone
@@ -25,7 +26,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,16 +53,46 @@ class InviteUserRequest(BaseModel):
     role: str = Field(..., min_length=1, max_length=50)
     name: Optional[str] = Field(None, max_length=200)
 
+    @field_validator("role")
+    @classmethod
+    def role_must_be_valid(cls, v: str) -> str:
+        allowed = {"end_user", "tenant_admin"}
+        if v not in allowed:
+            raise ValueError(f"role must be one of: {', '.join(sorted(allowed))}")
+        return v
+
 
 class UpdateUserRequest(BaseModel):
     role: Optional[str] = Field(None, max_length=50)
     name: Optional[str] = Field(None, max_length=200)
     is_active: Optional[bool] = None
 
+    @field_validator("role")
+    @classmethod
+    def role_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"end_user", "tenant_admin"}
+        if v not in allowed:
+            raise ValueError(f"role must be one of: {', '.join(sorted(allowed))}")
+        return v
+
+
+_PREFERENCES_MAX_BYTES = 65_536  # 64 KB serialized
+
 
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     preferences: Optional[dict] = None
+
+    @field_validator("preferences")
+    @classmethod
+    def preferences_size_limit(cls, v: Optional[dict]) -> Optional[dict]:
+        if v is not None and len(json.dumps(v)) > _PREFERENCES_MAX_BYTES:
+            raise ValueError(
+                f"preferences payload exceeds maximum of {_PREFERENCES_MAX_BYTES} bytes"
+            )
+        return v
 
 
 class BulkInviteResult(BaseModel):
@@ -78,6 +109,7 @@ class BulkInviteResult(BaseModel):
 _VALID_BULK_INVITE_ROLES = {"end_user", "tenant_admin"}
 _EMAIL_PATTERN = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
 _MAX_BULK_INVITE_ROWS = 500
+_MAX_CSV_BYTES = 2 * 1024 * 1024  # 2 MB upload limit
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +174,10 @@ async def invite_user_db(
         },
     )
     await db.commit()
-    logger.info("user_invited", user_id=user_id, email=email, tenant_id=tenant_id)
+    email_domain = email.split("@")[-1] if "@" in email else "unknown"
+    logger.info(
+        "user_invited", user_id=user_id, email_domain=email_domain, tenant_id=tenant_id
+    )
     return {"id": user_id, "email": email, "status": "invited", "role": role}
 
 
@@ -170,6 +205,17 @@ async def get_user_db(user_id: str, tenant_id: str, db) -> Optional[dict]:
 
 _USER_UPDATE_ALLOWLIST = {"role", "name", "is_active"}
 
+# Hardcoded SQL fragments — column names never interpolated from user-controlled data.
+# Only these exact fragments can appear in SET clauses; values remain parameterized.
+# NOTE: `is_active` is intentionally absent here — the loop below maps it to `status`.
+# Any new field added to _USER_UPDATE_ALLOWLIST must have a corresponding entry here
+# OR an explicit mapping in the is_active→status block (lines ~196-199).
+_DB_COLUMN_SQL: dict[str, str] = {
+    "role": "role = :role",
+    "name": "name = :name",
+    "status": "status = :status",
+}
+
 
 async def update_user_db(
     user_id: str,
@@ -190,7 +236,13 @@ async def update_user_db(
         else:
             db_updates[k] = v
 
-    set_clauses = ", ".join(f"{k} = :{k}" for k in db_updates)
+    # Column names sourced exclusively from _DB_COLUMN_SQL (static map).
+    # Values remain parameterized (`:col`). No user-controlled strings reach SQL.
+    set_clauses = ", ".join(
+        _DB_COLUMN_SQL[k] for k in db_updates if k in _DB_COLUMN_SQL
+    )
+    if not set_clauses:
+        raise ValueError("No valid update fields after allowlist filtering")
     params = {"id": user_id, "tenant_id": tenant_id, **db_updates}
     result = await db.execute(
         text(
@@ -248,7 +300,7 @@ async def get_user_profile_db(user_id: str, tenant_id: str, db) -> dict:
 async def update_user_profile_db(
     user_id: str, tenant_id: str, updates: dict, db
 ) -> dict:
-    """Update user profile fields."""
+    """Update user profile fields (name on users table; preferences on user_profiles)."""
     if "name" in updates and updates["name"] is not None:
         await db.execute(
             text(
@@ -261,8 +313,24 @@ async def update_user_profile_db(
                 "tenant_id": tenant_id,
             },
         )
-        await db.commit()
-    return {"id": user_id, **updates}
+
+    if "preferences" in updates and updates["preferences"]:
+        await db.execute(
+            text(
+                "INSERT INTO user_profiles (user_id, tenant_id, preferences) "
+                "VALUES (:user_id, :tenant_id, :prefs::jsonb) "
+                "ON CONFLICT (user_id, tenant_id) DO UPDATE "
+                "SET preferences = COALESCE(user_profiles.preferences, '{}'::jsonb) || :prefs::jsonb"
+            ),
+            {
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "prefs": json.dumps(updates["preferences"]),
+            },
+        )
+
+    await db.commit()
+    return {"id": user_id, **{k: v for k, v in updates.items() if v is not None}}
 
 
 async def export_user_data(user_id: str, tenant_id: str, db) -> dict:
@@ -454,10 +522,11 @@ async def bulk_invite_insert_db(
         },
     )
     await db.commit()
+    email_domain = email.split("@")[-1] if "@" in email else "unknown"
     logger.info(
         "bulk_invite_user_created",
         invitation_id=invitation_id,
-        email=email,
+        email_domain=email_domain,
         tenant_id=tenant_id,
         invited_by=invited_by,
     )
@@ -740,7 +809,12 @@ async def bulk_invite_users(
         )
 
     # Read and parse CSV
-    content = await file.read()
+    content = await file.read(_MAX_CSV_BYTES + 1)
+    if len(content) > _MAX_CSV_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"CSV file exceeds maximum size of {_MAX_CSV_BYTES // 1024 // 1024} MB",
+        )
     try:
         decoded = content.decode("utf-8")
     except UnicodeDecodeError as exc:
