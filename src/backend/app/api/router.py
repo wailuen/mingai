@@ -62,3 +62,10 @@ router.include_router(admin_workspace_router)
 from app.modules.documents.sharepoint import router as sharepoint_router
 
 router.include_router(sharepoint_router)
+
+# Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
+# Always registered — HMAC token verification is the auth mechanism.
+# Cloud deployments (aws/azure/gcp) never receive requests at these routes.
+from app.core.local_storage_routes import router as local_storage_router
+
+router.include_router(local_storage_router)

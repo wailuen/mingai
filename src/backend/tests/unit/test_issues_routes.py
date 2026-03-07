@@ -1,8 +1,9 @@
 """
-Unit tests for issue reporting routes (API-013).
+Unit tests for issue reporting routes (API-013, API-014).
 
-Tests issue CRUD, blur_acknowledged enforcement, RBAC, and auth.
-Tier 1: Fast, isolated, uses mocking for DB helpers.
+Tests issue CRUD, blur_acknowledged enforcement, RBAC, auth,
+and screenshot presign URL generation.
+Tier 1: Fast, isolated, uses mocking for DB helpers and storage.
 """
 import os
 from datetime import datetime, timedelta, timezone
@@ -361,3 +362,128 @@ class TestAddIssueEvent:
             )
         assert resp.status_code == 201
         assert resp.json()["id"] == "event-1"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/issue-reports/presign — Presigned upload URL (API-014)
+# ---------------------------------------------------------------------------
+
+
+class TestPresignScreenshotUpload:
+    """GET /api/v1/issue-reports/presign (API-014)"""
+
+    def test_presign_requires_auth(self, client):
+        """Unauthenticated requests are rejected with 401."""
+        resp = client.get(
+            "/api/v1/issue-reports/presign",
+            params={"filename": "shot.png", "content_type": "image/png"},
+        )
+        assert resp.status_code == 401
+
+    def test_presign_returns_upload_blob_expires(self, client, user_headers):
+        """Happy path: returns upload_url, blob_url, expires_in=300."""
+        from app.core.storage import PresignedUpload
+
+        with patch("app.core.storage.generate_presigned_upload") as mock_presign:
+            mock_presign.return_value = PresignedUpload(
+                upload_url="http://localhost:8022/api/v1/internal/screenshots/tok",
+                blob_url="http://localhost:8022/api/v1/internal/screenshots/pay",
+                expires_in=300,
+            )
+            resp = client.get(
+                "/api/v1/issue-reports/presign",
+                params={"filename": "shot.png", "content_type": "image/png"},
+                headers=user_headers,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "upload_url" in data
+        assert "blob_url" in data
+        assert data["expires_in"] == 300
+
+    def test_presign_rejects_invalid_content_type(self, client, user_headers):
+        """Content-type not in {image/png, image/jpeg} returns 422."""
+        resp = client.get(
+            "/api/v1/issue-reports/presign",
+            params={"filename": "shot.gif", "content_type": "image/gif"},
+            headers=user_headers,
+        )
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "image/jpeg" in detail or "image/png" in detail
+
+    def test_presign_accepts_jpeg(self, client, user_headers):
+        """image/jpeg is an allowed content type."""
+        from app.core.storage import PresignedUpload
+
+        with patch("app.core.storage.generate_presigned_upload") as mock_presign:
+            mock_presign.return_value = PresignedUpload(
+                upload_url="http://localhost:8022/api/v1/internal/screenshots/tok",
+                blob_url="http://localhost:8022/api/v1/internal/screenshots/pay",
+                expires_in=300,
+            )
+            resp = client.get(
+                "/api/v1/issue-reports/presign",
+                params={"filename": "photo.jpg", "content_type": "image/jpeg"},
+                headers=user_headers,
+            )
+
+        assert resp.status_code == 200
+
+    def test_presign_missing_filename_returns_422(self, client, user_headers):
+        """filename is required."""
+        resp = client.get(
+            "/api/v1/issue-reports/presign",
+            params={"content_type": "image/png"},
+            headers=user_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_presign_missing_content_type_returns_422(self, client, user_headers):
+        """content_type is required."""
+        resp = client.get(
+            "/api/v1/issue-reports/presign",
+            params={"filename": "shot.png"},
+            headers=user_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_presign_scopes_path_to_tenant(self, client, user_headers):
+        """Storage key passed to generate_presigned_upload uses caller's tenant_id."""
+        from app.core.storage import PresignedUpload
+
+        captured_kwargs = {}
+
+        def capture_call(tenant_id, filename, content_type, **kwargs):
+            captured_kwargs["tenant_id"] = tenant_id
+            return PresignedUpload(
+                upload_url="http://localhost:8022/api/v1/internal/screenshots/tok",
+                blob_url="http://localhost:8022/api/v1/internal/screenshots/pay",
+                expires_in=300,
+            )
+
+        with patch(
+            "app.core.storage.generate_presigned_upload",
+            side_effect=capture_call,
+        ):
+            client.get(
+                "/api/v1/issue-reports/presign",
+                params={"filename": "shot.png", "content_type": "image/png"},
+                headers=user_headers,
+            )
+
+        assert captured_kwargs["tenant_id"] == TEST_TENANT_ID
+
+    def test_presign_storage_error_returns_500(self, client, user_headers):
+        """If generate_presigned_upload raises, returns 500 (not 4xx)."""
+        with patch(
+            "app.core.storage.generate_presigned_upload",
+            side_effect=RuntimeError("S3 connection refused"),
+        ):
+            resp = client.get(
+                "/api/v1/issue-reports/presign",
+                params={"filename": "shot.png", "content_type": "image/png"},
+                headers=user_headers,
+            )
+        assert resp.status_code == 500

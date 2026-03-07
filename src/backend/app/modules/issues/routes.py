@@ -1,7 +1,8 @@
 """
-Issue Reports API routes (API-013).
+Issue Reports API routes (API-013, API-014).
 
 Endpoints:
+- GET    /issue-reports/presign       — Get presigned upload URL (API-014, any user)
 - GET    /issues                      — List tenant issues (tenant admin only)
 - POST   /issues                      — Create issue (any authenticated user)
 - GET    /issues/{issue_id}           — Get issue (tenant admin or issue owner)
@@ -279,6 +280,52 @@ async def add_issue_event_db(
 # Note: /issues/{issue_id}/status and /issues/{issue_id}/events
 # MUST be registered BEFORE /{issue_id} to avoid path collision.
 # ---------------------------------------------------------------------------
+
+
+@router.get("/issue-reports/presign")
+async def presign_screenshot_upload(
+    filename: str = Query(..., min_length=1, max_length=255),
+    content_type: str = Query(..., alias="content_type"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    API-014: Generate a presigned URL for direct screenshot upload.
+
+    Returns upload_url (PUT target), blob_url (permanent reference after upload),
+    and expires_in (300 seconds). Content-type restricted to image/png and image/jpeg.
+    Storage path is scoped to the caller's tenant_id.
+    """
+    from app.core.storage import ALLOWED_CONTENT_TYPES, generate_presigned_upload
+
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        allowed = ", ".join(sorted(ALLOWED_CONTENT_TYPES))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"content_type must be one of: {allowed}",
+        )
+
+    try:
+        result = generate_presigned_upload(
+            tenant_id=current_user.tenant_id,
+            filename=filename,
+            content_type=content_type,
+        )
+    except Exception as exc:
+        logger.error(
+            "presign_failed",
+            tenant_id=current_user.tenant_id,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate upload URL",
+        )
+
+    return {
+        "upload_url": result.upload_url,
+        "blob_url": result.blob_url,
+        "expires_in": result.expires_in,
+    }
 
 
 @router.get("/issues")
