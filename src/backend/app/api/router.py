@@ -12,6 +12,12 @@ from app.modules.auth.routes import router as auth_router
 
 router.include_router(auth_router)
 
+# Issue reports endpoints (API-013) — must be before chat to avoid route collision
+# Chat module has legacy /issues endpoint; this module provides the full CRUD
+from app.modules.issues.routes import router as issues_router
+
+router.include_router(issues_router)
+
 # Chat endpoints (API-007 to API-014)
 from app.modules.chat.routes import router as chat_router
 
@@ -46,3 +52,8 @@ router.include_router(teams_router)
 from app.modules.platform.routes import router as platform_router
 
 router.include_router(platform_router)
+
+# Admin workspace settings endpoints (API-048/049)
+from app.modules.admin.workspace import router as admin_workspace_router
+
+router.include_router(admin_workspace_router)

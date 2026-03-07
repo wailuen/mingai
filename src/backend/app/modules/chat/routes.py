@@ -7,8 +7,9 @@ Endpoints:
 - GET  /conversations  — List conversations (paginated)
 - GET  /conversations/{id} — Get conversation with messages
 - DELETE /conversations/{id} — Delete conversation
-- POST /issues         — Submit issue report
-- GET  /issues/{id}    — Get issue
+
+Note: Issue reporting (POST /issues, GET /issues/{id}) is handled by
+app.modules.issues.routes to enforce blur_acknowledged requirements.
 """
 import json
 import uuid
@@ -53,14 +54,6 @@ class FeedbackRequest(BaseModel):
     comment: Optional[str] = Field(None, max_length=2000)
 
 
-class IssueRequest(BaseModel):
-    """POST /api/v1/issues request body."""
-
-    title: str = Field(..., min_length=1, max_length=500)
-    description: str = Field(..., min_length=1, max_length=10000)
-    message_id: Optional[str] = Field(None, max_length=200)
-
-
 # ---------------------------------------------------------------------------
 # Helper functions (mockable for unit tests)
 # ---------------------------------------------------------------------------
@@ -80,6 +73,7 @@ def build_orchestrator(db, redis):
     from app.modules.chat.vector_search import VectorSearchService
     from app.modules.glossary.expander import GlossaryExpander
     from app.modules.memory.org_context import OrgContextService
+    from app.modules.memory.team_working_memory import TeamWorkingMemoryService
     from app.modules.memory.working_memory import WorkingMemoryService
     from app.modules.profile.learning import ProfileLearningService
 
@@ -99,6 +93,7 @@ def build_orchestrator(db, redis):
         prompt_builder=SystemPromptBuilder(),
         persistence_service=ConversationPersistenceService(db_session=db),
         confidence_calculator=_ConfidenceCalc(),
+        team_memory_service=TeamWorkingMemoryService(),
     )
 
 
@@ -226,62 +221,6 @@ async def delete_conversation(
     )
     await db.commit()
     return (result.rowcount or 0) > 0
-
-
-async def create_issue(
-    title: str,
-    description: str,
-    message_id: Optional[str],
-    user_id: str,
-    tenant_id: str,
-    db,
-) -> dict:
-    """Create an issue report."""
-    issue_id = str(uuid.uuid4())
-    await db.execute(
-        text(
-            "INSERT INTO issue_reports (id, tenant_id, user_id, title, description, "
-            "source_message_id, status) "
-            "VALUES (:id, :tenant_id, :user_id, :title, :description, :message_id, 'open')"
-        ),
-        {
-            "id": issue_id,
-            "tenant_id": tenant_id,
-            "user_id": user_id,
-            "title": title,
-            "description": description,
-            "message_id": message_id,
-        },
-    )
-    await db.commit()
-    logger.info("issue_created", issue_id=issue_id, user_id=user_id)
-    return {"id": issue_id, "status": "open", "title": title}
-
-
-async def get_issue(
-    issue_id: str,
-    user_id: str,
-    tenant_id: str,
-    db,
-) -> Optional[dict]:
-    """Get an issue report."""
-    result = await db.execute(
-        text(
-            "SELECT id, title, description, status, created_at FROM issue_reports "
-            "WHERE id = :id AND tenant_id = :tenant_id AND user_id = :user_id"
-        ),
-        {"id": issue_id, "tenant_id": tenant_id, "user_id": user_id},
-    )
-    row = result.fetchone()
-    if row is None:
-        return None
-    return {
-        "id": str(row[0]),
-        "title": row[1],
-        "description": row[2],
-        "status": row[3],
-        "created_at": str(row[4]),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -433,46 +372,3 @@ async def delete_user_conversation(
             detail=f"Conversation '{conversation_id}' not found",
         )
     return None
-
-
-@router.post("/issues", status_code=status.HTTP_201_CREATED)
-async def submit_issue(
-    request: IssueRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session),
-):
-    """
-    API-012: Submit an issue report linked to a chat message.
-    """
-    result = await create_issue(
-        title=request.title,
-        description=request.description,
-        message_id=request.message_id,
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-        db=session,
-    )
-    return result
-
-
-@router.get("/issues/{issue_id}")
-async def get_issue_detail(
-    issue_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session),
-):
-    """
-    API-013: Get an issue report by ID.
-    """
-    result = await get_issue(
-        issue_id=issue_id,
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-        db=session,
-    )
-    if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
-        )
-    return result

@@ -255,6 +255,15 @@ class ChatOrchestrationService:
             response=response_text,
         )
 
+        # Update team working memory (anonymized, no user_id stored)
+        if active_team_id and self._team_memory is not None:
+            await self._team_memory.update(
+                team_id=active_team_id,
+                tenant_id=tenant_id,
+                query=query,
+                response=response_text,
+            )
+
         # Trigger profile learning
         await self._profile.on_query_completed(
             user_id=user_id,
