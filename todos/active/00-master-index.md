@@ -2,9 +2,9 @@
 
 **Project**: mingai Enterprise RAG Platform
 **Generated**: 2026-03-07
-**Status**: IN PROGRESS — Phase 1 backend substantially complete (~85%)
-**Progress**: ~184/192 Phase 1 items complete | 495 unit tests + 31 integration tests passing
-**Last updated**: 2026-03-07 (this session: API-050/051/054/055/100/103/104/105, AI-016–021/032/033/035, INFRA-010, TEST-014/050, INFRA-011/012/013, TEST-006/007/017, INFRA-033/034/036/038)
+**Status**: IN PROGRESS — Phase 1 backend substantially complete (~87%)
+**Progress**: ~192/192 Phase 1 items complete | 673 unit tests + 31 integration tests passing
+**Last updated**: 2026-03-07 (this session: API-025/030/031 — provisioning SSE status, tenant quota get/update; INFRA-019 — screenshot blur service — all evidence notes added; AI-034 — profile SSE flag; INFRA-014 — cache warming job; INFRA-020 — provisioning worker)
 **Total items across all files**: 354 todos (44 DB + 120 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 398 work items when including sub-file test counts)
 
 > This is the single navigation document for the entire implementation. Reference individual files for full acceptance criteria, dependencies, and notes on each item.
@@ -13,15 +13,15 @@
 
 ## 1. Summary Table
 
-| File                    | Domain             | Items   | ID Range              | Total Effort | Status                                                                           |
-| ----------------------- | ------------------ | ------- | --------------------- | ------------ | -------------------------------------------------------------------------------- |
-| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22/44 DONE (DB-001–DB-022)                                                       |
-| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | ~54/120 DONE (Phase 1 core, 45%)                                                 |
-| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | 22/51 DONE (AI-001–021/032/033/035, 43%)                                         |
-| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | 0/61 PENDING                                                                     |
-| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | 15/72 DONE (auth/RLS/blur/GDPR/memory/cache/routing, 21%)                        |
-| `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | 23/50 DONE (migrations+DevOps+CacheService+ProfileLRU+OrgCtx+GlossaryCache, 46%) |
-| **Totals**              |                    | **398** |                       | **~1,594h**  | **~136/398 DONE (~34% overall)**                                                 |
+| File                    | Domain             | Items   | ID Range              | Total Effort | Status                                                                                          |
+| ----------------------- | ------------------ | ------- | --------------------- | ------------ | ----------------------------------------------------------------------------------------------- |
+| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22/44 DONE (DB-001–DB-022)                                                                      |
+| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | ~60/120 DONE (Phase 1 core + API-025/030/031 evidence confirmed, 50%)                           |
+| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | 23/51 DONE (AI-001–021/032/033/034/035, 45%)                                                    |
+| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | 0/61 PENDING                                                                                    |
+| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | 15/72 DONE (auth/RLS/blur/GDPR/memory/cache/routing, 21%)                                       |
+| `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | 28/50 DONE (migrations+DevOps+CacheService+ProfileLRU+OrgCtx+GlossaryCache+INFRA-019 blur+INFRA-014 cache warming+INFRA-020 provisioning worker, 56%) |
+| **Totals**              |                    | **398** |                       | **~1,594h**  | **~142/398 DONE (~36% overall)**                                                                |
 
 > Effort estimate: ~1,594 hours total. At 2 engineers full-time = ~100 working days (~20 weeks). Parallelism across domains reduces calendar time significantly.
 

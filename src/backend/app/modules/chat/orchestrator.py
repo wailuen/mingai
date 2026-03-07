@@ -284,12 +284,17 @@ class ChatOrchestrationService:
             tenant_id=tenant_id,
         )
 
+        # AI-034: profile_context_used — true when any personalisation layer contributed
+        _PROFILE_LAYERS = {"profile", "working_memory", "org_context", "team_memory"}
+        profile_context_used = bool(_PROFILE_LAYERS.intersection(layers_active))
+
         # Emit metadata event
         yield {
             "event": "metadata",
             "data": {
                 "retrieval_confidence": retrieval_confidence,
                 "glossary_expansions": glossary_expansions,
+                "profile_context_used": profile_context_used,
                 "layers_active": layers_active,
             },
         }

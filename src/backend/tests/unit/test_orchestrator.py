@@ -515,6 +515,139 @@ class TestTeamMemoryIntegration:
         # (it might not even exist in the mock set if not passed)
 
 
+class TestProfileContextUsedFlag:
+    """AI-034: profile_context_used flag in metadata SSE event."""
+
+    @pytest.mark.asyncio
+    async def test_profile_context_used_true_when_profile_layer_active(self):
+        """metadata.profile_context_used is True when 'profile' in layers_active."""
+        from app.modules.chat.orchestrator import ChatOrchestrationService
+
+        mocks = _make_mock_services()
+        # prompt_builder returns profile layer active (default fixture already has this)
+        mocks["prompt_builder"].build = AsyncMock(
+            return_value=("system prompt", ["profile"])
+        )
+        service = ChatOrchestrationService(**mocks)
+
+        events = await _collect_events(
+            service.stream_response(
+                query="show me my recent reports",
+                user_id="u1",
+                tenant_id="t1",
+                agent_id="a1",
+                conversation_id=None,
+                active_team_id=None,
+                jwt_claims={},
+            )
+        )
+
+        metadata = next(e["data"] for e in events if e["event"] == "metadata")
+        assert metadata["profile_context_used"] is True
+
+    @pytest.mark.asyncio
+    async def test_profile_context_used_true_when_working_memory_active(self):
+        """metadata.profile_context_used is True when 'working_memory' in layers_active."""
+        from app.modules.chat.orchestrator import ChatOrchestrationService
+
+        mocks = _make_mock_services()
+        mocks["prompt_builder"].build = AsyncMock(
+            return_value=("system prompt", ["working_memory"])
+        )
+        service = ChatOrchestrationService(**mocks)
+
+        events = await _collect_events(
+            service.stream_response(
+                query="what were we discussing?",
+                user_id="u1",
+                tenant_id="t1",
+                agent_id="a1",
+                conversation_id=None,
+                active_team_id=None,
+                jwt_claims={},
+            )
+        )
+
+        metadata = next(e["data"] for e in events if e["event"] == "metadata")
+        assert metadata["profile_context_used"] is True
+
+    @pytest.mark.asyncio
+    async def test_profile_context_used_false_when_no_personalisation_layers(self):
+        """metadata.profile_context_used is False when no profile layers contributed."""
+        from app.modules.chat.orchestrator import ChatOrchestrationService
+
+        mocks = _make_mock_services()
+        # Only RAG layer active — no personalisation
+        mocks["prompt_builder"].build = AsyncMock(
+            return_value=("system prompt", ["rag"])
+        )
+        service = ChatOrchestrationService(**mocks)
+
+        events = await _collect_events(
+            service.stream_response(
+                query="what is the refund policy?",
+                user_id="u1",
+                tenant_id="t1",
+                agent_id="a1",
+                conversation_id=None,
+                active_team_id=None,
+                jwt_claims={},
+            )
+        )
+
+        metadata = next(e["data"] for e in events if e["event"] == "metadata")
+        assert metadata["profile_context_used"] is False
+
+    @pytest.mark.asyncio
+    async def test_profile_context_used_true_any_personalisation_layer_sufficient(self):
+        """profile_context_used True when org_context or team_memory active."""
+        from app.modules.chat.orchestrator import ChatOrchestrationService
+
+        mocks = _make_mock_services()
+        mocks["prompt_builder"].build = AsyncMock(
+            return_value=("system prompt", ["org_context", "team_memory"])
+        )
+        service = ChatOrchestrationService(**mocks)
+
+        events = await _collect_events(
+            service.stream_response(
+                query="team status?",
+                user_id="u1",
+                tenant_id="t1",
+                agent_id="a1",
+                conversation_id=None,
+                active_team_id="team-1",
+                jwt_claims={},
+            )
+        )
+
+        metadata = next(e["data"] for e in events if e["event"] == "metadata")
+        assert metadata["profile_context_used"] is True
+
+    @pytest.mark.asyncio
+    async def test_metadata_includes_profile_context_used_field(self):
+        """metadata event always contains profile_context_used key."""
+        from app.modules.chat.orchestrator import ChatOrchestrationService
+
+        service = ChatOrchestrationService(**_make_mock_services())
+
+        events = await _collect_events(
+            service.stream_response(
+                query="hello",
+                user_id="u1",
+                tenant_id="t1",
+                agent_id="a1",
+                conversation_id=None,
+                active_team_id=None,
+                jwt_claims={},
+            )
+        )
+
+        metadata_events = [e for e in events if e["event"] == "metadata"]
+        assert len(metadata_events) == 1
+        assert "profile_context_used" in metadata_events[0]["data"]
+
+
 class TestEmbeddingUseOriginalQuery:
     """Verify embedding uses ORIGINAL query, not expanded."""
 

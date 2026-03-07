@@ -26,7 +26,16 @@ import uuid
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    status,
+)
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.exc import IntegrityError
 
@@ -35,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_platform_admin
 from app.core.session import get_async_session
+from app.modules.tenants.worker import run_tenant_provisioning
 
 logger = structlog.get_logger()
 
@@ -70,6 +80,12 @@ class CreateLLMProfileRequest(BaseModel):
     endpoint_url: Optional[str] = Field(None, max_length=500)
     api_key_ref: Optional[str] = Field(None, max_length=500)
     is_default: bool = False
+
+
+class UpdateQuotaRequest(BaseModel):
+    monthly_token_limit: Optional[int] = Field(None, ge=0)
+    storage_gb: Optional[float] = Field(None, ge=0)
+    users_max: Optional[int] = Field(None, ge=1)
 
 
 class UpdateLLMProfileRequest(BaseModel):
@@ -138,7 +154,13 @@ async def create_tenant_db(
     slug: Optional[str],
     db,
 ) -> dict:
-    """Provision a new tenant."""
+    """
+    Insert a new tenant record with status 'provisioning'.
+
+    The caller is responsible for launching run_tenant_provisioning() as a
+    background task which will execute the remaining 7 steps and flip the
+    status to 'active' on success.
+    """
     tenant_id = str(uuid.uuid4())
     effective_slug = slug or _slugify(name)
     # Ensure slug uniqueness by appending short UUID suffix if needed
@@ -148,7 +170,7 @@ async def create_tenant_db(
     await db.execute(
         text(
             "INSERT INTO tenants (id, name, slug, plan, primary_contact_email, status) "
-            "VALUES (:id, :name, :slug, :plan, :primary_contact_email, 'active')"
+            "VALUES (:id, :name, :slug, :plan, :primary_contact_email, 'provisioning')"
         ),
         {
             "id": tenant_id,
@@ -165,7 +187,7 @@ async def create_tenant_db(
         "name": name,
         "slug": effective_slug,
         "plan": plan,
-        "status": "active",
+        "status": "provisioning",
         "primary_contact_email": primary_contact_email,
     }
 
@@ -468,6 +490,185 @@ async def get_platform_stats_db(db) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Quota DB helpers (API-030, API-031)
+# ---------------------------------------------------------------------------
+
+QUOTA_CONFIG_TYPE = "quota"
+QUOTA_DEFAULTS = {
+    "monthly_token_limit": 1000000,
+    "storage_gb": 10.0,
+    "users_max": 50,
+}
+
+
+async def get_tenant_quota_db(tenant_id: str, db) -> Optional[dict]:
+    """
+    Read quota data for a tenant.
+
+    Reads limits from tenant_configs (config_type='quota') and counts active
+    users from the users table. Returns None if the tenant does not exist.
+    """
+    # Check tenant exists
+    tenant = await get_tenant_db(tenant_id, db)
+    if tenant is None:
+        return None
+
+    # Read quota config from tenant_configs
+    result = await db.execute(
+        text(
+            "SELECT config_data FROM tenant_configs "
+            "WHERE tenant_id = :tenant_id AND config_type = :config_type"
+        ),
+        {"tenant_id": tenant_id, "config_type": QUOTA_CONFIG_TYPE},
+    )
+    row = result.fetchone()
+    if row is not None and row[0] is not None:
+        config_data = row[0] if isinstance(row[0], dict) else {}
+    else:
+        config_data = {}
+
+    monthly_token_limit = config_data.get(
+        "monthly_token_limit", QUOTA_DEFAULTS["monthly_token_limit"]
+    )
+    storage_gb_limit = config_data.get("storage_gb", QUOTA_DEFAULTS["storage_gb"])
+    users_max = config_data.get("users_max", QUOTA_DEFAULTS["users_max"])
+
+    # Count current users for this tenant
+    user_count_result = await db.execute(
+        text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
+        {"tenant_id": tenant_id},
+    )
+    user_count = user_count_result.scalar() or 0
+
+    return {
+        "tenant_id": tenant_id,
+        "tokens": {
+            "limit": monthly_token_limit,
+            # Actual token metering not yet implemented; returns 0 until
+            # the usage-tracking pipeline (metering service) is built.
+            "used": 0,
+            "period": "monthly",
+        },
+        "storage_gb": {
+            "limit": float(storage_gb_limit),
+            # Actual storage metering not yet implemented; returns 0.0 until
+            # the storage-tracking pipeline is built.
+            "used": 0.0,
+        },
+        "users": {"limit": users_max, "used": user_count},
+    }
+
+
+_QUOTA_UPDATE_ALLOWLIST = {"monthly_token_limit", "storage_gb", "users_max"}
+
+
+async def update_tenant_quota_db(tenant_id: str, updates: dict, db) -> Optional[bool]:
+    """
+    Upsert quota settings for a tenant into tenant_configs.
+
+    Returns True on success, None if the tenant does not exist.
+    Raises ValueError if invalid fields are provided.
+
+    Uses the UPSERT pattern (INSERT ... ON CONFLICT DO UPDATE) to ensure
+    the quota config row exists after the operation.
+    """
+    safe_updates = {k: v for k, v in updates.items() if k in _QUOTA_UPDATE_ALLOWLIST}
+    invalid = set(updates) - _QUOTA_UPDATE_ALLOWLIST
+    if invalid:
+        raise ValueError(f"Invalid quota update fields: {invalid}")
+    if not safe_updates:
+        raise ValueError("No valid quota fields to update")
+
+    # Check tenant exists
+    tenant = await get_tenant_db(tenant_id, db)
+    if tenant is None:
+        return None
+
+    # Read existing config_data to merge with updates
+    result = await db.execute(
+        text(
+            "SELECT config_data FROM tenant_configs "
+            "WHERE tenant_id = :tenant_id AND config_type = :config_type"
+        ),
+        {"tenant_id": tenant_id, "config_type": QUOTA_CONFIG_TYPE},
+    )
+    row = result.fetchone()
+    existing_data = {}
+    if row is not None and row[0] is not None:
+        existing_data = row[0] if isinstance(row[0], dict) else {}
+
+    # Merge updates into existing config
+    merged = {**existing_data, **safe_updates}
+
+    import json
+
+    config_json = json.dumps(merged)
+
+    await db.execute(
+        text(
+            "INSERT INTO tenant_configs (id, tenant_id, config_type, config_data) "
+            "VALUES (gen_random_uuid(), :tenant_id, :config_type, CAST(:config_data AS jsonb)) "
+            "ON CONFLICT (tenant_id, config_type) "
+            "DO UPDATE SET config_data = CAST(:config_data AS jsonb), updated_at = NOW()"
+        ),
+        {
+            "tenant_id": tenant_id,
+            "config_type": QUOTA_CONFIG_TYPE,
+            "config_data": config_json,
+        },
+    )
+    await db.commit()
+    logger.info("tenant_quota_updated", tenant_id=tenant_id, fields=list(safe_updates))
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Provisioning SSE helper (API-025)
+# ---------------------------------------------------------------------------
+
+
+async def get_provisioning_events(job_id: str) -> Optional[list]:
+    """
+    Read provisioning job events from Redis.
+
+    Key: mingai:provisioning:{job_id}
+    Value: JSON-encoded list of step dicts.
+
+    Returns the list of events, or None if the job_id is not found.
+    """
+    import json as json_mod
+
+    from app.core.redis_client import get_redis
+
+    redis = get_redis()
+    redis_key = f"mingai:provisioning:{job_id}"
+    raw = await redis.get(redis_key)
+    if raw is None:
+        logger.warning("provisioning_job_not_found", job_id=job_id)
+        return None
+
+    try:
+        events = json_mod.loads(raw)
+        if not isinstance(events, list):
+            logger.error(
+                "provisioning_events_invalid_format",
+                job_id=job_id,
+                type=type(events).__name__,
+            )
+            raise ValueError(f"Provisioning events for job '{job_id}' are not a list")
+        return events
+    except json_mod.JSONDecodeError as exc:
+        logger.error(
+            "provisioning_events_decode_error",
+            job_id=job_id,
+            error=str(exc),
+        )
+        raise ValueError(
+            f"Failed to decode provisioning events for job '{job_id}': {exc}"
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
 
@@ -487,10 +688,17 @@ async def list_tenants(
 @router.post("/tenants", status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     request: CreateTenantRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """API-025: Provision a new tenant."""
+    """API-024: Provision a new tenant.
+
+    Creates the tenant record synchronously and enqueues the full 8-step
+    provisioning workflow as a FastAPI background task. Returns immediately
+    with status='provisioning' and a job_id the client can use with
+    GET /platform/provisioning/{job_id} (SSE) to track progress.
+    """
     result = await create_tenant_db(
         name=request.name,
         plan=request.plan,
@@ -498,12 +706,32 @@ async def create_tenant(
         slug=request.slug,
         db=session,
     )
-    return result
+
+    job_id = str(uuid.uuid4())
+    background_tasks.add_task(
+        run_tenant_provisioning,
+        job_id=job_id,
+        tenant_id=result["id"],
+        name=result["name"],
+        plan=result["plan"],
+        primary_contact_email=result["primary_contact_email"],
+        slug=result["slug"],
+    )
+
+    logger.info(
+        "tenant_provisioning_started",
+        tenant_id=result["id"],
+        job_id=job_id,
+    )
+    return {**result, "job_id": job_id}
+
+
+_UUID_PATH = Path(..., max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 @router.get("/tenants/{tenant_id}")
 async def get_tenant(
-    tenant_id: str,
+    tenant_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -519,8 +747,8 @@ async def get_tenant(
 
 @router.patch("/tenants/{tenant_id}")
 async def update_tenant(
-    tenant_id: str,
     request: UpdateTenantRequest,
+    tenant_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -542,7 +770,7 @@ async def update_tenant(
 
 @router.post("/tenants/{tenant_id}/suspend")
 async def suspend_tenant(
-    tenant_id: str,
+    tenant_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -558,7 +786,7 @@ async def suspend_tenant(
 
 @router.post("/tenants/{tenant_id}/activate")
 async def activate_tenant(
-    tenant_id: str,
+    tenant_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -570,6 +798,71 @@ async def activate_tenant(
             detail=f"Tenant '{tenant_id}' not found",
         )
     return result
+
+
+@router.get("/provisioning/{job_id}")
+async def get_provisioning_status(
+    job_id: str = Path(..., max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,64}$"),
+    current_user: CurrentUser = Depends(require_platform_admin),
+):
+    """API-025: SSE stream for tenant provisioning job progress."""
+    import json as json_mod
+
+    events = await get_provisioning_events(job_id)
+    if events is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provisioning job '{job_id}' not found",
+        )
+
+    async def event_stream():
+        for event in events:
+            yield f"data: {json_mod.dumps(event)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.get("/tenants/{tenant_id}/quota")
+async def get_tenant_quota(
+    tenant_id: str = _UUID_PATH,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-030: Get tenant quota (limits and usage)."""
+    result = await get_tenant_quota_db(tenant_id=tenant_id, db=session)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tenant '{tenant_id}' not found",
+        )
+    return result
+
+
+@router.patch("/tenants/{tenant_id}/quota")
+async def update_tenant_quota(
+    request: UpdateQuotaRequest,
+    tenant_id: str = _UUID_PATH,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-031: Update tenant quota limits."""
+    updates = request.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No fields to update",
+        )
+    result = await update_tenant_quota_db(
+        tenant_id=tenant_id, updates=updates, db=session
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tenant '{tenant_id}' not found",
+        )
+    # Return the updated quota
+    quota = await get_tenant_quota_db(tenant_id=tenant_id, db=session)
+    return quota
 
 
 @router.get("/llm-profiles")
@@ -624,7 +917,7 @@ async def create_llm_profile(
 
 @router.get("/llm-profiles/{profile_id}")
 async def get_llm_profile(
-    profile_id: str,
+    profile_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -640,8 +933,8 @@ async def get_llm_profile(
 
 @router.patch("/llm-profiles/{profile_id}")
 async def update_llm_profile(
-    profile_id: str,
     request: UpdateLLMProfileRequest,
+    profile_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -665,7 +958,7 @@ async def update_llm_profile(
 
 @router.delete("/llm-profiles/{profile_id}")
 async def delete_llm_profile(
-    profile_id: str,
+    profile_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -794,7 +1087,7 @@ async def get_tenant_health_components_db(tenant_id: str, db) -> dict:
 
 @router.get("/tenants/{tenant_id}/health")
 async def get_tenant_health_score(
-    tenant_id: str,
+    tenant_id: str = _UUID_PATH,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):

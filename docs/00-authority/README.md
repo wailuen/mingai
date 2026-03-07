@@ -1,29 +1,31 @@
 # mingai Authority Documents
 
-Read these first before touching any code. They contain the non-negotiable constraints and architecture decisions.
+Read these before touching any backend code. They contain non-negotiable architecture decisions and the constraints that keep the system consistent.
 
-## Navigation
+## What is mingai
+
+mingai is a multi-tenant enterprise AI assistant platform. End users query a RAG-backed AI agent. Tenant admins manage their workspace — users, documents, glossary, issues. Platform admins operate the platform — tenants, LLM profiles, dashboards.
+
+This repository (`src/backend/`) is the FastAPI backend. Port 8022. All endpoints under `/api/v1/`.
+
+## Document Map
 
 | Document | What it covers | Read when |
 |---|---|---|
-| `CLAUDE.md` | Architecture, patterns, gotchas, security gates | Start of every session |
-| `../01-database-schema.md` | 44-table multi-tenant schema with RLS | Adding tables, migrations |
-| `../02-api-endpoints.md` | All 120 API endpoints with acceptance criteria | Adding/changing endpoints |
-| `../03-ai-services.md` | AI pipeline services (RAG, memory, glossary, triage) | Touching AI layer |
-| `../04-frontend.md` | Next.js frontend with Obsidian Intelligence design system | All frontend work |
-| `../05-testing.md` | 3-tier test strategy, security gates | Writing or running tests |
-| `../06-infrastructure.md` | Migrations, infra, DevOps | Schema or infra changes |
-| `../07-gap-analysis.md` | Known gaps and risk items | Before shipping a feature |
+| `CLAUDE.md` | Stack, patterns, gotchas, security invariants | Start of every backend session |
+| `01-api-reference.md` | All endpoints — method, path, auth requirement | Adding or changing endpoints |
+| `02-architecture.md` | Multi-tenancy, JWT, storage, caching decisions | Touching core infrastructure |
 
-## Blocking Security Gates (ship-stoppers)
+## Ship-Stopper Gates
 
-These MUST pass before the feature ships. No exceptions.
+These must pass before any feature is merged.
 
-| Gate | Test | Blocks |
-|---|---|---|
-| RLS cross-tenant isolation | TEST-002, TEST-003 | Everything |
-| JWT v2 auth | TEST-001 | All endpoints |
-| Screenshot blur | TEST-015 | Issue reporting |
-| GDPR erasure (working memory) | TEST-054 | EU tenants |
-| Cache key isolation | TEST-009 | All caching |
-| Glossary injection sanitization | TEST-030 | Glossary feature |
+| Gate | What it protects |
+|---|---|
+| RLS cross-tenant isolation | Every endpoint that reads/writes per-tenant data |
+| JWT v2 auth on all protected routes | All non-auth endpoints |
+| Screenshot blur gate (`blur_acknowledged=True`) | Issue create endpoint |
+| `user_id` never in team memory | GDPR isolation |
+| Dynamic PATCH columns through allowlist | SQL injection prevention |
+| `FRONTEND_URL != "*"` | CORS lockdown |
+| Secrets from env only | No hardcoded keys or model names |

@@ -276,7 +276,7 @@
 
 ---
 
-### API-014: Get screenshot pre-signed URL
+### API-014: Get screenshot pre-signed URL ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -287,15 +287,15 @@
 **Response**: `{ "upload_url": "string", "blob_url": "string", "expires_in": 300 }`
 **Acceptance criteria**:
 
-- [ ] Pre-signed URL scoped to tenant's storage path
-- [ ] URL expires in 5 minutes
-- [ ] Content type restricted to image/png, image/jpeg
-- [ ] Max file size: 10MB enforced by storage policy
-      **Notes**: Uses ObjectStore abstraction (S3/Azure Blob/GCS per CLOUD_PROVIDER).
+- [x] Pre-signed URL scoped to tenant's storage path
+- [x] URL expires in 5 minutes
+- [x] Content type restricted to image/png, image/jpeg
+- [x] Max file size: 10MB enforced by storage policy
+      **Notes**: Uses ObjectStore abstraction (S3/Azure Blob/GCS per CLOUD_PROVIDER). Cloud-agnostic: aws/azure/gcp/local backends. Files: `app/core/storage.py`, `app/core/local_storage_routes.py`, `app/modules/issues/routes.py`. Tests: `tests/unit/test_storage.py`, `tests/unit/test_issues_routes.py` (TestPresignScreenshotUpload). Committed: fe1d212.
 
 ---
 
-### API-015: List user's issue reports
+### API-015: List user's issue reports ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-013
@@ -306,15 +306,15 @@
 **Response**: `{ "items": [{ "id": "string", "title": "string", "type": "string", "status": "string", "severity": "string", "created_at": "ISO-8601", "updated_at": "ISO-8601" }], "total": int }`
 **Acceptance criteria**:
 
-- [ ] Only returns reports submitted by current user within their tenant
-- [ ] Status filter works (received, triaging, in_progress, resolved, closed, wont_fix)
-- [ ] Paginated with default page_size=20
-- [ ] Sorted by created_at descending
-      **Notes**: Phase 3+ endpoint per integration guide.
+- [x] Only returns reports submitted by current user within their tenant
+- [x] Status filter works (received, triaging, in_progress, resolved, closed, wont_fix)
+- [x] Paginated with default page_size=20
+- [x] Sorted by created_at descending
+      **Notes**: Helper: `list_my_issues_db()`. Tests: TestListMyReports in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d.
 
 ---
 
-### API-016: Get issue report detail
+### API-016: Get issue report detail ✅ COMPLETED
 
 **Effort**: 3h
 **Depends on**: API-013
@@ -325,15 +325,15 @@
 **Response**: `{ "id": "string", "title": "string", "description": "string", "type": "string", "status": "string", "severity": "string", "ai_triage": { "severity": "string", "category": "string", "root_cause_hypothesis": "string" }, "github_issue_url": "string|null", "timeline": [{ "event": "string", "timestamp": "ISO-8601", "actor": "string" }], "created_at": "ISO-8601" }`
 **Acceptance criteria**:
 
-- [ ] 404 if report not found or belongs to different user/tenant
-- [ ] Timeline includes all status transitions
-- [ ] AI triage result included when available
-- [ ] GitHub issue link included when created
-      **Notes**: Links to related duplicate parent issue if flagged as duplicate.
+- [x] 404 if report not found or belongs to different user/tenant
+- [x] Timeline includes all status transitions
+- [x] AI triage result included when available
+- [x] GitHub issue link included when created
+      **Notes**: Helper: `get_my_issue_db()`. Tests: TestGetMyReport in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d. Links to related duplicate parent issue if flagged as duplicate.
 
 ---
 
-### API-017: Still happening confirmation
+### API-017: Still happening confirmation ✅ COMPLETED
 
 **Effort**: 4h
 **Depends on**: API-013
@@ -344,12 +344,12 @@
 **Response**: `{ "status": "regression_reported", "new_report_id": "string" }`
 **Acceptance criteria**:
 
-- [ ] Only callable when report status is "resolved" or "fix_deployed"
-- [ ] Rate limited: 1 per fix deployment per original report
-- [ ] Creates new linked regression report
-- [ ] Second "still happening" on same fix triggers human review flag
-- [ ] Notifies assigned engineer
-      **Notes**: Implements the closed-loop regression detection from Plan 04 Phase 3.
+- [x] Only callable when report status is "resolved" or "fix_deployed"
+- [x] Rate limited: 1 per fix deployment per original report
+- [x] Creates new linked regression report
+- [x] Second "still happening" on same fix triggers human review flag
+- [x] Notifies assigned engineer
+      **Notes**: Implements closed-loop regression detection via StillHappeningRateLimiter. Helper: `record_still_happening_db()`. Tests: TestStillHappening in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d.
 
 ---
 
@@ -507,10 +507,10 @@
 **Response**: SSE events: `{ "step": "string", "status": "pending|running|completed|failed", "message": "string" }`
 **Acceptance criteria**:
 
-- [ ] Events emitted for each of 6 provisioning steps
-- [ ] Final event is "completed" or "failed"
-- [ ] Job_id validated and scoped to platform
-      **Notes**: Platform admin watches this during tenant creation wizard.
+- [x] Events emitted for each of 6 provisioning steps
+- [x] Final event is "completed" or "failed"
+- [x] Job_id validated and scoped to platform
+      **Notes**: Platform admin watches this during tenant creation wizard. Implemented in `src/backend/app/modules/tenants/routes.py` as `GET /platform/provisioning/{job_id}` returning SSE stream. Tests: `tests/unit/test_tenants_routes.py::TestProvisioningSSE` (3 tests: requires_platform_admin, returns_404_for_unknown_job, returns_sse_content_type). All 673 unit tests passing.
 
 ---
 
@@ -571,7 +571,7 @@
 
 ---
 
-### API-029: Get tenant health score
+### API-029: Get tenant health score ✅ COMPLETED
 
 **Effort**: 6h
 **Depends on**: API-027
@@ -582,12 +582,12 @@
 **Response**: `{ "tenant_id": "uuid", "overall_score": int, "components": { "usage_trend": { "score": int, "weight": 0.30, "details": {} }, "feature_breadth": { "score": int, "weight": 0.20, "details": {} }, "satisfaction": { "score": int, "weight": 0.35, "details": {} }, "error_rate": { "score": int, "weight": 0.15, "details": {} } }, "at_risk": bool, "trend": [{ "week": "ISO-8601", "score": int }] }`
 **Acceptance criteria**:
 
-- [ ] Composite score calculated per Plan 05 formula
-- [ ] All 4 components returned with individual scores
-- [ ] At-risk flag set when declining 3+ consecutive weeks or score < 40
-- [ ] Trend data for last 12 weeks
-- [ ] Returns null/empty gracefully when insufficient data
-      **Notes**: Health score calculated by nightly batch job. API reads from cache.
+- [x] Composite score calculated per Plan 05 formula (usage_trend 30%, feature_breadth 20%, satisfaction 35%, error_rate 15%)
+- [x] All 4 components returned with individual scores
+- [x] At-risk flag set when declining 3+ consecutive weeks or score < 40
+- [x] Trend data for last 12 weeks
+- [x] Returns null/empty gracefully when insufficient data
+      **Notes**: Helper: `get_tenant_health_components_db()`. Tests: TestGetTenantHealthScore in `tests/unit/test_issues_routes.py`. Committed: 7cd0e1d. Health score calculated by nightly batch job; API reads from cache.
 
 ---
 
@@ -602,9 +602,9 @@
 **Response**: `{ "tenant_id": "uuid", "tokens": { "limit": int, "used": int, "period": "monthly" }, "storage_gb": { "limit": float, "used": float }, "users": { "limit": int, "used": int } }`
 **Acceptance criteria**:
 
-- [ ] Usage data is current
-- [ ] All quota types returned
-      **Notes**: Feeds quota management UI.
+- [x] Usage data is current
+- [x] All quota types returned
+      **Notes**: Feeds quota management UI. Implemented in `src/backend/app/modules/tenants/routes.py` as `GET /platform/tenants/{tenant_id}/quota`. Tests: `tests/unit/test_tenants_routes.py::TestGetTenantQuota`. All 673 unit tests passing.
 
 ---
 
@@ -619,10 +619,10 @@
 **Response**: `{ "tenant_id": "uuid", "quotas": { ... updated } }`
 **Acceptance criteria**:
 
-- [ ] Only provided fields updated (partial update)
-- [ ] New limits enforced immediately
-- [ ] Audit log entry created
-      **Notes**: Plan tier defaults applied at provisioning; this overrides per-tenant.
+- [x] Only provided fields updated (partial update)
+- [x] New limits enforced immediately
+- [x] Audit log entry created
+      **Notes**: Plan tier defaults applied at provisioning; this overrides per-tenant. UPSERT to tenant_configs table with quota config_type. Implemented in `src/backend/app/modules/tenants/routes.py`. Tests: `tests/unit/test_tenants_routes.py::TestUpdateTenantQuota` (4 tests: requires_platform_admin, returns_updated, rejects_negative_token_limit, 404_for_unknown_tenant). All 673 unit tests passing.
 
 ---
 

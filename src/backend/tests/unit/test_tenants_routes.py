@@ -103,6 +103,9 @@ class TestListTenants:
         assert resp.status_code == 200
         data = resp.json()
         assert "items" in data
+        assert data["total"] == 0
+        assert data["page"] == 1
+        assert data["page_size"] == 20
 
     def test_list_tenants_pagination_params(self, client, platform_headers):
         with patch(
@@ -132,15 +135,18 @@ class TestCreateTenant:
         assert resp.status_code == 403
 
     def test_create_tenant_returns_created(self, client, platform_headers):
-        with patch(
-            "app.modules.tenants.routes.create_tenant_db", new_callable=AsyncMock
-        ) as mock_create:
+        with (
+            patch(
+                "app.modules.tenants.routes.create_tenant_db", new_callable=AsyncMock
+            ) as mock_create,
+            patch("fastapi.BackgroundTasks.add_task"),
+        ):
             mock_create.return_value = {
                 "id": "tenant-new",
                 "name": "Acme Corp",
                 "slug": "acme-corp-12345678",
                 "plan": "professional",
-                "status": "active",
+                "status": "provisioning",
                 "primary_contact_email": "admin@acme.com",
             }
             resp = client.post(
@@ -154,7 +160,13 @@ class TestCreateTenant:
             )
         assert resp.status_code == 201
         data = resp.json()
-        assert "id" in data
+        assert data["id"] == "tenant-new"
+        assert data["name"] == "Acme Corp"
+        assert data["status"] == "provisioning"
+        assert data["plan"] == "professional"
+        # job_id returned for SSE tracking
+        assert "job_id" in data
+        assert len(data["job_id"]) > 0
 
     def test_create_tenant_rejects_empty_name(self, client, platform_headers):
         resp = client.post(
@@ -333,7 +345,11 @@ class TestLLMProfiles:
                 headers=platform_headers,
             )
         assert resp.status_code == 201
-        assert "id" in resp.json()
+        data = resp.json()
+        assert data["id"] == "profile-1"
+        assert data["provider"] == "azure"
+        assert data["primary_model"] == "agentic-worker"
+        assert data["tenant_id"] == TEST_TENANT_ID
 
 
 class TestPlatformStats:
@@ -542,3 +558,179 @@ class TestGetTenantHealthScore:
         assert "positive_feedback" in data["satisfaction"]["details"]
         assert "total_feedback" in data["satisfaction"]["details"]
         assert "open_issues" in data["error_rate"]["details"]
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/platform/tenants/{tenant_id}/quota — API-030
+# ---------------------------------------------------------------------------
+
+
+class TestGetTenantQuota:
+    """GET /api/v1/platform/tenants/{tenant_id}/quota (API-030)"""
+
+    def test_quota_requires_platform_admin(self, client, tenant_headers):
+        """Tenant admin (non-platform admin) is rejected with 403."""
+        resp = client.get(
+            f"/api/v1/platform/tenants/{TEST_TENANT_ID}/quota",
+            headers=tenant_headers,
+        )
+        assert resp.status_code == 403
+
+    def test_quota_returns_structure(self, client, platform_headers):
+        """200 response includes tokens, storage_gb, and users keys."""
+        with patch(
+            "app.modules.tenants.routes.get_tenant_quota_db",
+            new_callable=AsyncMock,
+        ) as mock_quota:
+            mock_quota.return_value = {
+                "tenant_id": TEST_TENANT_ID,
+                "tokens": {"limit": 1000000, "used": 0, "period": "monthly"},
+                "storage_gb": {"limit": 10.0, "used": 0.0},
+                "users": {"limit": 50, "used": 12},
+            }
+            resp = client.get(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/quota",
+                headers=platform_headers,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["tenant_id"] == TEST_TENANT_ID
+        assert "tokens" in data
+        assert "storage_gb" in data
+        assert "users" in data
+        assert data["tokens"]["period"] == "monthly"
+        assert data["tokens"]["limit"] == 1000000
+        assert data["storage_gb"]["limit"] == 10.0
+        assert data["users"]["limit"] == 50
+        assert data["users"]["used"] == 12
+
+    def test_quota_returns_404_for_unknown_tenant(self, client, platform_headers):
+        """Returns 404 when tenant does not exist."""
+        with patch(
+            "app.modules.tenants.routes.get_tenant_quota_db",
+            new_callable=AsyncMock,
+        ) as mock_quota:
+            mock_quota.return_value = None
+            resp = client.get(
+                "/api/v1/platform/tenants/nonexistent/quota",
+                headers=platform_headers,
+            )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v1/platform/tenants/{tenant_id}/quota — API-031
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateTenantQuota:
+    """PATCH /api/v1/platform/tenants/{tenant_id}/quota (API-031)"""
+
+    def test_update_quota_requires_platform_admin(self, client, tenant_headers):
+        """Tenant admin (non-platform admin) is rejected with 403."""
+        resp = client.patch(
+            f"/api/v1/platform/tenants/{TEST_TENANT_ID}/quota",
+            json={"monthly_token_limit": 2000000},
+            headers=tenant_headers,
+        )
+        assert resp.status_code == 403
+
+    def test_update_quota_returns_updated(self, client, platform_headers):
+        """200 response with updated quota limits."""
+        with patch(
+            "app.modules.tenants.routes.update_tenant_quota_db",
+            new_callable=AsyncMock,
+        ) as mock_update, patch(
+            "app.modules.tenants.routes.get_tenant_quota_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_update.return_value = True
+            mock_get.return_value = {
+                "tenant_id": TEST_TENANT_ID,
+                "tokens": {"limit": 2000000, "used": 0, "period": "monthly"},
+                "storage_gb": {"limit": 10.0, "used": 0.0},
+                "users": {"limit": 50, "used": 12},
+            }
+            resp = client.patch(
+                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/quota",
+                json={"monthly_token_limit": 2000000},
+                headers=platform_headers,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["tokens"]["limit"] == 2000000
+
+    def test_update_quota_rejects_negative_token_limit(self, client, platform_headers):
+        """422 when monthly_token_limit is negative."""
+        resp = client.patch(
+            f"/api/v1/platform/tenants/{TEST_TENANT_ID}/quota",
+            json={"monthly_token_limit": -100},
+            headers=platform_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_update_quota_404_for_unknown_tenant(self, client, platform_headers):
+        """Returns 404 when tenant does not exist."""
+        with patch(
+            "app.modules.tenants.routes.update_tenant_quota_db",
+            new_callable=AsyncMock,
+        ) as mock_update:
+            mock_update.return_value = None
+            resp = client.patch(
+                "/api/v1/platform/tenants/nonexistent/quota",
+                json={"monthly_token_limit": 2000000},
+                headers=platform_headers,
+            )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/platform/provisioning/{job_id} — API-025 (SSE)
+# ---------------------------------------------------------------------------
+
+
+class TestProvisioningSSE:
+    """GET /api/v1/platform/provisioning/{job_id} (API-025)"""
+
+    def test_provisioning_requires_platform_admin(self, client, tenant_headers):
+        """Tenant admin (non-platform admin) is rejected with 403."""
+        resp = client.get(
+            "/api/v1/platform/provisioning/test-job-id",
+            headers=tenant_headers,
+        )
+        assert resp.status_code == 403
+
+    def test_provisioning_returns_404_for_unknown_job(self, client, platform_headers):
+        """Returns 404 when job_id not found in Redis."""
+        with patch(
+            "app.modules.tenants.routes.get_provisioning_events",
+            new_callable=AsyncMock,
+        ) as mock_events:
+            mock_events.return_value = None
+            resp = client.get(
+                "/api/v1/platform/provisioning/nonexistent-job",
+                headers=platform_headers,
+            )
+        assert resp.status_code == 404
+
+    def test_provisioning_returns_sse_content_type(self, client, platform_headers):
+        """Response has text/event-stream media type."""
+        with patch(
+            "app.modules.tenants.routes.get_provisioning_events",
+            new_callable=AsyncMock,
+        ) as mock_events:
+            mock_events.return_value = [
+                {
+                    "step": "create_tenant",
+                    "status": "completed",
+                    "message": "Tenant record created",
+                },
+            ]
+            resp = client.get(
+                "/api/v1/platform/provisioning/test-job-123",
+                headers=platform_headers,
+            )
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")

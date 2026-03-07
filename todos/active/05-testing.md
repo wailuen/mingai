@@ -512,7 +512,7 @@
 - [ ] ACTIVE state triggers welcome email / invite to tenant admin
       **Notes**: State machine transitions can be unit tested with mocked external calls (Tier 1).
 
-### TEST-023: LLM profile CRUD — integration tests
+### TEST-023: LLM profile CRUD — integration tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Integration
@@ -712,7 +712,7 @@
 - [ ] Admin adds term, user queries within 60s -> sees new term in expansion
       **Notes**: Real Redis. Verify with Redis MONITOR or key inspection.
 
-### TEST-032: RAG query routing (original vs expanded) — integration tests
+### TEST-032: RAG query routing (original vs expanded) — integration tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Integration
@@ -1520,7 +1520,7 @@
 
 ## Cross-Cutting — Test Infrastructure
 
-### TEST-067: Docker test environment setup
+### TEST-067: Docker test environment setup ✅ COMPLETED
 
 **Effort**: 4h
 **Test tier**: N/A (infrastructure)
@@ -1538,7 +1538,7 @@
 - [ ] Teardown removes all containers and volumes
       **Notes**: Script at `tests/utils/test-env`. Must run before any Tier 2-3 tests.
 
-### TEST-068: Test fixtures and seed data
+### TEST-068: Test fixtures and seed data ✅ COMPLETED
 
 **Effort**: 4h
 **Test tier**: N/A (infrastructure)
@@ -1558,7 +1558,7 @@
 - [ ] All fixtures scoped to test tenants (cleaned up after test suite)
       **Notes**: Fixtures in `tests/fixtures/`. Use pytest fixtures with session scope for expensive setup.
 
-### TEST-069: pytest conftest.py and shared fixtures
+### TEST-069: pytest conftest.py and shared fixtures ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: N/A (infrastructure)
