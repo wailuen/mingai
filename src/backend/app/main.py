@@ -7,10 +7,14 @@ Framework: FastAPI + Kailash SDK (DataFlow + Nexus + Kaizen)
 All configuration from .env - never hardcode secrets or model names.
 """
 import os
+import traceback
+import uuid
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.health import build_health_response
 from app.core.logging import setup_logging
@@ -34,15 +38,99 @@ app = FastAPI(
 setup_middleware(app)
 
 
-# Global error handler (GAP-009 / API-122)
+# ---------------------------------------------------------------------------
+# Error handlers (GAP-009 / API-122)
+# ---------------------------------------------------------------------------
+
+# HTTP status code → error code string mapping
+_HTTP_ERROR_CODES: dict[int, str] = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    409: "conflict",
+    422: "validation_error",
+    429: "rate_limited",
+    500: "internal_error",
+    503: "service_unavailable",
+}
+
+
+def _get_request_id(request: Request) -> str:
+    """Read X-Request-ID from request header, or generate a fresh UUID."""
+    return request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    Handler for HTTPException — returns consistent error envelope.
+
+    Format: {"error": "code", "message": "...", "request_id": "uuid", "details": {}}
+    """
+    request_id = _get_request_id(request)
+    status_code = exc.status_code
+    error_code = _HTTP_ERROR_CODES.get(status_code, f"error_{status_code}")
+
+    # detail may be a string or a dict from FastAPI; normalise to string for message
+    detail = exc.detail
+    if isinstance(detail, dict):
+        message = detail.get("message", str(detail))
+    else:
+        message = str(detail) if detail else exc.__class__.__name__
+
+    # Include "detail" for backward compatibility with tests and existing clients
+    # that read resp.json()["detail"]. New consumers should use "message".
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": error_code,
+            "message": message,
+            "detail": message,
+            "request_id": request_id,
+            "details": {},
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handler for Pydantic/FastAPI validation errors — returns field-level details.
+
+    Format: {"error": "validation_error", "message": "...", "request_id": "uuid",
+             "details": {"field_errors": [...]}}
+    """
+    request_id = _get_request_id(request)
+    field_errors = [
+        {
+            "loc": list(err.get("loc", [])),
+            "msg": err.get("msg", ""),
+            "type": err.get("type", ""),
+        }
+        for err in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "message": "Request validation failed",
+            "request_id": request_id,
+            "details": {"field_errors": field_errors},
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """
-    Global error handler returning consistent error format.
+    Catch-all handler for unexpected exceptions.
 
-    Format: {"error": "code", "message": "human-readable", "request_id": "uuid"}
+    Logs full traceback server-side; returns generic 500 with no internal details.
+    Format: {"error": "internal_error", "message": "Internal server error",
+             "request_id": "uuid", "details": {}}
     """
-    request_id = getattr(request.state, "request_id", generate_request_id())
+    request_id = _get_request_id(request)
 
     logger.error(
         "unhandled_exception",
@@ -50,18 +138,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         error_type=type(exc).__name__,
         request_id=request_id,
         path=str(request.url.path),
+        traceback=traceback.format_exc(),
     )
-
-    # Never expose internal errors in production
-    debug = os.environ.get("DEBUG", "").lower() == "true"
-    message = str(exc) if debug else "An internal error occurred"
 
     return JSONResponse(
         status_code=500,
         content={
-            "error": "internal_server_error",
-            "message": message,
+            "error": "internal_error",
+            "message": "Internal server error",
             "request_id": request_id,
+            "details": {},
         },
     )
 

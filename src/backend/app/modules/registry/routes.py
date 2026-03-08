@@ -22,11 +22,16 @@ from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_current_user, require_tenant_admin
+from app.core.dependencies import (
+    CurrentUser,
+    get_current_user,
+    require_platform_admin,
+    require_tenant_admin,
+)
 from app.core.redis_client import build_redis_key, get_redis
 from app.core.session import get_async_session
 from app.modules.har.signing import verify_event_signature
@@ -1208,3 +1213,466 @@ async def get_registry_analytics(
         )
 
     return {"agents": agents}
+
+
+# ---------------------------------------------------------------------------
+# Dispute allowlists (GAP-036 / API-124, API-125)
+# ---------------------------------------------------------------------------
+
+_VALID_DISPUTE_CATEGORIES = {"quality", "delivery", "billing", "terms", "other"}
+_VALID_DISPUTE_RESOLUTIONS = {"buyer_favor", "seller_favor", "mutual", "void"}
+
+# States that allow a new dispute to be filed
+_DISPUTABLE_STATES = {"OPEN", "NEGOTIATING", "COMMITTED", "EXECUTING"}
+
+# Terminal COMPLETED transactions older than this cannot be disputed
+_DISPUTE_COMPLETED_WINDOW_DAYS = 30
+
+
+# ---------------------------------------------------------------------------
+# Dispute request/response schemas (GAP-036)
+# ---------------------------------------------------------------------------
+
+
+class FileDisputeRequest(BaseModel):
+    reason: str = Field(..., min_length=10, description="Dispute reason (min 10 chars)")
+    category: str = Field(..., description="quality|delivery|billing|terms|other")
+    evidence_urls: List[str] = Field(default_factory=list)
+    desired_resolution: str = Field(
+        ..., min_length=10, description="Desired outcome (min 10 chars)"
+    )
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        if v not in _VALID_DISPUTE_CATEGORIES:
+            raise ValueError(
+                f"category must be one of: {sorted(_VALID_DISPUTE_CATEGORIES)}"
+            )
+        return v
+
+
+class ResolveDisputeRequest(BaseModel):
+    resolution: str = Field(..., description="buyer_favor|seller_favor|mutual|void")
+    resolution_notes: str = Field(
+        ..., min_length=10, description="Resolution explanation (min 10 chars)"
+    )
+    action_taken: str = Field(..., min_length=1, description="Action taken description")
+
+    @field_validator("resolution")
+    @classmethod
+    def validate_resolution(cls, v: str) -> str:
+        if v not in _VALID_DISPUTE_RESOLUTIONS:
+            raise ValueError(
+                f"resolution must be one of: {sorted(_VALID_DISPUTE_RESOLUTIONS)}"
+            )
+        return v
+
+
+# ---------------------------------------------------------------------------
+# Dispute DB helpers (mockable in unit tests)
+# ---------------------------------------------------------------------------
+
+
+async def create_dispute_db(
+    transaction_id: str,
+    filed_by_tenant_id: str,
+    reason: str,
+    category: str,
+    evidence_urls: List[str],
+    desired_resolution: str,
+    db: AsyncSession,
+) -> dict:
+    """Insert a new dispute row and return the created dispute as a dict."""
+    dispute_id = str(uuid.uuid4())
+    evidence_json = json.dumps(evidence_urls)
+
+    await db.execute(
+        text(
+            "INSERT INTO disputes "
+            "(id, transaction_id, filed_by_tenant_id, reason, category, "
+            "evidence_urls, desired_resolution, status) "
+            "VALUES (:id, :transaction_id, :filed_by_tenant_id, :reason, :category, "
+            "CAST(:evidence_urls AS jsonb), :desired_resolution, 'open')"
+        ),
+        {
+            "id": dispute_id,
+            "transaction_id": transaction_id,
+            "filed_by_tenant_id": filed_by_tenant_id,
+            "reason": reason,
+            "category": category,
+            "evidence_urls": evidence_json,
+            "desired_resolution": desired_resolution,
+        },
+    )
+    await db.commit()
+
+    # Re-fetch to return canonical row
+    result = await db.execute(
+        text(
+            "SELECT id, transaction_id, status, filed_at FROM disputes WHERE id = :id"
+        ),
+        {"id": dispute_id},
+    )
+    row = result.mappings().first()
+    return {
+        "dispute_id": str(row["id"]),
+        "transaction_id": str(row["transaction_id"]),
+        "status": row["status"],
+        "filed_at": row["filed_at"].isoformat() if row["filed_at"] else None,
+    }
+
+
+async def get_open_dispute_db(transaction_id: str, db: AsyncSession) -> Optional[dict]:
+    """Fetch the open dispute for a transaction. Returns None if not found."""
+    result = await db.execute(
+        text(
+            "SELECT id, transaction_id, filed_by_tenant_id, status, filed_at "
+            "FROM disputes WHERE transaction_id = :transaction_id AND status = 'open' "
+            "ORDER BY filed_at DESC LIMIT 1"
+        ),
+        {"transaction_id": transaction_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        return None
+    return {
+        "dispute_id": str(row["id"]),
+        "transaction_id": str(row["transaction_id"]),
+        "filed_by_tenant_id": str(row["filed_by_tenant_id"]),
+        "status": row["status"],
+        "filed_at": row["filed_at"].isoformat() if row["filed_at"] else None,
+    }
+
+
+async def resolve_dispute_db(
+    dispute_id: str,
+    resolved_by: str,
+    resolution: str,
+    resolution_notes: str,
+    db: AsyncSession,
+) -> dict:
+    """Update dispute to resolved status. Returns updated dispute dict."""
+    await db.execute(
+        text(
+            "UPDATE disputes SET "
+            "status = 'resolved', "
+            "resolved_by = :resolved_by, "
+            "resolution = :resolution, "
+            "resolution_notes = :resolution_notes, "
+            "resolved_at = NOW() "
+            "WHERE id = :dispute_id AND status = 'open'"
+        ),
+        {
+            "dispute_id": dispute_id,
+            "resolved_by": resolved_by,
+            "resolution": resolution,
+            "resolution_notes": resolution_notes,
+        },
+    )
+    await db.commit()
+
+    result = await db.execute(
+        text(
+            "SELECT id, resolution, resolved_at, resolved_by FROM disputes WHERE id = :id"
+        ),
+        {"id": dispute_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Dispute disappeared after update — data integrity error",
+        )
+    return {
+        "dispute_id": str(row["id"]),
+        "resolution": row["resolution"],
+        "resolved_at": row["resolved_at"].isoformat() if row["resolved_at"] else None,
+        "resolved_by": str(row["resolved_by"]) if row["resolved_by"] else None,
+    }
+
+
+async def log_dispute_audit_event_db(
+    transaction_id: str,
+    tenant_id: str,
+    event_type: str,
+    actor_user_id: str,
+    payload: dict,
+    db: AsyncSession,
+) -> None:
+    """
+    Insert an unsigned audit event in har_transaction_events for dispute actions.
+    Mirrors the unsigned-event path in state_machine.record_transition_event().
+    """
+    import hashlib as _hashlib
+
+    event_id = str(uuid.uuid4())
+    # Get chain head for linking
+    head_result = await db.execute(
+        text("SELECT chain_head_hash FROM har_transactions " "WHERE id = :id"),
+        {"id": transaction_id},
+    )
+    head_row = head_result.mappings().first()
+    prev_event_hash = head_row["chain_head_hash"] if head_row else None
+
+    hash_input = json.dumps(
+        {
+            "event_id": event_id,
+            "event_type": event_type,
+            "payload": payload,
+            "prev_event_hash": prev_event_hash,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        sort_keys=True,
+    )
+    event_hash = _hashlib.sha256(hash_input.encode()).hexdigest()
+
+    await db.execute(
+        text(
+            "INSERT INTO har_transaction_events "
+            "(id, tenant_id, transaction_id, event_type, actor_agent_id, actor_user_id, "
+            "payload, signature, nonce, prev_event_hash, event_hash) "
+            "VALUES (:id, :tenant_id, :transaction_id, :event_type, "
+            "NULL, :actor_user_id, "
+            "CAST(:payload AS jsonb), NULL, NULL, :prev_event_hash, :event_hash)"
+        ),
+        {
+            "id": event_id,
+            "tenant_id": tenant_id,
+            "transaction_id": transaction_id,
+            "event_type": event_type,
+            "actor_user_id": actor_user_id,
+            "payload": json.dumps(payload),
+            "prev_event_hash": prev_event_hash,
+            "event_hash": event_hash,
+        },
+    )
+    await db.execute(
+        text("UPDATE har_transactions SET chain_head_hash = :hash WHERE id = :id"),
+        {"hash": event_hash, "id": transaction_id},
+    )
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# API-124: POST /registry/transactions/{transaction_id}/dispute
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/transactions/{transaction_id}/dispute",
+    status_code=status.HTTP_201_CREATED,
+)
+async def file_dispute(
+    transaction_id: str,
+    body: FileDisputeRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-124 (GAP-036): File a dispute on a registry transaction.
+
+    Auth: tenant_admin of either the from or to agent's tenant.
+    The transaction must be in OPEN, NEGOTIATING, COMMITTED, or EXECUTING state.
+    COMPLETED transactions older than 30 days cannot be disputed.
+    Already-DISPUTED or RESOLVED transactions cannot be disputed again.
+    """
+    # Fetch transaction (no tenant filter — dispute filer may be counter-party)
+    txn = await get_registry_transaction_db(transaction_id, session)
+    if txn is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transaction '{transaction_id}' not found.",
+        )
+
+    internal_id = txn["internal_id"]
+    current_state = txn["status"]
+
+    # Cannot dispute already-DISPUTED or RESOLVED transactions
+    if current_state in ("DISPUTED", "RESOLVED"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Transaction is already in state '{current_state}' and cannot be disputed.",
+        )
+
+    # COMPLETED transactions: only disputable within 30-day window
+    if current_state == "COMPLETED":
+        updated_at_str = txn.get("updated_at", "")
+        try:
+            updated_at = datetime.fromisoformat(
+                updated_at_str.replace("+00:00", "")
+            ).replace(tzinfo=timezone.utc)
+            window = timedelta(days=_DISPUTE_COMPLETED_WINDOW_DAYS)
+            if datetime.now(timezone.utc) - updated_at > window:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Cannot dispute a COMPLETED transaction older than "
+                        f"{_DISPUTE_COMPLETED_WINDOW_DAYS} days."
+                    ),
+                )
+        except HTTPException:
+            raise
+        except (ValueError, AttributeError):
+            # If we cannot parse the date, block the dispute to be safe
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot determine transaction completion date.",
+            )
+    elif current_state not in _DISPUTABLE_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Transaction in state '{current_state}' cannot be disputed. "
+                f"Disputable states: {sorted(_DISPUTABLE_STATES)}"
+            ),
+        )
+
+    # Verify requester's tenant is a party to the transaction
+    from_agent = await get_agent_card_db(txn["from_agent_id"], session)
+    to_agent = await get_agent_card_db(txn["to_agent_id"], session)
+
+    requester_is_party = (
+        from_agent and from_agent["tenant_id"] == current_user.tenant_id
+    ) or (to_agent and to_agent["tenant_id"] == current_user.tenant_id)
+
+    if not requester_is_party:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a party to this transaction.",
+        )
+
+    # Create dispute record
+    dispute = await create_dispute_db(
+        transaction_id=internal_id,
+        filed_by_tenant_id=current_user.tenant_id,
+        reason=body.reason,
+        category=body.category,
+        evidence_urls=body.evidence_urls,
+        desired_resolution=body.desired_resolution,
+        db=session,
+    )
+
+    # Transition transaction state to DISPUTED
+    await transition_state(
+        transaction_id=internal_id,
+        new_state="DISPUTED",
+        actor_agent_id=None,
+        actor_user_id=current_user.id,
+        tenant_id=txn["tenant_id"],
+        db=session,
+    )
+
+    # Log dispute-filed audit event
+    await log_dispute_audit_event_db(
+        transaction_id=internal_id,
+        tenant_id=txn["tenant_id"],
+        event_type="dispute_filed",
+        actor_user_id=current_user.id,
+        payload={
+            "dispute_id": dispute["dispute_id"],
+            "category": body.category,
+            "filed_by_tenant_id": current_user.tenant_id,
+        },
+        db=session,
+    )
+
+    logger.info(
+        "registry_dispute_filed",
+        transaction_id=transaction_id,
+        dispute_id=dispute["dispute_id"],
+        filed_by_tenant_id=current_user.tenant_id,
+        category=body.category,
+    )
+
+    return dispute
+
+
+# ---------------------------------------------------------------------------
+# API-125: POST /registry/transactions/{transaction_id}/dispute/resolve
+# ---------------------------------------------------------------------------
+
+
+@router.post("/transactions/{transaction_id}/dispute/resolve")
+async def resolve_dispute(
+    transaction_id: str,
+    body: ResolveDisputeRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-125 (GAP-036): Resolve a transaction dispute.
+
+    Auth: platform_admin only.
+    Transaction must be in DISPUTED state with an open dispute record.
+    """
+    # Fetch transaction (no tenant filter — platform admin has global access)
+    txn = await get_registry_transaction_db(transaction_id, session)
+    if txn is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transaction '{transaction_id}' not found.",
+        )
+
+    if txn["status"] != "DISPUTED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Transaction is in state '{txn['status']}', not DISPUTED. "
+                "Only DISPUTED transactions can be resolved."
+            ),
+        )
+
+    internal_id = txn["internal_id"]
+
+    # Verify open dispute record exists
+    dispute = await get_open_dispute_db(internal_id, session)
+    if dispute is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No open dispute found for this transaction.",
+        )
+
+    # Resolve the dispute record
+    resolved = await resolve_dispute_db(
+        dispute_id=dispute["dispute_id"],
+        resolved_by=current_user.id,
+        resolution=body.resolution,
+        resolution_notes=body.resolution_notes,
+        db=session,
+    )
+
+    # Transition transaction state to RESOLVED
+    await transition_state(
+        transaction_id=internal_id,
+        new_state="RESOLVED",
+        actor_agent_id=None,
+        actor_user_id=current_user.id,
+        tenant_id=txn["tenant_id"],
+        db=session,
+    )
+
+    # Log dispute-resolved audit event
+    await log_dispute_audit_event_db(
+        transaction_id=internal_id,
+        tenant_id=txn["tenant_id"],
+        event_type="dispute_resolved",
+        actor_user_id=current_user.id,
+        payload={
+            "dispute_id": dispute["dispute_id"],
+            "resolution": body.resolution,
+            "action_taken": body.action_taken,
+            "resolved_by": current_user.id,
+        },
+        db=session,
+    )
+
+    logger.info(
+        "registry_dispute_resolved",
+        transaction_id=transaction_id,
+        dispute_id=dispute["dispute_id"],
+        resolution=body.resolution,
+        resolved_by=current_user.id,
+    )
+
+    return resolved
