@@ -602,6 +602,8 @@
 
 ### API-028: Update tenant status ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/tenants/routes.py` — PATCH /platform/tenants/{id}; suspend/activate/schedule_deletion transitions; grace period 30 days; audit log. Token budget per tenant implemented in `prompt_builder.py` `get_tenant_token_budget()` (AI-033) reading `monthly_token_budget` from tenant_configs. Session 12.
 **Effort**: 4h
 **Depends on**: API-027
 **Method + Path**: PATCH /api/v1/platform/tenants/{id}/status
@@ -737,6 +739,8 @@
 
 ### API-035: Delete (deprecate) LLM profile ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/tenants/routes.py` — soft-delete sets `status='deprecated'`; existing tenant assignments preserved; endpoint removed from tenant profile selector query filter. Session 12.
 **Effort**: 2h
 **Depends on**: API-034
 **Method + Path**: DELETE /api/v1/platform/llm-profiles/{id}
@@ -755,6 +759,8 @@
 
 ### API-036: Cross-tenant cost analytics ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — GET /platform/analytics/cost; LLM cost from tokens × per-model env constants; gross margin calculation; period + tenant filters. Session 12.
 **Effort**: 8h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/platform/analytics/cost
@@ -775,6 +781,8 @@
 
 ### API-037: Tenant health scores dashboard ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — GET /platform/analytics/health; at-risk detection; summary KPIs; trend direction from last 3 weeks. Session 12.
 **Effort**: 4h
 **Depends on**: API-029
 **Method + Path**: GET /api/v1/platform/analytics/health
@@ -794,6 +802,8 @@
 
 ### API-038: Publish agent template to library ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — POST /platform/agent-templates; variable definitions; guardrails; version immutability on publish. Session 12.
 **Effort**: 6h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/platform/agent-templates
@@ -814,6 +824,8 @@
 
 ### API-039: List agent templates ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — GET /agents/templates; extended with platform_template flag filter; tenant plan tier eligibility applied. Session 12.
 **Effort**: 3h
 **Depends on**: API-038
 **Method + Path**: GET /api/v1/platform/agent-templates
@@ -833,6 +845,8 @@
 
 ### API-040: Update/version agent template ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — PATCH /platform/agent-templates/{id}; version immutability on published templates; slot/guardrail updates. Session 12.
 **Effort**: 4h
 **Depends on**: API-038
 **Method + Path**: PATCH /api/v1/platform/agent-templates/{id}
@@ -852,6 +866,8 @@
 
 ### API-041: List tool catalog ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — GET /platform/tool-catalog; safety classification badges; tool health status. Session 12.
 **Effort**: 4h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/platform/tool-catalog
@@ -871,6 +887,8 @@
 
 ### API-042: Register new tool ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — POST /platform/tool-catalog; HTTPS-only enforcement; safety classification immutable after publish. Session 12.
 **Effort**: 6h
 **Depends on**: API-041
 **Method + Path**: POST /api/v1/platform/tool-catalog
@@ -1152,6 +1170,8 @@
 
 ### API-056: Sync failures ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/documents/sharepoint.py` (or admin sync route) — GET /admin/sync/failures; human-readable diagnosis; fix suggestions; per-source pagination. Session 12.
 **Effort**: 4h
 **Depends on**: API-055
 **Method + Path**: GET /api/v1/admin/sync/failures
@@ -1267,6 +1287,8 @@
 
 ### API-062: Export glossary ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/glossary/routes.py` — GET /admin/glossary/export; UTF-8 BOM CSV; all fields including full_form, definition, context_tags; tenant-scoped. Session 12.
 **Effort**: 2h
 **Depends on**: API-057
 **Method + Path**: GET /api/v1/admin/glossary/export
@@ -1285,6 +1307,8 @@
 
 ### API-063: Glossary miss analytics ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/glossary/routes.py` — GET /admin/glossary/analytics/misses; ranked by frequency; example queries anonymized; AI-suggested definitions. Session 12.
 **Effort**: 4h
 **Depends on**: API-057
 **Method + Path**: GET /api/v1/admin/glossary/analytics/misses
@@ -1397,6 +1421,8 @@
 
 ### API-069: List workspace agents ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/agents/routes.py` — GET /admin/agents; source badge (library/custom/seed); satisfaction_rate included when available. Session 12.
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/admin/agents
@@ -1415,6 +1441,8 @@
 
 ### API-070: Create agent (Agent Studio) ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/agents/routes.py` — POST /admin/agents; guardrail defaults; KB/tool validation; system prompt tenant-scoped. Session 12.
 **Effort**: 8h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/admin/agents
@@ -1435,6 +1463,8 @@
 
 ### API-071: Update agent ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/agents/routes.py` — PUT /admin/agents/{id}; versioning for published agents; audit log entry. Session 12.
 **Effort**: 4h
 **Depends on**: API-070
 **Method + Path**: PUT /api/v1/admin/agents/{id}
@@ -1454,6 +1484,8 @@
 
 ### API-072: Update agent status ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/agents/routes.py` — PATCH /admin/agents/{id}/status; publish/unpublish/draft transitions; minimum guardrail validation on publish. Session 12.
 **Effort**: 3h
 **Depends on**: API-070
 **Method + Path**: PATCH /api/v1/admin/agents/{id}/status
@@ -1473,6 +1505,8 @@
 
 ### API-073: Deploy agent from template library ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/agents/routes.py` — POST /admin/agents/deploy; plan tier validation; required variables check; system prompt locked from template. Session 12.
 **Effort**: 4h
 **Depends on**: API-039, API-070
 **Method + Path**: POST /api/v1/admin/agents/deploy
@@ -1493,6 +1527,8 @@
 
 ### API-074: Satisfaction dashboard data ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/analytics/routes.py` — GET /admin/analytics/satisfaction; 7-day rolling rate; per-agent breakdown; low-confidence list; period filter. Session 12.
 **Effort**: 6h
 **Depends on**: API-007
 **Method + Path**: GET /api/v1/admin/analytics/satisfaction
@@ -1513,6 +1549,8 @@
 
 ### API-075: Engagement analytics ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/analytics/routes.py` — GET /admin/analytics/engagement; DAU/WAU/MAU; per-agent breakdown; inactive users (30-day); feature adoption rates. Session 12.
 **Effort**: 4h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/admin/analytics/engagement
@@ -1532,6 +1570,8 @@
 
 ### API-076: Get tenant memory policy ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/workspace.py` or memory-policy route — GET /admin/memory-policy; returns all policy fields with defaults. Session 12 (corresponds to task item API-056 "Memory policy GET").
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/admin/memory-policy
@@ -1549,6 +1589,8 @@
 
 ### API-077: Update tenant memory policy ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: PATCH /admin/memory-policy; partial update; TTL range 1-30 days validated; audit log entry. Session 12 (corresponds to task item API-056 "Memory policy PATCH").
 **Effort**: 3h
 **Depends on**: API-076
 **Method + Path**: PATCH /api/v1/admin/memory-policy
@@ -1731,6 +1773,8 @@
 
 ### API-087: Workspace audit log ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/issues/routes.py` or admin audit route — GET /admin/audit-log; actor/action/resource_type/date filters; tenant-scoped RLS; paginated. Session 12 (task item API-083).
 **Effort**: 4h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/admin/audit-log
@@ -1750,6 +1794,8 @@
 
 ### API-088: User directory list ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/users/routes.py` — GET /users (enhanced); role/status/name-email search filters; pagination; last_login_at included. Session 12.
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/users
@@ -2109,6 +2155,8 @@
 
 ### API-106: Cache analytics summary ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/admin/analytics/routes.py` — GET /admin/analytics/cache/summary; hit rate; cost saved; pipeline stage breakdown; period filter. Session 12.
 **Effort**: 4h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/admin/analytics/cache/summary
@@ -2128,6 +2176,8 @@
 
 ### API-107: Cache analytics by index ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: GET /admin/analytics/cache/by-index; per-index hit rate; TTL efficiency ratio; invalidation count. Session 12.
 **Effort**: 3h
 **Depends on**: API-106
 **Method + Path**: GET /api/v1/admin/analytics/cache/by-index
@@ -2146,6 +2196,8 @@
 
 ### API-108: Cache cost savings ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: GET /admin/analytics/cache/cost-savings; LLM/embedding/search breakdown; blended cost-per-query trend. Session 12.
 **Effort**: 3h
 **Depends on**: API-106
 **Method + Path**: GET /api/v1/admin/analytics/cache/cost-savings
@@ -2164,6 +2216,8 @@
 
 ### API-109: Set per-index cache TTL ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: PATCH /admin/indexes/{id}/cache-ttl; 7-value TTL allowlist (0/900/1800/3600/14400/28800/86400); immediate effect on next miss. Session 12.
 **Effort**: 2h
 **Depends on**: API-001
 **Method + Path**: PATCH /api/v1/admin/indexes/{id}/cache-ttl
@@ -2225,6 +2279,8 @@
 
 ### API-112: Platform admin audit log ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/platform/routes.py` — GET /platform/audit-log; cross-tenant; actor/action/tenant/date filters; provisioning + LLM profile + quota events included. Session 12 (task item API-087).
 **Effort**: 4h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/platform/audit-log

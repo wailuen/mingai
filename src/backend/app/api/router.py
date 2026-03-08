@@ -104,10 +104,14 @@ from app.modules.documents.sharepoint import (
 router.include_router(sharepoint_router)
 router.include_router(admin_sync_router)
 
-# Notification SSE stream (API-012)
-from app.modules.notifications.routes import router as notifications_router
+# Notification SSE stream + list/mark-read/preferences (API-012, API-117 to API-120)
+from app.modules.notifications.routes import (
+    me_notifications_router,
+    router as notifications_router,
+)
 
 router.include_router(notifications_router)
+router.include_router(me_notifications_router)
 
 # Agent templates endpoints (API-110 to API-115)
 from app.modules.agents.routes import router as agents_router
@@ -123,6 +127,11 @@ router.include_router(agents_admin_router)
 from app.modules.har.routes import router as har_router
 
 router.include_router(har_router)
+
+# Public Agent Registry endpoints (API-089 to API-098)
+from app.modules.registry.routes import router as registry_router
+
+router.include_router(registry_router)
 
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.

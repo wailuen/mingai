@@ -2,6 +2,7 @@
 Agent Templates API routes (API-110 to API-115, API-039) and Agent Studio management (API-069 to API-073).
 
 Endpoints (public router /agents):
+- GET    /agents                                - List published agents for end user (API-117)
 - GET    /agents/templates                      - List agent templates (seed + DB + platform)
 - GET    /agents/templates/{template_id}        - Get template detail
 - POST   /agents/templates/{template_id}/deploy - Deploy template as new agent
@@ -1317,5 +1318,82 @@ async def deploy_from_library(
         resource_id=result["id"],
         details={"template_id": template_id, "name": body.name},
         db=session,
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# API-117: End-user agent list — GET /agents
+# Lists published agents visible to any authenticated end user.
+# Distinct from /admin/agents (which includes drafts + metrics).
+# ---------------------------------------------------------------------------
+
+
+async def list_published_agents_db(
+    tenant_id: str, page: int, page_size: int, db: AsyncSession
+) -> dict:
+    """List published agent_cards for the end-user agents list (API-117)."""
+    offset = (page - 1) * page_size
+
+    await db.execute(
+        text("SELECT set_config('app.tenant_id', :tid, true)"),
+        {"tid": tenant_id},
+    )
+
+    count_result = await db.execute(
+        text(
+            "SELECT COUNT(*) FROM agent_cards "
+            "WHERE tenant_id = :tenant_id AND status = 'published'"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    total = count_result.scalar() or 0
+
+    rows_result = await db.execute(
+        text(
+            "SELECT id, name, description, category, avatar "
+            "FROM agent_cards "
+            "WHERE tenant_id = :tenant_id AND status = 'published' "
+            "ORDER BY name ASC LIMIT :limit OFFSET :offset"
+        ),
+        {"tenant_id": tenant_id, "limit": page_size, "offset": offset},
+    )
+    items = [
+        {
+            "id": str(row[0]),
+            "name": row[1],
+            "description": row[2],
+            "category": row[3],
+            "avatar": row[4],
+        }
+        for row in rows_result.fetchall()
+    ]
+    return {"items": items, "total": total}
+
+
+@router.get("")
+async def list_agents_for_user(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    List published agents available to the current authenticated user (API-117).
+
+    End-user view — returns only published agents with name, description,
+    category, and avatar. No metrics, no draft status. RLS enforces tenant scope.
+    """
+    result = await list_published_agents_db(
+        tenant_id=current_user.tenant_id,
+        page=page,
+        page_size=page_size,
+        db=session,
+    )
+    logger.info(
+        "user_agents_listed",
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        total=result["total"],
     )
     return result

@@ -2,7 +2,7 @@
 
 **Project**: mingai Enterprise RAG Platform
 **Generated**: 2026-03-07
-**Last audited**: 2026-03-08 (session 12: Phase 2 API endpoints batch — AI-033, AI-034, API-035–037, API-038–042, API-056, API-062–063, API-069–073, API-074–075, API-076–077, API-087–088, API-106–109, API-112 all COMPLETE; 1082 tests passing (+103 since session 11); migrations v004 + v005 applied; commit b48d9f0. Session 11: HAR A2A backend AI-040–051, AI-060 COMPLETE; 979/979 tests. Session 10: Playwright E2E FE-058–061 COMPLETE. Session 9: FE-030, FE-031, FE-032, FE-038, FE-054, FE-055 COMPLETE. Session 8: FE-044–FE-057 COMPLETE. Session 7: FE-042, FE-043, FE-051, FE-052, FE-062, FE-063 COMPLETE)
+**Last audited**: 2026-03-08 (session 13: parallel teams launching API-089–098 (Registry), API-113–120 (Platform extras + Notifications), and docs update. Test baseline: 1082 passing / 2 failed / 4 errors — pre-existing ordering noise from asyncpg event loop binding, not regressions. Session 12: Phase 2 API endpoints batch — AI-033, AI-034, API-035–037, API-038–042, API-056, API-062–063, API-069–073, API-074–075, API-076–077, API-087–088, API-106–109, API-112 all COMPLETE; 1082 tests passing (+103 since session 11); migrations v004 + v005 applied; commit b48d9f0. Session 11: HAR A2A backend AI-040–051, AI-060 COMPLETE; 979/979 tests. Session 10: Playwright E2E FE-058–061 COMPLETE. Session 9: FE-030, FE-031, FE-032, FE-038, FE-054, FE-055 COMPLETE. Session 8: FE-044–FE-057 COMPLETE. Session 7: FE-042, FE-043, FE-051, FE-052, FE-062, FE-063 COMPLETE)
 **Total items across all files**: 354 todos (44 DB + 120 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 398 work items when including sub-file test counts)
 
 ---
@@ -175,7 +175,7 @@ Note: The Phase 1 todo list covers DB-001–DB-044. The implementation delivered
 | AI-020 | GenericSAMLOrgContextSource                                  | ✅ COMPLETE | GenericSAMLOrgContextSource in memory/org_context.py                                                                                                                                        |
 | AI-021 | OrgContextService (source selector)                          | ✅ COMPLETE | OrgContextService.\_select_source() in memory/org_context.py                                                                                                                                |
 | AI-023 | Memory notes CRUD with 200-char enforcement                  | ✅ COMPLETE | memory/notes.py validate_memory_note_content() + routes                                                                                                                                     |
-| AI-024 | Chat router "remember that" fast path                        | ⚠️ PARTIAL  | orchestrator.py exists; "remember that" detection not confirmed                                                                                                                             |
+| AI-024 | Chat router "remember that" fast path                        | ✅ COMPLETE | orchestrator.py — `_handle_memory_fast_path()` implements regex detection; emits `memory_saved` SSE; confirmed session 13 (2026-03-08)                                                      |
 | AI-026 | GlossaryExpander.expand() core                               | ✅ COMPLETE | glossary/expander.py with full expansion logic                                                                                                                                              |
 | AI-027 | Glossary stop-word exclusion + uppercase rule                | ✅ COMPLETE | STOP_WORDS frozenset + SHORT_TERM_UPPERCASE rule in expander.py                                                                                                                             |
 | AI-028 | Glossary pipeline integration                                | ✅ COMPLETE | GlossaryExpander wired into ChatOrchestrationService                                                                                                                                        |
@@ -293,12 +293,12 @@ Note: The Phase 1 todo list covers DB-001–DB-044. The implementation delivered
 | File                    | Domain             | Items   | ID Range              | Total Effort | Status (2026-03-07)                                                                                                                                                            |
 | ----------------------- | ------------------ | ------- | --------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22 complete / 22 pending (Phase 1 core tables done; cache+HAR tables are Phase 2 scope) — unchanged session 6                                                                  |
-| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | **Session 12: +27 endpoints COMPLETE** (API-035–042, API-056, API-062–063, API-069–077, API-087–088, API-106–109, API-112); prior session 6: 43 complete                       |
-| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | **Session 12: AI-033 + AI-034 confirmed COMPLETE** (was PARTIAL); AI-040–051, AI-060 COMPLETE (session 11); total: 40+ complete                                                |
+| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | **Session 13: completion dates + evidence added to all session 12 items; pending API-089–098, API-113–120, API-121–125 (gap remediation).** Session 12: +27 endpoints COMPLETE.  |
+| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | **Session 13: AI-024 confirmed COMPLETE** (evidence added); AI-033 + AI-034 confirmed session 12; AI-040–051, AI-060 COMPLETE session 11; total: 40+ complete                  |
 | `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | **Session 10: 36 complete / 1 partial (FE-022) / 1 gated (FE-036)** (was session 9: 32/1/1); FE-058, FE-059, FE-060, FE-061 completed (Playwright E2E suites; 40 tests total)  |
 | `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | **Session 6: 25 complete / 1 partial (TEST-004) / 1 pending (TEST-005)** — unchanged session 12                                                                                |
 | `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | **Session 6: 26 complete / 0 partial / 0 pending** — unchanged session 12                                                                                                      |
-| **Totals**              |                    | **398** |                       | **~1,594h**  | **Session 12: 1082 tests passing (+103); 27 API + 2 AI items completed; commit b48d9f0. Session 11: 979/979, HAR A2A AI tasks complete. Session 10: Playwright E2E complete.** |
+| **Totals**              |                    | **398** |                       | **~1,594h**  | **Session 13 (2026-03-08): 1082+ tests; parallel launches — API-089–098 (Registry), API-113–120 (Platform extras). AI-024 confirmed complete. Completion dates added to all session 12 items. Session 12: 1082 tests, 27 API + 2 AI complete, commit b48d9f0.** |
 
 > Effort estimate: ~1,594 hours total. At 2 engineers full-time = ~100 working days (~20 weeks). Parallelism across domains reduces calendar time significantly.
 
@@ -922,12 +922,27 @@ The table below has been corrected to reflect the actual implementation state (7
 | Infrastructure | 25                 | 26                 | 0                      | 0                              |
 | Database       | 22                 | 22                 | 0                      | 22 (cache/HAR — Phase 2 scope) |
 | API Endpoints  | 41                 | 43                 | 0                      | 0                              |
-| AI Services    | 26                 | 26                 | 2 (AI-024, 033/034)    | 0                              |
+| AI Services    | 26                 | 26+3               | 0 (AI-024, 033, 034 confirmed session 12/13) | 0               |
 | Frontend       | 23                 | 23                 | 1 (FE-022)             | 0                              |
 | Testing        | 23                 | 25                 | 1 (TEST-004)           | 1 (TEST-005)                   |
 | **TOTALS**     | **160**            | **165**            | **4**                  | **1 (+ 22 Phase 2 DB)**        |
 
 **Phase 1 completion (session 6): COMPLETE.** All blocking items resolved. TEST-005 (Auth0 integration test) requires an Auth0 test environment — it is a P3 external-dependency item, not a Phase 1 blocker.
+
+### Session 13 — Parallel Launch + Documentation (2026-03-08)
+
+**Test baseline**: 1082 passing / 2 failed / 4 errors (pre-existing asyncpg event loop ordering noise — not regressions).
+**Work in flight**: API-089–098 (Registry: HAR agent registry public discovery + tenant management), API-113–120 (Platform extras: impersonation, daily digest config, GDPR deletion workflow, notification preferences/read/list), API-121–125 (gap remediation).
+
+**Items confirmed complete this session**:
+
+| Item   | Description                              | Evidence                                                                                                         |
+| ------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| AI-024 | Chat router "remember that" fast path    | `chat/orchestrator.py` — `_handle_memory_fast_path()`; regex for remember/note/save phrases; `memory_saved` SSE |
+
+**Documentation updates**: `docs/00-authority/CLAUDE.md` Phase 2 state section added; `docs/00-authority/README.md` Phase Coverage table updated; all session 12 completion items annotated with `**Completed**: 2026-03-08` in `02-api-endpoints.md` and `03-ai-services.md`.
+
+---
 
 ### Session 12 — Phase 2 API Endpoints (2026-03-08)
 

@@ -382,6 +382,8 @@
 
 ### AI-024: Chat router "remember that" fast path ✅ COMPLETED
 
+**Completed**: 2026-03-08
+**Evidence**: `app/modules/chat/orchestrator.py` — `_handle_memory_fast_path()` implements regex detection for "remember that/remember:/please remember/note that/save this:" patterns; routes to `add_memory_note(source="user")`; emits `memory_saved` SSE event; bypasses LLM call. Confirmed in session 12 audit.
 **Effort**: 2h
 **Depends on**: AI-023
 **Description**: Implement regex-based intent detection in the chat router for memory note creation. When user says "remember that...", bypass LLM call and directly create a memory note.
@@ -541,7 +543,7 @@
 
 ### AI-033: Token budget enforcement and truncation priority ✅ COMPLETED
 
-**Completed**: 2026-03-07
+**Completed**: 2026-03-08 (confirmed session 12; implementation date 2026-03-07)
 **Effort**: 4h
 **Depends on**: AI-032
 **Description**: Implement token budget enforcement with a defined truncation priority order when the total system prompt exceeds the configured budget.
@@ -559,7 +561,7 @@
 
 **Effort**: 3h
 **Depends on**: AI-032
-**Completed**: 2026-03-07
+**Completed**: 2026-03-08 (confirmed session 12; implementation date 2026-03-07)
 **Evidence**:
 
 - Implementation: `src/backend/app/modules/chat/orchestrator.py` — `profile_context_used` derived from `_PROFILE_LAYERS.intersection(layers_active)` set intersection, emitted in SSE metadata event

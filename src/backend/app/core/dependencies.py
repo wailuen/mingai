@@ -81,6 +81,28 @@ async def get_current_user(
     except JWTValidationError as e:
         raise HTTPException(status_code=e.status_code, detail=e.reason)
 
+    # Check impersonation blocklist — impersonation tokens are revocable via
+    # POST /platform/impersonate/end which stores the JTI in Redis.
+    jti = payload.get("jti")
+    if jti and payload.get("impersonated_by"):
+        from app.core.redis_client import build_redis_key, get_redis  # noqa: PLC0415
+
+        try:
+            redis = get_redis()
+            blocklist_key = build_redis_key("platform", "impersonation_blocklist", jti)
+            is_blocked = await redis.exists(blocklist_key)
+            if is_blocked:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Impersonation session has been ended",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            # Redis unavailable — fail open to avoid blocking all auth
+            logger.warning("impersonation_blocklist_check_failed", jti=jti)
+
     return CurrentUser(
         id=payload["sub"],
         tenant_id=payload["tenant_id"],

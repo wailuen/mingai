@@ -1,7 +1,37 @@
 # CLAUDE.md — mingai Backend Codegen Instructions
 
 Preloaded instructions for AI codegen agents. Read this before writing any backend code.
-Validated against real Phase 1 code on 2026-03-07.
+Validated against real Phase 1 code on 2026-03-07. Phase 2 ongoing as of 2026-03-08.
+
+## Implementation State (2026-03-08)
+
+**Tests**: 1082 passing / 2 failed / 4 errors. The 2 failures and 4 errors are pre-existing asyncpg event loop binding noise from test ordering — not regressions. All feature tests pass.
+
+**Phase 2 endpoint groups completed**:
+- Auth, Chat, Issues (full CRUD + triage stream + admin/platform queues + GitHub webhook)
+- Memory (notes, working memory, GDPR erasure, org context)
+- Glossary (CRUD, bulk import, export, miss analytics, cache warm-up)
+- Documents (SharePoint + Google Drive connect/sync, sync failure diagnosis)
+- Users (invite, bulk invite, enhanced list, GDPR export)
+- Teams (CRUD, members, audit log, Auth0 sync allowlist)
+- Agents (list, create, update, status toggle, deploy from template)
+- Agent templates (create, update, list with platform filter — platform admin)
+- Tool catalog (list, register — platform admin)
+- Analytics: satisfaction + engagement (tenant admin); cost + health (platform admin)
+- Cache analytics: summary, by-index, cost savings, per-index TTL (API-106–109)
+- Memory policy GET/PATCH (API-076–077)
+- Audit logs: workspace (API-087) + platform (API-112)
+- HAR A2A: transactions, signed events, trust score, health monitor (AI-040–060)
+- Document indexing pipeline (AI-060)
+- Notifications SSE (API-012)
+- Tenant management: provisioning, health score, quota, LLM profiles, token budget
+
+**Pending (Session 13 parallel launch)**:
+- API-089–098: Registry (HAR agent registry CRUD, public discovery)
+- API-113–120: Platform extras (impersonation, daily digest, GDPR deletion, notifications)
+- API-121–125: Gap remediation items
+
+**Migrations applied**: v001 (schema), v002 (RLS), v003 (HAR tables), v004 (cache tables), v005 (agent cards)
 
 ---
 

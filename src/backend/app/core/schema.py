@@ -35,6 +35,7 @@ TABLE_NAMES = [
     "audit_log",
     "har_transactions",
     "har_transaction_events",
+    "notifications",
 ]
 
 # All tables requiring RLS (standard tenant_id + special cases)
@@ -327,6 +328,17 @@ TABLE_DEFINITIONS = {
         "prev_event_hash TEXT, "
         "event_hash TEXT, "
         "created_at TIMESTAMPTZ DEFAULT NOW()"
+    ),
+    "notifications": (
+        "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, "
+        "user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+        "type VARCHAR(50) NOT NULL, "
+        "title VARCHAR(200) NOT NULL, "
+        "body TEXT NOT NULL DEFAULT '', "
+        "link VARCHAR(500), "
+        "read BOOLEAN NOT NULL DEFAULT false, "
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ),
 }
 

@@ -13,23 +13,32 @@ Endpoints:
 - GET  /platform/audit-log                 — Cross-tenant audit log (API-112)
 - GET  /platform/analytics/cost            — Cross-tenant cost analytics (API-036)
 - GET  /platform/analytics/health          — Tenant health scores dashboard (API-037)
+- GET  /platform/preferences               — Get platform admin preferences (API-115)
+- PATCH /platform/preferences              — Update platform admin preferences (API-115)
+- POST /platform/impersonate               — Impersonate a tenant (API-113)
+- POST /platform/impersonate/end           — End impersonation (API-114)
+- POST /platform/tenants/{id}/gdpr-delete  — GDPR deletion workflow (API-116)
 """
+import asyncio
 import csv
 import io
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from jose import jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_current_user, require_platform_admin
+from app.core.redis_client import build_redis_key, get_redis
 from app.core.session import get_async_session
 from app.modules.platform.health_score import calculate_health_score
 
@@ -442,10 +451,7 @@ async def get_dashboard_stats(
         )
         raise HTTPException(
             status_code=403,
-            detail=(
-                "Platform admin access required. "
-                f"Your scope is '{current_user.scope}' but 'platform' is needed."
-            ),
+            detail="Access denied.",
         )
 
     logger.info(
@@ -1381,4 +1387,590 @@ async def get_health_dashboard(
             "avg_satisfaction": avg_satisfaction,
         },
         "tenants": tenant_scores,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Platform admin preferences (API-115)
+# Stored in Redis: mingai:platform:preferences:{user_id}
+# ---------------------------------------------------------------------------
+
+_HH_MM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+_DEFAULT_PLATFORM_PREFS: dict = {
+    "daily_digest_enabled": True,
+    "daily_digest_time": "08:00",
+    "alert_thresholds": {
+        "cost_spike_pct": 20.0,
+        "health_score_min": 60,
+    },
+    "notification_preferences": {},
+}
+
+
+class AlertThresholds(BaseModel):
+    cost_spike_pct: Optional[float] = Field(None, ge=0.0)
+    health_score_min: Optional[int] = Field(None, ge=0, le=100)
+
+
+class PlatformPreferencesRequest(BaseModel):
+    daily_digest_enabled: Optional[bool] = None
+    daily_digest_time: Optional[str] = Field(None, max_length=5)
+    alert_thresholds: Optional[AlertThresholds] = None
+    notification_preferences: Optional[dict] = None
+
+
+async def _get_platform_prefs(user_id: str) -> dict:
+    """Read platform admin preferences from Redis. Returns defaults on miss."""
+    redis = get_redis()
+    key = build_redis_key("platform", "preferences", user_id)
+    raw = await redis.get(key)
+    if raw is None:
+        return json.loads(json.dumps(_DEFAULT_PLATFORM_PREFS))  # deep copy
+    data = json.loads(raw)
+    # Merge with defaults so new keys always appear
+    merged = json.loads(json.dumps(_DEFAULT_PLATFORM_PREFS))
+    merged.update(data)
+    if "alert_thresholds" in data:
+        merged["alert_thresholds"].update(data["alert_thresholds"])
+    return merged
+
+
+async def _save_platform_prefs(user_id: str, prefs: dict) -> None:
+    """Persist platform admin preferences to Redis (no TTL — sticky)."""
+    redis = get_redis()
+    key = build_redis_key("platform", "preferences", user_id)
+    await redis.set(key, json.dumps(prefs))
+
+
+@router.get("/platform/preferences")
+async def get_platform_preferences(
+    current_user: CurrentUser = Depends(require_platform_admin),
+):
+    """
+    Get platform admin's personal preferences (API-115).
+
+    Returns current preferences or defaults if never set.
+    """
+    prefs = await _get_platform_prefs(current_user.id)
+    return prefs
+
+
+@router.patch("/platform/preferences")
+async def update_platform_preferences(
+    body: PlatformPreferencesRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+):
+    """
+    Update platform admin's personal preferences (API-115).
+
+    Validates HH:MM format for daily_digest_time (00:00 – 23:59).
+    """
+    if body.daily_digest_time is not None:
+        if not _HH_MM_RE.match(body.daily_digest_time):
+            raise HTTPException(
+                status_code=422,
+                detail="daily_digest_time must be in HH:MM format (00:00–23:59)",
+            )
+
+    prefs = await _get_platform_prefs(current_user.id)
+
+    if body.daily_digest_enabled is not None:
+        prefs["daily_digest_enabled"] = body.daily_digest_enabled
+    if body.daily_digest_time is not None:
+        prefs["daily_digest_time"] = body.daily_digest_time
+    if body.alert_thresholds is not None:
+        threshold_update = body.alert_thresholds.model_dump(exclude_none=True)
+        prefs["alert_thresholds"].update(threshold_update)
+    if body.notification_preferences is not None:
+        prefs["notification_preferences"] = body.notification_preferences
+
+    await _save_platform_prefs(current_user.id, prefs)
+
+    logger.info("platform_preferences_updated", user_id=current_user.id)
+    return prefs
+
+
+# ---------------------------------------------------------------------------
+# Platform admin audit log helper (used by impersonation + GDPR)
+# ---------------------------------------------------------------------------
+
+
+async def _insert_platform_audit_log(
+    db: AsyncSession,
+    user_id: str,
+    action: str,
+    resource_type: str,
+    resource_id: Optional[str],
+    details: dict,
+) -> None:
+    """Insert a cross-tenant audit log record (tenant_id = platform sentinel)."""
+    platform_tenant_id = os.environ.get("PLATFORM_TENANT_ID", "platform")
+    # platform sentinel may not be a valid UUID — use a fixed known UUID
+    # for the audit_log FK constraint. The record's details contain the real IDs.
+    # Use the well-known platform admin record tenant entry or skip if not available.
+    try:
+        await db.execute(
+            text(
+                "INSERT INTO audit_log "
+                "(id, tenant_id, user_id, action, resource_type, resource_id, details) "
+                "VALUES (:id, :tenant_id, :user_id, :action, :resource_type, "
+                ":resource_id, CAST(:details AS jsonb))"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "tenant_id": resource_id,  # use target tenant_id for FK validity
+                "user_id": None,
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "details": json.dumps({**details, "actor_user_id": user_id}),
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.warning(
+            "audit_log_insert_failed",
+            action=action,
+            error=str(exc),
+        )
+
+
+# ---------------------------------------------------------------------------
+# API-113: Platform admin impersonation — POST /platform/impersonate
+# ---------------------------------------------------------------------------
+
+
+class ImpersonateRequest(BaseModel):
+    tenant_id: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=10, max_length=500)
+
+
+@router.post("/platform/impersonate", status_code=200)
+async def impersonate_tenant(
+    body: ImpersonateRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Generate an impersonation token scoped to a tenant (API-113).
+
+    Only users with scope='platform' AND role='platform_admin' may call this.
+    Generates a 1-hour tenant-scoped JWT with impersonation claims.
+    """
+    # Extra check: role must be exactly 'platform_admin' in addition to platform scope
+    if "platform_admin" not in current_user.roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Platform admin role required for impersonation.",
+        )
+
+    # Validate UUID format for tenant_id
+    try:
+        tenant_uuid = uuid.UUID(body.tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="tenant_id must be a valid UUID")
+
+    # Verify tenant exists and read actual plan
+    tenant_result = await db.execute(
+        text("SELECT id, name, plan FROM tenants WHERE id = :tid"),
+        {"tid": str(tenant_uuid)},
+    )
+    tenant_row = tenant_result.fetchone()
+    if tenant_row is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    tenant_plan = str(tenant_row[2]) if tenant_row[2] else "professional"
+
+    secret = os.environ.get("JWT_SECRET_KEY")
+    if not secret:
+        raise HTTPException(status_code=500, detail="JWT_SECRET_KEY not configured")
+    algorithm = os.environ.get("JWT_ALGORITHM", "HS256")
+
+    now = datetime.now(timezone.utc)
+    expires_in = 3600  # 1 hour
+    jti = str(uuid.uuid4())
+
+    payload = {
+        "sub": current_user.id,
+        "tenant_id": body.tenant_id,
+        "roles": ["tenant_admin"],
+        "scope": "tenant",
+        "plan": tenant_plan,
+        "impersonated_by": current_user.id,
+        "impersonated_reason": body.reason,
+        "exp": now + timedelta(seconds=expires_in),
+        "iat": now,
+        "jti": jti,
+        "token_version": 2,
+    }
+
+    token = jwt.encode(payload, secret, algorithm=algorithm)
+
+    await _insert_platform_audit_log(
+        db=db,
+        user_id=current_user.id,
+        action="impersonation_started",
+        resource_type="tenant",
+        resource_id=body.tenant_id,
+        details={
+            "tenant_id": body.tenant_id,
+            "reason": body.reason,
+            "impersonated_by": current_user.id,
+        },
+    )
+
+    logger.info(
+        "platform_impersonation_started",
+        user_id=current_user.id,
+        tenant_id=body.tenant_id,
+    )
+
+    return {
+        "impersonation_token": token,
+        "expires_in": expires_in,
+        "tenant_id": body.tenant_id,
+    }
+
+
+# ---------------------------------------------------------------------------
+# API-114: End impersonation — POST /platform/impersonate/end
+# ---------------------------------------------------------------------------
+
+
+@router.post("/platform/impersonate/end", status_code=200)
+async def end_impersonation(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+    raw_authorization: Optional[str] = Header(None, alias="authorization"),
+):
+    """
+    End an active impersonation session (API-114).
+
+    The caller must present an impersonation token (one that has 'impersonated_by'
+    claim). Adds the token's JTI to a Redis blocklist and logs the event.
+    Returns 400 if the token is not an impersonation token.
+    """
+    from app.modules.auth.jwt import decode_jwt_token_v1_compat
+
+    secret = os.environ.get("JWT_SECRET_KEY")
+    if not secret:
+        raise HTTPException(status_code=500, detail="JWT_SECRET_KEY not configured")
+    algorithm = os.environ.get("JWT_ALGORITHM", "HS256")
+
+    if raw_authorization and raw_authorization.startswith("Bearer "):
+        raw_token = raw_authorization[7:]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="No active impersonation session found in this token",
+        )
+
+    try:
+        payload = decode_jwt_token_v1_compat(raw_token, secret, algorithm)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="No active impersonation session found in this token",
+        )
+
+    impersonated_by = payload.get("impersonated_by")
+    if not impersonated_by:
+        raise HTTPException(
+            status_code=400,
+            detail="No active impersonation session found in this token",
+        )
+
+    jti = payload.get("jti", "")
+    iat = payload.get("iat")
+    exp = payload.get("exp")
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    duration_seconds = 0
+    if iat is not None:
+        iat_ts = iat.timestamp() if isinstance(iat, datetime) else float(iat)
+        duration_seconds = max(0, int(now_ts - iat_ts))
+
+    # Add jti to Redis blocklist with TTL = remaining token lifetime
+    if jti:
+        remaining_ttl = 3600
+        if exp is not None:
+            exp_ts = exp.timestamp() if isinstance(exp, datetime) else float(exp)
+            remaining_ttl = max(1, int(exp_ts - now_ts))
+        try:
+            redis = get_redis()
+            blocklist_key = build_redis_key("platform", "impersonation_blocklist", jti)
+            await redis.set(blocklist_key, "1", ex=remaining_ttl)
+        except Exception as exc:
+            logger.warning(
+                "impersonation_blocklist_write_failed",
+                jti=jti,
+                error=str(exc),
+            )
+
+    tenant_id = payload.get("tenant_id", "")
+    resource_id = tenant_id if _is_valid_uuid(tenant_id) else None
+    await _insert_platform_audit_log(
+        db=db,
+        user_id=impersonated_by,
+        action="impersonation_ended",
+        resource_type="tenant",
+        resource_id=resource_id,
+        details={
+            "impersonated_by": impersonated_by,
+            "duration_seconds": duration_seconds,
+        },
+    )
+
+    logger.info(
+        "platform_impersonation_ended",
+        impersonated_by=impersonated_by,
+        duration_seconds=duration_seconds,
+    )
+
+    return {"status": "ended", "duration_seconds": duration_seconds}
+
+
+def _is_valid_uuid(value: str) -> bool:
+    """Return True if value is a valid UUID string."""
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+# ---------------------------------------------------------------------------
+# API-116: GDPR deletion workflow — POST /platform/tenants/{tenant_id}/gdpr-delete
+# ---------------------------------------------------------------------------
+
+
+class GdprDeleteRequest(BaseModel):
+    confirmed: bool
+    deletion_reference: str = Field(..., min_length=1, max_length=200)
+
+
+async def _run_gdpr_deletion(
+    tenant_id: str,
+    job_id: str,
+    deletion_reference: str,
+) -> None:
+    """
+    Background task: execute GDPR deletion steps for a tenant.
+
+    Steps:
+    1. Suspend tenant
+    2. Delete users, agent_cards, glossary_terms
+    3. Clear Redis keys for the tenant
+    4. Mark job complete in Redis
+    """
+    from app.core.session import get_async_session as _get_session
+
+    logger.info(
+        "gdpr_deletion_started",
+        tenant_id=tenant_id,
+        job_id=job_id,
+    )
+
+    try:
+        # We cannot reuse the request-scoped DB session in a background task.
+        # Create a fresh session directly from the engine.
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+        from sqlalchemy.orm import sessionmaker
+
+        db_url = os.environ.get("DATABASE_URL", "")
+        engine = create_async_engine(db_url, echo=False)
+        async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+
+        async with async_session() as db:
+            # Step 1: Suspend tenant
+            await db.execute(
+                text(
+                    "UPDATE tenants SET status = 'suspended', updated_at = NOW() "
+                    "WHERE id = :tenant_id"
+                ),
+                {"tenant_id": tenant_id},
+            )
+            await db.commit()
+
+            # Step 2: Delete tenant data — explicit parameterized statements, no interpolation
+            await db.execute(
+                text("DELETE FROM users WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            await db.execute(
+                text("DELETE FROM agent_cards WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            await db.execute(
+                text("DELETE FROM glossary_terms WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            await db.commit()
+
+        await engine.dispose()
+
+        # Step 3: Clear Redis keys matching mingai:{tenant_id}:*
+        try:
+            redis = get_redis()
+            pattern = f"mingai:{tenant_id}:*"
+            cursor = 0
+            while True:
+                cursor, keys = await redis.scan(cursor, match=pattern, count=100)
+                if keys:
+                    await redis.delete(*keys)
+                if cursor == 0:
+                    break
+        except Exception as exc:
+            logger.warning(
+                "gdpr_redis_clear_failed",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+
+        # Step 4: Mark job as completed
+        try:
+            redis = get_redis()
+            job_key = build_redis_key("platform", "gdpr_delete_job", job_id)
+            job_data = await redis.get(job_key)
+            if job_data:
+                job_obj = json.loads(job_data)
+                job_obj["status"] = "completed"
+                job_obj["completed_at"] = datetime.now(timezone.utc).isoformat()
+                await redis.set(job_key, json.dumps(job_obj), ex=86400 * 30)
+        except Exception as exc:
+            logger.warning(
+                "gdpr_job_status_update_failed",
+                job_id=job_id,
+                error=str(exc),
+            )
+
+        logger.info(
+            "gdpr_deletion_completed",
+            tenant_id=tenant_id,
+            job_id=job_id,
+        )
+
+    except Exception as exc:
+        logger.error(
+            "gdpr_deletion_failed",
+            tenant_id=tenant_id,
+            job_id=job_id,
+            error=str(exc),
+        )
+        # Update job status to failed
+        try:
+            redis = get_redis()
+            job_key = build_redis_key("platform", "gdpr_delete_job", job_id)
+            job_obj = {
+                "job_id": job_id,
+                "status": "failed",
+                "tenant_id": tenant_id,
+                "error": "gdpr_deletion_failed",
+            }
+            await redis.set(job_key, json.dumps(job_obj), ex=86400 * 30)
+        except Exception as redis_exc:
+            logger.warning(
+                "gdpr_job_failed_status_write_failed",
+                job_id=job_id,
+                tenant_id=tenant_id,
+                error=str(redis_exc),
+            )
+
+
+@router.post("/platform/tenants/{tenant_id}/gdpr-delete", status_code=202)
+async def gdpr_delete_tenant(
+    tenant_id: str,
+    body: GdprDeleteRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Initiate GDPR deletion workflow for a tenant (API-116).
+
+    Requires confirmed=true and a non-empty deletion_reference.
+    Verifies the tenant exists, then launches an async deletion job.
+    Returns a job_id to poll for completion status.
+    """
+    if not body.confirmed:
+        raise HTTPException(
+            status_code=422,
+            detail="confirmed must be true to initiate GDPR deletion",
+        )
+
+    if not body.deletion_reference.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="deletion_reference is required",
+        )
+
+    # Validate UUID format
+    try:
+        tenant_uuid = uuid.UUID(tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="tenant_id must be a valid UUID")
+
+    # Verify tenant exists
+    tenant_result = await db.execute(
+        text("SELECT id FROM tenants WHERE id = :tid"),
+        {"tid": str(tenant_uuid)},
+    )
+    if tenant_result.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    job_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    estimated_completion = (now + timedelta(minutes=5)).isoformat()
+
+    # Store job metadata in Redis
+    try:
+        redis = get_redis()
+        job_key = build_redis_key("platform", "gdpr_delete_job", job_id)
+        job_data = {
+            "job_id": job_id,
+            "status": "in_progress",
+            "tenant_id": tenant_id,
+            "deletion_reference": body.deletion_reference,
+            "created_at": now.isoformat(),
+        }
+        await redis.set(job_key, json.dumps(job_data), ex=86400 * 30)  # 30d TTL
+    except Exception as exc:
+        logger.warning(
+            "gdpr_job_redis_write_failed",
+            job_id=job_id,
+            error=str(exc),
+        )
+
+    await _insert_platform_audit_log(
+        db=db,
+        user_id=current_user.id,
+        action="gdpr_delete_initiated",
+        resource_type="tenant",
+        resource_id=tenant_id,
+        details={
+            "tenant_id": tenant_id,
+            "deletion_reference": body.deletion_reference,
+        },
+    )
+
+    # Launch background deletion task
+    asyncio.create_task(
+        _run_gdpr_deletion(
+            tenant_id=tenant_id,
+            job_id=job_id,
+            deletion_reference=body.deletion_reference,
+        )
+    )
+
+    logger.info(
+        "gdpr_delete_initiated",
+        user_id=current_user.id,
+        tenant_id=tenant_id,
+        job_id=job_id,
+    )
+
+    return {
+        "job_id": job_id,
+        "status": "in_progress",
+        "estimated_completion": estimated_completion,
     }
