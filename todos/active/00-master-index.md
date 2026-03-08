@@ -2,8 +2,8 @@
 
 **Project**: mingai Enterprise RAG Platform
 **Generated**: 2026-03-07
-**Last audited**: 2026-03-08 (session 14: frontend file-system audit correcting status on FE-036 NOT STARTED, FE-040 PARTIAL (AlertSummary missing), FE-041 PARTIAL (ProvisioningProgress.tsx missing), FE-047 PARTIAL (GitHubIssueButton/BatchActions/IssueHeatmap missing), FE-054 PARTIAL (queue sub-components not found as separate files), FE-055 PARTIAL (MTTRChart/TopBugsTable/TrendChart/DuplicateView/SLAAdherence missing). Session 13: parallel teams launching API-089–098 (Registry), API-113–120 (Platform extras + Notifications), and docs update. Test baseline: 1082 passing / 2 failed / 4 errors. Session 12: Phase 2 API endpoints batch — all COMPLETE; 1082 tests passing; migrations v004 + v005 applied; commit b48d9f0. Session 11: HAR A2A backend AI-040–051, AI-060 COMPLETE; 979/979 tests. Session 10: Playwright E2E FE-058–061 COMPLETE. Session 9: FE-030, FE-031, FE-032, FE-038, FE-054, FE-055 COMPLETE. Session 8: FE-044–FE-057 COMPLETE. Session 7: FE-042, FE-043, FE-051, FE-052, FE-062, FE-063 COMPLETE)
-**Total items across all files**: 354 todos (44 DB + 120 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 398 work items when including sub-file test counts)
+**Last audited**: 2026-03-08 (session 14: frontend file-system audit correcting status on FE-036 NOT STARTED, FE-040 PARTIAL (AlertSummary missing), FE-041 PARTIAL (ProvisioningProgress.tsx missing), FE-047 PARTIAL (GitHubIssueButton/BatchActions/IssueHeatmap missing), FE-054 PARTIAL (queue sub-components not found as separate files), FE-055 PARTIAL (MTTRChart/TopBugsTable/TrendChart/DuplicateView/SLAAdherence missing). Session 13: 21 APIs COMPLETE — API-089–098 (Registry), API-113–120 (Platform extras + Notifications), API-122/124/125 (error middleware + disputes); 1033 unit tests; commits 5fea852 + c96dc16; API-121 (Stripe) deferred. Session 12: Phase 2 API endpoints batch — all COMPLETE; 1082 tests passing; migrations v004 + v005 applied; commit b48d9f0. Session 11: HAR A2A backend AI-040–051, AI-060 COMPLETE; 979/979 tests. Session 10: Playwright E2E FE-058–061 COMPLETE. Session 9: FE-030, FE-031, FE-032, FE-038, FE-054, FE-055 COMPLETE. Session 8: FE-044–FE-057 COMPLETE. Session 7: FE-042, FE-043, FE-051, FE-052, FE-062, FE-063 COMPLETE)
+**Total items across all files**: 359 todos (44 DB + 125 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 403 work items when including sub-file test counts)
 
 ---
 
@@ -290,15 +290,15 @@ Note: The Phase 1 todo list covers DB-001–DB-044. The implementation delivered
 
 ## 1. Summary Table
 
-| File                    | Domain             | Items   | ID Range              | Total Effort | Status (2026-03-07)                                                                                                                                                                                                                                             |
-| ----------------------- | ------------------ | ------- | --------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22 complete / 22 pending (Phase 1 core tables done; cache+HAR tables are Phase 2 scope) — unchanged session 6                                                                                                                                                   |
-| `02-api-endpoints.md`   | API Endpoints      | 120     | API-001 – API-120     | ~449h        | **Session 13: completion dates + evidence added to all session 12 items; pending API-089–098, API-113–120, API-121–125 (gap remediation).** Session 12: +27 endpoints COMPLETE.                                                                                 |
-| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | **Session 13: AI-024 confirmed COMPLETE** (evidence added); AI-033 + AI-034 confirmed session 12; AI-040–051, AI-060 COMPLETE session 11; total: 40+ complete                                                                                                   |
-| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | **Session 14 audit: 48 complete / 7 partial (FE-013, FE-014, FE-033, FE-034, FE-039, FE-040, FE-041, FE-047, FE-054, FE-055) / 1 not started (FE-036)** — see session 14 audit note above for details per item                                                  |
-| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | **Session 6: 25 complete / 1 partial (TEST-004) / 1 pending (TEST-005)** — unchanged session 12                                                                                                                                                                 |
-| `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | **Session 6: 26 complete / 0 partial / 0 pending** — unchanged session 12                                                                                                                                                                                       |
-| **Totals**              |                    | **398** |                       | **~1,594h**  | **Session 13 (2026-03-08): 1082+ tests; parallel launches — API-089–098 (Registry), API-113–120 (Platform extras). AI-024 confirmed complete. Completion dates added to all session 12 items. Session 12: 1082 tests, 27 API + 2 AI complete, commit b48d9f0.** |
+| File                    | Domain             | Items   | ID Range              | Total Effort | Status (2026-03-07)                                                                                                                                                                                                                                                                                                       |
+| ----------------------- | ------------------ | ------- | --------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-database-schema.md` | DB + Redis         | 44      | DB-001 – DB-044       | ~120h        | 22 complete / 22 pending (Phase 1 core tables done; cache+HAR tables are Phase 2 scope) — unchanged session 6                                                                                                                                                                                                             |
+| `02-api-endpoints.md`   | API Endpoints      | 125     | API-001 – API-125     | ~466h        | **Session 13 (2026-03-08): +21 endpoints COMPLETE** — API-089–098 (Registry), API-113–120 (Platform extras + Notifications), API-122/124/125 (error middleware + disputes); commits 5fea852 + c96dc16; 1033 unit tests passing. Pending: API-110 (verify), API-121 (Stripe, ext dep). Session 12: +27 endpoints COMPLETE. |
+| `03-ai-services.md`     | AI / Intelligence  | 51      | AI-001 – AI-051       | ~171h        | **Session 13: AI-024 confirmed COMPLETE** (evidence added); AI-033 + AI-034 confirmed session 12; AI-040–051, AI-060 COMPLETE session 11; total: 40+ complete                                                                                                                                                             |
+| `04-frontend.md`        | Frontend (Next.js) | 61      | FE-001 – FE-061       | ~379h        | **Session 14 audit: 48 complete / 7 partial (FE-013, FE-014, FE-033, FE-034, FE-039, FE-040, FE-041, FE-047, FE-054, FE-055) / 1 not started (FE-036)** — see session 14 audit note above for details per item                                                                                                            |
+| `05-testing.md`         | Tests (all tiers)  | 72      | TEST-001 – TEST-072   | ~248h        | **Session 6: 25 complete / 1 partial (TEST-004) / 1 pending (TEST-005)** — unchanged session 12                                                                                                                                                                                                                           |
+| `06-infrastructure.md`  | Infra / DevOps     | 50      | INFRA-001 – INFRA-050 | ~227h        | **Session 6: 26 complete / 0 partial / 0 pending** — unchanged session 12                                                                                                                                                                                                                                                 |
+| **Totals**              |                    | **403** |                       | **~1,611h**  | **Session 13 (2026-03-08): 21 API endpoints COMPLETE (API-089–098, API-113–120, API-122, API-124–125); 1033 unit tests passing; commits 5fea852 + c96dc16. Pending: API-110 (verify), API-121 (Stripe). Session 12: 1082 tests, 27 API + 2 AI complete, commit b48d9f0.**                                                 |
 
 > Effort estimate: ~1,594 hours total. At 2 engineers full-time = ~100 working days (~20 weeks). Parallelism across domains reduces calendar time significantly.
 
@@ -929,16 +929,44 @@ The table below has been corrected to reflect the actual implementation state (7
 
 **Phase 1 completion (session 6): COMPLETE.** All blocking items resolved. TEST-005 (Auth0 integration test) requires an Auth0 test environment — it is a P3 external-dependency item, not a Phase 1 blocker.
 
-### Session 13 — Parallel Launch + Documentation (2026-03-08)
+### Session 13 — Registry + Notifications + Platform APIs COMPLETE (2026-03-08)
 
-**Test baseline**: 1082 passing / 2 failed / 4 errors (pre-existing asyncpg event loop ordering noise — not regressions).
-**Work in flight**: API-089–098 (Registry: HAR agent registry public discovery + tenant management), API-113–120 (Platform extras: impersonation, daily digest config, GDPR deletion workflow, notification preferences/read/list), API-121–125 (gap remediation).
+**Test baseline (start)**: 1082 passing / 2 failed / 4 errors (pre-existing asyncpg event loop ordering noise — not regressions).
+**Test count (end)**: 1033 unit passing.
+**Commits**: `5fea852` (Registry + Notifications + Platform APIs), `c96dc16` (Error middleware + Disputes).
 
-**Items confirmed complete this session**:
+**Items completed this session (21 APIs)**:
 
-| Item   | Description                           | Evidence                                                                                                        |
-| ------ | ------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| AI-024 | Chat router "remember that" fast path | `chat/orchestrator.py` — `_handle_memory_fast_path()`; regex for remember/note/save phrases; `memory_saved` SSE |
+| Item    | Description                           | Commit                     |
+| ------- | ------------------------------------- | -------------------------- |
+| API-089 | Register agent to global registry     | 5fea852                    |
+| API-090 | Search/list public registry           | 5fea852                    |
+| API-091 | Get agent card detail                 | 5fea852                    |
+| API-092 | Update agent card                     | 5fea852                    |
+| API-093 | Deregister agent                      | 5fea852                    |
+| API-094 | Initiate A2A transaction              | 5fea852                    |
+| API-095 | Get transaction status + audit trail  | 5fea852                    |
+| API-096 | Approve transaction                   | 5fea852                    |
+| API-097 | Reject transaction                    | 5fea852                    |
+| API-098 | Registry discovery analytics          | 5fea852                    |
+| API-113 | Platform admin impersonation          | 5fea852                    |
+| API-114 | End impersonation                     | 5fea852                    |
+| API-115 | Platform daily digest configuration   | 5fea852                    |
+| API-116 | GDPR deletion workflow (platform)     | 5fea852                    |
+| API-117 | List user's agents                    | 5fea852                    |
+| API-118 | Notification preferences (PATCH/GET)  | 5fea852                    |
+| API-119 | Read/mark notifications               | 5fea852                    |
+| API-120 | List notifications                    | 5fea852                    |
+| API-122 | Global error handler middleware       | c96dc16                    |
+| API-124 | File transaction dispute              | c96dc16                    |
+| API-125 | Resolve transaction dispute           | c96dc16                    |
+| AI-024  | Chat router "remember that" fast path | (prev session — confirmed) |
+
+**Deferred items**:
+
+- API-121 (Stripe webhook handler) — deferred; `stripe` library not installed; external dependency
+- API-110 (Glossary expansions SSE metadata) — needs verification; may already be in `chat/orchestrator.py`
+- API-123 — verify if any remaining gap item exists under this ID
 
 **Documentation updates**: `docs/00-authority/CLAUDE.md` Phase 2 state section added; `docs/00-authority/README.md` Phase Coverage table updated; all session 12 completion items annotated with `**Completed**: 2026-03-08` in `02-api-endpoints.md` and `03-ai-services.md`.
 

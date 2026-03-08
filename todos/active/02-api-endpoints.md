@@ -1815,8 +1815,9 @@
 
 ## Plan 07 — Hosted Agent Registry (HAR)
 
-### API-089: Register agent card
+### API-089: Register agent card ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 6h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/registry/agents
@@ -1836,8 +1837,9 @@
 
 ---
 
-### API-090: List/search registry agents
+### API-090: List/search registry agents ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 4h
 **Depends on**: API-089
 **Method + Path**: GET /api/v1/registry/agents
@@ -1856,8 +1858,9 @@
 
 ---
 
-### API-091: Get agent card detail
+### API-091: Get agent card detail ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 2h
 **Depends on**: API-089
 **Method + Path**: GET /api/v1/registry/agents/{id}
@@ -1874,8 +1877,9 @@
 
 ---
 
-### API-092: Update agent card
+### API-092: Update agent card ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 3h
 **Depends on**: API-089
 **Method + Path**: PUT /api/v1/registry/agents/{id}
@@ -1893,8 +1897,9 @@
 
 ---
 
-### API-093: Deregister agent
+### API-093: Deregister agent ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 3h
 **Depends on**: API-089
 **Method + Path**: DELETE /api/v1/registry/agents/{id}
@@ -1913,8 +1918,9 @@
 
 ---
 
-### API-094: Initiate A2A transaction
+### API-094: Initiate A2A transaction ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 8h
 **Depends on**: API-089
 **Method + Path**: POST /api/v1/registry/transactions
@@ -1934,8 +1940,9 @@
 
 ---
 
-### API-095: Get transaction status + audit trail
+### API-095: Get transaction status + audit trail ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 4h
 **Depends on**: API-094
 **Method + Path**: GET /api/v1/registry/transactions/{txn_id}
@@ -1953,8 +1960,9 @@
 
 ---
 
-### API-096: Approve transaction (human approval gate)
+### API-096: Approve transaction (human approval gate) ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 4h
 **Depends on**: API-094
 **Method + Path**: POST /api/v1/registry/transactions/{txn_id}/approve
@@ -1973,8 +1981,9 @@
 
 ---
 
-### API-097: Reject transaction
+### API-097: Reject transaction ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 2h
 **Depends on**: API-096
 **Method + Path**: POST /api/v1/registry/transactions/{txn_id}/reject
@@ -1992,8 +2001,9 @@
 
 ---
 
-### API-098: Registry discovery analytics
+### API-098: Registry discovery analytics ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 4h
 **Depends on**: API-089
 **Method + Path**: GET /api/v1/registry/analytics
@@ -2297,8 +2307,9 @@
 
 ---
 
-### API-113: Platform admin impersonation
+### API-113: Platform admin impersonation ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 6h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/platform/impersonate
@@ -2317,8 +2328,9 @@
 
 ---
 
-### API-114: End impersonation
+### API-114: End impersonation ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 2h
 **Depends on**: API-113
 **Method + Path**: POST /api/v1/platform/impersonate/end
@@ -2334,8 +2346,9 @@
 
 ---
 
-### API-115: Platform daily digest configuration
+### API-115: Platform daily digest configuration ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: PATCH /api/v1/platform/preferences
@@ -2352,8 +2365,9 @@
 
 ---
 
-### API-116: GDPR deletion workflow (platform)
+### API-116: GDPR deletion workflow (platform) ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 6h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/platform/tenants/{id}/gdpr-delete
@@ -2374,8 +2388,9 @@
 
 ## Cross-Plan — End User Additional
 
-### API-117: List user's agents
+### API-117: List user's agents ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/agents
@@ -2392,8 +2407,9 @@
 
 ---
 
-### API-118: Notification preferences
+### API-118: Notification preferences ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 2h
 **Depends on**: API-001
 **Method + Path**: PATCH /api/v1/me/notification-preferences
@@ -2409,8 +2425,9 @@
 
 ---
 
-### API-119: Read/mark notifications
+### API-119: Read/mark notifications ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 3h
 **Depends on**: API-012
 **Method + Path**: PATCH /api/v1/notifications/{id}
@@ -2426,8 +2443,9 @@
 
 ---
 
-### API-120: List notifications
+### API-120: List notifications ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 2h
 **Depends on**: API-012
 **Method + Path**: GET /api/v1/notifications
@@ -2487,8 +2505,9 @@
 - [ ] All secrets from env (never hardcoded)
       **Notes**: GAP-005. HIGH. Without this, billing tables (DB-045) remain permanently empty. No authentication middleware — uses Stripe signature instead.
 
-### API-122: Global error handler middleware
+### API-122: Global error handler middleware ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 4h
 **Depends on**: API-001
 **Method + Path**: Middleware (all routes)
@@ -2505,8 +2524,9 @@
 - [ ] No stack traces or internal details leaked to client in production
       **Notes**: GAP-009. HIGH. TEST-072 already expects this format but no middleware implements it.
 
-### API-124: File transaction dispute
+### API-124: File transaction dispute ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 4h
 **Depends on**: API-094
 **Method + Path**: POST /api/v1/registry/transactions/{id}/dispute
@@ -2525,8 +2545,9 @@
 - [ ] Audit trail entry created
       **Notes**: GAP-036. HIGH. Phase 1: manual platform admin resolution. Critical for Tier 3 financial transaction trust.
 
-### API-125: Resolve transaction dispute
+### API-125: Resolve transaction dispute ✅ COMPLETED
 
+**Completed**: 2026-03-08
 **Effort**: 3h
 **Depends on**: API-124
 **Method + Path**: POST /api/v1/registry/transactions/{id}/dispute/resolve
