@@ -26,7 +26,9 @@ export interface AgentTemplatesResponse {
 export interface DeployAgentPayload {
   name: string;
   access_control: "workspace" | "role" | "user";
-  kb_ids: string[];
+  access_roles?: string[];
+  access_user_ids?: string[];
+  kb_selections?: { integration_id: string; mode: string }[];
 }
 
 export interface DeployAgentResponse {

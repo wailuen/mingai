@@ -83,7 +83,7 @@ export function AccessControlSelector({
     );
     if (unresolvedIds.length === 0) return;
 
-    setResolvingIds((prev) => new Set([...prev, ...unresolvedIds]));
+    setResolvingIds((prev) => new Set(Array.from(prev).concat(unresolvedIds)));
     Promise.all(
       unresolvedIds.map((id) =>
         apiGet<UserRecord>(`/api/v1/users/${encodeURIComponent(id)}`).catch(
