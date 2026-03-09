@@ -136,3 +136,31 @@ class TestAgentHealthMonitor:
         summary = await monitor.run_once(mock_db)
 
         assert summary["avg_trust_score"] == 60  # (60 + 80 + 40) / 3
+
+    @pytest.mark.asyncio
+    @patch("app.modules.har.health_monitor.compute_trust_score")
+    async def test_run_once_handles_score_error_as_failure(self, mock_compute):
+        """Agent that raises exception during scoring gets score=0 and is flagged low-trust."""
+        from app.modules.har.health_monitor import AgentHealthMonitor
+
+        # First agent OK, second raises exception (simulating timeout/failure)
+        mock_compute.side_effect = [75, Exception("Agent health check timed out")]
+
+        mock_db = AsyncMock()
+        rows = [
+            {"id": "agent-ok", "tenant_id": "tenant-1"},
+            {"id": "agent-timeout", "tenant_id": "tenant-1"},
+        ]
+        result_mock = MagicMock()
+        result_mock.mappings.return_value = rows
+        mock_db.execute = AsyncMock(return_value=result_mock)
+
+        monitor = AgentHealthMonitor(
+            db_session_factory=AsyncMock(), interval_seconds=3600
+        )
+        summary = await monitor.run_once(mock_db)
+
+        assert summary["agents_checked"] == 2
+        # agent-timeout should be in low_trust (score=0 due to exception)
+        assert "agent-timeout" in summary["low_trust_agents"]
+        assert "agent-ok" not in summary["low_trust_agents"]

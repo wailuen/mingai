@@ -213,3 +213,96 @@ class TestComputeTrustScore:
 
         score = await compute_trust_score("agent-007", "tenant-001", mock_db)
         assert score == 0
+
+    @pytest.mark.asyncio
+    async def test_high_completed_transactions_high_kyb_near_max(self):
+        """kyb_level=3 (40pts) + 30 completed (30pts, capped) + 0 disputes => 70."""
+        from app.modules.har.trust import compute_trust_score
+
+        mock_db = AsyncMock()
+
+        kyb_result = MagicMock()
+        kyb_result.scalar.return_value = 3
+
+        completed_result = MagicMock()
+        completed_result.scalar.return_value = 30
+
+        disputed_result = MagicMock()
+        disputed_result.scalar.return_value = 0
+
+        update_result = MagicMock()
+        update_result.rowcount = 1
+
+        mock_db.execute = AsyncMock(
+            side_effect=[kyb_result, completed_result, disputed_result, update_result]
+        )
+
+        score = await compute_trust_score("agent-high", "tenant-001", mock_db)
+        # 40 + 30 - 0 = 70 (maximum achievable score)
+        assert score == 70
+
+    @pytest.mark.asyncio
+    async def test_low_completed_transactions_low_kyb(self):
+        """kyb_level=1 (15pts) + 1 completed (1pt) + 2 disputes (20 penalty) => 0."""
+        from app.modules.har.trust import compute_trust_score
+
+        mock_db = AsyncMock()
+
+        kyb_result = MagicMock()
+        kyb_result.scalar.return_value = 1
+
+        completed_result = MagicMock()
+        completed_result.scalar.return_value = 1
+
+        disputed_result = MagicMock()
+        disputed_result.scalar.return_value = 2
+
+        update_result = MagicMock()
+        update_result.rowcount = 1
+
+        mock_db.execute = AsyncMock(
+            side_effect=[kyb_result, completed_result, disputed_result, update_result]
+        )
+
+        score = await compute_trust_score("agent-low", "tenant-001", mock_db)
+        # 15 + 1 - 20 = -4 => floored to 0
+        assert score == 0
+
+    @pytest.mark.asyncio
+    async def test_score_recomputed_fresh_each_call(self):
+        """Each call to compute_trust_score queries DB fresh — not stale/cached."""
+        from app.modules.har.trust import compute_trust_score
+
+        mock_db = AsyncMock()
+
+        # First call: kyb=2, 10 completed, 0 disputes => 30 + 10 = 40
+        kyb1 = MagicMock()
+        kyb1.scalar.return_value = 2
+        comp1 = MagicMock()
+        comp1.scalar.return_value = 10
+        disp1 = MagicMock()
+        disp1.scalar.return_value = 0
+        upd1 = MagicMock()
+        upd1.rowcount = 1
+
+        # Second call: kyb=2, 10 completed, 3 disputes => 30 + 10 - 30 = 10
+        kyb2 = MagicMock()
+        kyb2.scalar.return_value = 2
+        comp2 = MagicMock()
+        comp2.scalar.return_value = 10
+        disp2 = MagicMock()
+        disp2.scalar.return_value = 3
+        upd2 = MagicMock()
+        upd2.rowcount = 1
+
+        mock_db.execute = AsyncMock(
+            side_effect=[kyb1, comp1, disp1, upd1, kyb2, comp2, disp2, upd2]
+        )
+
+        score1 = await compute_trust_score("agent-x", "tenant-001", mock_db)
+        score2 = await compute_trust_score("agent-x", "tenant-001", mock_db)
+
+        assert score1 == 40
+        assert score2 == 10
+        # Score changed immediately — not stale
+        assert score1 != score2

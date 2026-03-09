@@ -70,7 +70,7 @@ export function useIssueStatus(id: string | null) {
   return useQuery({
     queryKey: ["tenant-issue-detail", id],
     queryFn: () =>
-      apiGet<TenantIssue>(`/api/v1/admin/issues/${encodeURIComponent(id)}`),
+      apiGet<TenantIssue>(`/api/v1/admin/issues/${encodeURIComponent(id!)}`),
     enabled: !!id,
   });
 }

@@ -23,7 +23,10 @@ class TestMemoryNoteValidation:
 
     def test_note_at_201_chars_rejected(self):
         """201 characters must be rejected."""
-        from app.modules.memory.notes import validate_memory_note_content, MemoryNoteValidationError
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
 
         content = "x" * 201
         with pytest.raises(MemoryNoteValidationError, match="200"):
@@ -31,7 +34,10 @@ class TestMemoryNoteValidation:
 
     def test_note_at_1000_chars_rejected(self):
         """Very long notes must be rejected."""
-        from app.modules.memory.notes import validate_memory_note_content, MemoryNoteValidationError
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
 
         content = "x" * 1000
         with pytest.raises(MemoryNoteValidationError, match="200"):
@@ -39,21 +45,30 @@ class TestMemoryNoteValidation:
 
     def test_empty_note_rejected(self):
         """Empty notes must be rejected."""
-        from app.modules.memory.notes import validate_memory_note_content, MemoryNoteValidationError
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
 
         with pytest.raises(MemoryNoteValidationError, match="empty"):
             validate_memory_note_content("")
 
     def test_whitespace_only_note_rejected(self):
         """Whitespace-only notes must be rejected."""
-        from app.modules.memory.notes import validate_memory_note_content, MemoryNoteValidationError
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
 
         with pytest.raises(MemoryNoteValidationError, match="empty"):
             validate_memory_note_content("   \n\t  ")
 
     def test_none_note_rejected(self):
         """None content must be rejected."""
-        from app.modules.memory.notes import validate_memory_note_content, MemoryNoteValidationError
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
 
         with pytest.raises(MemoryNoteValidationError, match="empty"):
             validate_memory_note_content(None)
@@ -68,7 +83,10 @@ class TestMemoryNoteValidation:
 
     def test_valid_source_types(self):
         """Valid source types: user_directed, auto_extracted."""
-        from app.modules.memory.notes import validate_note_source, MemoryNoteValidationError
+        from app.modules.memory.notes import (
+            validate_note_source,
+            MemoryNoteValidationError,
+        )
 
         assert validate_note_source("user_directed") == "user_directed"
         assert validate_note_source("auto_extracted") == "auto_extracted"
@@ -87,3 +105,46 @@ class TestMemoryNoteValidation:
         from app.modules.memory.notes import MAX_NOTES_IN_PROMPT
 
         assert MAX_NOTES_IN_PROMPT == 5
+
+    def test_note_over_200_chars_rejected_not_truncated(self):
+        """Note > 200 chars is REJECTED (raises error), not silently truncated."""
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
+
+        content = "a" * 250
+        with pytest.raises(MemoryNoteValidationError) as exc_info:
+            validate_memory_note_content(content)
+        # Verify it's a rejection, not a truncation — error mentions 200
+        assert "200" in str(exc_info.value)
+        # Ensure the error includes the actual length
+        assert "250" in str(exc_info.value)
+
+    def test_note_exactly_200_chars_accepted(self):
+        """Exactly 200 characters is the boundary — accepted."""
+        from app.modules.memory.notes import validate_memory_note_content
+
+        content = "b" * 200
+        result = validate_memory_note_content(content)
+        assert result == content
+        assert len(result) == 200
+
+    def test_whitespace_only_tabs_newlines_rejected(self):
+        """Note with only tabs and newlines is rejected as whitespace-only."""
+        from app.modules.memory.notes import (
+            validate_memory_note_content,
+            MemoryNoteValidationError,
+        )
+
+        with pytest.raises(MemoryNoteValidationError, match="empty"):
+            validate_memory_note_content("\t\t\n\n\r\n  ")
+
+    def test_note_with_html_tags_accepted_as_text(self):
+        """HTML content is stored as plain text (not executed). Validation passes if under 200 chars."""
+        from app.modules.memory.notes import validate_memory_note_content
+
+        content = "<script>alert('xss')</script>Prefer dark mode"
+        result = validate_memory_note_content(content)
+        # Content is accepted as-is (sanitization is at display layer)
+        assert result == content.strip()
