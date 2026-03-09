@@ -22,7 +22,7 @@ down_revision = "001"
 branch_labels = None
 depends_on = None
 
-# Snapshot of the 22 tables that existed at v001.
+# Snapshot of the 21 tenant-scoped tables that existed at v001 (tenants appended separately below).
 # IMPORTANT: Do NOT import TENANT_SCOPED_TABLES here — that list grows with
 # later migrations (e.g. har_transactions added in v003) and would cause
 # downgrade() to reference tables that don't exist when rolling back to v001.

@@ -76,6 +76,17 @@ class TestAllowlistFiltering:
 
         assert result == ["user"]
 
+    def test_two_groups_same_role_deduplicated(self):
+        """Two allowlisted groups mapping to the same role produce only one role entry."""
+        jwt_groups = ["Engineering", "R&D"]
+        allowlist = ["Engineering", "R&D"]
+        mapping = {"Engineering": "admin", "R&D": "admin"}
+
+        result = sync_auth0_groups(jwt_groups, allowlist, mapping)
+
+        assert result.count("admin") == 1, "Duplicate role must be deduplicated"
+        assert result == ["admin"]
+
     def test_allowlist_update_uses_new_allowlist(self):
         """When allowlist changes, subsequent calls use the new allowlist."""
         jwt_groups = ["Engineering", "Finance"]
