@@ -23,13 +23,13 @@ function formatTimestamp(dateStr: string): string {
 function sourceBadge(source: "manual" | "auth0_sync") {
   if (source === "auth0_sync") {
     return (
-      <span className="rounded-sm border border-accent/20 bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent">
+      <span className="rounded-badge border border-accent/20 bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent">
         Auth0
       </span>
     );
   }
   return (
-    <span className="rounded-sm border border-border bg-bg-elevated px-1.5 py-0.5 text-[10px] font-medium text-text-faint">
+    <span className="rounded-badge border border-border bg-bg-elevated px-1.5 py-0.5 text-[10px] font-medium text-text-faint">
       Manual
     </span>
   );
@@ -38,13 +38,13 @@ function sourceBadge(source: "manual" | "auth0_sync") {
 function actionBadge(action: "added" | "removed") {
   if (action === "added") {
     return (
-      <span className="rounded-sm border border-accent/20 bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent">
+      <span className="rounded-badge border border-accent/20 bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent">
         Added
       </span>
     );
   }
   return (
-    <span className="rounded-sm border border-alert/20 bg-alert-dim px-1.5 py-0.5 text-[10px] font-medium text-alert">
+    <span className="rounded-badge border border-alert/20 bg-alert-dim px-1.5 py-0.5 text-[10px] font-medium text-alert">
       Removed
     </span>
   );

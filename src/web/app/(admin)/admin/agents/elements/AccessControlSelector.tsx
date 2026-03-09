@@ -234,7 +234,7 @@ export function AccessControlSelector({
 
                 {/* Search results dropdown */}
                 {showDropdown && userSearch.length >= 2 && (
-                  <div className="absolute z-10 mt-1 w-full rounded-control border border-border bg-bg-surface shadow-lg">
+                  <div className="absolute z-10 mt-1 w-full rounded-control border border-border bg-bg-surface">
                     {isSearching && (
                       <p className="px-3 py-2 text-xs text-text-faint">
                         Searching...
