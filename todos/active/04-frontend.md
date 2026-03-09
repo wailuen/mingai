@@ -876,13 +876,12 @@
 - `src/web/app/settings/glossary/elements/TermForm.tsx` — add/edit dialog with character counter, alias pills, `prefillTerm` prop for pre-population from miss signals
 - `src/web/app/settings/glossary/elements/BulkImportDialog.tsx` — 3-step CSV wizard (upload→preview→result)
 - `src/web/app/settings/glossary/elements/MissSignalsPanel.tsx` — top uncovered terms from queries with occurrence counts and Add-to-Glossary quick action
+- `src/web/app/settings/glossary/elements/VersionHistoryDrawer.tsx` — slide-in 420px drawer, per-entry rollback with scoped loading state (isRollbacking per version_id), backdrop overlay, history list with timestamp/editor/change_summary
 - `src/web/lib/hooks/useGlossary.ts` — React Query CRUD + import hooks + `useExportGlossary` hook (calls `GET /api/v1/glossary/export`, client-side blob download) + `useMissSignals` hook
 
-**Components (pending)**:
+**Evidence (Session 15 — 2026-03-09)**: `VersionHistoryDrawer.tsx` confirmed — slide-in 420px drawer, per-entry rollback with scoped loading state (isRollbacking per version_id), backdrop overlay, history list with timestamp/editor/change_summary. TypeScript clean (0 errors).
+**Acceptance criteria**:
 
-- `VersionHistoryDrawer.tsx` — per-term edit history with rollback
-  **Evidence**: `useExportGlossary` hook in `useGlossary.ts`, Export CSV button in `page.tsx` calls `GET /api/v1/glossary/export`. `MissSignalsPanel.tsx` uses `useMissSignals` hook, integrated in `page.tsx` with `onAddTerm` callback that opens TermForm pre-filled via `prefillTerm` prop. TypeScript clean.
-  **Acceptance criteria**:
 - [x] Term list: searchable by term/definition, filterable by active/inactive
 - [x] Term form fields: term, full form, definition (200 char limit), aliases
 - [x] Character counter on definition field: warning at 180 chars, block at 200 chars
@@ -890,7 +889,7 @@
 - [x] Bulk import: CSV upload → preview table → import (basic, no conflict resolution)
 - [ ] Bulk import conflict resolution (skip/overwrite/rename)
 - [x] Bulk export: CSV download of all terms
-- [ ] Version history: per-term drawer showing edit history with rollback button
+- [x] Version history: per-term drawer showing edit history with rollback button
 - [x] Miss signals panel: top terms appearing in queries without glossary coverage
 - [x] Each action persists immediately via API
 - [x] Empty state: "No glossary terms yet. Add your first term or import from CSV."
@@ -912,13 +911,15 @@
 - `src/web/app/(admin)/admin/sync/elements/FreshnessIndicator.tsx` — green (<24h) / yellow (24-72h) / red (>72h) dot with label
 - `src/web/app/(admin)/admin/sync/elements/SyncJobHistory.tsx` — job history log per source
 - `src/web/app/(admin)/admin/sync/elements/CredentialExpiryBanner.tsx` — 30-day warning banner
+- `src/web/app/(admin)/admin/sync/elements/ScheduleConfigForm.tsx` — frequency selector (hourly/every 6h/daily/weekly) per source
+- `src/web/app/(admin)/admin/sync/elements/ReindexButton.tsx` — re-index trigger with estimated embedding cost dialog
 - `src/web/lib/hooks/useSyncHealth.ts` — React Query hooks for sync health data
-  **Evidence**: `useSyncHealth.ts` React Query hooks, `page.tsx` orchestrator with all child elements integrated, freshness thresholds implemented (green <24h, yellow 24-72h, red >72h), Sync Now button per source card. TypeScript clean, design system compliant.
+  **Evidence**: `useSyncHealth.ts` React Query hooks, `page.tsx` orchestrator with all child elements integrated, freshness thresholds implemented (green <24h, yellow 24-72h, red >72h), Sync Now button per source card. Session 15 (2026-03-09): `ScheduleConfigForm.tsx` confirmed — frequency selector per source. `ReindexButton.tsx` confirmed — re-index with cost estimate dialog. TypeScript clean (0 errors).
   **Acceptance criteria**:
 - [x] Per-source status card: name, document count, last sync time, error count, freshness dot
 - [x] Freshness: green (<24h), yellow (24-72h), red (>72h since last successful sync)
-- [ ] Schedule configuration: frequency selector (hourly, every 6h, daily, weekly) per source
-- [ ] Re-index button: shows estimated embedding cost dialog before confirming
+- [x] Schedule configuration: frequency selector (hourly, every 6h, daily, weekly) per source
+- [x] Re-index button: shows estimated embedding cost dialog before confirming
 - [ ] Cost estimate uses DM Mono font for dollar amounts
 - [x] Credential expiry banner: appears 30 days before expiry, links to reconnect wizard
 - [x] Sync Now button per source
@@ -940,9 +941,11 @@
 - `src/web/app/(admin)/admin/agents/elements/AgentCard.tsx` — template card with seed badge, capabilities, Preview/Deploy buttons, loading skeleton
 - `src/web/app/(admin)/admin/agents/elements/TemplatePreviewModal.tsx` — read-only system prompt, variable detection, capabilities
 - `src/web/app/(admin)/admin/agents/elements/AgentDeployForm.tsx` — deploy form with name and access control
-- `src/web/app/(admin)/admin/agents/elements/UpgradeNotificationBanner.tsx` — placeholder (returns null)
+- `src/web/app/(admin)/admin/agents/elements/KBSelector.tsx` — multi-select KB with grounded/extended toggle, correct border tokens
+- `src/web/app/(admin)/admin/agents/elements/AccessControlSelector.tsx` — workspace/role/user access control with user search, chip display showing display_name||email, handleSearchBlur with 150ms delay
+- `src/web/app/(admin)/admin/agents/elements/UpgradeNotificationBanner.tsx` — upgrade notification banner
 - `src/web/lib/hooks/useAgentTemplates.ts` — React Query hooks for agent templates API
-  **Evidence**: `useAgentTemplates.ts` React Query hooks; `page.tsx` orchestrator with category filter state; filter chips use outlined neutral style (not filled accent); `AgentCard.tsx` with seed badge, capabilities, Preview/Deploy buttons and loading skeleton; `TemplatePreviewModal.tsx` with read-only prompt and variable detection; `AgentDeployForm.tsx` with name and access control. TypeScript clean, design system compliant.
+  **Evidence**: `useAgentTemplates.ts` React Query hooks; `page.tsx` orchestrator with category filter state; filter chips use outlined neutral style (not filled accent); `AgentCard.tsx` with seed badge, capabilities, Preview/Deploy buttons and loading skeleton; `TemplatePreviewModal.tsx` with read-only prompt and variable detection; `AgentDeployForm.tsx` with name and access control. Session 15 (2026-03-09): `KBSelector.tsx` confirmed — multi-select KB with grounded/extended toggle, correct border tokens. `AccessControlSelector.tsx` confirmed — workspace/role/user access control with user search, chip display showing display_name||email, handleSearchBlur with 150ms delay. `UpgradeNotificationBanner.tsx` confirmed. TypeScript clean (0 errors).
   **Acceptance criteria**:
 - [x] Card grid shows all available templates (seed + platform-published)
 - [x] Seed templates (HR, IT Helpdesk, Procurement, Onboarding) visible immediately
@@ -950,9 +953,9 @@
 - [x] Filter chips use outlined neutral style (NOT filled accent)
 - [x] Template preview: read-only system prompt, variable list, example conversations
 - [x] Deploy form: fill required variables, set agent name, select KBs, set access control
-- [ ] KB selector: multi-select from workspace KBs with grounded/extended toggle
-- [ ] Access control: workspace-wide / role-restricted / user-specific
-- [ ] Upgrade notification banner when new template version available
+- [x] KB selector: multi-select from workspace KBs with grounded/extended toggle
+- [x] Access control: workspace-wide / role-restricted / user-specific
+- [x] Upgrade notification banner when new template version available
 - [x] Loading skeleton for card grid
       **Notes**: Plan 06 Sprint C1. Seed templates shipped in codebase per R27 fix.
 

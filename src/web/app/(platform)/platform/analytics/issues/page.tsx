@@ -8,6 +8,11 @@ import type { AnalyticsPeriod } from "@/lib/hooks/useIssueAnalytics";
 import { IssueSummaryKPIs } from "./elements/IssueSummaryKPIs";
 import { IssuesByTenantTable } from "./elements/IssuesByTenantTable";
 import { SeverityBreakdown } from "./elements/SeverityBreakdown";
+import { MTTRChart } from "./elements/MTTRChart";
+import { TopBugsTable } from "./elements/TopBugsTable";
+import { TrendChart } from "./elements/TrendChart";
+import { DuplicateView } from "./elements/DuplicateView";
+import { SLAAdherence } from "./elements/SLAAdherence";
 
 // ---------------------------------------------------------------------------
 // Period selector (same pattern as cost analytics)
@@ -89,10 +94,37 @@ export default function IssueAnalyticsPage() {
           </ErrorBoundary>
         </div>
 
-        {/* Severity breakdown */}
-        <div className="mt-7">
+        {/* Severity breakdown + SLA adherence side-by-side */}
+        <div className="mt-7 grid grid-cols-1 gap-7 lg:grid-cols-2">
           <ErrorBoundary>
             <SeverityBreakdown period={period} />
+          </ErrorBoundary>
+          <ErrorBoundary>
+            <SLAAdherence period={period} />
+          </ErrorBoundary>
+        </div>
+
+        {/* MTTR chart + Trend chart side-by-side */}
+        <div className="mt-7 grid grid-cols-1 gap-7 lg:grid-cols-2">
+          <ErrorBoundary>
+            <MTTRChart period={period} />
+          </ErrorBoundary>
+          <ErrorBoundary>
+            <TrendChart period={period} />
+          </ErrorBoundary>
+        </div>
+
+        {/* Top bugs */}
+        <div className="mt-7">
+          <ErrorBoundary>
+            <TopBugsTable period={period} />
+          </ErrorBoundary>
+        </div>
+
+        {/* Duplicate clusters */}
+        <div className="mt-7">
+          <ErrorBoundary>
+            <DuplicateView period={period} />
           </ErrorBoundary>
         </div>
       </div>
