@@ -28,7 +28,7 @@ function DeleteConfirmPopover({
   isDeleting: boolean;
 }) {
   return (
-    <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-card border border-border bg-bg-surface p-3 shadow-lg">
+    <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-card border border-border bg-bg-surface p-3">
       <p className="mb-3 text-sm text-text-primary">
         Delete <span className="font-semibold">{teamName}</span>? This cannot be
         undone.
@@ -108,7 +108,7 @@ export function TeamList({ onEdit, onSelect }: TeamListProps) {
         const source = info.row.original.source ?? "manual";
         const label = source === "auth0_sync" ? "Auth0" : "Manual";
         return (
-          <span className="rounded-sm border border-border bg-bg-elevated px-1.5 py-0.5 text-[10px] text-text-faint">
+          <span className="rounded-badge border border-border bg-bg-elevated px-1.5 py-0.5 text-[10px] text-text-faint">
             {label}
           </span>
         );

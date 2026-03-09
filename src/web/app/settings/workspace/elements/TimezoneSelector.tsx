@@ -70,7 +70,7 @@ export function TimezoneSelector({ value, onChange }: TimezoneSelectorProps) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-card border border-border bg-bg-surface shadow-lg">
+          <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-card border border-border bg-bg-surface">
             <div className="border-b border-border p-2">
               <input
                 type="text"

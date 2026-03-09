@@ -39,7 +39,7 @@ export function AgentCard({
           {agent.capabilities.map((cap) => (
             <span
               key={cap}
-              className="rounded-sm bg-bg-elevated px-2 py-0.5 text-[10px] font-medium text-text-muted"
+              className="rounded-badge bg-bg-elevated px-2 py-0.5 text-[10px] font-medium text-text-muted"
             >
               {cap}
             </span>

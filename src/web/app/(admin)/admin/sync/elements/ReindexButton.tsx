@@ -66,7 +66,7 @@ export function ReindexButton({
           />
 
           {/* Dialog */}
-          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-border bg-bg-surface p-6 shadow-lg animate-fade-in">
+          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-border bg-bg-surface p-6 animate-fade-in">
             <h3 className="text-section-heading text-text-primary">
               Confirm Re-index
             </h3>

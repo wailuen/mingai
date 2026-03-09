@@ -62,7 +62,7 @@ function ClusterRow({ cluster }: { cluster: DuplicateCluster }) {
             {cluster.affected_tenants.map((tenant) => (
               <span
                 key={tenant}
-                className="rounded-sm border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted"
+                className="rounded-badge border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted"
               >
                 {tenant}
               </span>

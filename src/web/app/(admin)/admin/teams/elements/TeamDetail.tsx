@@ -37,7 +37,7 @@ export function TeamDetail({ teamId, onClose, onAddMember }: TeamDetailProps) {
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-border bg-bg-surface shadow-lg animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-border bg-bg-surface animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div className="min-w-0 flex-1">
@@ -210,7 +210,7 @@ function MemoryTab({
             {memory?.topics.map((topic, i) => (
               <span
                 key={i}
-                className="rounded-sm border border-border bg-bg-elevated px-2 py-0.5 text-xs text-text-muted"
+                className="rounded-badge border border-border bg-bg-elevated px-2 py-0.5 text-xs text-text-muted"
               >
                 {topic}
               </span>

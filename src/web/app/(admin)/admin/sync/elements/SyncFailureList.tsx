@@ -48,7 +48,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
         <h2 className="text-section-heading text-text-primary">
           Sync Failures
         </h2>
-        <span className="rounded-sm bg-bg-elevated px-2 py-0.5 font-mono text-xs text-text-muted">
+        <span className="rounded-badge bg-bg-elevated px-2 py-0.5 font-mono text-xs text-text-muted">
           {failures.length}
         </span>
       </div>
@@ -149,7 +149,7 @@ function TypeBadge({ type }: { type: "sharepoint" | "google_drive" }) {
   const label = type === "sharepoint" ? "SharePoint" : "Google Drive";
 
   return (
-    <span className="inline-block rounded-sm bg-bg-elevated px-2 py-0.5 text-[11px] font-medium text-text-muted">
+    <span className="inline-block rounded-badge bg-bg-elevated px-2 py-0.5 text-[11px] font-medium text-text-muted">
       {label}
     </span>
   );

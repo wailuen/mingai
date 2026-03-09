@@ -160,7 +160,7 @@ function QueueIssueRow({
         <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
           {issue.title}
           {issue.sla_at_risk && (
-            <span className="ml-2 rounded-sm bg-alert/15 px-1.5 py-0.5 text-[10px] font-semibold text-alert">
+            <span className="ml-2 rounded-badge bg-alert/15 px-1.5 py-0.5 text-[10px] font-semibold text-alert">
               SLA AT RISK
             </span>
           )}

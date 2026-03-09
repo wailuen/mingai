@@ -30,7 +30,7 @@ function severityBadge(severity: Issue["severity"]) {
 
   return (
     <span
-      className={`inline-block rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-medium ${colorMap[severity]}`}
+      className={`inline-block rounded-badge border px-1.5 py-0.5 font-mono text-[10px] font-medium ${colorMap[severity]}`}
     >
       {severity}
     </span>

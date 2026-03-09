@@ -54,7 +54,7 @@ export function UserActionMenu({ user }: { user: UserRow }) {
               className="fixed inset-0 z-10"
               onClick={() => setOpen(false)}
             />
-            <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-card border border-border bg-bg-surface p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-card border border-border bg-bg-surface p-1">
               <button
                 onClick={handleRoleChange}
                 className="w-full rounded-control px-3 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"

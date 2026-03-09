@@ -89,7 +89,7 @@ const columns = [
     cell: (info) => (
       <span
         className={cn(
-          "inline-block rounded-sm border px-1.5 py-0.5 text-[11px] font-medium",
+          "inline-block rounded-badge border px-1.5 py-0.5 text-[11px] font-medium",
           statusBadgeClass(info.getValue()),
         )}
       >

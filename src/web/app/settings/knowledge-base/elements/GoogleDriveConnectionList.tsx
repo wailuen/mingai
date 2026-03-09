@@ -105,7 +105,7 @@ function ConnectionCard({ connection }: { connection: GoogleDriveConnection }) {
       <div className="flex items-center gap-3">
         <span
           className={cn(
-            "rounded-sm border px-2 py-0.5 text-xs font-medium",
+            "rounded-badge border px-2 py-0.5 text-xs font-medium",
             config.badgeClass,
           )}
         >

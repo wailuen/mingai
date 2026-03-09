@@ -73,7 +73,7 @@ export function SeverityBreakdown({ period }: SeverityBreakdownProps) {
             <div key={item.severity} className="flex items-center gap-3">
               <span
                 className={cn(
-                  "inline-block w-10 rounded-sm border px-1.5 py-0.5 text-center font-mono text-[11px] font-medium",
+                  "inline-block w-10 rounded-badge border px-1.5 py-0.5 text-center font-mono text-[11px] font-medium",
                   severityBadgeClass(item.severity),
                 )}
               >

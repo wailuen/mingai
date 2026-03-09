@@ -38,7 +38,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!entry) return null;
 
   return (
-    <div className="rounded-control border border-border bg-bg-surface px-3 py-2 shadow-lg">
+    <div className="rounded-control border border-border bg-bg-surface px-3 py-2">
       <p className="text-xs font-medium text-text-primary">
         {formatDate(String(label))}
       </p>

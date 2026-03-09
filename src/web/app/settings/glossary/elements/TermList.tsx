@@ -44,7 +44,7 @@ function DeleteConfirmPopover({
   isDeleting: boolean;
 }) {
   return (
-    <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-card border border-border bg-bg-surface p-3 shadow-lg">
+    <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-card border border-border bg-bg-surface p-3">
       <p className="mb-3 text-sm text-text-primary">
         Delete <span className="font-semibold">{termName}</span>? This cannot be
         undone.

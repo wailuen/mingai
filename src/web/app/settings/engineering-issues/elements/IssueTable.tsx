@@ -215,7 +215,7 @@ function IssueRow({
         <td className="px-3.5 py-3">
           <span
             className={cn(
-              "inline-block rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-medium",
+              "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-[11px] font-medium",
               severityBadgeClass(issue.severity),
             )}
           >

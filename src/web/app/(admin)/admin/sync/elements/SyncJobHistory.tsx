@@ -117,7 +117,7 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
                   <td className="py-2.5 pr-4">
                     <span
                       className={cn(
-                        "rounded-sm px-1.5 py-0.5 text-[11px] font-medium",
+                        "rounded-badge px-1.5 py-0.5 text-[11px] font-medium",
                         statusBadgeClasses(job.status),
                       )}
                     >
