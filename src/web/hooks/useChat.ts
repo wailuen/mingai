@@ -144,13 +144,26 @@ export function useChat(agentId: string) {
               }));
               break;
 
-            case "status":
+            case "status": {
+              const stageLabels: Record<string, string> = {
+                glossary_expansion: "Expanding glossary terms...",
+                intent_detection: "Detecting intent...",
+                embedding: "Generating embeddings...",
+                vector_search: "Searching knowledge base...",
+                context_assembly: "Assembling context...",
+                prompt_build: "Building prompt...",
+                llm_streaming: "Generating response...",
+                post_processing: "Processing response...",
+                memory_save: "Saving to memory...",
+              };
               setState((prev) => ({
                 ...prev,
                 reconnecting: false,
-                statusMessage: event.data.message,
+                statusMessage:
+                  stageLabels[event.data.stage] ?? event.data.stage,
               }));
               break;
+            }
 
             case "sources":
               currentSources = event.data.sources;
@@ -167,7 +180,7 @@ export function useChat(agentId: string) {
                 if (lastMsg.role === "assistant") {
                   msgs[msgs.length - 1] = {
                     ...lastMsg,
-                    content: lastMsg.content + event.data.text,
+                    content: lastMsg.content + event.data.chunk,
                   };
                 }
                 return {

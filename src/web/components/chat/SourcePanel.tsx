@@ -43,7 +43,7 @@ export function SourcePanel({ sources, onClose }: SourcePanelProps) {
           ) : (
             <div className="space-y-3">
               {sources.map((source) => (
-                <SourceCard key={source.id} source={source} />
+                <SourceCard key={source.document_id} source={source} />
               ))}
             </div>
           )}
@@ -65,15 +65,21 @@ function SourceCard({ source }: { source: Source }) {
   return (
     <div className="rounded-control border border-border bg-bg-elevated p-3">
       <div className="flex items-center justify-between">
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-sm font-medium text-text-primary transition-colors hover:text-accent"
-        >
-          {source.title}
-          <ExternalLink size={12} />
-        </a>
+        {source.source_url ? (
+          <a
+            href={source.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-sm font-medium text-text-primary transition-colors hover:text-accent"
+          >
+            {source.title}
+            <ExternalLink size={12} />
+          </a>
+        ) : (
+          <span className="text-sm font-medium text-text-primary">
+            {source.title}
+          </span>
+        )}
         <span className="font-mono text-xs text-accent">{pct}%</span>
       </div>
 
@@ -85,9 +91,9 @@ function SourceCard({ source }: { source: Source }) {
         />
       </div>
 
-      {source.excerpt && (
+      {source.content && (
         <p className="mt-2 line-clamp-2 text-xs text-text-muted">
-          {source.excerpt}
+          {source.content}
         </p>
       )}
     </div>

@@ -162,12 +162,27 @@ async def create_issue_db(
     db,
 ) -> dict:
     """Create a new issue report."""
+    import json as _json
+    import re as _re
+
+    # Validate tenant_id is a real UUID — the platform admin bootstrap uses
+    # the sentinel value "default" which is not a valid UUID column value.
+    _uuid_re = _re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    if not _uuid_re.match(tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Issue creation requires a tenant-scoped user account.",
+        )
+
     issue_id = str(uuid.uuid4())
+    # metadata is a JSONB column — use CAST to avoid asyncpg type inference errors
     await db.execute(
         text(
             "INSERT INTO issue_reports "
             "(id, tenant_id, reporter_id, issue_type, description, screenshot_url, status, blur_acknowledged, metadata) "
-            "VALUES (:id, :tenant_id, :reporter_id, :issue_type, :description, :screenshot_url, :status, :blur_acknowledged, :metadata)"
+            "VALUES (:id, :tenant_id, :reporter_id, :issue_type, :description, :screenshot_url, :status, :blur_acknowledged, CAST(:metadata AS jsonb))"
         ),
         {
             "id": issue_id,
@@ -178,7 +193,7 @@ async def create_issue_db(
             "screenshot_url": screenshot_url,
             "status": "open",
             "blur_acknowledged": blur_acknowledged,
-            "metadata": __import__("json").dumps({"title": title}),
+            "metadata": _json.dumps({"title": title}),
         },
     )
     await db.commit()
@@ -281,8 +296,9 @@ async def add_issue_event_db(
         {
             "id": event_id,
             "issue_id": issue_id,
-            "user_id": user_id,
-            "content": content,
+            "tenant_id": tenant_id,
+            "event_type": "comment",
+            "data": content,
         },
     )
     await db.commit()
@@ -346,7 +362,7 @@ async def list_my_issues_db(
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
             ),
             {
-                "user_id": user_id,
+                "reporter_id": user_id,
                 "tenant_id": tenant_id,
                 "status": status_filter,
                 "limit": page_size,
@@ -362,7 +378,7 @@ async def list_my_issues_db(
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
             ),
             {
-                "user_id": user_id,
+                "reporter_id": user_id,
                 "tenant_id": tenant_id,
                 "limit": page_size,
                 "offset": offset,
@@ -550,6 +566,7 @@ async def list_my_reports(
     # Platform admins operate cross-tenant and cannot access per-tenant my-reports
     try:
         import uuid as _uuid
+
         _uuid.UUID(current_user.tenant_id)
     except (ValueError, AttributeError):
         raise HTTPException(
@@ -722,7 +739,7 @@ async def get_issue(
 
     # Authorization: tenant admins can see all issues; others can only see their own
     is_admin = "tenant_admin" in current_user.roles
-    is_owner = result["user_id"] == current_user.id
+    is_owner = result["reporter_id"] == current_user.id
     if not is_admin and not is_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -794,7 +811,7 @@ async def list_admin_issues_db(
     # query string; user-supplied VALUES are always passed as bind parameters.
     select_cols = (
         "ir.id, ir.reporter_id, ir.issue_type, ir.status, ir.severity, "
-        "ir.ai_classification, ir.created_at, "
+        "ir.description, ir.created_at, "
         "u.name AS reporter_name"  # reporter_name intentionally returned for admin UI
     )
     join_clause = "LEFT JOIN users u ON u.id = ir.reporter_id"
@@ -802,11 +819,15 @@ async def list_admin_issues_db(
 
     count_sql = "SELECT COUNT(*) FROM issue_reports ir WHERE " + where
     list_sql = (
-        "SELECT " + select_cols
+        "SELECT "
+        + select_cols
         + " FROM issue_reports ir "
         + join_clause
-        + " WHERE " + where
-        + " " + order_clause + " LIMIT :limit OFFSET :offset"
+        + " WHERE "
+        + where
+        + " "
+        + order_clause
+        + " LIMIT :limit OFFSET :offset"
     )
 
     count_result = await db.execute(text(count_sql), params)
@@ -818,13 +839,13 @@ async def list_admin_issues_db(
         {
             "id": str(r[0]),
             # reporter name is intentional — this is a tenant-admin-only endpoint
-            "reporter": {"id": str(r[1]), "name": r[8]},
-            "title": r[2],
-            "type": r[3],
-            "status": r[4],
-            "severity": r[5],
-            "ai_classification": r[6],
-            "created_at": str(r[7]),
+            "reporter": {"id": str(r[1]), "name": r[7]},
+            "title": r[5] or r[2],
+            "type": r[2],
+            "status": r[3],
+            "severity": r[4],
+            "description": r[5],
+            "created_at": str(r[6]),
         }
         for r in rows
     ]
@@ -958,8 +979,8 @@ async def list_platform_issues_db(
     # Build SQL via concatenation — only allowlisted/hardcoded fragments enter the
     # query string; user-supplied VALUES are always passed as bind parameters.
     select_cols = (
-        "ir.id, ir.tenant_id, ir.reporter_id, ir.issue_type, ir.status, "
-        "ir.severity, ir.created_at, "
+        "ir.id, ir.tenant_id, ir.reporter_id, ir.issue_type, ir.description, "
+        "ir.status, ir.severity, ir.created_at, "
         "t.name AS tenant_name, u.name AS reporter_name"
     )
     join_clause = (
@@ -971,15 +992,19 @@ async def list_platform_issues_db(
 
     count_sql = "SELECT COUNT(*) FROM issue_reports ir " + where_clause
     list_sql = (
-        "SELECT " + select_cols
+        "SELECT "
+        + select_cols
         + " FROM issue_reports ir "
         + join_clause
-        + " " + where_clause
-        + order_clause + " LIMIT :limit OFFSET :offset"
+        + " "
+        + where_clause
+        + order_clause
+        + " LIMIT :limit OFFSET :offset"
     )
     severity_sql = (
         "SELECT severity, COUNT(*) FROM issue_reports ir "
-        + where_clause + "GROUP BY severity"
+        + where_clause
+        + "GROUP BY severity"
     )
 
     count_result = await db.execute(text(count_sql), params)
@@ -994,14 +1019,13 @@ async def list_platform_issues_db(
     items = [
         {
             "id": str(r[0]),
-            "tenant": {"id": str(r[1]), "name": r[9]},
-            "reporter": {"name": r[10]},
-            "title": r[3],
-            "type": r[4],
+            "tenant": {"id": str(r[1]), "name": r[8]},
+            "reporter": {"name": r[9]},
+            "title": r[4] or r[3],  # description as title, fall back to issue_type
+            "type": r[3],
             "status": r[5],
             "severity": r[6],
-            "ai_classification": r[7],
-            "created_at": str(r[8]),
+            "created_at": str(r[7]),
         }
         for r in rows
     ]
@@ -1070,19 +1094,33 @@ async def platform_issue_action_db(
     if (result.rowcount or 0) == 0:
         return None
 
-    event_id = str(uuid.uuid4())
-    await db.execute(
-        text(
-            "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, data) "
-            "VALUES (:id, :issue_id, :tenant_id, :event_type, :data)"
-        ),
-        {
-            "id": event_id,
-            "issue_id": issue_id,
-            "user_id": actor_id,
-            "content": f"Platform action: {action}" + (f" — {note}" if note else ""),
-        },
+    # Fetch tenant_id for this issue (required by the event FK)
+    tid_row = await db.execute(
+        text("SELECT tenant_id FROM issue_reports WHERE id = :id"),
+        {"id": issue_id},
     )
+    tid_result = tid_row.fetchone()
+    tenant_id_for_event = str(tid_result[0]) if tid_result else None
+
+    if tenant_id_for_event:
+        import json as _json
+
+        event_id = str(uuid.uuid4())
+        await db.execute(
+            text(
+                "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, data) "
+                "VALUES (:id, :issue_id, :tenant_id, :event_type, CAST(:data AS jsonb))"
+            ),
+            {
+                "id": event_id,
+                "issue_id": issue_id,
+                "tenant_id": tenant_id_for_event,
+                "event_type": "platform_action",
+                "data": _json.dumps(
+                    {"action": action, "actor_id": actor_id, "note": note}
+                ),
+            },
+        )
     await db.commit()
 
     now = datetime.now(timezone.utc).isoformat()

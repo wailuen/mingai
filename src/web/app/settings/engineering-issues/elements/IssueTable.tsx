@@ -226,7 +226,7 @@ function IssueRow({
           {issue.title}
         </td>
         <td className="px-3.5 py-3 font-mono text-xs text-text-muted">
-          {issue.reporter_email}
+          {issue.reporter?.name ?? issue.reporter_email ?? "—"}
         </td>
         <td className="px-3.5 py-3">
           <StatusDropdown issueId={issue.id} currentStatus={issue.status} />

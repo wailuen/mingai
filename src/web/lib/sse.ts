@@ -3,17 +3,17 @@ import { getStoredToken } from "./auth";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export interface Source {
-  id: string;
+  document_id: string;
   title: string;
   score: number;
-  url: string;
-  excerpt: string;
+  source_url: string | null;
+  content: string;
 }
 
 export type SSEEvent =
-  | { type: "status"; data: { stage: string; message: string } }
+  | { type: "status"; data: { stage: string } }
   | { type: "sources"; data: { sources: Source[] } }
-  | { type: "response_chunk"; data: { text: string } }
+  | { type: "response_chunk"; data: { chunk: string } }
   | {
       type: "metadata";
       data: {

@@ -21,9 +21,10 @@ export interface TenantIssue {
   title: string;
   description: string;
   status: TenantIssueStatus;
-  reporter_email: string;
+  reporter?: { id: string; name: string } | null;
+  reporter_email?: string;  // legacy field — use reporter.name if available
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface TenantIssueFilters {
@@ -52,13 +53,22 @@ function buildFilterParams(filters?: TenantIssueFilters): string {
 // useTenantIssues — GET /api/v1/admin/issues
 // ---------------------------------------------------------------------------
 
+interface TenantIssuesResponse {
+  items: TenantIssue[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export function useTenantIssues(filters?: TenantIssueFilters) {
   return useQuery({
     queryKey: ["tenant-issues", filters],
-    queryFn: () =>
-      apiGet<TenantIssue[]>(
+    queryFn: async () => {
+      const res = await apiGet<TenantIssuesResponse>(
         `/api/v1/admin/issues${buildFilterParams(filters)}`,
-      ),
+      );
+      return res.items;
+    },
   });
 }
 

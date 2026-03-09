@@ -67,13 +67,12 @@ async def insert_integration_db(
     now = datetime.now(timezone.utc)
     await db.execute(
         text(
-            "INSERT INTO integrations (id, tenant_id, type, name, status, config, created_at, updated_at) "
-            "VALUES (:id, :tenant_id, 'sharepoint', :name, 'pending', CAST(:config AS jsonb), :created_at, :updated_at)"
+            "INSERT INTO integrations (id, tenant_id, provider, status, config, created_at, updated_at) "
+            "VALUES (:id, :tenant_id, 'sharepoint', 'pending', CAST(:config AS jsonb), :created_at, :updated_at)"
         ),
         {
             "id": integration_id,
             "tenant_id": tenant_id,
-            "name": name,
             "config": config_json,
             "created_at": now,
             "updated_at": now,
@@ -91,7 +90,7 @@ async def get_integration_db(
     """Fetch an integration by id and tenant_id. Returns None if not found."""
     result = await db.execute(
         text(
-            "SELECT id, tenant_id, type, name, status, config "
+            "SELECT id, tenant_id, provider, status, config "
             "FROM integrations "
             "WHERE id = :id AND tenant_id = :tenant_id"
         ),
@@ -106,8 +105,7 @@ async def get_integration_db(
     return {
         "id": row["id"],
         "tenant_id": row["tenant_id"],
-        "type": row["type"],
-        "name": row["name"],
+        "type": row["provider"],
         "status": row["status"],
         "config": config_val,
     }
@@ -187,7 +185,7 @@ async def list_integrations_db(
     """
     result = await db.execute(
         text(
-            "SELECT i.id, i.name, i.status, i.config, "
+            "SELECT i.id, i.provider AS name, i.status, i.config, "
             "sj.created_at AS last_sync_at, sj.status AS last_sync_status "
             "FROM integrations i "
             "LEFT JOIN LATERAL ("
@@ -196,7 +194,7 @@ async def list_integrations_db(
             "  WHERE sj2.integration_id = i.id "
             "  ORDER BY sj2.created_at DESC LIMIT 1"
             ") sj ON true "
-            "WHERE i.tenant_id = :tenant_id AND i.type = 'sharepoint' "
+            "WHERE i.tenant_id = :tenant_id AND i.provider = 'sharepoint' "
             "ORDER BY i.created_at DESC"
         ),
         {"tenant_id": tenant_id},

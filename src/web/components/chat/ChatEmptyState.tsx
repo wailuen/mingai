@@ -78,7 +78,7 @@ export function ChatEmptyState({
         {/* KB hint - never expose "RAG" or technical terms */}
         <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-text-faint">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          <span>SharePoint · Google Drive · 2,081 documents indexed</span>
+          <span>SharePoint · Google Drive · Knowledge base active</span>
         </div>
 
         {/* Suggestion chips */}

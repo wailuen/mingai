@@ -12,9 +12,7 @@ import {
   Settings,
   Building2,
   Cpu,
-  DollarSign,
   AlertCircle,
-  Boxes,
   Shield,
   type LucideIcon,
 } from "lucide-react";
@@ -61,8 +59,7 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Insights",
     items: [
-      { label: "Analytics", href: "/settings/analytics", icon: BarChart3 },
-      { label: "Issues", href: "/settings/issues", icon: AlertCircle },
+      { label: "Issues", href: "/settings/engineering-issues", icon: AlertCircle },
       { label: "Settings", href: "/settings/workspace", icon: Settings },
     ],
   },
@@ -84,19 +81,6 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
     title: "Intelligence",
     items: [
       { label: "LLM Profiles", href: "/settings/llm-profiles", icon: Cpu },
-      { label: "Agent Templates", href: "/settings/agent-templates", icon: Bot },
-      { label: "Analytics", href: "/settings/analytics-platform", icon: BarChart3 },
-      { label: "Tool Catalog", href: "/settings/tool-catalog", icon: Boxes },
-    ],
-  },
-  {
-    title: "Finance",
-    items: [
-      {
-        label: "Cost Analytics",
-        href: "/settings/cost-analytics",
-        icon: DollarSign,
-      },
     ],
   },
 ];

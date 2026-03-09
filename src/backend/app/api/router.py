@@ -139,3 +139,44 @@ router.include_router(registry_router)
 from app.core.local_storage_routes import router as local_storage_router
 
 router.include_router(local_storage_router)
+
+# Document integrations list endpoint (FE-029 knowledge base page)
+# Aggregates SharePoint and Google Drive connections for a tenant.
+from fastapi import Depends
+from app.core.dependencies import CurrentUser, require_tenant_admin
+from app.core.session import get_async_session
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+_integrations_router = APIRouter(prefix="/integrations", tags=["integrations"])
+
+
+@_integrations_router.get("")
+async def list_integrations(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """List document source integrations for the tenant (SharePoint + Google Drive)."""
+    result = await session.execute(
+        text(
+            "SELECT id, provider, status, last_sync_at "
+            "FROM integrations WHERE tenant_id = :tid ORDER BY created_at DESC"
+        ),
+        {"tid": current_user.tenant_id},
+    )
+    rows = result.fetchall()
+    items = [
+        {
+            "id": str(r[0]),
+            "type": r[1],  # "sharepoint" | "googledrive"
+            "status": r[2],
+            "last_sync": r[3].isoformat() if r[3] else None,
+            "document_count": 0,
+            "error_count": 0,
+        }
+        for r in rows
+    ]
+    return items
+
+
+router.include_router(_integrations_router)

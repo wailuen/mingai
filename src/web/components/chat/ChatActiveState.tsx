@@ -3,6 +3,8 @@
 import { useRef, useEffect, useState } from "react";
 import { type ChatMessage } from "@/hooks/useChat";
 import { ChatInput } from "./ChatInput";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { FeedbackWidget } from "./FeedbackWidget";
 import { ConfidenceBar } from "./ConfidenceBar";
 import { GlossaryExpansionIndicator } from "./GlossaryExpansionIndicator";
@@ -112,9 +114,7 @@ export function ChatActiveState({
                     idx === messages.length - 1 ? glossaryExpansions : []
                   }
                   glossaryExpansionsApplied={
-                    idx === messages.length - 1
-                      ? glossaryExpansionsApplied
-                      : []
+                    idx === messages.length - 1 ? glossaryExpansionsApplied : []
                   }
                   profileContextUsed={
                     idx === messages.length - 1 ? profileContextUsed : false
@@ -256,9 +256,11 @@ function AIMessage({
         </div>
       )}
 
-      {/* Response text - 14px/1.6, no card */}
-      <div className="text-sm leading-relaxed text-text-primary">
-        {message.content}
+      {/* Response text - 14px/1.6, no card. Markdown rendered. */}
+      <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-text-primary [&_code]:rounded [&_code]:bg-bg-elevated [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-accent [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-text-primary [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-text-primary [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-text-muted [&_li]:text-text-primary [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:text-text-primary [&_strong]:font-semibold [&_strong]:text-text-primary [&_ul]:list-disc [&_ul]:pl-4">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {message.content}
+        </ReactMarkdown>
         {isStreaming && !statusMessage && (
           <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-accent" />
         )}

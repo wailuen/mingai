@@ -44,8 +44,7 @@ const SUPPORTED_LOCALES = [
 export default function WorkspaceSettingsPage() {
   const { data: settings, isLoading } = useQuery<WorkspaceSettings>({
     queryKey: ["workspace-settings"],
-    queryFn: () =>
-      apiGet<WorkspaceSettings>("/api/v1/admin/workspace-settings"),
+    queryFn: () => apiGet<WorkspaceSettings>("/api/v1/admin/workspace"),
   });
 
   const [form, setForm] = useState<WorkspaceSettings>({
@@ -96,7 +95,7 @@ export default function WorkspaceSettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
-      await apiPatch("/api/v1/admin/workspace-settings", {
+      await apiPatch("/api/v1/admin/workspace", {
         tenant_name: form.tenant_name,
         timezone: form.timezone,
         locale: form.locale,
