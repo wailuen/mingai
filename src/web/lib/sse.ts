@@ -119,9 +119,7 @@ export async function* streamChat(
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Chat request failed: ${response.status} ${errorText}`,
-      );
+      throw new Error(`Chat request failed: ${response.status} ${errorText}`);
     }
 
     if (!response.body) {
@@ -160,7 +158,7 @@ export async function* streamChat(
               const data = JSON.parse(line.slice(6));
               const event = { type: currentEvent, data } as SSEEvent;
               yield event;
-              // If we received "done", stream is fully complete
+              // If we received "done", stream is fully complete — stop reading
               if (currentEvent === "done") {
                 streamCompleted = true;
               }
@@ -172,6 +170,8 @@ export async function* streamChat(
             currentEvent = null;
           }
         }
+        // Exit inner loop as soon as done event is processed
+        if (streamCompleted) break;
       }
     } catch (readErr) {
       // Stream interrupted mid-read (network drop, server crash)

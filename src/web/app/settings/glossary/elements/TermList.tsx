@@ -119,11 +119,11 @@ export function TermList({
     columnHelper.accessor("definition", {
       header: "Definition",
       cell: (info) => {
-        const val = info.getValue();
+        const val = info.getValue() ?? "";
         const truncated = val.length > 60 ? `${val.slice(0, 60)}...` : val;
         return (
           <span className="text-sm text-text-muted" title={val}>
-            {truncated}
+            {truncated || "\u2014"}
           </span>
         );
       },

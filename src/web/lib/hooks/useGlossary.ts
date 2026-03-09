@@ -4,15 +4,34 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 
+// API response shape (raw from backend)
+interface GlossaryTermRaw {
+  id: string;
+  term: string;
+  full_form?: string | null;
+  aliases?: Array<{ term?: string; note?: string }> | null;
+  created_at: string;
+}
+
 export interface GlossaryTerm {
   id: string;
   term: string;
-  full_form?: string;
+  full_form?: string | null;
   definition: string;
-  aliases?: string[];
+  aliases?: Array<{ term?: string; note?: string }> | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+function transformTerm(raw: GlossaryTermRaw): GlossaryTerm {
+  const definition = raw.aliases?.[0]?.note ?? "";
+  return {
+    ...raw,
+    definition,
+    is_active: true, // terms in the DB are active by default (no status column)
+    updated_at: raw.created_at,
+  };
 }
 
 export interface GlossaryListResponse {
@@ -60,8 +79,15 @@ export function useGlossaryTerms(
 
   return useQuery({
     queryKey: [GLOSSARY_KEY, page, search, statusFilter],
-    queryFn: () =>
-      apiGet<GlossaryListResponse>(`/api/v1/glossary?${params.toString()}`),
+    queryFn: async () => {
+      const raw = await apiGet<{ items: GlossaryTermRaw[]; total: number; page: number; page_size: number }>(
+        `/api/v1/glossary/?${params.toString()}`,
+      );
+      return {
+        ...raw,
+        items: raw.items.map(transformTerm),
+      } as GlossaryListResponse;
+    },
   });
 }
 

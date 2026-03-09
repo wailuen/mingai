@@ -34,7 +34,7 @@ export function ChatInput({
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
-  }, [value, disabled, onSend]);
+  }, [value, disabled, onSend, mode]);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
