@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,14 +43,14 @@ function ClusterRow({ cluster }: { cluster: DuplicateCluster }) {
           {cluster.total_reports} reports
         </span>
 
-        <a
+        <Link
           href={`/platform/issues/${encodeURIComponent(cluster.first_report_id)}`}
           onClick={(e) => e.stopPropagation()}
           className="shrink-0 text-accent transition-colors hover:text-text-primary"
           title="View first report"
         >
           <ExternalLink size={14} />
-        </a>
+        </Link>
       </button>
 
       {expanded && (

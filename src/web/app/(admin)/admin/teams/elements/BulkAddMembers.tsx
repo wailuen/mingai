@@ -122,12 +122,12 @@ export function BulkAddMembers({
             {selectedUsers.map((user) => (
               <span
                 key={user.id}
-                className="inline-flex items-center gap-1 rounded-sm border border-accent/20 bg-accent-dim px-2 py-0.5 text-xs text-text-primary"
+                className="inline-flex items-center gap-1 rounded-badge border border-accent/20 bg-accent-dim px-2 py-0.5 text-xs text-text-primary"
               >
                 {user.name}
                 <button
                   onClick={() => removeUser(user.id)}
-                  className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-sm text-text-faint transition-colors hover:text-alert"
+                  className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-badge text-text-faint transition-colors hover:text-alert"
                 >
                   <X size={10} />
                 </button>

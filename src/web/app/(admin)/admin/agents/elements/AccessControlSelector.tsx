@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, Search } from "lucide-react";
 import { apiGet } from "@/lib/api";
@@ -71,8 +71,42 @@ export function AccessControlSelector({
   const [selectedUserRecords, setSelectedUserRecords] = useState<
     Record<string, UserRecord>
   >({});
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { data: searchResults, isPending: isSearching } =
     useUserSearch(userSearch);
+
+  // Fetch display records for any pre-existing userIds not yet in selectedUserRecords
+  useEffect(() => {
+    if (value.mode !== "user") return;
+    const unresolvedIds = (value.userIds ?? []).filter(
+      (id) => !selectedUserRecords[id],
+    );
+    if (unresolvedIds.length === 0) return;
+
+    setResolvingIds((prev) => new Set([...prev, ...unresolvedIds]));
+    Promise.all(
+      unresolvedIds.map((id) =>
+        apiGet<UserRecord>(`/api/v1/users/${encodeURIComponent(id)}`).catch(
+          () => null,
+        ),
+      ),
+    ).then((results) => {
+      const newRecords: Record<string, UserRecord> = {};
+      results.forEach((rec, i) => {
+        if (rec) newRecords[unresolvedIds[i]] = rec;
+      });
+      if (Object.keys(newRecords).length > 0) {
+        setSelectedUserRecords((prev) => ({ ...prev, ...newRecords }));
+      }
+      setResolvingIds((prev) => {
+        const next = new Set(prev);
+        unresolvedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    });
+    // value.userIds identity changes trigger this; selectedUserRecords excluded to avoid loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value.mode, value.userIds]);
 
   function handleModeChange(mode: AccessControlConfig["mode"]) {
     onChange({
@@ -187,15 +221,16 @@ export function AccessControlSelector({
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     {(value.userIds ?? []).map((uid) => {
                       const rec = selectedUserRecords[uid];
+                      const isResolving = resolvingIds.has(uid);
                       const label = rec
                         ? rec.display_name || rec.email
                         : uid.slice(0, 8);
                       return (
                         <span
                           key={uid}
-                          className="flex items-center gap-1 rounded-badge bg-accent-dim px-2 py-0.5 text-xs text-text-primary"
+                          className={`flex items-center gap-1 rounded-badge bg-accent-dim px-2 py-0.5 text-xs text-text-primary transition-opacity ${isResolving ? "opacity-50" : ""}`}
                         >
-                          <span className={rec ? "" : "font-mono"}>
+                          <span className={rec ? "" : "font-mono italic"}>
                             {label}
                           </span>
                           <button

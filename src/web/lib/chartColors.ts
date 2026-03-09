@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Resolves Obsidian Intelligence CSS custom properties for use in Recharts
  * SVG attributes (fill, stroke) where Tailwind classes cannot be applied.
@@ -27,11 +25,11 @@ export const CHART_COLORS = {
 
   // Issue severity colors (per design system table)
   severity: {
-    P0: "#FF3547",   // red
-    P1: "#ff6b35",   // --alert orange
-    P2: "#f5c518",   // --warn yellow
-    P3: "#1e2330",   // --bg-elevated grey
-    P4: "#1e2330",   // --bg-elevated grey
+    P0: "#FF3547", // red
+    P1: "#ff6b35", // --alert orange
+    P2: "#f5c518", // --warn yellow
+    P3: "#1e2330", // --bg-elevated grey
+    P4: "#1e2330", // --bg-elevated grey
   },
 } as const;
 

@@ -35,7 +35,12 @@ export function AgentDeployForm({
         payload: {
           name: name.trim(),
           access_control: accessControl.mode,
-          kb_ids: kbSelections.map((kb) => kb.integrationId),
+          access_roles: accessControl.roles,
+          access_user_ids: accessControl.userIds,
+          kb_selections: kbSelections.map((kb) => ({
+            integration_id: kb.integrationId,
+            mode: kb.mode,
+          })),
         },
       },
       {

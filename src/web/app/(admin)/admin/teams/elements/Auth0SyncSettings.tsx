@@ -120,12 +120,12 @@ export function Auth0SyncSettings({
           {patterns.map((pattern, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-bg-elevated px-2 py-0.5 font-mono text-xs text-text-muted"
+              className="inline-flex items-center gap-1 rounded-badge border border-border bg-bg-elevated px-2 py-0.5 font-mono text-xs text-text-muted"
             >
               {pattern}
               <button
                 onClick={() => removePattern(i)}
-                className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-sm text-text-faint transition-colors hover:bg-alert-dim hover:text-alert"
+                className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-badge text-text-faint transition-colors hover:bg-alert-dim hover:text-alert"
               >
                 <X size={10} />
               </button>

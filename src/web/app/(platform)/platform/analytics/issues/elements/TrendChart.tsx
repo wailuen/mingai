@@ -14,18 +14,19 @@ import {
   useIssueTrend,
   type AnalyticsPeriod,
 } from "@/lib/hooks/useIssueAnalytics";
+import { CHART_COLORS } from "@/lib/chartColors";
 import { Skeleton } from "@/components/shared/LoadingState";
 
 // ---------------------------------------------------------------------------
-// Severity line colors
+// Severity line colors — sourced from chartColors.ts (no hardcoded hex)
 // ---------------------------------------------------------------------------
 
 const SEVERITY_LINE_COLORS: Record<string, string> = {
-  p0: "#FF3547",
-  p1: "#ff6b35",
-  p2: "#f5c518",
-  p3: "#4a5568",
-  p4: "#2a3042",
+  p0: CHART_COLORS.severity.P0,
+  p1: CHART_COLORS.severity.P1,
+  p2: CHART_COLORS.severity.P2,
+  p3: CHART_COLORS.textFaint,
+  p4: CHART_COLORS.border,
 };
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@ function TrendTooltip({
 }) {
   if (!active || !payload || payload.length === 0) return null;
   return (
-    <div className="rounded-card border border-border bg-bg-surface px-3 py-2 text-xs shadow-md">
+    <div className="rounded-card border border-border bg-bg-surface px-3 py-2 text-xs">
       <p className="mb-1 font-mono text-text-primary">{label}</p>
       {payload.map((entry) => (
         <p key={entry.name} className="flex items-center gap-2 text-text-muted">
@@ -57,7 +58,7 @@ function TrendTooltip({
             className="inline-block h-2 w-2 rounded-full"
             style={{ backgroundColor: entry.color }}
           />
-          {entry.name.toUpperCase()}:{" "}
+          <span className="font-mono">{entry.name.toUpperCase()}</span>:{" "}
           <span className="font-mono text-text-primary">{entry.value}</span>
         </p>
       ))}
@@ -107,26 +108,26 @@ export function TrendChart({ period }: TrendChartProps) {
             >
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#2a3042"
+                stroke={CHART_COLORS.border}
                 vertical={false}
               />
               <XAxis
                 dataKey="week"
                 tick={{
-                  fill: "#8892a4",
+                  fill: CHART_COLORS.textMuted,
                   fontSize: 11,
                   fontFamily: "DM Mono, monospace",
                 }}
-                axisLine={{ stroke: "#2a3042" }}
+                axisLine={{ stroke: CHART_COLORS.border }}
                 tickLine={false}
               />
               <YAxis
                 tick={{
-                  fill: "#8892a4",
+                  fill: CHART_COLORS.textMuted,
                   fontSize: 12,
                   fontFamily: "DM Mono, monospace",
                 }}
-                axisLine={{ stroke: "#2a3042" }}
+                axisLine={{ stroke: CHART_COLORS.border }}
                 tickLine={false}
                 allowDecimals={false}
               />
@@ -135,7 +136,7 @@ export function TrendChart({ period }: TrendChartProps) {
                 wrapperStyle={{
                   fontSize: 11,
                   fontFamily: "DM Mono, monospace",
-                  color: "#8892a4",
+                  color: CHART_COLORS.textMuted,
                 }}
               />
               {Object.entries(SEVERITY_LINE_COLORS).map(([key, color]) => (
@@ -147,7 +148,7 @@ export function TrendChart({ period }: TrendChartProps) {
                   stroke={color}
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, stroke: color, fill: "#0c0e14" }}
+                  activeDot={{ r: 4, stroke: color, fill: CHART_COLORS.bgBase }}
                 />
               ))}
             </LineChart>
