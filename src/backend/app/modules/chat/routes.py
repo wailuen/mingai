@@ -16,7 +16,7 @@ import uuid
 from typing import AsyncGenerator, Literal, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -248,6 +248,7 @@ async def delete_conversation(
 @router.post("/chat/stream")
 async def stream_chat(
     request: ChatRequest,
+    http_request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -256,9 +257,15 @@ async def stream_chat(
 
     Executes the 8-stage RAG pipeline and streams events back to the client.
     Rate limit: 30 requests/min (enforced at gateway / middleware layer).
+
+    GAP-011: Supports Last-Event-ID resume.
+      - Each SSE event carries an ``id:`` line with a sequential integer.
+      - On reconnect, send ``Last-Event-ID: N`` to replay from event N+1.
+      - If the buffer has expired (>5 min), the pipeline re-runs from scratch.
     """
     # Import inline to allow mocking in tests
     from app.core.database import validate_tenant_id
+    from app.modules.chat.sse_buffer import SSEBufferService, stream_with_buffer
 
     try:
         validate_tenant_id(current_user.tenant_id)
@@ -276,13 +283,23 @@ async def stream_chat(
         "plan": current_user.plan,
     }
 
+    # Parse Last-Event-ID from request header (GAP-011)
+    raw_last_event_id = http_request.headers.get("Last-Event-ID")
+    last_event_id: int | None = None
+    if raw_last_event_id is not None:
+        try:
+            last_event_id = int(raw_last_event_id)
+        except (ValueError, TypeError):
+            last_event_id = None
+
     orchestrator = await build_orchestrator(
         db=session, redis=None, tenant_id=current_user.tenant_id
     )
+    buffer_service = SSEBufferService()
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
-            async for event in orchestrator.stream_response(
+            orch_gen = orchestrator.stream_response(
                 query=request.query,
                 user_id=current_user.id,
                 tenant_id=current_user.tenant_id,
@@ -290,8 +307,15 @@ async def stream_chat(
                 conversation_id=request.conversation_id,
                 active_team_id=request.active_team_id,
                 jwt_claims=jwt_claims,
+            )
+            async for sse_line in stream_with_buffer(
+                tenant_id=current_user.tenant_id,
+                conversation_id=request.conversation_id,
+                last_event_id=last_event_id,
+                orchestrator_gen=orch_gen,
+                buffer_service=buffer_service,
             ):
-                yield f"data: {json.dumps(event)}\n\n"
+                yield sse_line
         except Exception as exc:
             logger.error(
                 "stream_error",

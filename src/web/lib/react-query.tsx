@@ -7,13 +7,15 @@ function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000,
-        gcTime: 5 * 60 * 1000,
-        retry: 1,
+        staleTime: 60_000,
+        gcTime: 5 * 60_000,
+        retry: 3,
+        retryDelay: (attemptIndex) =>
+          Math.min(1000 * 2 ** attemptIndex, 30_000),
         refetchOnWindowFocus: false,
       },
       mutations: {
-        retry: 0,
+        retry: 1,
       },
     },
   });

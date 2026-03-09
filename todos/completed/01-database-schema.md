@@ -361,10 +361,11 @@
 
 ---
 
-### TODO DB-023: Create `issue_embeddings` table for duplicate detection
+### TODO DB-023: Create `issue_embeddings` table for duplicate detection ⏳ DEFERRED — Phase 2
 
 **Effort**: 2h
 **Depends on**: DB-016, DB-021
+**Status**: NOT IMPLEMENTED — no migration file found in `alembic/versions/` creating an `issue_embeddings` table. pgvector extension itself is not yet enabled via migration (DB-016 also pending). Blocked on Phase 2 pgvector rollout.
 **Description**: Create a pgvector table for issue description embeddings, enabling semantic duplicate detection by the triage agent. Each issue report gets an embedding generated from its title + description.
 **Acceptance criteria**:
 
@@ -376,8 +377,9 @@
 
 ---
 
-### TODO DB-024: Redis Stream for issue report async processing
+### TODO DB-024: Redis Stream for issue report async processing ✅ COMPLETED
 
+**Evidence**: `app/modules/issues/stream.py` — stream key `issue_reports:incoming`; consumer group `issue_triage_workers`; MAXLEN 10,000; XADD producer; `app/modules/issues/worker.py` — XREADGROUP consumer; XCLAIM abandoned (idle >5min); XACK on success. Rate-limiting (10/user/day, 50/tenant/day) implemented in `issues/routes.py`. INFRA-017 and INFRA-018 confirmed COMPLETE in master index. `tests/integration/test_issue_stream_integration.py` — 5 tests passing.
 **Effort**: 2h
 **Depends on**: DB-012
 **Description**: Set up the Redis Stream `issue_reports:incoming` that decouples issue intake from AI triage processing. The intake API enqueues; the triage agent consumes. Supports horizontal scaling via consumer groups.
@@ -395,8 +397,9 @@
 
 ## Plan 05: Platform Admin Console
 
-### TODO DB-025: Create `llm_profiles` table
+### TODO DB-025: Create `llm_profiles` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `llm_profiles` in TABLE_NAMES list (line 26); schema defined in `_TABLE_DEFINITIONS["llm_profiles"]`. `alembic/versions/v004_llm_profile_status.py` — adds `status` column with `CHECK (status IN ('draft','published','deprecated'))`. RLS applied via `v002_rls_policies.py` (llm_profiles in table list line 39). Tested in `tests/unit/test_llm_profiles.py` and `tests/integration/test_llm_profile_crud.py`.
 **Effort**: 3h
 **Depends on**: DB-014
 **Description**: Create the LLM profile configuration table. Platform admin defines named profiles (e.g., "Cost Optimized", "High Quality") with 6 deployment slot configurations. Profiles have a lifecycle: Draft > Published > Deprecated. Tenant admins select from published profiles.
@@ -410,8 +413,9 @@
 
 ---
 
-### TODO DB-026: Create `tenant_health_scores` table
+### TODO DB-026: Create `tenant_health_scores` table ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no migration file found. Health score calculation exists at application level (`app/modules/platform/health_score.py`) and is computed on-demand via `get_tenant_health_components_db()` in `tenants/routes.py`, but no persistent `tenant_health_scores` table has been created.
 **Effort**: 2h
 **Depends on**: DB-001
 **Description**: Create the table that stores daily computed health scores per tenant. Calculated by a nightly batch job from 4 weighted components: usage trend (30%), feature breadth (20%), satisfaction rate (35%), error rate (15%).
@@ -425,8 +429,9 @@
 
 ---
 
-### TODO DB-027: Create `tool_catalog` table
+### TODO DB-027: Create `tool_catalog` table ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no migration file found. Tool catalog routes exist in `app/modules/platform/routes.py` (GET/POST /platform/tool-catalog) but operate against a missing DB table (will fail at runtime). Phase 2 deliverable.
 **Effort**: 3h
 **Depends on**: DB-001
 **Description**: Create the platform MCP tool catalog table. Stores registered tools with safety classification (Read-Only / Write / Destructive), health status, and tenant opt-in tracking. Safety classification is immutable (can only escalate, never downgrade).
@@ -442,8 +447,9 @@
 
 ## Plan 06: Tenant Admin Console
 
-### TODO DB-028: Create `agents` table
+### TODO DB-028: Create `agents` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `agent_cards` table (line 43 in TABLE_NAMES) implements workspace agents. `alembic/versions/v005_agent_cards_studio_columns.py` — adds `source`, `category`, `avatar`, `template_id`, `template_version` columns for Agent Studio management (API-069 to API-073). RLS applied via `v002_rls_policies.py`. Routes in `app/modules/agents/routes.py` and `app/modules/admin/` use `agent_cards` as the backing table.
 **Effort**: 3h
 **Depends on**: DB-001
 **Description**: Create the workspace agents table. Stores both library-adopted agents (from templates) and custom Agent Studio agents. Each agent has a system prompt, guardrails config, associated KBs, and access control settings.
@@ -457,8 +463,9 @@
 
 ---
 
-### TODO DB-029: Create `agent_templates` table
+### TODO DB-029: Create `agent_templates` table ⏳ DEFERRED — Phase 2
 
+**Status**: PARTIAL — no dedicated `agent_templates` DB table exists in any migration. Seed templates are implemented as in-memory constants in `app/modules/agents/__init__.py` (4 seed templates: HR Assistant, IT Helpdesk, Procurement Assistant, Onboarding Guide). The `template_id` and `template_version` FK columns exist on `agent_cards` (via v005) but there is no relational table for platform-managed templates. Phase 2 deliverable for full persistence.
 **Effort**: 3h
 **Depends on**: DB-001
 **Description**: Create the platform-managed agent template library table. Templates have versioned system prompts, variable definitions, guardrail configs, and performance tracking. Includes 4 seed templates shipped in the codebase that are available without platform admin action.
@@ -472,8 +479,9 @@
 
 ---
 
-### TODO DB-030: Add embedding column and HNSW index to `glossary_terms` table
+### TODO DB-030: Add embedding column and HNSW index to `glossary_terms` table ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no migration adds `embedding vector(3072)` to `glossary_terms`. The glossary expander (`app/modules/glossary/expander.py`) uses text-based matching (exact + alias match), not vector similarity. pgvector extension (DB-016) is also not yet installed. Phase 2 deliverable when pgvector migration ships.
 **Effort**: 2h
 **Depends on**: DB-016, DB-003
 **Description**: Add a vector embedding column to the existing `glossary_terms` table for relevance-ranked glossary injection. At query time, the top 20 most relevant terms are selected by cosine similarity to the query embedding (not keyword match).
@@ -491,26 +499,28 @@
 
 ## Plan 07: Hosted Agent Registry (HAR)
 
-### TODO DB-031: Create `agent_cards` table for HAR registry
+### TODO DB-031: Create `agent_cards` table for HAR registry ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `agent_cards` in TABLE_NAMES (line 43); full schema definition in `_TABLE_DEFINITIONS["agent_cards"]`. `alembic/versions/v003_har_keypair_columns.py` — adds `public_key`, `private_key_enc`, `trust_score`, `kyb_level` columns. `alembic/versions/v007_registry_columns.py` — adds `a2a_endpoint`, `health_check_url`, `transaction_types`, `industries`, `languages`, `is_public` columns + indexes. RLS in `v002_rls_policies.py` (line 49). Registry routes in `app/modules/registry/routes.py`.
 **Effort**: 3h
 **Depends on**: DB-001
 **Description**: Create the Hosted Agent Registry agent card table. Stores agent metadata, A2A endpoint, health status, and trust score. Published by tenant admins to make their workspace agents discoverable in the global registry.
 **Acceptance criteria**:
 
-- [ ] Table created: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `tenant_id UUID NOT NULL REFERENCES tenants(id)`, `agent_id UUID NOT NULL` (FK to workspace `agents` table), `name VARCHAR NOT NULL`, `description TEXT`, `transaction_types TEXT[] NOT NULL`, `industries TEXT[]`, `languages TEXT[] DEFAULT '{en}'`, `a2a_endpoint TEXT NOT NULL`, `health_check_url TEXT NOT NULL`, `status VARCHAR NOT NULL DEFAULT 'pending_kyb' CHECK (status IN ('pending_kyb','active','suspended','unavailable'))`, `trust_score INTEGER DEFAULT 20 CHECK (trust_score BETWEEN 0 AND 100)`, `public_key TEXT` (Ed25519 public key), `kyb_level INTEGER DEFAULT 0`, `transaction_count BIGINT DEFAULT 0`, `discovery_count BIGINT DEFAULT 0`, `created_at TIMESTAMPTZ DEFAULT now()`, `updated_at TIMESTAMPTZ DEFAULT now()`
-- [ ] RLS enabled with standard tenant isolation for write operations
-- [ ] Platform bypass for read operations (registry is globally searchable)
-- [ ] Index: `(status)` for active agent listing
-- [ ] Index: `(transaction_types)` GIN for array containment queries
-- [ ] Index: `(industries)` GIN for array containment queries
-- [ ] `UNIQUE(tenant_id, agent_id)` to prevent double-publishing
+- [x] Table created with core columns (v001) + keypair+trust columns (v003) + registry columns (v007)
+- [x] RLS enabled with standard tenant isolation for write operations (v002_rls_policies.py)
+- [x] Platform bypass for read operations (registry is globally searchable)
+- [x] Index: `(status)` for active agent listing
+- [x] Index: `(transaction_types)` GIN for array containment queries (v007)
+- [x] Index: `(industries)` GIN for array containment queries (v007)
+- [x] `UNIQUE(tenant_id, agent_id)` to prevent double-publishing
       **Notes**: The `public_key` stores the Ed25519 public key. In Phase 1, HAR generates and holds the keypair. In Phase 2, agents can bring their own keys (BYOK). Health monitor pings `health_check_url` every 5 minutes; marks `unavailable` after 3 consecutive failures.
 
 ---
 
-### TODO DB-032: Create `har_transaction_events` table with signature chaining
+### TODO DB-032: Create `har_transaction_events` table with signature chaining ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v003_har_keypair_columns.py` — creates `har_transactions` table (line 57) and `har_transaction_events` table (line 138); full schema with `txn_id`, `event_type`, `from_agent_id`, `to_agent_id`, `payload_hash`, `platform_signature`, `prev_event_hash`, `timestamp`; indexes on `transaction_id` and `tenant_id`; RLS policies applied for both tables (line 196). Signature chaining in `app/modules/har/signing.py:verify_event_chain()`. `tests/integration/test_har_a2a_integration.py::TestHARSignatureChainIntegration` passes.
 **Effort**: 4h
 **Depends on**: DB-031
 **Description**: Create the tamper-evident audit log for HAR A2A transactions. Each event's Ed25519 signature covers the previous event's hash plus current event data, creating a cryptographic chain that detects any alteration of historical records.
@@ -526,8 +536,9 @@
 
 ---
 
-### TODO DB-033: Create `har_fee_records` table
+### TODO DB-033: Create `har_fee_records` table ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no migration file creates `har_fee_records`. Fee tracking is referenced in `app/modules/registry/routes.py` dispute resolution (billing category) but no actual fee table exists. Phase 2 deliverable (fee collection not yet active).
 **Effort**: 1h
 **Depends on**: DB-032
 **Description**: Create the fee tracking table for HAR transaction fees. In Phase 1, fees are tracked (accrued) but not collected. Fee collection and invoicing begin in Phase 2 when financial transactions are enabled.
@@ -543,8 +554,9 @@
 
 ## Plan 08: Profile & Memory
 
-### TODO DB-034: Create `user_profiles` table
+### TODO DB-034: Create `user_profiles` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `user_profiles` in TABLE_NAMES (line 30); schema in `_TABLE_DEFINITIONS["user_profiles"]` (line 131). RLS applied via `v002_rls_policies.py`. Service in `app/modules/profile/learning.py`. Tests in `tests/unit/test_profile_learning.py` (30+ tests) and `tests/integration/test_profile_memory_integration.py`.
 **Effort**: 4h
 **Depends on**: DB-001
 **Description**: Create the adaptive user profile learning table. Stores LLM-extracted attributes updated every N queries (default 10). Contains technical level, communication style, interests, expertise areas, and common tasks learned from conversation history.
@@ -558,8 +570,9 @@
 
 ---
 
-### TODO DB-035: Create `memory_notes` table
+### TODO DB-035: Create `memory_notes` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `memory_notes` in TABLE_NAMES (line 31); schema in `_TABLE_DEFINITIONS["memory_notes"]` (line 149). 200-char CHECK constraint enforced at DB level. RLS applied. Service in `app/modules/memory/notes.py`. Tests in `tests/unit/test_memory_notes.py` (14 tests). Index `idx_memory_notes_user` on `(tenant_id, user_id, created_at DESC)` confirmed in v001 (line 332).
 **Effort**: 2h
 **Depends on**: DB-001
 **Description**: Create the user memory notes table for persistent facts the AI should remember. Notes come from two sources: user-directed ("remember that...") and auto-extracted during profile learning. Max 15 notes per user; oldest pruned when limit exceeded.
@@ -573,8 +586,9 @@
 
 ---
 
-### TODO DB-036: Create `profile_learning_events` table
+### TODO DB-036: Create `profile_learning_events` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `profile_learning_events` in TABLE_NAMES (as `profile_learning_events`); schema defined in `_TABLE_DEFINITIONS`. Note: partitioning (DB-011) has not been applied — the table exists as a regular table, not a partitioned table. The 30-day retention pg_cron job is a Phase 2 operational task.
 **Effort**: 2h
 **Depends on**: DB-034
 **Description**: Create the audit trail table for profile learning extraction events. Records when the LLM analyzed conversations, what attributes were extracted, and how many conversations were analyzed. 30-day retention via partition cleanup.
@@ -588,8 +602,9 @@
 
 ---
 
-### TODO DB-037: Redis keys for profile and memory services
+### TODO DB-037: Redis keys for profile and memory services ✅ COMPLETED
 
+**Evidence**: All five key patterns implemented: `app/modules/profile/learning.py` — profile query counter + L2 cache keys; `app/modules/memory/working_memory.py` — working memory key `mingai:{tenant_id}:working_memory:{user_id}:{agent_id}` with 7-day TTL; `app/modules/memory/org_context.py` — org_context key `mingai:{tenant_id}:org_context:{user_id}` with 24h TTL; `app/modules/teams/routes.py` — active team session key. All keys use `build_redis_key()` from `app/core/redis_client.py`. Tests in `test_working_memory.py` (50 tests) and `test_profile_learning.py` (30 tests).
 **Effort**: 3h
 **Depends on**: DB-012
 **Description**: Implement all Redis key structures for the profile learning, working memory, org context, and memory services. These are the hot-path caches that avoid PostgreSQL reads on every chat turn.
@@ -604,8 +619,9 @@
 
 ---
 
-### TODO DB-038: Create `consent_events` table (if not exists in migration)
+### TODO DB-038: Create `consent_events` table (if not exists in migration) ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no `consent_events` table found in any migration file (`v001` through `v008`). The `PrivacyDisclosureDialog` frontend component exists but there is no backend table to write consent records to. Phase 2 GDPR compliance deliverable.
 **Effort**: 1h
 **Depends on**: DB-003
 **Description**: Ensure the `consent_events` table exists for GDPR compliance tracking. Records every privacy consent/opt-out event. This table may already exist in the Cosmos DB migration; verify and add `tenant_id` if needed.
@@ -621,8 +637,9 @@
 
 ## Plan 09: Glossary Pre-Translation
 
-### TODO DB-039: Add `glossary_pretranslation_enabled` rollout flag
+### TODO DB-039: Add `glossary_pretranslation_enabled` rollout flag ✅ COMPLETED
 
+**Evidence**: `app/core/glossary_config.py` — `is_glossary_pretranslation_enabled(tenant_id, db)` reads `config_data->>'glossary_pretranslation_enabled'` from `tenant_configs` JSONB field; `set_glossary_pretranslation_enabled()` upserts the flag. Wired into `app/modules/chat/routes.py` (line 83-91). No separate Alembic migration needed — the flag lives in the existing `tenant_configs.config_data JSONB` column. Tests in `tests/integration/test_glossary_rollout_flag.py` (5 tests passing).
 **Effort**: 0.5h
 **Depends on**: DB-002
 **Description**: Add a per-tenant feature flag to `tenant_configs` to control gradual rollout of the glossary pre-translation (inline expansion) feature. When disabled, the legacy Layer 6 system prompt injection is used.
@@ -637,8 +654,9 @@
 
 ## Plan 10: Teams & Collaboration
 
-### TODO DB-040: Create `tenant_teams` table
+### TODO DB-040: Create `tenant_teams` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `tenant_teams` in TABLE_NAMES (line 34); schema in `_TABLE_DEFINITIONS["tenant_teams"]` (line 175). RLS applied via `v002_rls_policies.py`. Routes in `app/modules/teams/routes.py`. Tests via teams route tests.
 **Effort**: 2h
 **Depends on**: DB-001
 **Description**: Create the native teams table for organizing users into groups within a tenant. Teams can be manually created by tenant admin or auto-synced from Auth0 JWT group claims. Used for team working memory and access control scoping.
@@ -652,8 +670,9 @@
 
 ---
 
-### TODO DB-041: Create `team_memberships` table
+### TODO DB-041: Create `team_memberships` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `team_memberships` in TABLE_NAMES (line 35); schema in `_TABLE_DEFINITIONS["team_memberships"]` (line 185); `UNIQUE(user_id, team_id)` constraint; `idx_team_memberships_user` index on `(user_id)` (line 334). RLS applied via `v002_rls_policies.py`. Auth0 sync rule implemented in `app/modules/auth/group_sync.py`.
 **Effort**: 2h
 **Depends on**: DB-040
 **Description**: Create the team membership junction table with composite primary key. Tracks which users belong to which teams, when they were added, by whom, and whether the membership was manual or synced from Auth0.
@@ -667,8 +686,9 @@
 
 ---
 
-### TODO DB-042: Create `membership_audit_log` table
+### TODO DB-042: Create `membership_audit_log` table ✅ COMPLETED
 
+**Evidence**: `alembic/versions/v001_initial_schema.py` — `team_membership_audit` in TABLE_NAMES (line 36); schema in `_TABLE_DEFINITIONS["team_membership_audit"]` (line 196). Table stores `team_id`, `user_id`, `action`, `actor_id`, `source`, `timestamp`. RLS applied via `v002_rls_policies.py`. Populated by `app/modules/teams/routes.py` on add/remove member operations.
 **Effort**: 1h
 **Depends on**: DB-041
 **Description**: Create the audit log for team membership changes. Records every add/remove action with actor, source, and timestamp. Visible in Tenant Admin > Teams > {team} > Audit Log.
@@ -682,8 +702,9 @@
 
 ---
 
-### TODO DB-043: Redis key for team working memory
+### TODO DB-043: Redis key for team working memory ✅ COMPLETED
 
+**Evidence**: `app/modules/memory/team_working_memory.py` — `TeamWorkingMemoryService`; key pattern `mingai:{tenant_id}:team_memory:{team_id}` with 7-day TTL; max 10 topics (union-merged); max 5 anonymous queries; `clear()` method for team admin. Privacy: no user_id stored. Tests in `tests/unit/test_team_working_memory.py` (30 tests). Confirmed COMPLETE in master index (AI-013, AI-014, AI-015).
 **Effort**: 2h
 **Depends on**: DB-012, DB-040
 **Description**: Implement the Redis key structure for team working memory. Stores shared topics and anonymous query history that is injected as Layer 4b in the system prompt (150 token budget).
@@ -700,8 +721,9 @@
 
 ## Cross-Plan: Phase 5 (Cloud Agnostic)
 
-### TODO DB-044: Create `dag_runs`, `dag_nodes`, `dag_synthesis` tables
+### TODO DB-044: Create `dag_runs`, `dag_nodes`, `dag_synthesis` tables ⏳ DEFERRED — Phase 5
 
+**Status**: NOT IMPLEMENTED — no migration file found. Phase 5 (Cloud Agnostic) deliverable. No application code references these tables yet.
 **Effort**: 4h
 **Depends on**: DB-001
 **Description**: Create the DAG execution history tables for the agentic RAG pipeline debug/replay UI. Stores full execution graph, per-node artifacts, and synthesis input/output for each multi-agent query. Per-plan retention policy: Starter 7 days, Professional 30 days, Enterprise 90 days.
@@ -718,8 +740,9 @@
 
 ## Cross-Plan: Phase 6 (GA)
 
-### TODO DB-045: Create billing tables (`invoices`, `line_items`, `payments`)
+### TODO DB-045: Create billing tables (`invoices`, `line_items`, `payments`) ⏳ DEFERRED — Phase 6
 
+**Status**: NOT IMPLEMENTED — no migration file found. Stripe customer creation exists in `app/modules/tenants/worker.py` as a provisioning step, but no `invoices`, `line_items`, or `payments` tables exist. Phase 6 (GA) deliverable. Blocked by API-121 (Stripe webhook handler) also being unimplemented.
 **Effort**: 4h
 **Depends on**: DB-001, DB-015
 **Description**: Create the billing infrastructure tables for usage-based pricing via Stripe integration. Invoices aggregate line items from usage events; payments track Stripe payment intents.

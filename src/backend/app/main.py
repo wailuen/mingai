@@ -6,19 +6,23 @@ Framework: FastAPI + Kailash SDK (DataFlow + Nexus + Kaizen)
 
 All configuration from .env - never hardcode secrets or model names.
 """
+import asyncio
 import os
 import traceback
 import uuid
+from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.health import build_health_response
+from app.core.health import build_health_response, build_ready_response
 from app.core.logging import setup_logging
 from app.core.middleware import setup_middleware
+from app.core.tenant_middleware import TenantContextMiddleware
 from app.modules.auth.jwt import generate_request_id
 
 # Configure structured logging before anything else
@@ -26,16 +30,170 @@ setup_logging(json_output=os.environ.get("LOG_FORMAT", "json") == "json")
 
 logger = structlog.get_logger()
 
+# ---------------------------------------------------------------------------
+# GAP-014: Request body size limit (10 MB)
+# ---------------------------------------------------------------------------
+
+_MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose Content-Length exceeds the configured limit.
+
+    This is a fail-safe guard. Actual file-size validation for document
+    uploads also happens at the route layer, but this middleware stops
+    oversized payloads before they are read into memory at all.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                if int(content_length) > _MAX_REQUEST_BODY_BYTES:
+                    logger.warning(
+                        "request_body_too_large",
+                        content_length=content_length,
+                        limit_bytes=_MAX_REQUEST_BODY_BYTES,
+                        path=str(request.url.path),
+                    )
+                    return Response(
+                        content="Request body too large",
+                        status_code=413,
+                        media_type="text/plain",
+                    )
+            except ValueError:
+                # Malformed Content-Length — let downstream reject it naturally
+                pass
+        return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# GAP-033: Graceful shutdown via lifespan context manager
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup then graceful shutdown.
+
+    Replaces deprecated @app.on_event("startup") / @app.on_event("shutdown").
+    """
+    # ------------------------------------------------------------------
+    # Startup
+    # ------------------------------------------------------------------
+    logger.info("application_starting", version="1.0.0")
+
+    # Dispose stale pool connections so all new connections belong to this
+    # event loop. This is a no-op in production (pool is fresh) but prevents
+    # asyncpg "another operation in progress" errors in tests where multiple
+    # TestClient instances are created in different event loops.
+    from app.core.session import engine as _engine
+
+    await _engine.dispose()
+
+    # Validate critical env vars are set
+    required_vars = ["DATABASE_URL", "REDIS_URL", "JWT_SECRET_KEY", "FRONTEND_URL"]
+    missing = [v for v in required_vars if not os.environ.get(v)]
+    if missing:
+        logger.error(
+            "missing_required_env_vars",
+            missing=missing,
+            hint="Check .env file and .env.example for required variables",
+        )
+
+    # AI-048: Start agent health monitor background job.
+    # Recomputes trust scores for all published agents every hour.
+    _health_monitor_task = None
+    try:
+        from app.core.session import async_session_factory
+        from app.modules.har.health_monitor import AgentHealthMonitor
+
+        monitor = AgentHealthMonitor(
+            db_session_factory=async_session_factory, interval_seconds=3600
+        )
+        _health_monitor_task = asyncio.create_task(monitor.start())
+        logger.info("agent_health_monitor_scheduled", interval_seconds=3600)
+    except Exception as exc:
+        logger.warning(
+            "agent_health_monitor_startup_failed",
+            error=str(exc),
+        )
+
+    # INFRA-026: Warm up glossary cache for all active tenants.
+    # Lazy import to avoid import errors if Redis/DB not ready at module load.
+    # Failure never blocks startup.
+    try:
+        from app.modules.glossary.warmup import warm_up_glossary_cache
+
+        await warm_up_glossary_cache()
+    except Exception as exc:
+        logger.warning(
+            "glossary_warmup_startup_failed",
+            error=str(exc),
+        )
+
+    logger.info("application_started")
+
+    # ------------------------------------------------------------------
+    # Hand control to the application
+    # ------------------------------------------------------------------
+    yield
+
+    # ------------------------------------------------------------------
+    # Shutdown
+    # ------------------------------------------------------------------
+    logger.info("application_shutting_down")
+
+    # Cancel background tasks
+    if _health_monitor_task is not None and not _health_monitor_task.done():
+        _health_monitor_task.cancel()
+        try:
+            await _health_monitor_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("agent_health_monitor_stopped")
+
+    # Close Redis connections
+    try:
+        from app.core.redis_client import close_redis
+
+        await close_redis()
+        logger.info("redis_connections_closed")
+    except Exception as exc:
+        logger.warning("redis_close_failed", error=str(exc))
+
+    # Close DB connection pool
+    try:
+        from app.core.session import engine as _engine
+
+        await _engine.dispose()
+        logger.info("db_connection_pool_disposed")
+    except Exception as exc:
+        logger.warning("db_pool_dispose_failed", error=str(exc))
+
+    logger.info("graceful_shutdown_complete")
+
+
 app = FastAPI(
     title="mingai API",
     description="Enterprise RAG Platform - Multi-Tenant Backend",
     version="1.0.0",
     docs_url="/api/docs" if os.environ.get("DEBUG", "").lower() == "true" else None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
-# Setup middleware: CORS, security headers, request ID
+# Setup middleware: CORS, security headers, request ID, rate limiting
 setup_middleware(app)
+
+# INFRA-048: Tenant context resolution — after CORS/security headers,
+# before route handlers.  Populates request.state.tenant_id and
+# request.state.scope from the JWT (or "default" in single-tenant mode).
+app.add_middleware(TenantContextMiddleware)
+
+# GAP-014: Request body size limit (must be added after setup_middleware so it
+# wraps the full middleware stack — added last so it executes first in the chain)
+app.add_middleware(RequestSizeLimitMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -199,74 +357,77 @@ async def health_check():
     return JSONResponse(content=response, status_code=status_code)
 
 
+# Ready check endpoint (INFRA-055) - exposes circuit breaker state
+@app.get("/ready", tags=["health"])
+@app.get("/api/v1/ready", tags=["health"])
+async def ready_check():
+    """
+    Readiness probe — includes circuit breaker state (INFRA-055).
+
+    Returns component status plus any open LLM circuit breakers.
+    A degraded status indicates the service can still accept traffic
+    but some LLM slots may be temporarily unavailable.
+    No authentication required.
+    """
+    db_ok = False
+    redis_ok = False
+
+    try:
+        from sqlalchemy import text as sa_text
+
+        from app.core.session import engine
+
+        async with engine.connect() as conn:
+            await conn.execute(sa_text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        logger.warning("ready_check_db_failed", error=str(e))
+
+    try:
+        from app.core.redis_client import get_redis
+
+        redis = get_redis()
+        await redis.ping()
+        redis_ok = True
+    except Exception as e:
+        logger.warning("ready_check_redis_failed", error=str(e))
+
+    # Collect circuit breaker states — best-effort, never blocks readiness
+    circuit_breakers: dict = {}
+    try:
+        if redis_ok:
+            from app.core.circuit_breaker import get_circuit_breaker
+            from app.core.redis_client import get_redis as _get_redis
+
+            cb = get_circuit_breaker()
+            r = _get_redis()
+            # Scan for all CB keys: mingai:*:cb:*
+            cb_keys = []
+            async for key in r.scan_iter("mingai:*:cb:*"):
+                cb_keys.append(key)
+            for cb_key in cb_keys:
+                # Parse tenant_id and slot from key pattern:
+                # mingai:{tenant_id}:cb:{slot}
+                parts = cb_key.split(":")
+                if len(parts) >= 4:
+                    tenant_id_part = parts[1]
+                    slot_part = ":".join(parts[3:])
+                    state = await cb.get_state(tenant_id_part, slot_part)
+                    circuit_breakers[f"{tenant_id_part}:{slot_part}"] = state
+    except Exception as e:
+        logger.warning("ready_check_cb_scan_failed", error=str(e))
+
+    response = build_ready_response(
+        database_ok=db_ok,
+        redis_ok=redis_ok,
+        circuit_breakers=circuit_breakers,
+    )
+
+    status_code = 200 if response["status"] in ("ready", "degraded") else 503
+    return JSONResponse(content=response, status_code=status_code)
+
+
 # Include API router with all module endpoints
 from app.api.router import router as api_router
 
 app.include_router(api_router)
-
-
-@app.on_event("startup")
-async def startup():
-    """Application startup: validate configuration and initialize connections."""
-    logger.info("application_starting", version="1.0.0")
-
-    # Dispose stale pool connections so all new connections belong to this
-    # event loop. This is a no-op in production (pool is fresh) but prevents
-    # asyncpg "another operation in progress" errors in tests where multiple
-    # TestClient instances are created in different event loops.
-    from app.core.session import engine as _engine
-
-    await _engine.dispose()
-
-    # Validate critical env vars are set
-    required_vars = ["DATABASE_URL", "REDIS_URL", "JWT_SECRET_KEY", "FRONTEND_URL"]
-    missing = [v for v in required_vars if not os.environ.get(v)]
-    if missing:
-        logger.error(
-            "missing_required_env_vars",
-            missing=missing,
-            hint="Check .env file and .env.example for required variables",
-        )
-
-    # AI-048: Start agent health monitor background job.
-    # Recomputes trust scores for all published agents every hour.
-    try:
-        import asyncio
-
-        from app.core.session import async_session_factory
-        from app.modules.har.health_monitor import AgentHealthMonitor
-
-        monitor = AgentHealthMonitor(
-            db_session_factory=async_session_factory, interval_seconds=3600
-        )
-        asyncio.create_task(monitor.start())
-        logger.info("agent_health_monitor_scheduled", interval_seconds=3600)
-    except Exception as exc:
-        logger.warning(
-            "agent_health_monitor_startup_failed",
-            error=str(exc),
-        )
-
-    # INFRA-026: Warm up glossary cache for all active tenants.
-    # Lazy import to avoid import errors if Redis/DB not ready at module load.
-    # Failure never blocks startup.
-    try:
-        from app.modules.glossary.warmup import warm_up_glossary_cache
-
-        await warm_up_glossary_cache()
-    except Exception as exc:
-        logger.warning(
-            "glossary_warmup_startup_failed",
-            error=str(exc),
-        )
-
-    logger.info("application_started")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Application shutdown: close connections cleanly."""
-    from app.core.redis_client import close_redis
-
-    await close_redis()
-    logger.info("application_shutdown")

@@ -13,7 +13,7 @@ import {
 import { ProfileIndicator } from "./ProfileIndicator";
 import { TeamContextBadge } from "./TeamContextBadge";
 import { CacheStateChip } from "./CacheStateChip";
-import { Loader2, FileText } from "lucide-react";
+import { Loader2, FileText, RefreshCw } from "lucide-react";
 
 interface ChatActiveStateProps {
   messages: ChatMessage[];
@@ -25,7 +25,13 @@ interface ChatActiveStateProps {
   profileContextUsed: boolean;
   layersActive: string[];
   error: string | null;
+  /** GAP-024: True while SSE stream is attempting reconnection */
+  reconnecting?: boolean;
+  /** GAP-024: Non-null when all reconnect attempts failed */
+  reconnectFailed?: string | null;
   onSend: (message: string, mode: string) => void;
+  /** GAP-024: Retry the last failed message */
+  onRetry?: () => void;
   onViewSources?: () => void;
   currentMode?: string;
   /** FE-010: Team name for team context badge */
@@ -50,7 +56,10 @@ export function ChatActiveState({
   profileContextUsed,
   layersActive,
   error,
+  reconnecting,
+  reconnectFailed,
   onSend,
+  onRetry,
   onViewSources,
   currentMode = "auto",
   teamName,
@@ -126,11 +135,30 @@ export function ChatActiveState({
         </div>
       </div>
 
+      {/* GAP-024: Reconnecting indicator */}
+      {reconnecting && (
+        <div className="mx-auto max-w-[860px] px-4 pb-2">
+          <div className="flex items-center gap-2 rounded-control border border-accent-ring bg-accent-dim px-3 py-2 text-sm text-accent">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
+            <span>{statusMessage ?? "Reconnecting..."}</span>
+          </div>
+        </div>
+      )}
+
       {/* Error display */}
       {error && (
         <div className="mx-auto max-w-[860px] px-4 pb-2">
-          <div className="rounded-control border border-alert-ring bg-alert-dim px-3 py-2 text-sm text-alert">
-            {error}
+          <div className="flex items-center justify-between rounded-control border border-alert-ring bg-alert-dim px-3 py-2 text-sm text-alert">
+            <span>{error}</span>
+            {reconnectFailed && onRetry && (
+              <button
+                onClick={onRetry}
+                className="ml-3 flex items-center gap-1 rounded-control border border-alert-ring px-2 py-1 text-xs text-alert transition-colors hover:bg-alert-dim"
+              >
+                <RefreshCw size={12} />
+                Retry
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -1089,8 +1089,9 @@
 
 ---
 
-### API-052: Connect Google Drive
+### API-052: Connect Google Drive ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no Google Drive routes found anywhere in `src/backend/app/`. Frontend wizard `GoogleDriveWizard.tsx` exists (FE-030 COMPLETE) but the backend endpoint does not exist. No file under `app/modules/documents/` handles Google Drive OAuth. Phase 2 deliverable.
 **Effort**: 8h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/admin/integrations/googledrive/connect
@@ -1109,8 +1110,9 @@
 
 ---
 
-### API-053: Google Drive OAuth callback
+### API-053: Google Drive OAuth callback ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — depends on API-052. No OAuth callback route exists in the backend. Note: `app/modules/teams/routes.py` uses API-052/053 numbering internally for team routes (different context). Phase 2 deliverable.
 **Effort**: 3h
 **Depends on**: API-052
 **Method + Path**: GET /api/v1/admin/integrations/googledrive/callback
@@ -1326,8 +1328,9 @@
 
 ---
 
-### API-064: Configure SAML SSO
+### API-064: Configure SAML SSO ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no POST /admin/sso/saml route found in any backend file. Frontend SSO wizard `SSOSetupWizard.tsx` exists (FE-032 COMPLETE) but backend endpoints are absent. SAML attribute parsing exists in `app/modules/memory/org_context.py` for context enrichment only, not SSO configuration. Phase 2 deliverable.
 **Effort**: 6h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/admin/sso/saml
@@ -1346,8 +1349,9 @@
 
 ---
 
-### API-065: Configure OIDC SSO
+### API-065: Configure OIDC SSO ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no POST /admin/sso/oidc route found. Blocked on same Phase 2 SSO infra as API-064.
 **Effort**: 5h
 **Depends on**: API-001
 **Method + Path**: POST /api/v1/admin/sso/oidc
@@ -1364,8 +1368,9 @@
 
 ---
 
-### API-066: Test SSO login flow
+### API-066: Test SSO login flow ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — depends on API-064 and API-065. No SSO test route found. Phase 2 deliverable.
 **Effort**: 4h
 **Depends on**: API-064, API-065
 **Method + Path**: POST /api/v1/admin/sso/test
@@ -1383,8 +1388,9 @@
 
 ---
 
-### API-067: KB access control settings
+### API-067: KB access control settings ⏳ DEFERRED — Phase 2
 
+**Status**: NOT IMPLEMENTED — no GET /admin/kb/{id}/access route found. KB access mode field exists in agent card schema but there is no standalone KB access control endpoint. Phase 2 deliverable.
 **Effort**: 3h
 **Depends on**: API-001
 **Method + Path**: GET /api/v1/admin/kb/{id}/access
@@ -1400,7 +1406,9 @@
 
 ---
 
-### API-068: Update KB access control
+### API-068: Update KB access control ⏳ DEFERRED — Phase 2
+
+**Status**: NOT IMPLEMENTED — no PATCH /admin/kb/{id}/access route found. Same scope as API-067. KB access mode exists as an agent_card field but there is no standalone KB access control endpoint with Redis cache invalidation or JWT claim propagation. Phase 2 deliverable.
 
 **Effort**: 4h
 **Depends on**: API-067
@@ -1752,7 +1760,9 @@
 
 ---
 
-### API-086: Configure Auth0 group sync allowlist
+### API-086: Configure Auth0 group sync allowlist ⏳ DEFERRED — Phase 2
+
+**Status**: NOT IMPLEMENTED — `app/modules/auth/group_sync.py` has `sync_auth0_groups()` and `build_group_sync_config()` functions (tested in `tests/unit/test_auth0_group_sync.py`) that read the allowlist from `tenant_configs`. However, there is no PATCH /admin/settings/auth0-sync HTTP route to let tenant admins configure the allowlist through the API. The allowlist can only be set directly in the database. Phase 2 deliverable.
 
 **Effort**: 3h
 **Depends on**: API-001
@@ -2246,7 +2256,10 @@
 
 ## Plan 09 — Glossary Pre-translation
 
-### API-110: Glossary expansions metadata in chat response
+### API-110: Glossary expansions metadata in chat response ✅ COMPLETED
+
+**Completed**: 2026-03-09.
+**Evidence**: `app/modules/chat/orchestrator.py` — `glossary_expansions` field emitted inside the `metadata` SSE event (embedded in metadata payload, not a standalone event). `src/web/hooks/useChat.ts` parses `glossaryExpansions` and `glossaryExpansionsApplied` from the metadata event. `src/web/components/chat/TermsInterpreted.tsx` renders the "Terms interpreted" indicator (AI-029). `src/web/components/chat/ChatActiveState.tsx` conditionally shows indicator when expansions are non-empty.
 
 **Effort**: 2h
 **Depends on**: API-008
@@ -2486,7 +2499,9 @@
 
 ## Gap Remediation (from 07-gap-analysis.md)
 
-### API-121: Stripe webhook handler
+### API-121: Stripe webhook handler ⏳ DEFERRED — Phase 2
+
+**Status**: NOT IMPLEMENTED — no POST /webhooks/stripe route exists. The provisioning worker (`app/modules/tenants/worker.py`) creates a Stripe customer during tenant provisioning when `STRIPE_SECRET_KEY` is set, but there is no inbound webhook handler for billing events. `STRIPE_WEBHOOK_SECRET` is documented in `.env.example` but unused. Explicitly deferred: without this, billing tables (DB-045) remain permanently empty. Phase 2 gate.
 
 **Effort**: 6h
 **Depends on**: API-001

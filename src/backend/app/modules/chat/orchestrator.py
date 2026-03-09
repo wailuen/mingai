@@ -74,6 +74,7 @@ class ChatOrchestrationService:
         self._team_memory = team_memory_service
         self._llm_service = llm_service
         self._db_session = db_session
+        self._intent_service = None  # lazily injected; set via inject_intent_service()
 
     async def stream_response(
         self,
@@ -135,6 +136,22 @@ class ChatOrchestrationService:
             original_query=query,
             expanded_query=expanded_query,
             expansions_count=len(glossary_expansions),
+            tenant_id=tenant_id,
+        )
+
+        # --- Stage 2: Intent Detection (AI-057) ---
+        yield {"event": "status", "data": {"stage": "intent_detection"}}
+
+        intent_result = await self._detect_intent(
+            query=query,
+            conversation_history=[],
+            tenant_id=tenant_id,
+        )
+
+        logger.info(
+            "stage_2_intent",
+            intent=intent_result.intent,
+            confidence=intent_result.confidence,
             tenant_id=tenant_id,
         )
 
@@ -319,6 +336,43 @@ class ChatOrchestrationService:
             },
         }
 
+    def inject_intent_service(self, intent_service) -> None:
+        """Inject an IntentDetectionService instance (used in tests and wiring)."""
+        self._intent_service = intent_service
+
+    async def _detect_intent(
+        self,
+        *,
+        query: str,
+        conversation_history: list,
+        tenant_id: str,
+    ):
+        """
+        Run intent detection for Stage 2.
+
+        Uses the injected intent_service if set; otherwise lazy-constructs one.
+        Never raises — falls back to a rag_query IntentResult on any error.
+        """
+        try:
+            if self._intent_service is None:
+                from app.modules.chat.intent_detection import IntentDetectionService
+
+                self._intent_service = IntentDetectionService()
+            return await self._intent_service.classify(
+                query=query,
+                conversation_history=conversation_history,
+                tenant_id=tenant_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "intent_detection_failed",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+            from app.modules.chat.intent_detection import IntentResult
+
+            return IntentResult(intent="rag_query", confidence=0.5)
+
     def _extract_memory_command(self, query: str) -> str | None:
         """
         Check if query is a memory command and extract content.
@@ -459,6 +513,36 @@ class ChatOrchestrationService:
 
             client = AsyncOpenAI()
 
+        # INFRA-055: Check circuit breaker before calling the LLM.
+        # Slot is derived from CLOUD_PROVIDER so each provider gets its own
+        # circuit (e.g., "azure", "openai").  Use "primary" as the fallback.
+        _cb_slot = cloud_provider if cloud_provider else "primary"
+        try:
+            from app.core.circuit_breaker import get_circuit_breaker
+
+            _cb = get_circuit_breaker()
+            if await _cb.is_open(tenant_id, _cb_slot):
+                logger.warning(
+                    "llm_circuit_open_rejected",
+                    tenant_id=tenant_id,
+                    slot=_cb_slot,
+                )
+                raise RuntimeError(
+                    f"LLM circuit breaker is OPEN for slot '{_cb_slot}'. "
+                    "The LLM service is temporarily unavailable. Retry later."
+                )
+        except RuntimeError:
+            raise
+        except Exception as cb_check_err:
+            # Circuit breaker check failures must never block requests —
+            # log and proceed so Redis outages don't take down chat.
+            logger.warning(
+                "circuit_breaker_check_failed",
+                tenant_id=tenant_id,
+                slot=_cb_slot,
+                error=str(cb_check_err),
+            )
+
         logger.info(
             "llm_stream_start",
             model=model,
@@ -466,15 +550,46 @@ class ChatOrchestrationService:
             tenant_id=tenant_id,
         )
 
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query},
-            ],
-            stream=True,
-        )
+        try:
+            stream = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query},
+                ],
+                stream=True,
+            )
 
-        async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+            # Stream completed successfully — record success
+            try:
+                from app.core.circuit_breaker import get_circuit_breaker as _get_cb
+
+                await _get_cb().record_success(tenant_id, _cb_slot)
+            except Exception as cb_err:
+                logger.warning(
+                    "circuit_breaker_record_success_failed",
+                    tenant_id=tenant_id,
+                    slot=_cb_slot,
+                    error=str(cb_err),
+                )
+
+        except RuntimeError:
+            raise
+        except Exception as llm_err:
+            # Record failure in circuit breaker then re-raise
+            try:
+                from app.core.circuit_breaker import get_circuit_breaker as _get_cb
+
+                await _get_cb().record_failure(tenant_id, _cb_slot)
+            except Exception as cb_err:
+                logger.warning(
+                    "circuit_breaker_record_failure_failed",
+                    tenant_id=tenant_id,
+                    slot=_cb_slot,
+                    error=str(cb_err),
+                )
+            raise

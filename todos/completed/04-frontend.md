@@ -914,13 +914,13 @@
 - `src/web/app/(admin)/admin/sync/elements/ScheduleConfigForm.tsx` — frequency selector (hourly/every 6h/daily/weekly) per source
 - `src/web/app/(admin)/admin/sync/elements/ReindexButton.tsx` — re-index trigger with estimated embedding cost dialog
 - `src/web/lib/hooks/useSyncHealth.ts` — React Query hooks for sync health data
-  **Evidence**: `useSyncHealth.ts` React Query hooks, `page.tsx` orchestrator with all child elements integrated, freshness thresholds implemented (green <24h, yellow 24-72h, red >72h), Sync Now button per source card. Session 15 (2026-03-09): `ScheduleConfigForm.tsx` confirmed — frequency selector per source. `ReindexButton.tsx` confirmed — re-index with cost estimate dialog. TypeScript clean (0 errors).
+  **Evidence**: `useSyncHealth.ts` React Query hooks, `page.tsx` orchestrator with all child elements integrated, freshness thresholds implemented (green <24h, yellow 24-72h, red >72h), Sync Now button per source card. Session 15 (2026-03-09): `ScheduleConfigForm.tsx` confirmed — frequency selector per source. `ReindexButton.tsx` confirmed — re-index with cost estimate dialog; dollar amounts rendered with `font-mono` class (DM Mono). TypeScript clean (0 errors).
   **Acceptance criteria**:
 - [x] Per-source status card: name, document count, last sync time, error count, freshness dot
 - [x] Freshness: green (<24h), yellow (24-72h), red (>72h since last successful sync)
 - [x] Schedule configuration: frequency selector (hourly, every 6h, daily, weekly) per source
 - [x] Re-index button: shows estimated embedding cost dialog before confirming
-- [ ] Cost estimate uses DM Mono font for dollar amounts
+- [x] Cost estimate uses DM Mono font for dollar amounts
 - [x] Credential expiry banner: appears 30 days before expiry, links to reconnect wizard
 - [x] Sync Now button per source
       **Notes**: Plan 06 Sprint B3.
@@ -963,8 +963,8 @@
 
 ### FE-036: Agent Studio page
 
-**Status**: NOT STARTED
-**Audit note**: No files found under `src/web/app/(admin)/admin/agents/studio/`. Zero components implemented. All acceptance criteria unchecked.
+**Status**: 🔒 PRODUCT GATED — Requires 5-10 persona interviews before implementation (Plan 06 Sprint C2). Do NOT implement until research gate is cleared.
+**Audit note**: No files found under `src/web/app/(admin)/admin/agents/studio/`. Zero components implemented. All acceptance criteria unchecked. This is intentional — product-gated.
 
 **Effort**: 14h
 **Depends on**: FE-035

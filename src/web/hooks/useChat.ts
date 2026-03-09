@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { streamChat, type SSEEvent, type Source } from "@/lib/sse";
+import {
+  streamChat,
+  type SSEEvent,
+  type SSEControlEvent,
+  type Source,
+} from "@/lib/sse";
 import { apiGet } from "@/lib/api";
 import type { GlossaryExpansionApplied } from "@/components/chat/TermsInterpreted";
 
@@ -46,6 +51,10 @@ interface UseChatState {
   statusMessage: string | null;
   error: string | null;
   currentMode: string;
+  /** True while SSE stream is attempting to reconnect after a drop */
+  reconnecting: boolean;
+  /** Non-null when all reconnect attempts have been exhausted */
+  reconnectFailed: string | null;
 }
 
 export function useChat(agentId: string) {
@@ -62,6 +71,8 @@ export function useChat(agentId: string) {
     statusMessage: null,
     error: null,
     currentMode: "auto",
+    reconnecting: false,
+    reconnectFailed: null,
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -95,6 +106,8 @@ export function useChat(agentId: string) {
         retrievalConfidence: null,
         glossaryExpansions: [],
         glossaryExpansionsApplied: [],
+        reconnecting: false,
+        reconnectFailed: null,
       }));
 
       let currentSources: Source[] = [];
@@ -111,9 +124,30 @@ export function useChat(agentId: string) {
           agentId,
         )) {
           switch (event.type) {
+            case "__reconnecting":
+              setState((prev) => ({
+                ...prev,
+                reconnecting: true,
+                statusMessage: `Reconnecting... (attempt ${event.data.attempt}/${event.data.maxAttempts})`,
+              }));
+              break;
+
+            case "__reconnect_failed":
+              setState((prev) => ({
+                ...prev,
+                reconnecting: false,
+                reconnectFailed: event.data.message,
+                streaming: false,
+                statusMessage: null,
+                error:
+                  "Connection lost \u2014 click retry to try again",
+              }));
+              break;
+
             case "status":
               setState((prev) => ({
                 ...prev,
+                reconnecting: false,
                 statusMessage: event.data.message,
               }));
               break;
@@ -136,7 +170,12 @@ export function useChat(agentId: string) {
                     content: lastMsg.content + event.data.text,
                   };
                 }
-                return { ...prev, messages: msgs, statusMessage: null };
+                return {
+                  ...prev,
+                  messages: msgs,
+                  statusMessage: null,
+                  reconnecting: false,
+                };
               });
               break;
 
@@ -206,6 +245,8 @@ export function useChat(agentId: string) {
                   conversationId: event.data.conversation_id,
                   streaming: false,
                   statusMessage: null,
+                  reconnecting: false,
+                  reconnectFailed: null,
                 };
               });
               break;
@@ -227,6 +268,7 @@ export function useChat(agentId: string) {
             err instanceof Error ? err.message : "An unexpected error occurred",
           streaming: false,
           statusMessage: null,
+          reconnecting: false,
         }));
       }
     },
@@ -247,6 +289,8 @@ export function useChat(agentId: string) {
       statusMessage: null,
       error: null,
       currentMode: "auto",
+      reconnecting: false,
+      reconnectFailed: null,
     });
   }, []);
 
@@ -274,6 +318,8 @@ export function useChat(agentId: string) {
         statusMessage: null,
         error: null,
         currentMode: "auto",
+        reconnecting: false,
+        reconnectFailed: null,
       });
     } catch (err) {
       setState((prev) => ({
@@ -284,11 +330,41 @@ export function useChat(agentId: string) {
     }
   }, []);
 
+  const retryLastMessage = useCallback(() => {
+    // Find the last user message and re-send it
+    const lastUserMsg = [...state.messages]
+      .reverse()
+      .find((m) => m.role === "user");
+    if (!lastUserMsg) return;
+
+    // Remove the failed assistant message (last message) before retrying
+    setState((prev) => {
+      const msgs = [...prev.messages];
+      if (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
+        msgs.pop();
+      }
+      // Also remove the last user message — sendMessage will re-add it
+      if (msgs.length > 0 && msgs[msgs.length - 1].role === "user") {
+        msgs.pop();
+      }
+      return {
+        ...prev,
+        messages: msgs,
+        error: null,
+        reconnecting: false,
+        reconnectFailed: null,
+      };
+    });
+
+    sendMessage(lastUserMsg.content, state.currentMode);
+  }, [state.messages, state.currentMode, sendMessage]);
+
   return {
     ...state,
     sendMessage,
     resetChat,
     loadConversation,
+    retryLastMessage,
     hasMessages: state.messages.length > 0,
   };
 }

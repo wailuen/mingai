@@ -71,7 +71,10 @@ export function ChatInterface({
             profileContextUsed={chat.profileContextUsed}
             layersActive={chat.layersActive}
             error={chat.error}
+            reconnecting={chat.reconnecting}
+            reconnectFailed={chat.reconnectFailed}
             onSend={(message, mode) => chat.sendMessage(message, mode)}
+            onRetry={() => chat.retryLastMessage()}
             onViewSources={() => setSourcePanelOpen(true)}
             currentMode={chat.currentMode}
           />

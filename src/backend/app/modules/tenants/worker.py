@@ -137,7 +137,7 @@ async def run_tenant_provisioning(
                     text(
                         "INSERT INTO tenants "
                         "(id, name, slug, plan, status, primary_contact_email) "
-                        "VALUES (:id, :name, :slug, :plan, 'provisioning', :email)"
+                        "VALUES (:id, :name, :slug, :plan, 'draft', :email)"
                     ),
                     {
                         "id": tenant_id,
@@ -161,7 +161,7 @@ async def run_tenant_provisioning(
         """Remove tenant row if it was created by this job."""
         async with async_session_factory() as session:
             await session.execute(
-                text("DELETE FROM tenants WHERE id = :id AND status = 'provisioning'"),
+                text("DELETE FROM tenants WHERE id = :id AND status = 'draft'"),
                 {"id": tenant_id},
             )
             await session.commit()

@@ -4,6 +4,7 @@ Auth API endpoints (API-001 to API-010).
 Phase 1: Local JWT authentication with DB-backed bcrypt verification.
 Phase 2: Auth0 JWKS validation.
 """
+import asyncio
 import hmac
 import os
 from datetime import datetime, timedelta, timezone
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_current_user
 from app.core.session import get_async_session
+from app.modules.auth.group_sync import build_group_sync_config, sync_auth0_groups
 
 logger = structlog.get_logger()
 
@@ -166,6 +168,71 @@ def _verify_password(plain: str, stored: str) -> bool:
     return hmac.compare_digest(plain, stored)
 
 
+def _trigger_auth0_group_sync(
+    jwt_payload: dict,
+    user_id: str,
+    tenant_id: str,
+) -> None:
+    """
+    Fire-and-forget Auth0 group sync after a successful login.
+
+    If the JWT contains a 'groups' claim and the tenant has a group_sync_config
+    stored in tenant_configs, resolve the new role set using sync_auth0_groups()
+    and log the result.  The actual role-update DB write is intentionally omitted
+    here — that belongs to the RBAC event bus (Phase 2); this call validates the
+    group mapping and surfaces sync diagnostics in the structured log.
+
+    Runs as a background asyncio task so it cannot delay the login response.
+    Any error is caught and logged; the login always succeeds regardless.
+    """
+    jwt_groups: list[str] = jwt_payload.get("groups") or []
+    if not jwt_groups:
+        return
+
+    async def _do_sync() -> None:
+        try:
+            # build_group_sync_config needs a tenant_configs row.
+            # In Phase 1 we cannot easily query the DB from a background task
+            # without a fresh session, so we derive the config from the JWT
+            # custom claims if present (Auth0 actions can embed it), then fall
+            # back to a no-op if not present.
+            raw_config = jwt_payload.get("https://mingai.io/group_sync_config")
+            allowlist, mapping = build_group_sync_config(
+                {"config_data": raw_config} if raw_config else None
+            )
+            assigned_roles = sync_auth0_groups(jwt_groups, allowlist, mapping)
+            logger.info(
+                "auth0_group_sync_complete",
+                user_id=user_id,
+                tenant_id=tenant_id,
+                groups_count=len(jwt_groups),
+                roles_assigned=assigned_roles,
+            )
+        except Exception as exc:
+            # Sync errors must NEVER fail the login — log and continue.
+            logger.warning(
+                "auth0_group_sync_error",
+                user_id=user_id,
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+
+    # Schedule as a background task. create_task() is safe here because
+    # FastAPI routes always run inside a running event loop.
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(_do_sync())
+        else:
+            loop.run_until_complete(_do_sync())
+    except Exception as exc:
+        logger.warning(
+            "auth0_group_sync_schedule_failed",
+            user_id=user_id,
+            error=str(exc),
+        )
+
+
 @router.post("/local/login", response_model=TokenResponse)
 async def local_login(
     request: LoginRequest,
@@ -212,6 +279,12 @@ async def local_login(
             email=request.email,
             scope="platform",
             method="local_env",
+        )
+        # Auth0 group sync (no-op for local env bootstrap logins — no JWT groups)
+        _trigger_auth0_group_sync(
+            jwt_payload={},
+            user_id="00000000-0000-0000-0000-000000000001",
+            tenant_id="default",
         )
         return TokenResponse(access_token=token, expires_in=expires_in)
 
@@ -268,6 +341,17 @@ async def local_login(
         scope="tenant",
         method="local_db",
     )
+
+    # Auth0 group sync — fires in background, does NOT block login response.
+    # The JWT payload passed here is the *decoded* local token claims, so the
+    # 'groups' key will be absent for local-auth logins.  When Auth0 is the
+    # identity provider (Phase 2) the decoded JWT will carry the groups claim.
+    _trigger_auth0_group_sync(
+        jwt_payload={},  # local login — Auth0 groups not available
+        user_id=str_user_id,
+        tenant_id=str_tenant_id,
+    )
+
     return TokenResponse(access_token=token, expires_in=expires_in)
 
 

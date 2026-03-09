@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, DM_Mono } from "next/font/google";
 import { QueryProvider } from "@/lib/react-query";
+import { NetworkStatusProvider } from "@/components/providers/NetworkStatusProvider";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -32,7 +33,9 @@ export default function RootLayout({
       <body
         className={`${jakarta.variable} ${dmMono.variable} font-sans antialiased`}
       >
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <NetworkStatusProvider>{children}</NetworkStatusProvider>
+        </QueryProvider>
       </body>
     </html>
   );

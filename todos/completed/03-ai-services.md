@@ -464,7 +464,10 @@
 - [ ] Token budget documentation updated (500 tokens freed)
       **Notes**: This is a fundamental change to the query pipeline. The glossary no longer consumes system prompt tokens.
 
-### AI-029: "Terms interpreted" UI indicator
+### AI-029: "Terms interpreted" UI indicator ✅ COMPLETED
+
+**Completed**: 2026-03-09.
+**Evidence**: Backend — `app/modules/chat/orchestrator.py` emits `glossary_expansions` field inside the `metadata` SSE event (line 307). Frontend — `src/web/components/chat/TermsInterpreted.tsx` (AI-029 referenced in component comments), `src/web/components/chat/GlossaryExpansionIndicator.tsx`, `src/web/hooks/useChat.ts` (parses `glossaryExpansions` and `glossaryExpansionsApplied` from metadata stream), and `src/web/components/chat/ChatActiveState.tsx` renders both indicators when expansions are present.
 
 **Effort**: 3h
 **Depends on**: AI-028
@@ -816,7 +819,7 @@
 - [x] `compute_trust_score(agent_id, tenant_id, db) -> int` returns score 0-100
 - [x] Components: kyb_level points mapped to KYB tier score (0:0, 1:15, 2:30, 3:40)
 - [x] Components: completed transaction bonus (capped at 30)
-- [x] Components: disputed transaction penalty (disputed_count * 10, capped at 30)
+- [x] Components: disputed transaction penalty (disputed_count \* 10, capped at 30)
 - [ ] Components: uptime_score, response_score — Phase 2+ (requires health check telemetry)
 - [x] Constraint: score bounded to 0-100
 - [x] Score cached in `agent_cards.trust_score` column; updated via compute endpoint
@@ -924,22 +927,22 @@
 
 ## Summary
 
-| Section                     | Todos            | Total Effort | Status (2026-03-08)                          |
-| --------------------------- | ---------------- | ------------ | -------------------------------------------- |
-| Profile Learning Service    | AI-001 to AI-008 | 24.5h        | ALL COMPLETE                                 |
-| Working Memory Service      | AI-009 to AI-012 | 9.5h         | ALL COMPLETE                                 |
-| Team Working Memory Service | AI-013 to AI-015 | 14h          | ALL COMPLETE                                 |
-| Org Context Service         | AI-016 to AI-022 | 18h          | ALL COMPLETE                                 |
-| Memory Notes Service        | AI-023 to AI-025 | 10h          | ALL COMPLETE                                 |
-| Glossary Expander           | AI-026 to AI-031 | 21h          | ALL COMPLETE (AI-029 is FE scope)            |
-| System Prompt Builder       | AI-032 to AI-036 | 22h          | ALL COMPLETE                                 |
-| Issue Triage Agent          | AI-037 to AI-039 | 13h          | ALL COMPLETE                                 |
-| HAR A2A Message Handler     | AI-040 to AI-045 | 21h          | ALL COMPLETE (2026-03-08, 979/979 tests)     |
-| Trust Score Calculator      | AI-046 to AI-047 | 5h           | ALL COMPLETE (2026-03-08, 979/979 tests)     |
-| Health Monitor              | AI-048 to AI-049 | 5h           | ALL COMPLETE (2026-03-08, 979/979 tests)     |
-| Cross-Cutting Integration   | AI-050 to AI-051 | 8h           | ALL COMPLETE (2026-03-08, 979/979 tests)     |
-| Gap Remediation             | AI-052 to AI-060 | 72h          | AI-053–060 COMPLETE; AI-052 Phase 2 gate     |
-| **Total**                   | **60 todos**     | **~243h**    | **979/979 tests passing as of 2026-03-08**   |
+| Section                     | Todos            | Total Effort | Status (2026-03-08)                              |
+| --------------------------- | ---------------- | ------------ | ------------------------------------------------ |
+| Profile Learning Service    | AI-001 to AI-008 | 24.5h        | ALL COMPLETE                                     |
+| Working Memory Service      | AI-009 to AI-012 | 9.5h         | ALL COMPLETE                                     |
+| Team Working Memory Service | AI-013 to AI-015 | 14h          | ALL COMPLETE                                     |
+| Org Context Service         | AI-016 to AI-022 | 18h          | ALL COMPLETE                                     |
+| Memory Notes Service        | AI-023 to AI-025 | 10h          | ALL COMPLETE                                     |
+| Glossary Expander           | AI-026 to AI-031 | 21h          | ALL COMPLETE (AI-029 FE+BE confirmed 2026-03-09) |
+| System Prompt Builder       | AI-032 to AI-036 | 22h          | ALL COMPLETE                                     |
+| Issue Triage Agent          | AI-037 to AI-039 | 13h          | ALL COMPLETE                                     |
+| HAR A2A Message Handler     | AI-040 to AI-045 | 21h          | ALL COMPLETE (2026-03-08, 979/979 tests)         |
+| Trust Score Calculator      | AI-046 to AI-047 | 5h           | ALL COMPLETE (2026-03-08, 979/979 tests)         |
+| Health Monitor              | AI-048 to AI-049 | 5h           | ALL COMPLETE (2026-03-08, 979/979 tests)         |
+| Cross-Cutting Integration   | AI-050 to AI-051 | 8h           | ALL COMPLETE (2026-03-08, 979/979 tests)         |
+| Gap Remediation             | AI-052 to AI-060 | 72h          | AI-053–060 COMPLETE; AI-052 Phase 2 gate         |
+| **Total**                   | **60 todos**     | **~243h**    | **979/979 tests passing as of 2026-03-08**       |
 
 **AI-052 (AML/sanctions screening)**: Explicitly Phase 2 gate. Do not deploy HAR Tier 3 without this. All other Gap Remediation items (AI-053 to AI-060) are COMPLETE.
 
@@ -947,7 +950,7 @@
 
 ## Gap Remediation (from 07-gap-analysis.md)
 
-### AI-052: AML/sanctions screening for HAR Tier 3
+### AI-052: AML/sanctions screening for HAR Tier 3 ⏳ DEFERRED — Phase 2
 
 **Effort**: 16h
 **Depends on**: AI-041
