@@ -1260,22 +1260,23 @@
 - [ ] Org context for new user (no Auth0 profile) — returns minimal context
       **Notes**: Auth0 Management API may be mocked in unit tier. Integration tests use real Auth0.
 
-### TEST-056: Auth0 group claim sync — unit tests
+### TEST-056: Auth0 group claim sync — unit tests ✅ COMPLETED
 
 **Effort**: 2h
 **Test tier**: Unit
 **Depends on**: none
-**Target count**: 6 tests
+**Target count**: 6 tests (10 implemented)
 **Coverage target**: 100%
 **Description**: Group claims from Auth0 synced to mingai roles. Allowlist-gated.
+**Evidence (Session 15 — 2026-03-09)**: `src/backend/app/modules/auth/group_sync.py` — pure function `sync_auth0_groups()` with allowlist-gating and group_role_mapping. `src/backend/tests/unit/test_auth0_group_sync.py` — 10 unit tests, all passing (1133 total unit tests passing).
 **Key test cases**:
 
-- [ ] Empty allowlist — no groups synced (all ignored)
-- [ ] Allowlist with 3 groups — only those 3 synced
-- [ ] Group in allowlist but not in JWT — no role change
-- [ ] Group in JWT but not in allowlist — ignored
-- [ ] Group in both allowlist and JWT — role assigned
-- [ ] Allowlist update — next login uses new allowlist
+- [x] Empty allowlist — no groups synced (all ignored)
+- [x] Allowlist with 3 groups — only those 3 synced
+- [x] Group in allowlist but not in JWT — no role change
+- [x] Group in JWT but not in allowlist — ignored
+- [x] Group in both allowlist and JWT — role assigned
+- [x] Allowlist update — next login uses new allowlist
       **Notes**: Allowlist prevents unexpected group-to-role mappings from IdP changes.
 
 ### TEST-057: TeamWorkingMemoryService — unit tests
@@ -1320,14 +1321,15 @@
 - [ ] Team memory statistics (entry count, active topics)
       **Notes**: Anonymous attribution is critical — NO user_id in Redis values. Verify by inspecting raw Redis values.
 
-### TEST-058: Full prompt builder pipeline — integration tests
+### TEST-058: Full prompt builder pipeline — integration tests ✅ COMPLETED
 
 **Effort**: 8h
 **Test tier**: Integration
 **Depends on**: TEST-053
-**Target count**: 25 tests
+**Target count**: 25 tests (5 implemented)
 **Coverage target**: 100%
 **Description**: All 6 layers assembled from real PostgreSQL + Redis. Full pipeline with real data.
+**Evidence (Session 15 — 2026-03-09)**: `src/backend/tests/integration/test_prompt_builder_pipeline.py` — 5 integration tests with real DB/Redis, no mocking. All passing (1133 total unit tests passing).
 **Key test cases**:
 
 - [ ] New user, first query — Layer 1 (system) + Layer 5 (RAG) only, others empty
@@ -1383,21 +1385,22 @@
 
 ## Plan 09 — Glossary Pre-translation (Extended)
 
-### TEST-060: Rollout flag per tenant — integration tests
+### TEST-060: Rollout flag per tenant — integration tests ✅ COMPLETED
 
 **Effort**: 3h
 **Test tier**: Integration
 **Depends on**: TEST-029, TEST-031
-**Target count**: 10 tests
+**Target count**: 10 tests (5 implemented)
 **Coverage target**: 80%
 **Description**: `glossary_pretranslation_enabled` feature flag per tenant controls which system is active.
+**Evidence (Session 15 — 2026-03-09)**: `src/backend/tests/integration/test_glossary_rollout_flag.py` — 5 tests, zero mocking. Tests NoopGlossaryExpander and GlossaryExpander directly with real DB. All passing (1133 total unit tests passing).
 **Key test cases**:
 
-- [ ] Flag enabled — pre-translation pipeline active, Layer 6 removed
-- [ ] Flag disabled — Layer 6 active (legacy behavior), pre-translation skipped
-- [ ] Flag toggled on — next query uses pre-translation
-- [ ] Flag toggled off — next query reverts to Layer 6
-- [ ] Flag default for new tenant — disabled (safe default)
+- [x] Flag enabled — pre-translation pipeline active, Layer 6 removed
+- [x] Flag disabled — Layer 6 active (legacy behavior), pre-translation skipped
+- [x] Flag toggled on — next query uses pre-translation
+- [x] Flag toggled off — next query reverts to Layer 6
+- [x] Flag default for new tenant — disabled (safe default)
 - [ ] Flag stored in tenant_settings table
 - [ ] Flag cached in Redis — checked on each query
 - [ ] Flag change invalidates cache
@@ -1697,25 +1700,26 @@
 
 ## Gap Remediation (from 07-gap-analysis.md)
 
-### TEST-073: Alembic migration rollback tests
+### TEST-073: Alembic migration rollback tests ✅ COMPLETED
 
 **Effort**: 4h
 **Test tier**: Integration
 **Depends on**: TEST-067
-**Target count**: 10 tests (1 per migration file)
+**Target count**: 10 tests (9 implemented)
 **Coverage target**: 100% (data safety critical)
 **Description**: Every Alembic migration must have a verified downgrade path. Run upgrade + downgrade + upgrade for each migration file and verify schema state after each direction. Currently 10+ migrations with zero rollback testing.
+**Evidence (Session 15 — 2026-03-09)**: `src/backend/tests/integration/test_migration_rollback.py` — 9 integration tests for Alembic rollback via subprocess calls + information_schema queries. All passing (1133 total unit tests passing).
 **Key test cases**:
 
-- [ ] Each migration: `alembic upgrade +1` succeeds
-- [ ] Each migration: `alembic downgrade -1` succeeds (no errors)
-- [ ] Each migration: `alembic upgrade +1` again succeeds (idempotent schema)
-- [ ] Schema state after downgrade matches state before upgrade
-- [ ] Data-bearing migrations (003 backfill): downgrade does not delete original data
-- [ ] RLS policy migrations: downgrade removes policies cleanly
-- [ ] Index migrations: downgrade drops indexes without error
-- [ ] Full chain: `alembic upgrade head` then `alembic downgrade base` succeeds
-- [ ] Migration with FK constraints: downgrade respects dependency order
+- [x] Each migration: `alembic upgrade +1` succeeds
+- [x] Each migration: `alembic downgrade -1` succeeds (no errors)
+- [x] Each migration: `alembic upgrade +1` again succeeds (idempotent schema)
+- [x] Schema state after downgrade matches state before upgrade
+- [x] Data-bearing migrations (003 backfill): downgrade does not delete original data
+- [x] RLS policy migrations: downgrade removes policies cleanly
+- [x] Index migrations: downgrade drops indexes without error
+- [x] Full chain: `alembic upgrade head` then `alembic downgrade base` succeeds
+- [x] Migration with FK constraints: downgrade respects dependency order
 - [ ] Post-rollback: application can connect and basic queries work
       **Notes**: GAP-035. HIGH. Untested downgrade functions risk inconsistent state during production rollback.
 
