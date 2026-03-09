@@ -1,289 +1,266 @@
-# CLAUDE.md — mingai Backend Codegen Instructions
+# CLAUDE.md — mingai Codegen Instructions
 
-Preloaded instructions for AI codegen agents. Read this before writing any backend code.
-Validated against real Phase 1 code on 2026-03-07. Phase 2 ongoing as of 2026-03-08.
+Preloaded instructions for AI codegen agents working on the mingai platform.
+Read this before writing any backend or frontend code.
 
-## Implementation State (2026-03-08)
+Last validated: 2026-03-09.
 
-**Tests**: 1082 passing / 2 failed / 4 errors. The 2 failures and 4 errors are pre-existing asyncpg event loop binding noise from test ordering — not regressions. All feature tests pass.
+---
 
-**Phase 2 endpoint groups completed**:
-- Auth, Chat, Issues (full CRUD + triage stream + admin/platform queues + GitHub webhook)
-- Memory (notes, working memory, GDPR erasure, org context)
-- Glossary (CRUD, bulk import, export, miss analytics, cache warm-up)
-- Documents (SharePoint + Google Drive connect/sync, sync failure diagnosis)
-- Users (invite, bulk invite, enhanced list, GDPR export)
-- Teams (CRUD, members, audit log, Auth0 sync allowlist)
-- Agents (list, create, update, status toggle, deploy from template)
-- Agent templates (create, update, list with platform filter — platform admin)
-- Tool catalog (list, register — platform admin)
-- Analytics: satisfaction + engagement (tenant admin); cost + health (platform admin)
-- Cache analytics: summary, by-index, cost savings, per-index TTL (API-106–109)
-- Memory policy GET/PATCH (API-076–077)
-- Audit logs: workspace (API-087) + platform (API-112)
-- HAR A2A: transactions, signed events, trust score, health monitor (AI-040–060)
-- Document indexing pipeline (AI-060)
-- Notifications SSE (API-012)
-- Tenant management: provisioning, health score, quota, LLM profiles, token budget
+## What Is mingai
 
-**Pending (Session 13 parallel launch)**:
-- API-089–098: Registry (HAR agent registry CRUD, public discovery)
-- API-113–120: Platform extras (impersonation, daily digest, GDPR deletion, notifications)
-- API-121–125: Gap remediation items
-
-**Migrations applied**: v001 (schema), v002 (RLS), v003 (HAR tables), v004 (cache tables), v005 (agent cards)
+mingai is a multi-tenant enterprise AI assistant platform. End users query a RAG-backed AI through a chat interface. Tenant admins manage their workspace — users, documents, glossary, agents, issues, analytics. Platform admins operate the entire platform — tenants, LLM profiles, dashboards, registries.
 
 ---
 
 ## Architecture Overview
 
-**Stack**: FastAPI + SQLAlchemy (async) + Redis + PostgreSQL
-**Port**: 8022
-**Prefix**: All API endpoints under `/api/v1/`
-**Auth**: Local JWT (Phase 1), Auth0 JWKS (Phase 2)
-**Multi-tenant**: Row-Level Security (RLS) at PostgreSQL level
+### Stack
 
-### Module Structure
+| Layer            | Technology                                                        |
+| ---------------- | ----------------------------------------------------------------- |
+| Backend          | FastAPI + SQLAlchemy (async) + PostgreSQL + Redis                 |
+| Frontend         | Next.js 14 (App Router) + TypeScript + Tailwind CSS + React Query |
+| Auth             | JWT v2 (HS256 local) — Auth0 JWKS integration prepared            |
+| Multi-tenancy    | PostgreSQL Row-Level Security (RLS)                               |
+| Async processing | Redis Streams (issue triage), Redis Pub/Sub (notifications SSE)   |
+| AI               | Azure OpenAI via `AsyncAzureOpenAI`, pgvector for embeddings      |
 
-```
-src/backend/app/
-  api/
-    router.py              # Aggregates all module routers under /api/v1/
-  core/
-    config.py              # pydantic_settings.BaseSettings — all from .env
-    database.py            # RLS helpers, get_set_tenant_sql(), validate_tenant_id()
-    dependencies.py        # FastAPI DI: get_current_user, require_tenant_admin, require_platform_admin
-    session.py             # Async SQLAlchemy engine + get_async_session() dependency
-    redis_client.py        # get_redis() / close_redis()
-    middleware.py          # CORS, security headers, request ID injection
-    health.py              # build_health_response() helper
-    logging.py             # structlog JSON setup
-    bootstrap.py           # First-run schema/seed logic
-    seeds.py               # Seed data helpers
-    schema.py              # Shared Pydantic base schemas
-  modules/
-    auth/
-      jwt.py               # decode_jwt_token(), decode_jwt_token_v1_compat(), JWTValidationError
-      routes.py            # POST /auth/local/login, /auth/token/refresh, /auth/logout, GET /auth/current
-    issues/
-      routes.py            # Full CRUD + admin/platform queues + GitHub webhook
-      blur_service.py      # ScreenshotBlurService — PIL Gaussian blur pipeline
-      stream.py            # Redis Stream producer (XADD) — issue_reports:incoming
-      worker.py            # Redis Stream consumer (XREADGROUP) — triage worker loop
-    chat/
-      orchestrator.py      # ChatOrchestrationService — 8-stage RAG pipeline
-      routes.py            # POST /chat/stream, /chat/feedback; GET/DELETE /conversations/...
-      embedding.py         # EmbeddingService — reads EMBEDDING_MODEL from env
-      vector_search.py     # VectorSearchService — tenant-scoped pgvector search
-      persistence.py       # ConversationPersistenceService — saves exchanges to DB
-      prompt_builder.py    # SystemPromptBuilder — 6-layer prompt assembly
-    memory/
-      working_memory.py    # WorkingMemoryService — per-user/per-agent Redis context
-      team_working_memory.py  # TeamWorkingMemoryService — anonymized team context
-      org_context.py       # OrgContextService — JWT claims extraction
-      notes.py             # Memory notes model and validation (200-char enforcement)
-      routes.py            # GET/POST/DELETE /memory/notes, GDPR export/clear
-    admin/
-      workspace.py         # GET/PATCH /admin/workspace — workspace settings
-    glossary/
-      expander.py          # GlossaryExpander — inline query expansion + injection protection
-      routes.py            # CRUD for glossary_terms, bulk import
-    documents/
-      sharepoint.py        # SharePoint connection, test, sync trigger, sync status
-      indexing.py          # DocumentIndexingPipeline — PDF/DOCX/PPTX/TXT → chunks → embeddings → vector index
-    har/
-      crypto.py            # Ed25519 keypair generation, Fernet private-key encryption, sign/verify
-      signing.py           # create_signed_event(), verify_event_signature(), check_nonce_replay(), verify_event_chain()
-      state_machine.py     # HAR transaction state machine (DRAFT→OPEN→NEGOTIATING→COMMITTED→EXECUTING→COMPLETED)
-      routes.py            # POST/GET /har/transactions — create, list, get, transition, approve, reject
-      trust.py             # compute_trust_score(agent_id, tenant_id, db) — KYB + completed − disputed formula
-      health_monitor.py    # AgentHealthMonitor — asyncio background task, hourly trust score recomputation
-    users/routes.py        # User management — invite, GDPR erase, profile
-    teams/routes.py        # Team management — create, members, working memory
-    tenants/routes.py      # Platform admin — tenant CRUD
-    platform/routes.py     # Platform admin dashboard
-    profile/learning.py    # ProfileLearningService — async learning from queries
-    notifications/
-      publisher.py         # publish_notification() — Redis Pub/Sub producer
-      routes.py            # GET /notifications/stream — SSE delivery via StreamingResponse
-```
+### Ports
+
+- **Backend API**: `8022`
+- **Frontend**: `3022`
+- **API prefix**: `/api/v1/` (all backend endpoints)
 
 ---
 
-## Key Patterns
+## Backend
 
-### 1. DB Helpers Are Module-Level Async Functions (Mockable)
+### Root Structure
 
-Every route module defines its DB operations as standalone async functions at module level,
-not as class methods. This makes them patchable with `unittest.mock.patch`.
+```
+src/backend/
+  app/
+    main.py                   # FastAPI app, startup lifespan, router registration
+    api/
+      router.py               # Aggregates all module routers under /api/v1/
+    core/
+      config.py               # pydantic_settings.BaseSettings — all values from .env
+      database.py             # get_set_tenant_sql(), validate_tenant_id(), RLS helpers
+      dependencies.py         # get_current_user, require_tenant_admin, require_platform_admin
+      session.py              # Async SQLAlchemy engine + get_async_session()
+      redis_client.py         # build_redis_key(), get_redis(), close_redis()
+      cache.py                # CacheService, @cached decorator, invalidate_cache()
+      middleware.py           # CORS, security headers, request ID injection
+      health.py               # build_health_response()
+      logging.py              # structlog JSON setup
+      bootstrap.py            # First-run schema/seed logic
+      seeds.py                # Seed data helpers
+      schema.py               # Shared Pydantic base schemas
+      storage.py              # Cloud-agnostic presigned URL (aws/azure/gcp/local)
+    modules/
+      auth/
+        jwt.py                # decode_jwt_token(), decode_jwt_token_v1_compat()
+        routes.py             # /auth/local/login, /auth/token/refresh, /auth/logout, /auth/current
+      chat/
+        orchestrator.py       # ChatOrchestrationService — 8-stage RAG pipeline
+        routes.py             # POST /chat/stream, /chat/feedback; GET/DELETE /conversations/...
+        embedding.py          # EmbeddingService — reads EMBEDDING_MODEL from env
+        vector_search.py      # VectorSearchService — tenant-scoped pgvector search
+        persistence.py        # ConversationPersistenceService
+        prompt_builder.py     # SystemPromptBuilder — 6-layer prompt assembly
+      issues/
+        routes.py             # Full CRUD + admin/platform queues + GitHub webhook
+        blur_service.py       # ScreenshotBlurService — PIL Gaussian blur
+        stream.py             # Redis Stream producer (XADD) — issue_reports:incoming
+        worker.py             # Redis Stream consumer (XREADGROUP) — triage loop
+        triage_agent.py       # LLM-based issue classifier
+      memory/
+        working_memory.py     # WorkingMemoryService — per-user/per-agent Redis context
+        team_working_memory.py# TeamWorkingMemoryService — anonymized team context
+        org_context.py        # OrgContextService — JWT claims extraction
+        notes.py              # Memory notes model (200-char max)
+        routes.py             # /memory/notes, GDPR export/clear
+      notifications/
+        publisher.py          # publish_notification() — Redis Pub/Sub producer
+        routes.py             # GET /notifications/stream — SSE StreamingResponse
+      glossary/
+        expander.py           # GlossaryExpander — query expansion + injection protection
+        routes.py             # CRUD + bulk import + export + miss analytics
+      documents/
+        sharepoint.py         # SharePoint connect/test/sync/status
+        google_drive.py       # Google Drive connect/test/sync/status
+        indexing.py           # DocumentIndexingPipeline — PDF/DOCX/PPTX/TXT → pgvector
+      har/
+        crypto.py             # Ed25519 keypair generation, Fernet private-key encryption
+        signing.py            # create_signed_event(), verify_event_signature(), nonce check
+        state_machine.py      # Transaction state machine (DRAFT→...→COMPLETED)
+        routes.py             # /har/transactions CRUD + transition + approve/reject
+        trust.py              # compute_trust_score(agent_id, tenant_id, db)
+        health_monitor.py     # AgentHealthMonitor — asyncio background hourly task
+      admin/
+        workspace.py          # GET/PATCH /admin/workspace
+      users/routes.py         # invite, bulk invite, list, GDPR erase
+      teams/routes.py         # CRUD, members, working memory, audit log
+      agents/routes.py        # list, create, update, status toggle, deploy from template
+      agents/templates.py     # Agent template CRUD (platform admin)
+      tenants/routes.py       # Tenant CRUD, health, quota, LLM profiles, token budget
+      platform/routes.py      # Platform admin dashboard, audit log
+      registry/routes.py      # HAR agent registry — public discovery + CRUD
+      llm_profiles/routes.py  # LLM profile slot→deployment mapping (platform admin)
+      profile/learning.py     # ProfileLearningService — async learning from queries
+      feedback/routes.py      # User feedback collection
+  tests/
+    unit/                     # Tier 1 — mocked, < 1s each. 1133+ tests passing.
+    integration/              # Tier 2 — real PostgreSQL + Redis (Docker required)
+    e2e/                      # Tier 3 — Playwright, full stack
+    fixtures/                 # Shared test data (llm_providers.json etc.)
+    conftest.py               # Root conftest — session-scoped TestClient
+  alembic/
+    versions/                 # v001 schema, v002 RLS, v003 HAR, v004 cache, v005 agent cards
+  docker-compose.yml          # PostgreSQL + Redis for local dev/testing
+  pyproject.toml
+```
+
+### Database Migrations
+
+```bash
+cd src/backend
+alembic upgrade head                              # apply all
+alembic revision --autogenerate -m "description" # generate new
+```
+
+6 migrations applied (v001–v005 + one additional).
+
+---
+
+## Backend Patterns
+
+### 1. RLS Context — Always Set Before Querying Tenant Tables
 
 ```python
-# CORRECT pattern (in routes.py)
+from app.core.database import get_set_tenant_sql
+from sqlalchemy import text
+
+# get_set_tenant_sql returns (sql_str, params_dict) — NOT a string
+sql, params = get_set_tenant_sql(tenant_id)
+await db.execute(text(sql), params)
+```
+
+Never pass `get_set_tenant_sql(...)` directly to `text()` — it returns a tuple.
+
+### 2. Redis Key Construction — Always Use build_redis_key
+
+```python
+from app.core.redis_client import build_redis_key
+
+# Pattern: mingai:{tenant_id}:{key_type}:{...parts}
+key = build_redis_key(tenant_id, "working_memory", user_id, agent_id)
+channel = build_redis_key(tenant_id, "notifications", user_id)
+```
+
+`build_redis_key` raises `ValueError` if any segment contains a colon. Never construct Redis keys with f-strings.
+
+Key namespace reference:
+
+```
+mingai:{tenant_id}:working_memory:{user_id}:{agent_id}  # per-user working memory
+mingai:{tenant_id}:team_memory:{team_id}                 # team working memory
+mingai:{tenant_id}:glossary_terms                         # glossary cache
+mingai:{tenant_id}:embedding_cache:{sha256_hash[:16]}    # embedding cache
+mingai:{tenant_id}:notifications:{user_id}               # SSE pub/sub channel
+{tenant_id}:nonce:{nonce}                                # HAR replay protection
+```
+
+### 3. Dynamic PATCH — Column Allowlist Required
+
+```python
+_WORKSPACE_UPDATE_ALLOWLIST = {"name", "timezone", "locale", "notification_preferences"}
+
+invalid = set(updates) - _WORKSPACE_UPDATE_ALLOWLIST
+if invalid:
+    raise ValueError(f"Invalid fields: {invalid}")
+
+await db.execute(
+    text("UPDATE workspace SET col = :col WHERE id = :id"),
+    {"col": value, "id": record_id},
+)
+```
+
+Never use f-strings to inject column names from user input.
+
+### 4. asyncpg JSON Parameters — Always Use CAST
+
+```sql
+-- CORRECT (asyncpg)
+INSERT INTO t (col) VALUES (CAST(:val AS jsonb))
+
+-- WRONG (psycopg2 syntax, breaks asyncpg)
+INSERT INTO t (col) VALUES (:val::jsonb)
+```
+
+### 5. asyncpg TIMESTAMPTZ — Pass datetime Objects, Not Strings
+
+```python
+# CORRECT
+from datetime import datetime, timezone
+created_at = datetime.now(timezone.utc)  # datetime object
+
+# WRONG — raises DataError
+created_at = datetime.now(timezone.utc).isoformat()  # string
+```
+
+### 6. DB Helpers Are Module-Level Async Functions
+
+Every route module defines DB operations as standalone async functions at module level, not class methods. This makes them patchable in unit tests.
+
+```python
+# In routes.py
 async def create_issue_db(tenant_id, user_id, title, ..., db) -> dict:
-    await db.execute(text("INSERT ..."), {...})
-    await db.commit()
-    return {...}
+    ...
 
 @router.post("/issues")
 async def create_issue(request, current_user=Depends(...), session=Depends(...)):
     result = await create_issue_db(..., db=session)
     return result
 
-# In unit tests:
+# In unit tests
 with patch("app.modules.issues.routes.create_issue_db", new_callable=AsyncMock) as mock:
     mock.return_value = {...}
-    resp = client.post(...)
 ```
 
-### 2. Dynamic SQL Uses Column Allowlists + text() Parameterized Bindings
-
-Never construct SQL with f-strings using user data. Always use `sqlalchemy.text()` with
-a named params dict. For dynamic PATCH/UPDATE, filter through an allowlist first.
+### 7. Route Registration Order — Specific Before Parameterized
 
 ```python
-# CORRECT
-_WORKSPACE_UPDATE_ALLOWLIST = {"name", "timezone", "locale", "notification_preferences"}
+# CORRECT — specific sub-paths registered first
+@router.patch("/issues/{id}/status")   # registered first
+@router.post("/issues/{id}/events")    # registered first
+@router.get("/issues/{id}")            # parameterized last
 
-invalid = set(updates) - _WORKSPACE_UPDATE_ALLOWLIST
-if invalid:
-    raise ValueError(f"Invalid workspace update fields: {invalid}")
-
-await db.execute(
-    text("UPDATE ... SET col = :col WHERE id = :id"),
-    {"col": value, "id": record_id},
-)
-
-# NEVER
-await db.execute(f"UPDATE ... SET {col} = '{value}'")  # SQL injection
+# Also: /users/me before /users/{id}, /glossary/import before /glossary/{id}
 ```
 
-### 3. `get_set_tenant_sql()` Returns a Tuple — Unpack Before execute()
-
-`database.get_set_tenant_sql(tenant_id)` returns `(sql_str, params_dict)`, NOT a string.
+### 8. Screenshot Blur Gate — Enforced in Route Handler
 
 ```python
-# CORRECT
-from app.core.database import get_set_tenant_sql
-sql, params = get_set_tenant_sql(tenant_id)
-await db.execute(text(sql), params)
-
-# WRONG — will fail
-await db.execute(text(get_set_tenant_sql(tenant_id)))  # TypeError: text() got a tuple
-```
-
-### 4. `_stream_llm` in Orchestrator Must Be Mocked in Unit Tests (autouse fixture)
-
-`ChatOrchestrationService._stream_llm` reads `PRIMARY_MODEL` and `CLOUD_PROVIDER` from
-env and makes a real OpenAI/Azure API call. In Tier 1 unit tests, this MUST be intercepted
-via an `autouse=True` fixture using `monkeypatch.setattr`.
-
-```python
-# Required in test_orchestrator.py (autouse=True means it applies to ALL tests in the file)
-async def _fake_stream_llm(self, system_prompt, query, tenant_id):
-    yield "Test LLM response."
-
-@pytest.fixture(autouse=True)
-def mock_llm_stream(monkeypatch):
-    from app.modules.chat import orchestrator as _orch_module
-    monkeypatch.setattr(
-        _orch_module.ChatOrchestrationService, "_stream_llm", _fake_stream_llm
-    )
-```
-
-If you forget this fixture, the test will fail at import time or make a real API call.
-
-### 5. Redis Key Namespace
-
-All Redis keys follow this namespace convention:
-
-```
-mingai:{tenant_id}:{service}:{id}
-
-Examples:
-  mingai:{tenant_id}:working_memory:{user_id}:{agent_id}   # per-user working memory
-  mingai:{tenant_id}:team_memory:{team_id}                  # team working memory
-  mingai:{tenant_id}:glossary_terms                          # glossary term cache
-  mingai:{tenant_id}:embedding_cache:{sha256_hash[:16]}     # embedding cache
-```
-
-### 6. Team Memory: Never Store user_id
-
-`TeamWorkingMemoryService` stores anonymized queries only. `user_id` is never written
-to any Redis key or value. The stored schema is:
-
-```json
-{ "topics": ["string"], "recent_queries": ["a team member asked: <truncated>"] }
-```
-
-Any code that attempts to store `user_id` in team memory violates GDPR isolation.
-
-### 7. Screenshot Blur Gate — Always Enforce Before Storing
-
-Before accepting any `screenshot_url` in issue creation, the route must verify
-`blur_acknowledged=True`. This check lives in the route handler, not the DB helper.
-
-```python
-# In issues/routes.py
+# In issues/routes.py — NOT in the DB helper
 if request.screenshot_url is not None and not request.blur_acknowledged:
     raise HTTPException(status_code=422, detail="blur_acknowledged must be true...")
 ```
 
-Do not move this check into `create_issue_db`. The route layer is the enforcement point.
+Do not move this check into `create_issue_db`.
 
-### 8. `InviteUserRequest.email` Uses Pydantic `EmailStr`
-
-`users/routes.py` imports `EmailStr` from Pydantic and uses it as the type for
-`InviteUserRequest.email`. No manual `"@" not in v` check is needed.
+### 9. GitHub Webhook — Fail-Closed
 
 ```python
-from pydantic import BaseModel, EmailStr
-
-class InviteUserRequest(BaseModel):
-    email: EmailStr  # Pydantic validates — no manual check needed
+# If GITHUB_WEBHOOK_SECRET is not set, return 503 immediately
+# Never process an unverified webhook payload
 ```
 
-Note: `auth/routes.py` `LoginRequest.email` uses a manual `"@"` check (Phase 1 bootstrap
-only). Do not replicate that pattern in new code.
-
-### 9. Route Registration Order — Specific Before Parameterized
-
-Routes with specific path segments must be registered BEFORE parameterized routes
-to avoid FastAPI path collision.
+### 10. Notification SSE Pattern
 
 ```python
-# CORRECT order in issues/routes.py:
-@router.patch("/issues/{issue_id}/status")   # specific — registered first
-@router.post("/issues/{issue_id}/events")    # specific — registered first
-@router.get("/issues/{issue_id}")            # parameterized — registered last
-```
-
-Same pattern applies in `users/routes.py`: `/users/me` routes before `/users/{id}`.
-
-### 10. asyncpg JSON Parameters Require CAST
-
-asyncpg does not auto-cast Python dicts to jsonb. Use `CAST(:param AS jsonb)`:
-
-```sql
--- CORRECT (asyncpg)
-INSERT INTO t (col) VALUES (CAST(:val AS jsonb))
--- or pass json.dumps(dict) as a string parameter — asyncpg accepts string → jsonb
-
--- WRONG (psycopg2 syntax, breaks asyncpg)
-INSERT INTO t (col) VALUES (:val::jsonb)
-```
-
-### 11. Notification Channel Naming and SSE Pattern
-
-Redis Pub/Sub channel for per-user notifications:
-
-```
-mingai:{tenant_id}:notifications:{user_id}
-```
-
-`publisher.py` publishes JSON to this channel. The route subscribes and forwards events as SSE:
-
-```python
-# notifications/routes.py — the SSE generator pattern
+# notifications/routes.py
 async def event_generator(pubsub):
     try:
         while True:
@@ -291,157 +268,117 @@ async def event_generator(pubsub):
             if msg:
                 yield f"data: {msg['data']}\n\n"
             else:
-                yield ": keepalive\n\n"  # every 30s to prevent proxy timeouts
+                yield ": keepalive\n\n"  # prevent proxy timeouts
     finally:
-        await pubsub.unsubscribe()
+        await pubsub.unsubscribe()  # ALWAYS release in finally
 
-# Route uses StreamingResponse with media_type="text/event-stream"
 return StreamingResponse(event_generator(pubsub), media_type="text/event-stream")
 ```
 
-`publish_notification(user_id, tenant_id, notification_type, title, body, link=None, redis=None)` is the sole write path. Never publish directly to the channel outside this function.
-
-### 12. Redis Stream Constants and Patterns
-
-Stream key and consumer group are module-level constants in `issues/stream.py`:
-
-```python
-STREAM_KEY = "issue_reports:incoming"
-CONSUMER_GROUP = "issue_triage_workers"
-STREAM_MAX_LEN = 10_000  # MAXLEN ~ applied on XADD
-```
-
-`ensure_stream_group(redis)` is idempotent — uses `XGROUP CREATE ... MKSTREAM` with `SETID 0`. Call once at worker startup; safe to call repeatedly.
-
-`publish_issue_to_stream(report_id, tenant_id, issue_type, severity_hint, redis)` does XADD with `maxlen=STREAM_MAX_LEN, approximate=True`.
-
-Worker (`issues/worker.py`) uses `XREADGROUP GROUP ... COUNT 10 BLOCK 5000`. On failure it applies exponential backoff with 3 retries before NACK. `reclaim_abandoned_messages` uses XCLAIM to recover messages idle >5 min from any dead consumer.
-
-### 13. Issue Action Allowlists — State Machine Enforcement
-
-Both admin and platform issue action endpoints enforce transitions through a module-level allowlist. Never accept arbitrary action strings.
-
-Tenant admin actions (`POST /admin/issues/{id}/action`):
-
-```python
-_ADMIN_ISSUE_ACTIONS = {"assign", "resolve", "escalate", "request_info", "close_duplicate"}
-```
-
-Platform admin actions (`POST /platform/issues/{id}/action`):
-
-```python
-_PLATFORM_ISSUE_ACTIONS = {"override_severity", "route_to_tenant", "assign_sprint", "close_wontfix"}
-```
-
-Both follow the same route pattern as other PATCH endpoints: validate action against allowlist, then execute parameterized SQL. Reject unknown actions with 422.
-
-### 14. HAR A2A Cryptography — Ed25519 + Fernet
-
-Ed25519 keypairs are generated per agent on deploy. Private keys are stored Fernet-encrypted using PBKDF2HMAC derived from `JWT_SECRET_KEY` (200k iterations, SHA256, fixed salt `b"mingai-har-v1"`).
+### 11. HAR Cryptography
 
 ```python
 from app.modules.har.crypto import generate_agent_keypair, sign_payload, verify_signature
 
-# Generate (returns base64-encoded strings)
 public_key_b64, private_key_enc_b64 = generate_agent_keypair()
-
-# Sign (private_key_enc_b64 = Fernet-encrypted seed, payload = bytes)
 signature_b64 = sign_payload(private_key_enc_b64, canonical_bytes)
-
-# Verify (never raises — returns False on any error)
 ok = verify_signature(public_key_b64, canonical_bytes, signature_b64)
+# verify_signature never raises — returns False on any error
 ```
 
-### 15. HAR Signed Events — Canonical Payload Format
+Ed25519 private keys are Fernet-encrypted using PBKDF2HMAC derived from `JWT_SECRET_KEY` (200k iterations, SHA256, salt `b"mingai-har-v1"`). Never store raw private keys.
 
-Every signed event is created via `create_signed_event()`. The canonical payload is always:
+HAR signed event canonical payload uses `json.dumps(dict, sort_keys=True)` with `.isoformat()` for timestamps (T-separator). `str(datetime)` produces space-separated format — do not use it in signing.
+
+### 12. Trust Score Formula
+
+```
+score = max(0, min(100, kyb_pts + min(30, completed_count) - min(30, disputed_count × 10)))
+kyb_pts: {0→0, 1→15, 2→30, 3→40}
+```
+
+`compute_trust_score()` does NOT commit — the caller must `await db.commit()`.
+
+### 13. AgentHealthMonitor — Never Await Directly
 
 ```python
-canonical_dict = {
-    "transaction_id": str,
-    "event_type": str,
-    "actor_agent_id": str,
-    "payload": dict,
-    "nonce": secrets.token_hex(32),   # 64 hex chars
-    "timestamp": datetime.now(UTC).isoformat(),  # ISO 8601 with T separator
-}
-canonical_bytes = json.dumps(canonical_dict, sort_keys=True).encode()
-event_hash = sha256(canonical_bytes + signature.encode()).hexdigest()
+# In main.py startup — CORRECT
+asyncio.create_task(health_monitor.start())
+
+# WRONG — blocks forever
+await health_monitor.start()
 ```
 
-**Critical**: `created_at` passed to asyncpg INSERT must be a `datetime` object, NOT `isoformat()` string.
-`verify_event_signature()` must use `.isoformat()` (T-separated), NOT `str()` (space-separated) to match.
+### 14. Team Working Memory — Never Store user_id
 
-### 16. Nonce Replay Protection — Redis SETNX TTL=600
-
-```python
-key = f"{tenant_id}:nonce:{nonce}"
-was_set = await redis.set(key, "1", nx=True, ex=600)
-# True = fresh, False = replay
-```
-
-### 17. Trust Score Formula
-
-```
-trust_score = max(0, min(100, kyb_pts + min(30, completed_count) - min(30, disputed_count * 10)))
-kyb_pts: {0:0, 1:15, 2:30, 3:40}
-```
-
-Called by `compute_trust_score(agent_id, tenant_id, db)` which does NOT commit — caller commits.
-
-### 18. GitHub Webhook — HMAC-SHA256, Fail-Closed
-
-`POST /webhooks/github` validates the `X-Hub-Signature-256` header using HMAC-SHA256 over the raw request body. The secret comes from `GITHUB_WEBHOOK_SECRET` in env.
-
-Fail-closed rule: if `GITHUB_WEBHOOK_SECRET` is not set, the endpoint returns 503 immediately. Never process an unverified webhook payload.
-
-Event-to-status mapping (applied to `issue_reports`):
-
-| GitHub event          | New status        |
-| --------------------- | ----------------- |
-| `issues.labeled`      | `triaged`         |
-| `pull_request.opened` | `fix_in_progress` |
-| `pull_request.merged` | `fix_merged`      |
-| `release.published`   | `fix_deployed`    |
-
-Unrecognized events return 200 with `{"processed": false}` — do not raise errors for unknown event types.
+`TeamWorkingMemoryService` stores only anonymized strings: `"a team member asked: <truncated>"`. Writing `user_id` to team memory is a GDPR violation.
 
 ---
 
-## Test Patterns
+## Auth Architecture
 
-### Tier 1 — Unit Tests (target: < 1s each)
+### JWT v2 Payload
+
+```json
+{
+  "sub": "<user_id>",
+  "tenant_id": "<uuid>",
+  "roles": ["end_user"],
+  "scope": "tenant",
+  "plan": "professional",
+  "email": "user@example.com",
+  "exp": 1234567890,
+  "iat": 1234567890,
+  "token_version": 2
+}
+```
+
+### Role Enforcement Dependencies
+
+```python
+current_user = Depends(get_current_user)         # any authenticated user
+current_user = Depends(require_tenant_admin)     # roles includes "tenant_admin"
+current_user = Depends(require_platform_admin)   # scope == "platform"
+```
+
+| Role             | Scope      | Access                                                     |
+| ---------------- | ---------- | ---------------------------------------------------------- |
+| `end_user`       | `tenant`   | Chat, memory, own issues, own profile                      |
+| `tenant_admin`   | `tenant`   | Above + user mgmt, glossary, workspace, agents, all issues |
+| `platform_admin` | `platform` | Above + tenant mgmt, LLM profiles, platform analytics      |
+
+---
+
+## Backend Test Patterns
+
+### Tier 1 — Unit Tests
 
 Location: `src/backend/tests/unit/`
 Run: `cd src/backend && python -m pytest tests/unit/ -q`
 
 Rules:
 
-- Mock ALL external dependencies: DB, Redis, LLM APIs
-- Use `AsyncMock` for async functions, `MagicMock` for sync
-- Use `patch("app.modules.<module>.routes.<function_name>", new_callable=AsyncMock)`
-- JWT tokens: use a 64-char test secret (`"a" * 64`), never real env vars
+- Mock ALL external dependencies (DB, Redis, LLM APIs) with `AsyncMock` / `MagicMock`
+- Use `patch("app.modules.<module>.routes.<function>", new_callable=AsyncMock)`
+- JWT tokens: 64-char test secret (`"a" * 64`), never real env vars
 - Use `TestClient(app, raise_server_exceptions=False)` for route tests
 - Patch env vars via `patch.dict(os.environ, {...})` in a fixture
-- `autouse=True` fixtures for cross-cutting mocks (e.g., `_stream_llm`)
 
-Standard fixture pattern:
+Standard fixture:
 
 ```python
 TEST_JWT_SECRET = "a" * 64
-TEST_JWT_ALGORITHM = "HS256"
 TEST_TENANT_ID = "12345678-1234-5678-1234-567812345678"
 TEST_USER_ID = "user-001"
 
 @pytest.fixture
 def env_vars():
-    env = {
+    with patch.dict(os.environ, {
         "JWT_SECRET_KEY": TEST_JWT_SECRET,
-        "JWT_ALGORITHM": TEST_JWT_ALGORITHM,
+        "JWT_ALGORITHM": "HS256",
         "REDIS_URL": "redis://localhost:6379/0",
         "FRONTEND_URL": "http://localhost:3022",
-    }
-    with patch.dict(os.environ, env):
+    }):
         yield
 
 @pytest.fixture
@@ -450,84 +387,287 @@ def client(env_vars):
     return TestClient(app, raise_server_exceptions=False)
 ```
 
-### Tier 2 — Integration Tests (requires Docker)
+For `ChatOrchestrationService._stream_llm` — always intercept with `autouse=True` monkeypatch fixture. It makes real API calls without interception.
+
+### Tier 2 — Integration Tests
 
 Location: `src/backend/tests/integration/`
+Requires: `cd src/backend && docker-compose up -d`
 
-Rules:
-
-- NO MOCKING — use real PostgreSQL and real Redis from docker-compose
-- Guard with `pytest.skip()` when required env vars are absent
-- Session-scoped `TestClient` shared across all integration tests
+- NO MOCKING — real PostgreSQL and real Redis
+- Session-scoped `TestClient` shared across tests to avoid event loop binding errors
+- `asyncio.run()` for DB fixture setup, function-scoped DB engines
 
 ### Tier 3 — E2E Tests
 
 Location: `src/backend/tests/e2e/`
-No mocking. Requires full running stack. Uses Playwright.
+Requires: Full running stack. Uses Playwright.
 
 ---
 
-## Known Gotchas
+## Backend Known Gotchas
 
-1. **`get_set_tenant_sql()` returns a tuple** — never pass directly to `text()`. Always `sql, params = ...`.
-2. **`_stream_llm` makes real API calls** — `autouse=True` monkeypatch fixture required in test_orchestrator.py.
-3. **Route order matters** — specific paths (`/issues/{id}/status`) before parameterized (`/issues/{id}`).
-4. **`logout()` revokes the Redis session key** — `build_redis_key(tenant_id, "session", user_id)` deleted on logout. `local_login()` writes the same key via `_write_session_to_redis()` (fire-and-forget, non-fatal if Redis down).
-5. **Bootstrap login uses `hmac.compare_digest()` for plaintext fallback** — constant-time to prevent timing attacks even on non-hashed bootstrap passwords. Never use `==` for password comparison.
-6. **Module-level engine in session.py** — integration tests must use a single session-scoped TestClient.
-7. **`EmbeddingService.__init__` reads env vars** — instantiation raises ValueError if env vars absent.
-8. **`GlossaryExpander(db=None)` is valid** — returns [] from `_get_terms()` with debug log. For unit tests only.
-9. **Issues router must be registered BEFORE chat router** — prevents chat router's wildcard paths from shadowing `/issues`.
-10. **`on_event` in main.py is deprecated** — migrate to `lifespan` when refactoring startup.
-11. **SSE connections hold Redis subscriptions open** — always `await pubsub.unsubscribe()` in a `finally` block on disconnect.
-12. **`ensure_stream_group` must run before the worker's XREADGROUP loop** — if the group doesn't exist the XREADGROUP call raises a Redis error.
-13. **`GITHUB_WEBHOOK_SECRET` unset → 503, not 401** — fail-closed; never fall through to processing.
-14. **`_SAFE_SEGMENT_RE` in `redis_client.py` now validates both `tenant_id` and `key_type` and all `*parts`** — any segment with a colon raises ValueError immediately.
-15. **asyncpg event loop binding in integration tests** — module-scoped SQLAlchemy engines bind to the first event loop. Each integration test that needs a DB session must create and dispose a fresh engine (function-scoped fixture). Module-scoped engine = "Future attached to a different loop" error.
-16. **`generate_bootstrap_sql()` returns `list[tuple[text_obj, dict]]`** — each tuple is `(sqlalchemy.text(...), params_dict)`. Call `await session.execute(sql, params)` not `await session.execute(text(sql))`. Raw SQL strings are never returned.
-17. **asyncpg TIMESTAMPTZ needs a `datetime` object** — passing `datetime.isoformat()` string to a TIMESTAMPTZ column raises `DataError: invalid input for query argument $N (expected datetime)`. Always pass `datetime.now(timezone.utc)` directly.
-18. **HAR `verify_event_signature()` uses `.isoformat()` not `str()`** — `str(datetime)` produces space-separated format (`"2026-03-08 05:11:41+00:00"`); `.isoformat()` produces T-separator (`"2026-03-08T05:11:41+00:00"`). Signing and verification must match.
-19. **Redis singleton across `asyncio.run()` calls causes "readline waiting" errors** — if integration tests call `asyncio.run()` multiple times, reset `app.core.redis_client._redis_pool = None` before each call to force a fresh connection in the new event loop.
-20. **`AgentHealthMonitor.start()` is an infinite loop** — it must be launched as an `asyncio.create_task()` in `app.main:startup()`. Never `await` it directly.
+1. `get_set_tenant_sql()` returns a tuple — never pass to `text()` directly.
+2. `_stream_llm` makes real API calls — `autouse=True` monkeypatch required in test_orchestrator.py.
+3. Route registration order matters — specific paths before parameterized in every module.
+4. Module-level SQLAlchemy engine in `session.py` binds to the first event loop — integration tests need session-scoped TestClient.
+5. `EmbeddingService.__init__` reads env vars at instantiation — raises `ValueError` if absent.
+6. `GlossaryExpander(db=None)` is valid for unit tests — returns [] from `_get_terms()`.
+7. Issues router must be registered BEFORE chat router — prevents wildcard path shadowing.
+8. `on_event` in main.py is deprecated — migrate to `lifespan` when refactoring startup.
+9. SSE connections hold Redis subscriptions open — always `await pubsub.unsubscribe()` in `finally`.
+10. `ensure_stream_group` must run before worker's XREADGROUP loop.
+11. `GITHUB_WEBHOOK_SECRET` unset → 503, not 401 — fail-closed.
+12. `_SAFE_SEGMENT_RE` validates all Redis key segments — colons raise `ValueError`.
+13. asyncpg event loop binding in integration tests — multiple `asyncio.run()` calls require resetting `app.core.redis_client._redis_pool = None`.
+14. `generate_bootstrap_sql()` returns `list[tuple[text_obj, dict]]` — call `await session.execute(sql, params)`.
+15. HAR `verify_event_signature()` uses `.isoformat()` not `str()` for datetime — they produce different formats.
 
 ---
 
-## Environment Variables Reference
+## Environment Variables
 
-| Variable                         | Required    | Description                                                           |
-| -------------------------------- | ----------- | --------------------------------------------------------------------- |
-| `DATABASE_URL`                   | Yes         | `postgresql+asyncpg://user:pass@host:port/db`                         |
-| `REDIS_URL`                      | Yes         | `redis://host:port/db`                                                |
-| `CLOUD_PROVIDER`                 | Yes         | `aws` / `azure` / `gcp` / `local`                                     |
-| `PRIMARY_MODEL`                  | Yes         | LLM deployment name for chat responses                                |
-| `INTENT_MODEL`                   | Yes         | LLM deployment name for intent routing                                |
-| `EMBEDDING_MODEL`                | Yes         | Embedding model name                                                  |
-| `JWT_SECRET_KEY`                 | Yes         | Min 32 chars                                                          |
-| `JWT_ALGORITHM`                  | No          | Default `HS256`                                                       |
-| `FRONTEND_URL`                   | Yes         | Must not be `*`. Used for CORS.                                       |
-| `AZURE_PLATFORM_OPENAI_API_KEY`  | If azure    | Required when `CLOUD_PROVIDER=azure`                                  |
-| `AZURE_PLATFORM_OPENAI_ENDPOINT` | If azure    | Required when `CLOUD_PROVIDER=azure`                                  |
-| `DEBUG`                          | No          | `true` exposes exception details in responses                         |
-| `GITHUB_WEBHOOK_SECRET`          | If webhooks | HMAC-SHA256 secret for GitHub webhook. Endpoint returns 503 if unset. |
+| Variable                         | Required    | Description                                   |
+| -------------------------------- | ----------- | --------------------------------------------- |
+| `DATABASE_URL`                   | Yes         | `postgresql+asyncpg://user:pass@host:port/db` |
+| `REDIS_URL`                      | Yes         | `redis://host:port/db`                        |
+| `CLOUD_PROVIDER`                 | Yes         | `aws` / `azure` / `gcp` / `local`             |
+| `PRIMARY_MODEL`                  | Yes         | LLM deployment name for chat responses        |
+| `INTENT_MODEL`                   | Yes         | LLM deployment name for intent routing        |
+| `EMBEDDING_MODEL`                | Yes         | Embedding model name                          |
+| `JWT_SECRET_KEY`                 | Yes         | Min 32 chars                                  |
+| `JWT_ALGORITHM`                  | No          | Default `HS256`                               |
+| `FRONTEND_URL`                   | Yes         | Must not be `*` — enforced in config.py       |
+| `AZURE_OPENAI_API_KEY`           | If azure    | mingai-owned eastasia resource                |
+| `AZURE_PLATFORM_OPENAI_API_KEY`  | If azure    | Shared platform eastus2 resource              |
+| `AZURE_PLATFORM_OPENAI_ENDPOINT` | If azure    | eastus2 endpoint                              |
+| `DEBUG`                          | No          | `true` exposes exception details in responses |
+| `GITHUB_WEBHOOK_SECRET`          | If webhooks | HMAC-SHA256 secret; 503 returned if unset     |
+
+### Azure OpenAI Deployments (provisioned)
+
+| Deployment               | Model                  | Resource                    | Use               |
+| ------------------------ | ---------------------- | --------------------------- | ----------------- |
+| `agentic-gpt5`           | gpt-5                  | agentic-openai01 (eastasia) | mingai primary    |
+| `agentic-router`         | gpt-5-mini             | agentic-openai-eastus2      | Intent routing    |
+| `agentic-worker`         | gpt-5.2                | agentic-openai-eastus2      | Primary worker    |
+| `agentic-vision`         | gpt-5.2-chat           | agentic-openai-eastus2      | Vision/multimodal |
+| `text-embedding-3-small` | text-embedding-3-small | agentic-openai-eastus2      | Embeddings        |
 
 ---
 
-## Security Invariants (never violate these)
+## Security Invariants
+
+Never violate these:
 
 1. All SQL uses `text()` with named params. No f-strings with user data.
-2. Dynamic column selection (PATCH endpoints) uses a module-level allowlist set.
+2. Dynamic column selection (PATCH) uses a module-level allowlist set.
 3. All secrets from `os.environ`. No hardcoded keys, passwords, or model names.
 4. `screenshot_url` rejected unless `blur_acknowledged=True` — blur gate in route handler.
 5. `user_id` never stored in team working memory.
 6. Application DB user must be `NOSUPERUSER` (superusers bypass PostgreSQL RLS).
-7. `FRONTEND_URL` must not be `*` — enforced in `config.py` validator.
+7. `FRONTEND_URL` must not be `*` — enforced in config.py validator.
 8. Glossary definitions sanitized against injection patterns before storage.
 9. Error responses never leak internal config in production (`DEBUG=false`).
 10. Logs never record passwords, tokens, or full API keys.
-11. GitHub webhook payload rejected (503) when `GITHUB_WEBHOOK_SECRET` is unset — never process unverified payloads.
-12. Redis key segments (`tenant_id`, `key_type`, all `*parts`) validated against `_SAFE_SEGMENT_RE` — colons in any segment raise ValueError before key construction.
-13. Ed25519 private keys encrypted at rest with Fernet (`private_key_enc` column) — never store raw private keys.
-14. `verify_signature()` never raises — returns False on any error (malformed key, bad signature, etc.).
+11. GitHub webhook payload rejected (503) when `GITHUB_WEBHOOK_SECRET` is unset.
+12. Redis key segments validated against `_SAFE_SEGMENT_RE` — colons raise `ValueError`.
+13. Ed25519 private keys Fernet-encrypted at rest — never store raw private keys.
+14. `verify_signature()` never raises — returns `False` on any error.
 15. HAR transaction routes require `require_tenant_admin` — never expose to end users.
-16. Nonce replay attack prevention: every signed event nonce is recorded in Redis with 600s TTL. Duplicate nonce → reject.
-17. `compute_trust_score()` does not commit — caller must `await db.commit()` after calling it.
+16. Nonce replay protection: Redis SETNX with TTL=600. Duplicate nonce → reject.
+17. `compute_trust_score()` does not commit — caller must commit.
+
+---
+
+## Frontend
+
+### Root Structure
+
+```
+src/web/
+  app/
+    layout.tsx                    # Root layout — fonts, QueryClientProvider, dark theme
+    globals.css                   # CSS custom properties — all Obsidian Intelligence tokens
+    page.tsx                      # Root redirect
+    login/page.tsx                # Login page
+    (admin)/admin/                # Tenant admin routes (scope=tenant, role=tenant_admin)
+      page.tsx                    # Dashboard
+      agents/page.tsx             # Agent library (FE-035)
+      agents/studio/              # Agent Studio — NOT STARTED (FE-036, product-gated)
+      analytics/page.tsx          # Analytics dashboard
+      sync/page.tsx               # Document stores + sync health
+      teams/page.tsx              # Team management
+    (platform)/platform/          # Platform admin routes (scope=platform)
+      page.tsx                    # Platform dashboard
+      agent-templates/page.tsx    # Agent template management
+      alerts/page.tsx             # Alert summary (FE-040)
+      analytics/page.tsx          # Platform analytics
+      audit-log/page.tsx          # Platform audit log
+      elements/page.tsx           # Provisioning progress (FE-041)
+      issues/page.tsx             # Engineering issue queue
+      llm-profiles/page.tsx       # LLM profile management
+      registry/page.tsx           # Agent registry
+      tenants/page.tsx            # Tenant management
+      tool-catalog/page.tsx       # Tool catalog
+    settings/                     # Tenant admin settings tabs
+      agent-templates/page.tsx
+      analytics-platform/page.tsx
+      cost-analytics/page.tsx
+      dashboard/page.tsx
+      engineering-issues/page.tsx
+      glossary/page.tsx
+      issue-queue/page.tsx
+      knowledge-base/page.tsx
+      llm-profiles/page.tsx
+      memory/page.tsx
+      privacy/page.tsx
+      sso/page.tsx
+      tenants/page.tsx
+      tool-catalog/page.tsx
+      users/page.tsx
+      workspace/page.tsx
+    chat/page.tsx                  # End-user chat (two-state layout)
+    discover/page.tsx              # Agent registry discovery
+    my-reports/page.tsx            # End-user issue reports
+    onboarding/page.tsx            # Onboarding wizard
+  components/
+    chat/                          # Chat components (message list, input, citations)
+    issue-reporter/                # Issue report components
+    layout/                        # AppShell, Sidebar, Topbar
+    notifications/                 # Notification bell + SSE hook
+    privacy/                       # Privacy/memory management
+    shared/                        # ErrorBoundary, LoadingState, SafeHTML
+  lib/
+    api.ts                         # apiClient — Bearer token injection, error handling
+    auth.ts                        # getToken(), getCurrentUser(), role helpers
+    chartColors.ts                 # CHART_COLORS.accent, CHART_COLORS.alert etc.
+    react-query.tsx                # QueryClientProvider
+    sanitize.ts                    # DOMPurify wrapper
+    sse.ts                         # SSE hook utility
+    types/
+      issues.ts                    # Issue-related TypeScript types
+    hooks/                         # useAuth.ts, useChat.ts, useMyReports.ts
+    utils.ts                       # Shared utilities
+  middleware.ts                    # Route protection by JWT scope/role
+  tailwind.config.ts               # Obsidian Intelligence design tokens
+  next.config.mjs
+  package.json
+```
+
+### Frontend Patterns
+
+**API client**: All API calls go through `lib/api.ts` `apiClient`. The base URL comes from `NEXT_PUBLIC_API_URL` in `.env.local`. Never hardcode the backend URL.
+
+**Auth**: JWT stored in httpOnly cookie. `middleware.ts` blocks:
+
+- `/platform/*` unless `scope=platform`
+- `/admin/*` unless `scope=tenant` + `tenant_admin` role
+
+**React Query**: All server state managed via React Query. Use `useQuery` and `useMutation` hooks. Session-level `QueryClientProvider` is in `app/layout.tsx`.
+
+**Charts**: Use `CHART_COLORS` from `lib/chartColors.ts` for all chart series. Never hardcode hex colors in chart configs.
+
+**Role-based routing groups**:
+
+- `app/(admin)/` — tenant admin screens
+- `app/(platform)/` — platform admin screens
+- `app/` root — end-user screens (chat, discover, my-reports)
+
+---
+
+## Design System — Obsidian Intelligence
+
+Dark-first enterprise AI design system. Dark is the primary experience.
+
+### Core Color Tokens (CSS custom properties)
+
+```css
+/* Dark mode (default) */
+--bg-base: #0c0e14;
+--bg-surface: #161a24;
+--bg-elevated: #1e2330;
+--bg-deep: #0a0c12;
+--border: #2a3042;
+--accent: #4fffb0; /* mint — active states, CTAs, positive metrics only */
+--accent-dim: rgba(79, 255, 176, 0.08);
+--alert: #ff6b35; /* P0/P1 errors, at-risk signals */
+--warn: #f5c518; /* P2, quota warnings, health 50-69 */
+--text-primary: #f1f5fb;
+--text-muted: #8892a4;
+--text-faint: #4a5568;
+```
+
+### Typography
+
+```css
+/* All UI text */
+font-family: "Plus Jakarta Sans", sans-serif;
+/* Data/numbers */
+font-family: "DM Mono", monospace;
+```
+
+| Role            | Size / Weight                                    |
+| --------------- | ------------------------------------------------ |
+| Page title      | 22px / 700                                       |
+| Section heading | 15px / 600                                       |
+| Body / rows     | 13px / 400-500                                   |
+| Labels / nav    | 11px / 500-600, uppercase, letter-spacing 0.06em |
+| Data values     | 12-14px / 400-500, DM Mono                       |
+
+### Spacing and Radius
+
+```css
+--r: 7px; /* inputs, buttons, chips */
+--r-lg: 10px; /* cards, panels, modals */
+--r-sm: 4px; /* badges */
+```
+
+Card padding: `20px`. Admin content: `28px 32px`. Section gap: `24-28px`.
+
+### Key Component Rules
+
+- AI response: no card, no bubble, no background. Text flows directly on `--bg-base`.
+- Filter chips: outlined neutral at idle. Never fill with `accent-dim` unless selected.
+- Admin tables: `th` 11px uppercase faint; `td` 13px; row hover `accent-dim`; numbers in DM Mono.
+- Tab navigation: `border-bottom: 2px solid var(--accent)` on active tab.
+- KB hint to end users: `"SharePoint · Google Drive · 2,081 documents indexed"` — never show "RAG ·".
+
+### Severity Colors
+
+| State                 | Color                |
+| --------------------- | -------------------- |
+| P0                    | `#FF3547` red        |
+| P1                    | `--alert` orange     |
+| P2                    | `--warn` yellow      |
+| P3/P4                 | `--bg-elevated` grey |
+| Active/Healthy (≥70)  | `--accent` green     |
+| At Risk (50-69)       | `--warn` yellow      |
+| Suspended/Error (<50) | `--alert` orange     |
+
+### Banned Patterns
+
+- `#6366F1`, `#8B5CF6`, `#3B82F6` (purple/blue palette)
+- Inter, Roboto (wrong typefaces)
+- Purple-to-blue gradients, glassmorphism
+- AI response wrapped in card or bubble
+- Hardcoded hex colors in component files (use tokens)
+- `transition-all 300ms`, `rounded-2xl`, `shadow-lg` on every card
+
+---
+
+## Module Coverage Summary
+
+### Backend Modules (all implemented)
+
+auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace, users, teams, agents (+ templates), tenants, platform, registry, llm_profiles, profile/learning, feedback
+
+### Frontend Screens by Role
+
+**End User**: chat (two-state), discover (agent registry), my-reports, onboarding, privacy/memory controls, issue reporter modal, notification bell
+
+**Tenant Admin**: dashboard, agents (library + deploy from template), analytics, document stores (SharePoint + Google Drive + sync health), glossary, knowledge-base, teams (members + audit log + memory controls + Auth0 sync), users (directory + bulk invite), workspace settings, SSO wizard, memory policy, issue queue, analytics, agent templates, cost analytics
+
+**Platform Admin**: dashboard (tenant health table + alert summary + provisioning), tenants (CRUD + health + quota + LLM profiles + token budget), LLM profiles, agent templates, tool catalog, registry, engineering issue queue (platform queue + severity override + GitHub issue link), analytics (platform-wide + cost), audit log
+
+**Not started (product-gated)**: FE-036 Agent Studio (`/admin/agents/studio/`) — full authoring environment with prompt editor, AI suggestions, example conversation builder, test chat.
