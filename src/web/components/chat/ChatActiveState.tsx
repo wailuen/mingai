@@ -6,6 +6,10 @@ import { ChatInput } from "./ChatInput";
 import { FeedbackWidget } from "./FeedbackWidget";
 import { ConfidenceBar } from "./ConfidenceBar";
 import { GlossaryExpansionIndicator } from "./GlossaryExpansionIndicator";
+import {
+  TermsInterpreted,
+  type GlossaryExpansionApplied,
+} from "./TermsInterpreted";
 import { ProfileIndicator } from "./ProfileIndicator";
 import { TeamContextBadge } from "./TeamContextBadge";
 import { CacheStateChip } from "./CacheStateChip";
@@ -17,6 +21,7 @@ interface ChatActiveStateProps {
   statusMessage: string | null;
   retrievalConfidence: number | null;
   glossaryExpansions: string[];
+  glossaryExpansionsApplied: GlossaryExpansionApplied[];
   profileContextUsed: boolean;
   layersActive: string[];
   error: string | null;
@@ -41,6 +46,7 @@ export function ChatActiveState({
   statusMessage,
   retrievalConfidence,
   glossaryExpansions,
+  glossaryExpansionsApplied,
   profileContextUsed,
   layersActive,
   error,
@@ -95,6 +101,11 @@ export function ChatActiveState({
                   }
                   glossaryExpansions={
                     idx === messages.length - 1 ? glossaryExpansions : []
+                  }
+                  glossaryExpansionsApplied={
+                    idx === messages.length - 1
+                      ? glossaryExpansionsApplied
+                      : []
                   }
                   profileContextUsed={
                     idx === messages.length - 1 ? profileContextUsed : false
@@ -161,6 +172,7 @@ function AIMessage({
   statusMessage,
   retrievalConfidence,
   glossaryExpansions,
+  glossaryExpansionsApplied,
   profileContextUsed,
   layersActive,
   onViewSources,
@@ -174,6 +186,7 @@ function AIMessage({
   statusMessage: string | null;
   retrievalConfidence: number | null;
   glossaryExpansions: string[];
+  glossaryExpansionsApplied: GlossaryExpansionApplied[];
   profileContextUsed: boolean;
   layersActive: string[];
   onViewSources?: () => void;
@@ -226,6 +239,11 @@ function AIMessage({
       {/* Glossary expansion indicator (mandatory if expansions exist) */}
       {glossaryExpansions.length > 0 && (
         <GlossaryExpansionIndicator expansions={glossaryExpansions} />
+      )}
+
+      {/* AI-029: Structured terms interpreted indicator */}
+      {glossaryExpansionsApplied.length > 0 && (
+        <TermsInterpreted expansions={glossaryExpansionsApplied} />
       )}
 
       {/* Footer: sources count + cache state + latency */}

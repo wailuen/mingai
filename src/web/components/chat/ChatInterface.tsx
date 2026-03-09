@@ -67,6 +67,7 @@ export function ChatInterface({
             statusMessage={chat.statusMessage}
             retrievalConfidence={chat.retrievalConfidence}
             glossaryExpansions={chat.glossaryExpansions}
+            glossaryExpansionsApplied={chat.glossaryExpansionsApplied}
             profileContextUsed={chat.profileContextUsed}
             layersActive={chat.layersActive}
             error={chat.error}

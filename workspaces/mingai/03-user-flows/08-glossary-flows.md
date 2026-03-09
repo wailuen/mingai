@@ -142,7 +142,8 @@ Step 2: Prepare your CSV file
   • Separate multiple aliases with | (pipe character)
   • Status: "approved" or "draft" (defaults to draft if omitted)
   • Language: ISO 639-1 code (en, zh, ms, etc.)
-  • Max 5,000 rows per import
+  • Max 500 rows per import (platform limit: 500 active terms per tenant)
+  • Import will reject rows that would exceed your active term limit
 
 Step 3: Upload file
   [Drag CSV file here or click to browse]

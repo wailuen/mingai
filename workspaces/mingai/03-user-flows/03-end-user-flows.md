@@ -801,6 +801,7 @@ Positive ratings reinforce which agent/index combinations produce quality answer
 
 **Trigger**: User encounters unexpected behavior — wrong answer, missing sources, UI glitch, performance problem — at any point during platform use.
 **Entry points**:
+
 - `⚐ Report Issue` floating button (bottom-right, always visible)
 - Keyboard shortcut: `Ctrl+Shift+F`
 - Auto-triggered soft prompt when a 5xx API error is detected
@@ -1014,33 +1015,145 @@ End
 
 ### Phase Mapping
 
-| Sub-flow                  | Phase |
-|---------------------------|-------|
-| FAB + modal + submission  | Phase 2 |
-| AI triage + GitHub issue  | Phase 2 |
-| Duplicate detection       | Phase 2 |
-| Auto-trigger on 5xx       | Phase 2 |
-| "Still happening" signal  | Phase 3 |
-| My Reports tracking page  | Phase 3 |
+| Sub-flow                 | Phase   |
+| ------------------------ | ------- |
+| FAB + modal + submission | Phase 2 |
+| AI triage + GitHub issue | Phase 2 |
+| Duplicate detection      | Phase 2 |
+| Auto-trigger on 5xx      | Phase 2 |
+| "Still happening" signal | Phase 3 |
+| My Reports tracking page | Phase 3 |
 
 ---
 
 **Updated Flow Summary Table**
 
-| Flow | Flow Name | Built in Phase | Notes |
-|------|-----------|----------------|-------|
-| 01 | First Login and Onboarding | Phase 1 | SSO login, JWT session, onboarding tour |
-| 02 | Standard Chat (Query → RAG → Response) | Phase 1 | Core RAG pipeline, streaming responses |
-| 03 | Research Mode (Multi-Index Deep Search) | Phase 1 | Multi-index parallel search, deep synthesis |
-| 04 | Document Upload | Phase 1 | Personal document indexing and search |
-| 05 | Agent Delegation (Research Agent) | Phase 4 | Kaizen multi-agent orchestration |
-| 06 | Internet Search Fallback | Phase 1 | Tavily web search when KB insufficient |
-| 07 | Conversation History | Phase 1 | History, search, share, export |
-| 08 | Failure Paths | Phase 1 | Timeout, rate limit, session expiry handling |
-| 09 | User Response Feedback (Thumb Up/Down) | Phase 1 | Rating, tags, comments, admin review queue |
-| 10 | Issue Reporting | Phase 2 | FAB + modal, AI triage, SLA commitment, status tracking |
+| Flow | Flow Name                               | Built in Phase | Notes                                                   |
+| ---- | --------------------------------------- | -------------- | ------------------------------------------------------- |
+| 01   | First Login and Onboarding              | Phase 1        | SSO login, JWT session, onboarding tour                 |
+| 02   | Standard Chat (Query → RAG → Response)  | Phase 1        | Core RAG pipeline, streaming responses                  |
+| 03   | Research Mode (Multi-Index Deep Search) | Phase 1        | Multi-index parallel search, deep synthesis             |
+| 04   | Document Upload                         | Phase 1        | Personal document indexing and search                   |
+| 05   | Agent Delegation (Research Agent)       | Phase 4        | Kaizen multi-agent orchestration                        |
+| 06   | Internet Search Fallback                | Phase 1        | Tavily web search when KB insufficient                  |
+| 07   | Conversation History                    | Phase 1        | History, search, share, export                          |
+| 08   | Failure Paths                           | Phase 1        | Timeout, rate limit, session expiry handling            |
+| 09   | User Response Feedback (Thumb Up/Down)  | Phase 1        | Rating, tags, comments, admin review queue              |
+| 10   | Issue Reporting                         | Phase 2        | FAB + modal, AI triage, SLA commitment, status tracking |
+| 11   | Agent Discovery and Selection           | Phase 1        | Browse available agents, mode selector, switch agents   |
 
 ---
 
-**Document Version**: 1.2
-**Last Updated**: 2026-03-06
+## 11. Agent Discovery and Selection
+
+**Trigger**: User wants to use a specific AI agent (e.g. switch from general assistant to Finance Analyst).
+**Entry points**:
+
+- Mode selector in chat input bar (always visible)
+- Agent list in sidebar (if role has access to multiple agents)
+
+---
+
+### Happy Path — Browse and Select an Agent
+
+```
+Start
+  |
+  v
+[User opens chat — empty state]
+  |-- Input bar shows current agent: "General Assistant" (default)
+  |-- Mode selector chevron visible in input bar
+  |
+  v
+[User clicks mode selector / agent name in input bar]
+  |
+  v
+[Agent Picker dropdown opens]
+  |-- Shows agents available to this user (RBAC-filtered):
+  |   |-- General Assistant (no special role required)
+  |   |-- Finance Analyst [Analyst role required] → user has it ✓
+  |   |-- HR Policy Agent [Reader+ required] → user has it ✓
+  |   |-- Procurement Assistant [Analyst+ required] → user has it ✓
+  |   |-- Legal Assistant [locked] → "Request Access"
+  |
+  |-- Each agent card shows:
+  |   |-- Name, short description (1 line)
+  |   |-- Data sources it queries (e.g. "SharePoint Finance + Bloomberg")
+  |   |-- Mode badge: standard / research / A2A
+  |
+  v
+[User selects "Finance Analyst"]
+  |
+  v
+[Agent switches immediately]
+  |-- Chat input bar updates: "Finance Analyst"
+  |-- Greeting message changes to Finance Analyst's persona
+  |-- Working memory resets (agent-scoped, per Flow 6 in 14-profile-memory-flows.md)
+  |
+  v
+[User types query — handled by Finance Analyst agent]
+  |
+  v
+End
+```
+
+---
+
+### Locked Agent — Request Access
+
+```
+[User sees "Legal Assistant" with lock icon]
+  |
+  v
+[User clicks "Request Access"]
+  |
+  v
+[Request Access dialog]
+  |-- "Legal Assistant requires analyst role and Legal KB access."
+  |-- Reason field: "I'm the new legal coordinator and need to review contract policies"
+  |-- [Submit Request]
+  |
+  v
+[Request submitted to tenant admin]
+  |-- Admin receives notification: "Access request for Legal Assistant from {user}"
+  |-- Admin approves or denies in Admin > Users > Access Requests
+  |
+  v
+[User receives notification on decision]
+  |-- Approved: "You now have access to Legal Assistant."
+  |-- Denied: "Your request for Legal Assistant was not approved. Contact your admin."
+  |
+  v
+End
+```
+
+---
+
+### Error Paths
+
+- All visible agents are unavailable (service outage) -> "All agents are currently unavailable. Please try again shortly."
+- User switches agent mid-conversation -> previous conversation preserved in history; new agent starts fresh (no context carry-over by design — see working memory rules in 14)
+- User's role is downgraded while using a restricted agent -> next query returns 403; graceful error: "You no longer have access to this agent. Switch to General Assistant to continue."
+
+---
+
+**Updated Flow Summary Table**
+
+| Flow | Flow Name                               | Built in Phase | Notes                                                   |
+| ---- | --------------------------------------- | -------------- | ------------------------------------------------------- |
+| 01   | First Login and Onboarding              | Phase 1        | SSO login, JWT session, onboarding tour                 |
+| 02   | Standard Chat (Query → RAG → Response)  | Phase 1        | Core RAG pipeline, streaming responses                  |
+| 03   | Research Mode (Multi-Index Deep Search) | Phase 1        | Multi-index parallel search, deep synthesis             |
+| 04   | Document Upload                         | Phase 1        | Personal document indexing and search                   |
+| 05   | Agent Delegation (Research Agent)       | Phase 4        | Kaizen multi-agent orchestration                        |
+| 06   | Internet Search Fallback                | Phase 1        | Tavily web search when KB insufficient                  |
+| 07   | Conversation History                    | Phase 1        | History, search, share, export                          |
+| 08   | Failure Paths                           | Phase 1        | Timeout, rate limit, session expiry handling            |
+| 09   | User Response Feedback (Thumb Up/Down)  | Phase 1        | Rating, tags, comments, admin review queue              |
+| 10   | Issue Reporting                         | Phase 2        | FAB + modal, AI triage, SLA commitment, status tracking |
+| 11   | Agent Discovery and Selection           | Phase 1        | Agent picker, RBAC filtering, access request            |
+
+---
+
+**Document Version**: 1.3
+**Last Updated**: 2026-03-07

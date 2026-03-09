@@ -45,6 +45,40 @@ export interface AddMemberResult {
   user_id: string;
 }
 
+export interface BulkAddMembersResult {
+  added: number;
+  team_id: string;
+}
+
+export interface MemoryConfig {
+  enabled: boolean;
+  ttl_days: number;
+  entry_count: number;
+  size_bytes: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actor: string;
+  source: "manual" | "auth0_sync";
+  action: "added" | "removed";
+  member_name: string;
+}
+
+export interface AuditLogResponse {
+  items: AuditLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface WorkspaceUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
 const TEAMS_KEY = "teams";
 
 export function useTeams() {
@@ -128,6 +162,83 @@ export function useRemoveMember() {
   return useMutation({
     mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
       apiDelete(`/api/v1/teams/${teamId}/members/${userId}`),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: [TEAMS_KEY, variables.teamId],
+      });
+      queryClient.invalidateQueries({ queryKey: [TEAMS_KEY] });
+    },
+  });
+}
+
+export function useTeamMemoryConfig(teamId: string | null) {
+  return useQuery({
+    queryKey: [TEAMS_KEY, teamId, "memory-config"],
+    queryFn: () =>
+      apiGet<MemoryConfig>(`/api/v1/admin/teams/${teamId}/memory-config`),
+    enabled: teamId !== null,
+  });
+}
+
+export function useUpdateMemoryConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      teamId,
+      payload,
+    }: {
+      teamId: string;
+      payload: { enabled: boolean; ttl_days: number };
+    }) =>
+      apiPatch<MemoryConfig>(
+        `/api/v1/admin/teams/${teamId}/memory-config`,
+        payload,
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: [TEAMS_KEY, variables.teamId, "memory-config"],
+      });
+    },
+  });
+}
+
+export function useTeamAuditLog(
+  teamId: string | null,
+  page: number = 1,
+  limit: number = 20,
+) {
+  return useQuery({
+    queryKey: [TEAMS_KEY, teamId, "audit-log", page, limit],
+    queryFn: () =>
+      apiGet<AuditLogResponse>(
+        `/api/v1/admin/teams/${teamId}/audit-log?page=${page}&limit=${limit}`,
+      ),
+    enabled: teamId !== null,
+  });
+}
+
+export function useWorkspaceUsers(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  const qs = params.toString();
+  const path = `/api/v1/admin/users${qs ? `?${qs}` : ""}`;
+
+  return useQuery({
+    queryKey: ["workspace-users", search],
+    queryFn: () => apiGet<{ items: WorkspaceUser[] }>(path),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBulkAddMembers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ teamId, userIds }: { teamId: string; userIds: string[] }) =>
+      apiPost<BulkAddMembersResult>(`/api/v1/admin/teams/${teamId}/members`, {
+        user_ids: userIds,
+      }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: [TEAMS_KEY, variables.teamId],

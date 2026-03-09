@@ -293,6 +293,103 @@ STEP 4: Roadmap Signal Board
     - Export roadmap signals as CSV → paste into planning doc
     - Tag items: "In Roadmap Q2", "Under Review", "Won't Fix"
     - Filter by: plan tier, tenure, feature area
+
+STEP 5: Act on a Roadmap Signal (Signal → GitHub Issue → Tenant Communication)
+
+  Admin clicks "Slack integration" signal card to open it.
+  Signal detail panel shows:
+    - 14 requests from 8 tenants
+    - Plan breakdown: 6 Enterprise, 2 Professional (0 Starter)
+    - Top verbatim requests (anonymized by tenant, not user):
+        "We need Slack notifications when the AI answers a query"
+        "Would be great to query mingai from within our Slack workspace"
+        "Slack bot or webhook to push answers to channels"
+    - First requested: 2025-12-14
+    - Impact score: HIGH (Enterprise-heavy, recurring theme)
+
+  Admin selects tag: [In Roadmap Q2]
+  System records tag on signal. Admin adds a private note:
+    "Confirmed with product team: Slack integration scoped for Q2 2026.
+     Will build as outbound webhook first, Slack app in Q3."
+
+  BRANCH A: Create GitHub Issue from Signal
+    Admin clicks "Create GitHub Issue"
+    System pre-populates:
+      - Title: "[Roadmap Signal] Slack integration — 14 requests, 8 tenants"
+      - Labels: ["feature-request", "signal-aggregated", "enterprise", "q2-roadmap"]
+      - Body (auto-generated Markdown):
+          "## Signal Summary
+           - 14 feature requests from 8 tenants (6 Enterprise, 2 Professional)
+           - First request: 2025-12-14 | Latest: 2026-03-04
+           - Impact score: HIGH
+
+           ## Representative Requests (anonymized)
+           > 'We need Slack notifications when the AI answers a query'
+           > 'Would be great to query mingai from within our Slack workspace'
+           > 'Slack bot or webhook to push answers to channels'
+
+           ## Admin Note
+           Confirmed for Q2 2026. Outbound webhook first, Slack app in Q3.
+
+           ## Source
+           Generated from mingai Roadmap Signal Board · mingai-signals/rms_SLK14"
+      - Milestone: Q2 2026
+      - Assignee: (admin selects product owner from GitHub)
+    Admin reviews, edits if needed, clicks "Create"
+    GitHub issue URL stored on signal card: #1142
+    Signal status: "In Roadmap Q2 · GitHub #1142"
+
+  BRANCH B: Tag as "Won't Fix"
+    Admin tags signal: [Won't Fix]
+    Required: written reason
+      "Out of scope — mingai is a knowledge retrieval platform.
+       Slack is a distraction from core value. Revisit in 12 months."
+    Tenant admins who submitted requests are NOT automatically notified
+    (decision to communicate is always manual — see STEP 6 below)
+
+  BRANCH C: Tag as "Under Review"
+    No GitHub issue created yet. Signal watched for more input.
+    System will resurface if request count grows by 50%+.
+
+STEP 6: Notify Tenant Admins of Roadmap Decision (Optional)
+
+  For items tagged "In Roadmap Q2" or "Won't Fix", admin can optionally
+  notify the tenant admins who submitted related requests.
+
+  Admin clicks "Notify Affected Tenants"
+  System shows list of 8 tenant admins who submitted Slack requests.
+  Admin selects a message template:
+
+    Template: "Feature update — [Slack integration]"
+    "Hi [Tenant Admin Name],
+
+     Thank you for requesting Slack integration for mingai. We've reviewed
+     all the feedback and are happy to share that this feature is on our
+     roadmap for Q2 2026.
+
+     We'll notify you directly when it's available to enable in your workspace.
+
+     — mingai Platform Team"
+
+  Admin reviews, edits tone if needed, clicks "Send to 8 Tenant Admins"
+  Messages delivered via platform notification center + email
+  Communication logged against signal card with timestamp
+
+  For "Won't Fix" items, admin writes a custom decline message instead:
+    Template: "Feature request update — [feature name]"
+    System flags: "Decline messages must explain rationale clearly"
+    Admin sends → tenant admins notified with honest explanation
+
+STEP 7: Export and Share Roadmap Signals
+
+  Admin clicks "Export Roadmap Signals"
+  Options:
+    - CSV: all signals with request counts, tenant counts, plan breakdown, current tag
+    - Filtered CSV: only "Under Review" and untagged signals (for product triage session)
+  Export downloaded to local machine.
+  Admin pastes into quarterly product planning document or Notion/Linear backlog.
+
+  Note: Export contains no PII — tenant names only (no individual user identifiers).
 ```
 
 ---
@@ -946,6 +1043,7 @@ End
 ### Edge Cases
 
 **E-IQ-1: P1 issue — tenant admin self-resolves before engineering picks it up**
+
 ```
 Platform admin assigns issue to engineering sprint
 Tenant admin fixes SharePoint connection independently within 1 hour
@@ -955,6 +1053,7 @@ Engineering sprint item removed (or kept as a preventive task)
 ```
 
 **E-IQ-2: AI triage assigns wrong severity (P3 for what is clearly a P1)**
+
 ```
 Platform admin reviews, overrides severity to P1
 Reason logged: "User report indicates all tax queries broken for entire tenant"
@@ -963,6 +1062,7 @@ System learns from override signal for future triage calibration (Phase 3+)
 ```
 
 **E-IQ-3: Reporter data contains PII or confidential document content**
+
 ```
 Screenshot was not blurred at submission (user manually revealed RAG content)
 Platform admin reviews: screenshot contains extracted contract text
@@ -971,6 +1071,7 @@ Audit log records: redaction performed by [admin email] at [timestamp]
 ```
 
 **E-IQ-4: Issue volume spike (> 20 reports in 1 hour from one tenant)**
+
 ```
 Sudden spike detected — likely a systemic failure
 Platform auto-escalates all related issues to P1 minimum

@@ -2,6 +2,8 @@
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { FreshnessIndicator } from "./FreshnessIndicator";
+import { ScheduleConfigForm } from "./ScheduleConfigForm";
+import { ReindexButton } from "./ReindexButton";
 import { useTriggerSync } from "@/lib/hooks/useSyncHealth";
 import type { Integration } from "@/lib/hooks/useSyncHealth";
 
@@ -93,6 +95,24 @@ export function SourceHealthCard({
           Last status:{" "}
           <span className="font-mono">{integration.last_sync_status}</span>
         </p>
+      )}
+
+      {/* Expanded controls when selected */}
+      {isSelected && (
+        <div
+          className="mt-4 space-y-4 border-t border-border-faint pt-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ScheduleConfigForm
+            syncJobId={integration.id}
+            currentFrequency="daily"
+            onSave={() => {}}
+          />
+          <ReindexButton
+            integrationId={integration.id}
+            documentCount={0}
+          />
+        </div>
       )}
     </button>
   );

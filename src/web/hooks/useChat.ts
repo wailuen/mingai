@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { streamChat, type SSEEvent, type Source } from "@/lib/sse";
 import { apiGet } from "@/lib/api";
+import type { GlossaryExpansionApplied } from "@/components/chat/TermsInterpreted";
 
 export interface ChatMessage {
   id: string;
@@ -12,6 +13,7 @@ export interface ChatMessage {
   sources?: Source[];
   retrievalConfidence?: number;
   glossaryExpansions?: string[];
+  glossaryExpansionsApplied?: GlossaryExpansionApplied[];
   profileContextUsed?: boolean;
   layersActive?: string[];
   feedbackValue?: 1 | -1 | null;
@@ -37,6 +39,7 @@ interface UseChatState {
   sources: Source[];
   retrievalConfidence: number | null;
   glossaryExpansions: string[];
+  glossaryExpansionsApplied: GlossaryExpansionApplied[];
   profileContextUsed: boolean;
   layersActive: string[];
   conversationId: string | null;
@@ -52,6 +55,7 @@ export function useChat(agentId: string) {
     sources: [],
     retrievalConfidence: null,
     glossaryExpansions: [],
+    glossaryExpansionsApplied: [],
     profileContextUsed: false,
     layersActive: [],
     conversationId: null,
@@ -90,11 +94,13 @@ export function useChat(agentId: string) {
         sources: [],
         retrievalConfidence: null,
         glossaryExpansions: [],
+        glossaryExpansionsApplied: [],
       }));
 
       let currentSources: Source[] = [];
       let currentConfidence: number | null = null;
       let currentExpansions: string[] = [];
+      let currentExpansionsApplied: GlossaryExpansionApplied[] = [];
       let currentLayers: string[] = [];
       let profileUsed = false;
 
@@ -137,12 +143,15 @@ export function useChat(agentId: string) {
             case "metadata":
               currentConfidence = event.data.retrieval_confidence;
               currentExpansions = event.data.glossary_expansions ?? [];
+              currentExpansionsApplied =
+                event.data.glossary_expansions_applied ?? [];
               profileUsed = event.data.profile_context_used;
               currentLayers = event.data.layers_active ?? [];
               setState((prev) => ({
                 ...prev,
                 retrievalConfidence: currentConfidence,
                 glossaryExpansions: currentExpansions,
+                glossaryExpansionsApplied: currentExpansionsApplied,
                 profileContextUsed: profileUsed,
                 layersActive: currentLayers,
               }));
@@ -181,6 +190,10 @@ export function useChat(agentId: string) {
                     glossaryExpansions:
                       currentExpansions.length > 0
                         ? currentExpansions
+                        : undefined,
+                    glossaryExpansionsApplied:
+                      currentExpansionsApplied.length > 0
+                        ? currentExpansionsApplied
                         : undefined,
                     profileContextUsed: profileUsed || undefined,
                     layersActive:
@@ -227,6 +240,7 @@ export function useChat(agentId: string) {
       sources: [],
       retrievalConfidence: null,
       glossaryExpansions: [],
+      glossaryExpansionsApplied: [],
       profileContextUsed: false,
       layersActive: [],
       conversationId: null,
@@ -253,6 +267,7 @@ export function useChat(agentId: string) {
         sources: [],
         retrievalConfidence: null,
         glossaryExpansions: [],
+        glossaryExpansionsApplied: [],
         profileContextUsed: false,
         layersActive: [],
         conversationId: data.id,

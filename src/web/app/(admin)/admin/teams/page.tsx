@@ -7,6 +7,7 @@ import { TeamList } from "./elements/TeamList";
 import { TeamForm } from "./elements/TeamForm";
 import { TeamDetail } from "./elements/TeamDetail";
 import { AddMemberDialog } from "./elements/AddMemberDialog";
+import { BulkAddMembers } from "./elements/BulkAddMembers";
 import { Plus } from "lucide-react";
 import type { Team } from "@/lib/hooks/useTeams";
 
@@ -20,6 +21,7 @@ export default function TeamsPage() {
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
 
   function handleEdit(team: Team) {
     setEditingTeam(team);
@@ -77,7 +79,7 @@ export default function TeamsPage() {
           <TeamDetail
             teamId={selectedTeamId}
             onClose={handleCloseDetail}
-            onAddMember={() => setShowAddMember(true)}
+            onAddMember={() => setShowBulkAdd(true)}
           />
         )}
 
@@ -90,6 +92,13 @@ export default function TeamsPage() {
             teamId={selectedTeamId}
             teamName={selectedTeamName}
             onClose={() => setShowAddMember(false)}
+          />
+        )}
+        {showBulkAdd && selectedTeamId && (
+          <BulkAddMembers
+            teamId={selectedTeamId}
+            teamName={selectedTeamName}
+            onClose={() => setShowBulkAdd(false)}
           />
         )}
       </div>

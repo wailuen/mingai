@@ -897,6 +897,7 @@ End
 ### Configuring Issue Reporting Settings (Flow 6 reference)
 
 Per the product spec (10-issue-reporting-flows.md, Flow 6), tenant admins can configure:
+
 - GitHub / GitLab / Jira / Linear integration for their team's issue tracking
 - Reporter widget position and label
 - Notification recipients for P0/P1 alerts (email + Slack webhook)
@@ -909,6 +910,7 @@ Entry: Tenant Admin Console → Settings → Issue Reporting
 ### Edge Cases
 
 **E-IR-1: Reporter submits sensitive information in description**
+
 ```
 User describes issue but pastes a contract excerpt in the description field
 Admin reviews: flags as "Contains sensitive data"
@@ -917,6 +919,7 @@ Platform does not share reporter content externally without admin review
 ```
 
 **E-IR-2: Same issue reported by 10 users in one day**
+
 ```
 Widespread problem (e.g. SharePoint sync failure affecting all users)
 AI auto-escalates to P1 based on duplicate volume threshold (10 reports)
@@ -926,6 +929,7 @@ All 10 reporters notified simultaneously: "Your issue has been resolved."
 ```
 
 **E-IR-3: Report submitted but GitHub integration not configured**
+
 ```
 Issue created successfully in mingai platform
 GitHub step is skipped (logged as "GitHub not configured")
@@ -935,5 +939,124 @@ auto-create issues in your repository. [Configure now]"
 
 ---
 
+---
+
+## Flow 11: Low-Satisfaction Response Escalation (3-Rating Rule)
+
+**Trigger**: Three or more distinct users submit a thumbs-down rating on the same AI response (message_id) within any 7-day window.
+**Persona**: Tenant Admin (receives notification and review queue entry)
+**Entry**: Workspace → Analytics → Feedback → Flagged Responses
+
+This flow covers the **non-cached** response case. The cached response case (cache invalidation on thumbs-down) is defined in `05-caching-ux-flows.md` Flow EU-C5.
+
+---
+
+### Auto-Escalation and Admin Review
+
+```
+Start
+  |
+  v
+[3rd user submits thumbs-down on message_id: msg-abc123]
+  |
+  v
+[Platform: threshold check]
+  |-- Query: SELECT COUNT(*) FROM feedback WHERE message_id = 'msg-abc123' AND rating = -1
+  |-- Count = 3 → threshold met
+  |
+  v
+[System: auto-escalation]
+  |-- POST /api/v1/admin/feedback/flags (internal)
+  |-- Creates flagged_responses record:
+  |   |-- message_id: msg-abc123
+  |   |-- negative_count: 3
+  |   |-- auto_escalated_at: timestamp
+  |   |-- status: pending_review
+  |-- Notification sent to tenant admin:
+  |   |-- In-app badge on Analytics → Feedback → Flagged tab
+  |   |-- Email (if enabled): "A response received 3 negative ratings and requires review"
+  |
+  v
+[Admin navigates to Feedback → Flagged Responses]
+  |
+  v
+[Flagged Responses table]
+  |-- Row: msg-abc123 | Query: "What is the Q4 travel budget?" | Negative: 3 | Status: Pending
+  |-- Sort: newest / most negative ratings first
+  |
+  v
+[Admin clicks row → Review Detail Panel]
+  |
+  v
+[Detail Panel]
+  |-- Original query: "What is the Q4 travel budget?"
+  |-- AI response shown in full
+  |-- Source citations: "Finance Policy 2024 (SharePoint)"
+  |-- All negative feedback entries:
+  |   |-- User A: "Inaccurate — this is the 2024 budget, not 2025"
+  |   |-- User B: "Incomplete — missing APAC region figures"
+  |   |-- User C: [no comment, thumbs-down only]
+  |
+  v
+[Admin diagnoses root cause]
+  |
+  +-- CASE: Stale source document
+  |     |-- KB sync check shows: Finance Policy KB last synced 45 days ago
+  |     |-- Action: Admin clicks "Sync Now" on Finance Policy KB
+  |     |-- After sync: response will use updated document on next query
+  |     |-- Marks flagged item: "Resolved — KB re-synced"
+  |     |-- Users who flagged: notified "This issue has been addressed"
+  |
+  +-- CASE: Agent system prompt too narrow
+  |     |-- Admin reviews: agent's system prompt says "Finance Index only"
+  |     |-- Action: Edit agent in Agent Studio → add Regional Finance Index
+  |     |-- Re-test: ask same question → response now includes APAC figures
+  |     |-- Marks flagged item: "Resolved — agent updated"
+  |
+  +-- CASE: Platform bug (not fixable by tenant admin)
+  |     |-- Admin escalates: "Escalate to Platform" with note
+  |     |-- Platform admin receives copy in their issue queue
+  |     |-- Marks flagged item: "Escalated — awaiting platform fix"
+  |
+  +-- CASE: User misunderstanding (response was correct)
+        |-- Admin reviews: response accurately cited 2025 budget
+        |-- Action: marks "Won't Fix — response is correct" with explanation
+        |-- Optional: admin replies to users with context note
+        |
+        v
+[Flagged item resolved or escalated]
+  |-- Status updated in flagged_responses table
+  |-- Audit log entry: who acted, what was done, when
+  |
+  v
+End
+```
+
+---
+
+### Aggregate Flagging Analytics
+
+```
+[Admin → Analytics → Feedback → Summary]
+
+Flagged Responses This Month: 7
+  Auto-resolved (cache invalidated, re-served): 4
+  Pending admin review: 2
+  Escalated to platform: 1
+
+Most flagged topics: "travel budget", "Q4 reporting", "APAC expenses"
+Most common flag reason: "Inaccurate" (71%)
+Average negative ratings before flag: 3.2 (some items accumulate more before review)
+
+Recommendation shown: "5 flagged responses reference Finance Policy 2024.
+Consider forcing a full KB re-index of the Finance Policy SharePoint library."
+[Trigger Full Re-Index]
+```
+
+---
+
 **Section Added**: 2026-03-06
 **Covers**: Issue Queue review, resolution actions, escalation to platform, SLA monitoring, feature request routing
+
+**Section Added**: 2026-03-07
+**Covers**: Low-satisfaction response escalation (3-rating rule), flagged response review, root cause actions

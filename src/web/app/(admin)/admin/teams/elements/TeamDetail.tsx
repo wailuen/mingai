@@ -5,6 +5,9 @@ import { X, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/shared/LoadingState";
 import { useTeam, useTeamMemory, useRemoveMember } from "@/lib/hooks/useTeams";
+import { Auth0SyncSettings } from "./Auth0SyncSettings";
+import { TeamMemoryControls } from "./TeamMemoryControls";
+import { MembershipAuditLog } from "./MembershipAuditLog";
 
 interface TeamDetailProps {
   teamId: string;
@@ -12,7 +15,14 @@ interface TeamDetailProps {
   onAddMember: () => void;
 }
 
-type DetailTab = "members" | "memory";
+type DetailTab = "members" | "memory" | "sync" | "audit";
+
+const TAB_LABELS: Record<DetailTab, string> = {
+  members: "Members",
+  memory: "Memory",
+  sync: "Auth0 Sync",
+  audit: "Audit Log",
+};
 
 export function TeamDetail({ teamId, onClose, onAddMember }: TeamDetailProps) {
   const [activeTab, setActiveTab] = useState<DetailTab>("members");
@@ -60,19 +70,19 @@ export function TeamDetail({ teamId, onClose, onAddMember }: TeamDetailProps) {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-border px-5">
-        {(["members", "memory"] as const).map((tab) => (
+      <div className="flex overflow-x-auto border-b border-border px-5">
+        {(["members", "memory", "sync", "audit"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
-              "border-b-2 px-3 py-2 text-xs font-medium capitalize transition-colors",
+              "whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition-colors",
               activeTab === tab
                 ? "border-accent text-text-primary"
                 : "border-transparent text-text-faint hover:text-text-muted",
             )}
           >
-            {tab}
+            {TAB_LABELS[tab]}
           </button>
         ))}
       </div>
@@ -89,8 +99,18 @@ export function TeamDetail({ teamId, onClose, onAddMember }: TeamDetailProps) {
           />
         )}
         {activeTab === "memory" && (
-          <MemoryTab memory={memory} isLoading={memoryLoading} />
+          <>
+            <TeamMemoryControls
+              teamId={teamId}
+              memberCount={team?.member_count ?? 0}
+            />
+            <div className="mt-6 border-t border-border-faint pt-4">
+              <MemoryTab memory={memory} isLoading={memoryLoading} />
+            </div>
+          </>
         )}
+        {activeTab === "sync" && <Auth0SyncSettings teamId={teamId} />}
+        {activeTab === "audit" && <MembershipAuditLog teamId={teamId} />}
       </div>
 
       {/* Created at */}

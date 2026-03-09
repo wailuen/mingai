@@ -4,14 +4,10 @@ import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import type { AgentTemplate } from "@/lib/hooks/useAgentTemplates";
 import { useDeployAgent } from "@/lib/hooks/useAgentTemplates";
-
-type AccessControl = "workspace" | "role" | "user";
-
-const ACCESS_OPTIONS: { value: AccessControl; label: string }[] = [
-  { value: "workspace", label: "Workspace-wide (all users)" },
-  { value: "role", label: "Role-restricted" },
-  { value: "user", label: "User-specific" },
-];
+import { KBSelector } from "./KBSelector";
+import type { KBSelection } from "./KBSelector";
+import { AccessControlSelector } from "./AccessControlSelector";
+import type { AccessControlConfig } from "./AccessControlSelector";
 
 interface AgentDeployFormProps {
   template: AgentTemplate;
@@ -25,8 +21,10 @@ export function AgentDeployForm({
   onDeployed,
 }: AgentDeployFormProps) {
   const [name, setName] = useState(template.name);
-  const [accessControl, setAccessControl] =
-    useState<AccessControl>("workspace");
+  const [kbSelections, setKbSelections] = useState<KBSelection[]>([]);
+  const [accessControl, setAccessControl] = useState<AccessControlConfig>({
+    mode: "workspace",
+  });
   const deployMutation = useDeployAgent();
 
   function handleSubmit(e: React.FormEvent) {
@@ -36,8 +34,8 @@ export function AgentDeployForm({
         templateId: template.id,
         payload: {
           name: name.trim(),
-          access_control: accessControl,
-          kb_ids: [],
+          access_control: accessControl.mode,
+          kb_ids: kbSelections.map((kb) => kb.integrationId),
         },
       },
       {
@@ -88,29 +86,23 @@ export function AgentDeployForm({
           />
         </div>
 
+        {/* Knowledge Bases */}
+        <div className="mb-5">
+          <label className="mb-2 block text-label-nav uppercase text-text-faint">
+            Knowledge Bases
+          </label>
+          <KBSelector value={kbSelections} onChange={setKbSelections} />
+        </div>
+
         {/* Access Control */}
         <div className="mb-6">
           <label className="mb-2 block text-label-nav uppercase text-text-faint">
             Access Control
           </label>
-          <div className="space-y-2">
-            {ACCESS_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
-              >
-                <input
-                  type="radio"
-                  name="access_control"
-                  value={opt.value}
-                  checked={accessControl === opt.value}
-                  onChange={() => setAccessControl(opt.value)}
-                  className="accent-accent"
-                />
-                {opt.label}
-              </label>
-            ))}
-          </div>
+          <AccessControlSelector
+            value={accessControl}
+            onChange={setAccessControl}
+          />
         </div>
 
         {/* Error */}

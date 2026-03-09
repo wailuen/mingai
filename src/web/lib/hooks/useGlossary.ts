@@ -100,6 +100,42 @@ export function useDeleteTerm() {
   });
 }
 
+export interface VersionEntry {
+  version_id: string;
+  created_at: string;
+  editor_email: string;
+  change_summary: string;
+}
+
+export function useVersionHistory(termId: string | null) {
+  return useQuery({
+    queryKey: [GLOSSARY_KEY, "history", termId],
+    queryFn: () =>
+      apiGet<VersionEntry[]>(`/api/v1/glossary/${termId}/history`),
+    enabled: !!termId,
+  });
+}
+
+export function useRollbackTerm() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      termId,
+      versionId,
+    }: {
+      termId: string;
+      versionId: string;
+    }) =>
+      apiPost<GlossaryTerm>(`/api/v1/glossary/${termId}/rollback`, {
+        version_id: versionId,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [GLOSSARY_KEY] });
+    },
+  });
+}
+
 export interface MissSignal {
   term: string;
   occurrence_count: number;

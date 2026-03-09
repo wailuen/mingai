@@ -13,7 +13,6 @@ Create Date: 2026-03-07
 """
 from alembic import op
 from app.core.database import (
-    TENANT_SCOPED_TABLES,
     get_rls_policy_sql,
     get_platform_bypass_policy_sql,
 )
@@ -23,8 +22,36 @@ down_revision = "001"
 branch_labels = None
 depends_on = None
 
-# All tables that get RLS policies
-RLS_TABLES = TENANT_SCOPED_TABLES + ["tenants"]
+# Snapshot of the 22 tables that existed at v001.
+# IMPORTANT: Do NOT import TENANT_SCOPED_TABLES here — that list grows with
+# later migrations (e.g. har_transactions added in v003) and would cause
+# downgrade() to reference tables that don't exist when rolling back to v001.
+_V001_TABLES = [
+    "users",
+    "conversations",
+    "messages",
+    "user_feedback",
+    "user_profiles",
+    "memory_notes",
+    "profile_learning_events",
+    "working_memory_snapshots",
+    "tenant_configs",
+    "llm_profiles",
+    "tenant_teams",
+    "team_memberships",
+    "team_membership_audit",
+    "glossary_terms",
+    "glossary_miss_signals",
+    "integrations",
+    "sync_jobs",
+    "issue_reports",
+    "issue_report_events",
+    "agent_cards",
+    "audit_log",
+]
+
+# All tables that get RLS policies in this migration
+RLS_TABLES = _V001_TABLES + ["tenants"]
 
 
 def upgrade() -> None:

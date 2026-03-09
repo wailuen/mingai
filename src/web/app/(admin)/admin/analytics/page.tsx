@@ -1,14 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { SatisfactionGauge } from "./elements/SatisfactionGauge";
 import { SatisfactionTrend } from "./elements/SatisfactionTrend";
 import { LowConfidenceList } from "./elements/LowConfidenceList";
+import { AgentBreakdownTable } from "./elements/AgentBreakdownTable";
+import { RootCausePanel } from "./elements/RootCausePanel";
+import { IssueQueue } from "./elements/IssueQueue";
+import { IssueResponseWorkflow } from "./elements/IssueResponseWorkflow";
 import {
   useSatisfactionData,
   useLowConfidenceItems,
 } from "@/lib/hooks/useAnalytics";
+import type { Issue } from "@/lib/hooks/useAnalytics";
 
 /**
  * FE-037: Feedback Monitoring / Analytics dashboard (Tenant Admin).
@@ -17,11 +23,15 @@ import {
  * Sections:
  * 1. SatisfactionGauge (7-day KPI)
  * 2. SatisfactionTrend (30-day area chart)
- * 3. LowConfidenceList (table of low-confidence responses)
+ * 3. AgentBreakdownTable (per-agent satisfaction)
+ * 4. RootCausePanel (sync freshness vs satisfaction correlation)
+ * 5. LowConfidenceList (table of low-confidence responses)
+ * 6. IssueQueue + IssueResponseWorkflow (tenant issue management)
  */
 export default function AnalyticsPage() {
   const satisfaction = useSatisfactionData();
   const lowConfidence = useLowConfidenceItems();
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
 
   return (
     <AppShell>
@@ -62,6 +72,16 @@ export default function AnalyticsPage() {
           />
         </ErrorBoundary>
 
+        {/* Per-agent satisfaction breakdown */}
+        <ErrorBoundary>
+          <AgentBreakdownTable />
+        </ErrorBoundary>
+
+        {/* Root cause analysis: sync freshness vs satisfaction */}
+        <ErrorBoundary>
+          <RootCausePanel />
+        </ErrorBoundary>
+
         {/* Low confidence responses table */}
         <ErrorBoundary>
           <LowConfidenceList
@@ -69,6 +89,19 @@ export default function AnalyticsPage() {
             isPending={lowConfidence.isPending}
           />
         </ErrorBoundary>
+
+        {/* Issue queue and response workflow */}
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          <ErrorBoundary>
+            <IssueQueue
+              onSelectIssue={setSelectedIssue}
+              selectedIssueId={selectedIssue?.id ?? null}
+            />
+          </ErrorBoundary>
+          <ErrorBoundary>
+            <IssueResponseWorkflow issue={selectedIssue} />
+          </ErrorBoundary>
+        </div>
       </div>
     </AppShell>
   );

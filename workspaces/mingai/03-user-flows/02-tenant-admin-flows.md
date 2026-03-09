@@ -18,6 +18,9 @@
 | 05   | Knowledge Base Setup              | Phase 1        | Index registration, SharePoint sync, A2A agent enablement |
 | 06   | Cost Analytics                    | Phase 2        | Per-tenant cost tracking, budget alerts                   |
 | 07   | Role and Permission Customization | Phase 1        | Custom roles with index and A2A agent access control      |
+| 08   | SSO Group → RBAC Role Mapping     | Phase 3        | IdP group → tenant role auto-assignment on login          |
+| 09   | Plan Upgrade / Downgrade          | Phase 1        | Self-service plan change, downgrade impact resolution     |
+| 10   | Quota Warning — Tenant Response   | Phase 1        | Admin acts on quota alert: throttle, request increase     |
 
 ---
 
@@ -381,13 +384,15 @@ Start
   |
   v
 [Role Assignment Interface]
-  |-- Available roles (checkboxes):
-  |   |-- [x] User (default, cannot remove)
+  |-- System roles (checkboxes — cannot delete, read-only names):
+  |   |-- [x] Viewer (default, cannot remove — basic chat access)
+  |   |-- [ ] Reader (read access to assigned indexes)
+  |   |-- [ ] Analyst (advanced features: research mode, analytics)
+  |   |-- [ ] Tenant Admin (full workspace administration)
+  |-- Custom roles:
   |   |-- [ ] Finance Access
   |   |-- [ ] Engineering Access
   |   |-- [x] Finance Team (currently assigned)
-  |   |-- [ ] Tenant Manager
-  |   |-- [ ] Analytics Viewer
   |
   v
 [Save role changes]
@@ -640,11 +645,11 @@ Start
   |
   v
 [View role list]
-  |-- System roles (read-only):
-  |   |-- User (default)
-  |   |-- Tenant Admin
-  |   |-- Tenant Manager
-  |   |-- Analytics Viewer
+  |-- System roles (read-only, canonical names — cannot rename or delete):
+  |   |-- Viewer (default — basic chat access only)
+  |   |-- Reader (access to assigned indexes, no admin functions)
+  |   |-- Analyst (research mode, analytics view, knowledge base queries)
+  |   |-- Tenant Admin (full workspace administration)
   |
   |-- Custom roles:
   |   |-- Finance Team (3 indexes, 2 A2A agents)
@@ -708,17 +713,280 @@ End
 
 ---
 
+## 8. SSO Group → RBAC Role Mapping
+
+**Trigger**: Tenant admin wants IdP groups to automatically assign tenant roles on login, eliminating manual role assignment for each new user.
+
+```
+Start
+  |
+  v
+[Navigate to Admin > Settings > SSO > Group Mapping]
+  |
+  v
+[View current mappings table]
+  |-- Columns: IdP Group Name | Mapped Role | Users Affected | Last Synced
+  |-- (empty if no mappings configured)
+  |
+  v
+[Click "Add Mapping"]
+  |
+  v
+[Mapping Form]
+  |-- IdP Group Name: [type or browse — shows groups from SSO provider]
+  |   |-- For Azure AD / SAML: group name or group Object ID
+  |   |-- For Auth0: exact group claim value (e.g. "finance-team")
+  |-- Mapped Tenant Role: [dropdown — system and custom roles]
+  |   |-- Viewer (default)
+  |   |-- Reader
+  |   |-- Analyst
+  |   |-- Tenant Admin
+  |   |-- [any custom roles]
+  |-- Priority: mapping order matters when user is in multiple groups
+  |   |-- Higher priority mapping wins (e.g. Analyst > Viewer)
+  |
+  v
+[Save Mapping]
+  |-- POST /api/v1/admin/sso/group-mappings
+  |-- Takes effect on next user login (JWT re-issued on re-auth)
+  |
+  v
+[Example result after mapping setup]
+  |-- Group "finance-team" → Role: Analyst
+  |-- Group "hr-managers" → Role: Tenant Admin
+  |-- Group "all-staff" → Role: Viewer (default, lowest priority)
+  |
+  v
+[User logs in via SSO]
+  |-- JWT contains groups: ["finance-team", "all-staff"]
+  |-- System evaluates: finance-team → Analyst (higher priority wins)
+  |-- User assigned Analyst role automatically
+  |-- No manual invitation required
+  |
+  v
+End
+```
+
+**Error Paths**:
+
+- Group not found in IdP -> "Group name not recognized. Verify exact group name in your IdP."
+- Circular priority conflict -> system uses alphabetical order to break ties
+- User in no mapped groups -> falls back to Viewer (default)
+- Mapping to Tenant Admin requires secondary confirmation: "Admin role mappings grant full workspace access. Confirm?"
+
+---
+
+## 9. Plan Upgrade / Downgrade
+
+**Trigger**: Tenant admin navigates to billing settings, or receives quota warning prompting upgrade.
+
+```
+Start
+  |
+  v
+[Navigate to Admin > Settings > Billing]
+  |
+  v
+[Current Plan Summary]
+  |-- Plan: Professional ($25/user/month)
+  |-- Users: 147 / 500 (plan limit)
+  |-- LLM Budget: $3,200 / $5,000 this month
+  |-- Custom Roles: 12 / 50
+  |-- Storage: 42 GB / 100 GB
+  |-- Billing cycle: monthly, renews 2026-04-01
+  |
+  v
+[Click "Change Plan"]
+  |
+  v
+[Plan Comparison]
+  |
+  |-- Starter ($15/user/month)
+  |   |-- 100 user limit
+  |   |-- 5 custom roles
+  |   |-- 10 GB storage
+  |   |-- No BYOLLM
+  |
+  |-- Professional ($25/user/month) [CURRENT]
+  |   |-- 500 user limit
+  |   |-- 50 custom roles
+  |   |-- 100 GB storage
+  |   |-- BYOLLM: 1 provider
+  |
+  |-- Enterprise (custom pricing)
+  |   |-- Unlimited users
+  |   |-- Unlimited custom roles
+  |   |-- Custom storage
+  |   |-- Multi-BYOLLM, dedicated support
+  |
+  +-- UPGRADE (Professional → Enterprise)
+  |     |
+  |     v
+  |   [Contact Sales]
+  |   |-- Form: org size, use case, timeline
+  |   |-- Sales team follows up within 1 business day
+  |
+  +-- DOWNGRADE (Professional → Starter)
+        |
+        v
+      [Downgrade Warning]
+        |-- "Downgrading will:
+        |    ✗ Reduce user limit to 100 (you have 147 users — 47 will lose access)
+        |    ✗ Reduce custom role limit to 5 (you have 12 — 7 roles will be deactivated)
+        |    ✗ Remove BYOLLM access
+        |    ✓ Existing data retained
+        |
+        |    Effective at end of current billing cycle (2026-04-01)."
+        |
+        |-- [Select which 47 users to deactivate] — admin must resolve over-limit
+        |-- [Select which 7 custom roles to deactivate]
+        |
+        v
+      [Confirm Downgrade]
+        |-- Scheduled for 2026-04-01
+        |-- Email confirmation sent
+        |-- Admin reminded 7 days before effective date
+        |
+        v
+      End
+```
+
+**Error Paths**:
+
+- Downgrade would leave tenant over-limit with no resolution -> "Resolve over-limit users and roles before downgrading."
+- Payment method on file expired -> prompt to update payment before plan change
+- Enterprise downgrade requires sales team approval -> cannot self-serve
+
+---
+
+## 10. Quota Warning — Tenant Admin Response
+
+**Trigger**: Tenant admin receives an in-app notification and email: "Your workspace has used 85% of its monthly token quota."
+
+```
+Start
+  |
+  v
+[Tenant admin receives quota warning]
+  |-- In-app notification banner (orange, top of all pages):
+  |   "Token quota at 85%. Estimated to run out by March 22 at current usage."
+  |   [View Usage] [Request More]
+  |-- Simultaneous email to tenant admin(s):
+  |   Subject: "mingai quota warning — action may be required"
+  |   Body: current usage, projected exhaustion date, links to actions
+  |
+  v
+[Admin clicks "View Usage"]
+  |
+  v
+[Analytics > Cost (usage detail)]
+  |-- Summary:
+  |   |-- Tokens used this month: 425,000 / 500,000 (85%)
+  |   |-- Days remaining in billing cycle: 8
+  |   |-- Projected usage at current rate: 550,000 tokens
+  |   |-- Projected overage: 50,000 tokens (~$1.05 at overage rate)
+  |
+  |-- Per-user usage table (sorted by tokens consumed):
+  |   |-- j.smith@acme.com: 68,000 tokens (16%)
+  |   |-- m.jones@acme.com: 54,000 tokens (13%)
+  |   |-- ...
+  |
+  |-- Usage spike annotation (if any):
+  |   "2026-03-01: 42,000 tokens (5x daily average) — bulk session"
+  |
+  v
+[Admin decides on action]
+
+  +-- ACTION A: Do nothing (overage auto-billed)
+  |     |-- System continues allowing queries past quota
+  |     |-- Each token above quota charged at overage rate ($0.021/1000)
+  |     |-- Tenant admin notified of overage charges at end of billing cycle
+  |     |-- Platform admin sees projected overage in Cost Monitoring
+  |
+  +-- ACTION B: Restrict usage to prevent overage
+  |     |
+  |     v
+  |   [Settings > Usage Limits > Token Throttle]
+  |   |-- Throttle mode: [Warn users | Block queries above daily limit]
+  |   |-- Daily token budget: [set per-day cap]
+  |     e.g. "14,000 tokens/day remaining budget ÷ 8 days = 1,750/day"
+  |   |-- Warning message shown to end users:
+  |     "Workspace is near its monthly limit. Some queries may be delayed."
+  |   Admin saves → throttle active immediately
+  |   Users exceeding daily budget see: "Your daily query limit has been
+  |     reached. Queries resume tomorrow at midnight (UTC)."
+  |
+  +-- ACTION C: Request a quota increase from platform admin
+  |     |
+  |     v
+  |   [Click "Request More Tokens"]
+  |   |
+  |   v
+  |   [Quota Increase Request Form]
+  |   |-- Requested additional tokens: [+50,000 | +100,000 | +250,000 | custom]
+  |   |-- Justification (required for platform admin approval):
+  |   |   [text box — "We ran a large document batch process on March 1st.
+  |   |    Normal usage will resume. We need 50,000 additional tokens
+  |   |    to finish the month without disruption."]
+  |   |-- Urgency: [Not urgent | Urgent — queries will stop within 24h]
+  |   |
+  |   v
+  |   [Submit Request]
+  |   |-- POST /api/v1/admin/quota/increase-request
+  |   |-- Platform admin receives alert in dashboard (see 11-platform-admin-ops-flows, Flow 9)
+  |   |-- Tenant admin sees: "Request submitted. Platform team notified."
+  |   |-- Status: "Pending Approval"
+  |   |
+  |   v
+  |   BRANCH: Platform admin approves override
+  |     |-- Tenant admin notified in-app + email:
+  |     |   "Your quota has been increased by 50,000 tokens for this month.
+  |     |    Our team may follow up to discuss your usage."
+  |     |-- Quota banner updates: "500,000 + 50,000 override = 550,000 tokens"
+  |     |-- Status: "Approved"
+  |
+  |   BRANCH: Platform admin denies request
+  |     |-- Tenant admin notified:
+  |     |   "Your quota increase request was not approved this month.
+  |     |    [Reason: e.g. 'Usage spike appears resolved — remaining quota
+  |     |    should be sufficient'] Contact support if you need assistance."
+  |     |-- Status: "Declined"
+  |     |-- Tenant admin may fall back to ACTION A or B
+  |
+  +-- ACTION D: Upgrade plan to get higher base quota
+        |
+        v
+      [Click "Upgrade Plan" (from quota warning banner)]
+        → Redirects to Plan Comparison screen (see Flow 9)
+        Note: Enterprise plan has custom quota; upgrading from Professional
+        starts a sales conversation for quota renegotiation
+  |
+  v
+End
+```
+
+**Error Paths**:
+
+- Quota exhausted mid-conversation -> current query completes (grace: 1 query), next query blocked with: "Monthly token quota reached. Contact your administrator."
+- Throttle setting removes itself at billing cycle reset (1st of month) — admin must re-set each month if desired
+- Multiple tenant admins submit duplicate increase requests → system deduplicates; platform admin sees one consolidated request
+
+---
+
 ## Flow Summary
 
-| Flow               | Trigger                   | Primary API                 | Key Failure Mode               |
-| ------------------ | ------------------------- | --------------------------- | ------------------------------ |
-| Onboarding         | Welcome email             | Wizard (multi-step)         | Expired link, no data sources  |
-| SSO configuration  | Admin action / onboarding | PUT /admin/sso              | Misconfiguration, lockout      |
-| BYOLLM             | Admin action              | PUT /admin/providers/byollm | Invalid key, provider outage   |
-| User management    | Admin action              | POST /admin/users/invite    | Quota exceeded, invalid emails |
-| Knowledge base     | Admin action              | POST /admin/indexes         | Connection failure, sync error |
-| Cost analytics     | Admin action / alerts     | GET /admin/analytics/cost   | Budget overage                 |
-| Role customization | Admin action              | POST /admin/roles           | Plan limits, deletion conflict |
+| Flow                   | Trigger                    | Primary API                        | Key Failure Mode                          |
+| ---------------------- | -------------------------- | ---------------------------------- | ----------------------------------------- |
+| Onboarding             | Welcome email              | Wizard (multi-step)                | Expired link, no data sources             |
+| SSO configuration      | Admin action / onboarding  | PUT /admin/sso                     | Misconfiguration, lockout                 |
+| BYOLLM                 | Admin action               | PUT /admin/providers/byollm        | Invalid key, provider outage              |
+| User management        | Admin action               | POST /admin/users/invite           | Quota exceeded, invalid emails            |
+| Knowledge base         | Admin action               | POST /admin/indexes                | Connection failure, sync error            |
+| Cost analytics         | Admin action / alerts      | GET /admin/analytics/cost          | Budget overage                            |
+| Role customization     | Admin action               | POST /admin/roles                  | Plan limits, deletion conflict            |
+| SSO group → role map   | Admin action               | POST /admin/sso/group-mappings     | Group not found, circular priority        |
+| Plan upgrade/downgrade | Admin action / quota alert | PATCH /admin/billing/plan          | Over-limit users/roles blocking downgrade |
+| Quota warning response | System alert               | POST /admin/quota/increase-request | Request denied, quota exhausted mid-query |
 
 ---
 

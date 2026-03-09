@@ -20,6 +20,10 @@ export type SSEEvent =
         retrieval_confidence: number;
         tokens_used: number;
         glossary_expansions: string[];
+        glossary_expansions_applied?: Array<{
+          term: string;
+          expansion: string;
+        }>;
         profile_context_used: boolean;
         layers_active: string[];
       };

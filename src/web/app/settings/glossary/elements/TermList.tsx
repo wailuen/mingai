@@ -13,7 +13,8 @@ import {
   useDeleteTerm,
   type GlossaryTerm,
 } from "@/lib/hooks/useGlossary";
-import { Pencil, Trash2 } from "lucide-react";
+import { VersionHistoryDrawer } from "./VersionHistoryDrawer";
+import { Pencil, Trash2, History } from "lucide-react";
 import { useState } from "react";
 
 interface TermListProps {
@@ -77,6 +78,10 @@ export function TermList({
   onEdit,
 }: TermListProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [historyTerm, setHistoryTerm] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const deleteMutation = useDeleteTerm();
 
   const { data, isLoading } = useGlossaryTerms(
@@ -160,6 +165,15 @@ export function TermList({
         const term = info.row.original;
         return (
           <div className="relative flex items-center gap-1">
+            <button
+              onClick={() =>
+                setHistoryTerm({ id: term.id, name: term.term })
+              }
+              className="flex h-7 w-7 items-center justify-center rounded-control text-text-faint transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              aria-label={`History ${term.term}`}
+            >
+              <History size={14} />
+            </button>
             <button
               onClick={() => onEdit(term)}
               className="flex h-7 w-7 items-center justify-center rounded-control text-text-faint transition-colors hover:bg-bg-elevated hover:text-text-primary"
@@ -274,6 +288,14 @@ export function TermList({
           </button>
         </div>
       </div>
+
+      {/* Version History Drawer */}
+      <VersionHistoryDrawer
+        termId={historyTerm?.id ?? null}
+        termName={historyTerm?.name ?? ""}
+        isOpen={historyTerm !== null}
+        onClose={() => setHistoryTerm(null)}
+      />
     </div>
   );
 }
