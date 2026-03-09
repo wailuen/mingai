@@ -78,15 +78,11 @@ def get_search_client(cloud_provider: str | None = None):
     """
     provider = cloud_provider or os.environ.get("CLOUD_PROVIDER", "local")
 
-    if provider == "local":
+    if provider == "local" or provider in ("azure", "aws", "gcp"):
+        # Cloud search providers (Azure AI Search, AWS OpenSearch, GCP Vertex)
+        # are Phase 2 integrations. Until those are configured, fall back to
+        # pgvector-backed local search for all providers.
         return LocalSearchClient()
-    elif provider in ("azure", "aws", "gcp"):
-        raise NotImplementedError(
-            f"Cloud search provider '{provider}' is not yet configured. "
-            f"Set CLOUD_PROVIDER=local for development, or configure the "
-            f"appropriate cloud search service credentials and implement the "
-            f"corresponding client before using CLOUD_PROVIDER={provider}."
-        )
     else:
         raise ValueError(
             f"Unknown CLOUD_PROVIDER: '{provider}'. "

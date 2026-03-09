@@ -55,8 +55,37 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Settings routes: block end users (viewers) from all settings except /settings/privacy
+  if (
+    request.nextUrl.pathname.startsWith("/settings") &&
+    !request.nextUrl.pathname.startsWith("/settings/privacy")
+  ) {
+    const isEndUser =
+      claims.scope === "tenant" && !claims.roles.includes("tenant_admin");
+    if (isEndUser) {
+      return NextResponse.redirect(new URL("/chat", request.url));
+    }
+  }
+
+  // Platform-only settings routes: require scope=platform
+  const platformOnlyRoutes = [
+    "/settings/tenants",
+    "/settings/llm-profiles",
+    "/settings/issue-queue",
+  ];
+
+  const isPlatformRoute = platformOnlyRoutes.some((route) =>
+    request.nextUrl.pathname.startsWith(route),
+  );
+
+  if (isPlatformRoute) {
+    if (claims.scope !== "platform") {
+      return NextResponse.redirect(new URL("/chat", request.url));
+    }
+  }
+
   // Tenant admin settings routes: require tenant_admin role
-  const adminSettingsRoutes = [
+  const tenantAdminRoutes = [
     "/settings/workspace",
     "/settings/users",
     "/settings/knowledge-base",
@@ -67,7 +96,7 @@ export function middleware(request: NextRequest) {
     "/settings/analytics",
   ];
 
-  const isAdminRoute = adminSettingsRoutes.some((route) =>
+  const isAdminRoute = tenantAdminRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route),
   );
 

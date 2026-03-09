@@ -5,12 +5,24 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { AppShell } from "@/components/layout/AppShell";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserProfile } from "@/lib/hooks/useUserProfile";
 
-function deriveDisplayName(email?: string): string | undefined {
+/**
+ * Derive a human-readable display name.
+ * Priority: profile.name > email local part (cleaned up).
+ */
+function deriveDisplayName(
+  profileName?: string | null,
+  email?: string,
+): string | undefined {
+  if (profileName) return profileName;
   if (!email) return undefined;
   const localPart = email.split("@")[0];
   if (!localPart) return undefined;
-  return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+  // Replace underscores/dots with spaces, then title-case each word
+  return localPart
+    .replace(/[._-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
@@ -20,7 +32,8 @@ function deriveDisplayName(email?: string): string | undefined {
  */
 export default function ChatPage() {
   const { claims } = useAuth();
-  const userName = deriveDisplayName(claims?.email);
+  const { data: profile } = useUserProfile();
+  const userName = deriveDisplayName(profile?.name, claims?.email);
 
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null

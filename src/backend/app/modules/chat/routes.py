@@ -322,7 +322,10 @@ async def stream_chat(
                 user_id=current_user.id,
                 error=str(exc),
             )
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Stream error'})}\n\n"
+            error_payload = json.dumps(
+                {"code": "stream_error", "message": "Stream error"}
+            )
+            yield f"event: error\ndata: {error_payload}\n\n"
 
     return StreamingResponse(
         event_generator(),
