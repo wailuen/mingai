@@ -102,7 +102,9 @@ function IssueDetailRow({ issue }: { issue: TenantIssue }) {
           <span>
             Last updated:{" "}
             <span className="font-mono text-text-muted">
-              {new Date(issue.updated_at).toLocaleString()}
+              {issue.updated_at
+                ? new Date(issue.updated_at).toLocaleString()
+                : new Date(issue.created_at).toLocaleString()}
             </span>
           </span>
         </div>

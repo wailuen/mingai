@@ -87,7 +87,7 @@ class ConversationPersistenceService:
                     "title": title,
                 },
             )
-            conversation_id = result.scalar_one()
+            conversation_id = str(result.scalar_one())
 
             logger.info(
                 "conversation_created",
@@ -129,6 +129,8 @@ class ConversationPersistenceService:
         )
         assistant_msg_id = result.scalar_one()
 
+        await self._db.commit()
+
         logger.info(
             "exchange_persisted",
             conversation_id=conversation_id,
@@ -137,7 +139,7 @@ class ConversationPersistenceService:
             tenant_id=tenant_id,
         )
 
-        return assistant_msg_id, conversation_id
+        return str(assistant_msg_id), str(conversation_id)
 
     @staticmethod
     def _generate_title(query: str) -> str:

@@ -36,14 +36,21 @@ interface PlatformIssueListResponse {
 // Filter tabs
 // ---------------------------------------------------------------------------
 
-type StatusFilter = "all" | "new" | "in_triage" | "in_progress" | "resolved";
+type StatusFilter =
+  | "all"
+  | "open"
+  | "assigned"
+  | "in_progress"
+  | "resolved"
+  | "closed";
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "new", label: "Incoming" },
-  { value: "in_triage", label: "Triaged" },
+  { value: "open", label: "Open" },
+  { value: "assigned", label: "Assigned" },
   { value: "in_progress", label: "In Progress" },
   { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
 ];
 
 // ---------------------------------------------------------------------------

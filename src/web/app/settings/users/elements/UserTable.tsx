@@ -16,8 +16,8 @@ export interface UserRow {
   id: string;
   email: string;
   name: string;
-  role: "tenant_admin" | "user";
-  status: "active" | "suspended";
+  role: "tenant_admin" | "viewer" | "user";
+  status: "active" | "invited" | "suspended" | "closed";
   last_login: string | null;
   created_at: string;
 }
@@ -53,7 +53,7 @@ export function UserTable({
 }: UserTableProps) {
   const queryParams = new URLSearchParams({
     page: String(pagination.pageIndex + 1),
-    limit: String(pagination.pageSize),
+    page_size: String(pagination.pageSize),
   });
   if (searchQuery) queryParams.set("search", searchQuery);
   if (roleFilter) queryParams.set("role", roleFilter);
@@ -63,7 +63,7 @@ export function UserTable({
     queryKey: ["users", pagination, searchQuery, roleFilter, statusFilter],
     queryFn: () =>
       apiGet<PaginatedResponse<UserRow>>(
-        `/api/v1/users?${queryParams.toString()}`,
+        `/api/v1/admin/users?${queryParams.toString()}`,
       ),
   });
 
@@ -106,13 +106,17 @@ export function UserTable({
       header: "Status",
       cell: (info) => {
         const status = info.getValue();
+        const cls =
+          status === "active"
+            ? "border-accent/30 bg-accent/10 text-accent"
+            : status === "invited"
+              ? "border-warn/30 bg-warn-dim text-warn"
+              : "border-alert/30 bg-alert/10 text-alert";
         return (
           <span
             className={cn(
-              "rounded-badge border px-2 py-0.5 text-xs font-medium",
-              status === "active"
-                ? "border-accent/30 bg-accent/10 text-accent"
-                : "border-alert/30 bg-alert/10 text-alert",
+              "rounded-badge border px-2 py-0.5 text-xs font-medium capitalize",
+              cls,
             )}
           >
             {status}

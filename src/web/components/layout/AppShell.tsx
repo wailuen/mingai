@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { useAuth } from "@/hooks/useAuth";
+import { isPlatformAdmin, isTenantAdmin } from "@/lib/auth";
+import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -26,11 +29,24 @@ export function AppShell({
 }: AppShellProps) {
   const { claims, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isPA = claims ? isPlatformAdmin(claims) : false;
+
+  const { data: workspaceData } = useQuery<{ tenant_name?: string }>({
+    queryKey: ["workspace-name"],
+    queryFn: () => apiGet<{ tenant_name?: string }>("/api/v1/admin/workspace"),
+    enabled: !!claims && !isPA && isTenantAdmin(claims),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const tenantName = isPA
+    ? "Default"
+    : (workspaceData?.tenant_name ?? undefined);
 
   return (
     <div className="flex h-screen flex-col bg-bg-base">
       <Topbar
         claims={claims}
+        tenantName={tenantName}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onLogout={logout}
       />

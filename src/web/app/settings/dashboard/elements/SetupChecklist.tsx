@@ -35,7 +35,7 @@ export function SetupChecklist() {
     queryKey: ["setup-checklist"],
     queryFn: () => apiGet<ChecklistResponse>("/api/v1/admin/setup-checklist"),
     retry: false,
-    enabled: !isPA,
+    enabled: !!claims && !isPA,
   });
 
   if (isLoading) {

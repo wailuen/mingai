@@ -62,7 +62,7 @@ export default function UsersPage() {
           >
             <option value="">All Roles</option>
             <option value="tenant_admin">Admin</option>
-            <option value="user">User</option>
+            <option value="viewer">User</option>
           </select>
 
           <select
@@ -75,6 +75,7 @@ export default function UsersPage() {
           >
             <option value="">All Status</option>
             <option value="active">Active</option>
+            <option value="invited">Invited</option>
             <option value="suspended">Suspended</option>
           </select>
         </div>

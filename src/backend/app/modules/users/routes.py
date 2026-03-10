@@ -19,6 +19,7 @@ Note: /me routes must be registered BEFORE /{id} routes to avoid path collision.
 import csv
 import io
 import json
+import math
 import re
 import uuid
 from datetime import datetime, timezone
@@ -56,7 +57,7 @@ class InviteUserRequest(BaseModel):
     @field_validator("role")
     @classmethod
     def role_must_be_valid(cls, v: str) -> str:
-        allowed = {"end_user", "tenant_admin"}
+        allowed = {"viewer", "tenant_admin"}
         if v not in allowed:
             raise ValueError(f"role must be one of: {', '.join(sorted(allowed))}")
         return v
@@ -72,7 +73,7 @@ class UpdateUserRequest(BaseModel):
     def role_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        allowed = {"end_user", "tenant_admin"}
+        allowed = {"viewer", "tenant_admin"}
         if v not in allowed:
             raise ValueError(f"role must be one of: {', '.join(sorted(allowed))}")
         return v
@@ -106,7 +107,7 @@ class BulkInviteResult(BaseModel):
 # Constants
 # ---------------------------------------------------------------------------
 
-_VALID_BULK_INVITE_ROLES = {"end_user", "tenant_admin"}
+_VALID_BULK_INVITE_ROLES = {"viewer", "tenant_admin"}
 _EMAIL_PATTERN = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
 _MAX_BULK_INVITE_ROWS = 500
 _MAX_CSV_BYTES = 2 * 1024 * 1024  # 2 MB upload limit
@@ -807,6 +808,52 @@ async def deactivate_user(
 # ---------------------------------------------------------------------------
 
 
+class SingleInviteRequest(BaseModel):
+    """POST /admin/users/invite — invite a single user by email."""
+
+    email: str = Field(..., min_length=1, max_length=320)
+    role: str = Field("viewer", pattern="^(viewer|tenant_admin)$")
+    name: Optional[str] = Field(None, max_length=200)
+
+
+@admin_users_router.post("/invite", status_code=status.HTTP_201_CREATED)
+async def invite_single_user(
+    request: SingleInviteRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Invite a single user by email (creates user record with status='invited')."""
+    email = request.email.strip().lower()
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid email address",
+        )
+    existing = await bulk_invite_check_existing(
+        current_user.tenant_id, [email], session
+    )
+    if email in existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"User '{email}' already exists in this workspace",
+        )
+    remaining = await bulk_invite_check_quota(current_user.tenant_id, session)
+    if remaining <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="User quota reached. Upgrade your plan to invite more users.",
+        )
+    await bulk_invite_insert_db(
+        tenant_id=current_user.tenant_id,
+        email=email,
+        name=request.name,
+        role=request.role,
+        invited_by=current_user.id,
+        db=session,
+    )
+    return {"email": email, "status": "invited"}
+
+
 @admin_users_router.post("/bulk-invite", status_code=status.HTTP_200_OK)
 async def bulk_invite_users(
     file: UploadFile = File(...),
@@ -968,6 +1015,7 @@ async def bulk_invite_users(
 # ---------------------------------------------------------------------------
 
 _VALID_USER_STATUSES = {"active", "invited", "suspended"}
+_VALID_USER_ROLES = {"viewer", "tenant_admin"}
 
 # Hardcoded SQL fragments for user WHERE status filter — never from user input
 _USER_STATUS_SQL: dict[str, str] = {
@@ -1000,12 +1048,16 @@ async def list_users_enhanced_db(
         where_parts.append("u.status IN ('active', 'invited', 'suspended')")
 
     if search:
-        where_parts.append(
-            "(LOWER(u.name) LIKE :search OR LOWER(u.email) LIKE :search)"
+        # Escape LIKE metacharacters to prevent wildcard injection
+        safe_search = (
+            search.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         )
-        params["search"] = f"%{search.lower()}%"
+        where_parts.append(
+            "(LOWER(u.name) LIKE :search ESCAPE '\\\\' OR LOWER(u.email) LIKE :search ESCAPE '\\\\')"
+        )
+        params["search"] = f"%{safe_search}%"
 
-    if role_filter:
+    if role_filter and role_filter in _VALID_USER_ROLES:
         where_parts.append("u.role = :role")
         params["role"] = role_filter
 
@@ -1039,13 +1091,20 @@ async def list_users_enhanced_db(
                 "email": row["email"],
                 "role": row["role"],
                 "status": row["status"],
-                "last_active_at": str(row["last_active_at"])
+                "last_login": str(row["last_active_at"])
                 if row["last_active_at"]
                 else None,
                 "created_at": str(row["created_at"]),
             }
         )
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    total_pages = math.ceil(total / page_size) if page_size > 0 else 1
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 @admin_users_router.get("")

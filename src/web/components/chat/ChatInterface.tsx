@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChatEmptyState } from "./ChatEmptyState";
 import { ChatActiveState } from "./ChatActiveState";
 import { SourcePanel } from "./SourcePanel";
@@ -12,6 +12,8 @@ interface ChatInterfaceProps {
   userName?: string;
   /** Externally-selected conversation ID (from sidebar). */
   selectedConversationId?: string | null;
+  /** Incremented each time "New conversation" is requested; triggers chat reset. */
+  resetKey?: number;
   /** Called when the active conversation changes (for sidebar sync). */
   onConversationChange?: (id: string | null) => void;
 }
@@ -27,12 +29,27 @@ export function ChatInterface({
   agentId,
   userName,
   selectedConversationId,
+  resetKey,
   onConversationChange,
 }: ChatInterfaceProps) {
   const chat = useChat(agentId);
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
 
-  // Load conversation when selectedConversationId changes externally
+  // Reset chat when "New conversation" is requested (resetKey increments).
+  // Skip the initial render (resetKey === 0 or undefined).
+  const prevResetKey = useRef(resetKey ?? 0);
+  useEffect(() => {
+    const current = resetKey ?? 0;
+    if (current !== prevResetKey.current) {
+      prevResetKey.current = current;
+      chat.resetChat();
+      setSourcePanelOpen(false);
+      onConversationChange?.(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  // Load conversation when selectedConversationId changes externally.
   useEffect(() => {
     if (
       selectedConversationId &&

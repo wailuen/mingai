@@ -123,6 +123,8 @@ async def save_feedback(
     db,
 ) -> dict:
     """Persist user feedback to user_feedback table."""
+    # DB column is INTEGER with CHECK (rating IN (-1, 1))
+    rating_int = 1 if rating == "up" else -1
     feedback_id = str(uuid.uuid4())
     await db.execute(
         text(
@@ -134,7 +136,7 @@ async def save_feedback(
             "message_id": message_id,
             "user_id": user_id,
             "tenant_id": tenant_id,
-            "rating": rating,
+            "rating": rating_int,
             "comment": comment,
         },
     )

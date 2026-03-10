@@ -43,15 +43,13 @@ export interface GlossaryListResponse {
 
 export interface CreateTermPayload {
   term: string;
-  full_form?: string;
-  definition: string;
+  full_form: string;
   aliases?: string[];
 }
 
 export interface UpdateTermPayload {
   term?: string;
   full_form?: string;
-  definition?: string;
   aliases?: string[];
   is_active?: boolean;
 }

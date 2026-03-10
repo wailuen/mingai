@@ -25,14 +25,14 @@ export function MemoryNotesList() {
 
   const { data: notes = [], isLoading } = useQuery<MemoryNote[]>({
     queryKey: ["memory-notes"],
-    queryFn: () => apiRequest<MemoryNote[]>("/api/v1/me/memory"),
+    queryFn: () => apiRequest<MemoryNote[]>("/api/v1/memory/notes"),
   });
 
   const handleDeleteNote = useCallback(
     async (noteId: string) => {
       setDeleting(noteId);
       try {
-        await apiDelete(`/api/v1/me/memory/${noteId}`);
+        await apiDelete(`/api/v1/memory/notes/${noteId}`);
         queryClient.invalidateQueries({ queryKey: ["memory-notes"] });
       } catch {
         // Error handled silently - note stays visible
@@ -45,7 +45,7 @@ export function MemoryNotesList() {
 
   const handleClearAll = useCallback(async () => {
     try {
-      await apiDelete("/api/v1/me/memory");
+      await apiDelete("/api/v1/memory/notes");
       queryClient.invalidateQueries({ queryKey: ["memory-notes"] });
       setConfirmClearAll(false);
     } catch {

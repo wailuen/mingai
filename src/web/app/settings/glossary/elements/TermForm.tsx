@@ -24,8 +24,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
   const isEdit = term !== null;
 
   const [termValue, setTermValue] = useState(term?.term ?? prefillTerm ?? "");
-  const [fullForm, setFullForm] = useState(term?.full_form ?? "");
-  const [definition, setDefinition] = useState(term?.definition ?? "");
+  const [definition, setDefinition] = useState(term?.full_form ?? "");
   const [aliasInput, setAliasInput] = useState("");
   const [aliases, setAliases] = useState<string[]>(term?.aliases ?? []);
   const [error, setError] = useState("");
@@ -37,8 +36,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
   useEffect(() => {
     if (term) {
       setTermValue(term.term);
-      setFullForm(term.full_form ?? "");
-      setDefinition(term.definition);
+      setDefinition(term.full_form ?? "");
       setAliases(term.aliases ?? []);
     }
   }, [term]);
@@ -80,11 +78,8 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
 
     const payload: CreateTermPayload = {
       term: termValue.trim(),
-      definition: definition.trim(),
+      full_form: definition.trim(),
     };
-    if (fullForm.trim()) {
-      payload.full_form = fullForm.trim();
-    }
     if (aliases.length > 0) {
       payload.aliases = aliases;
     }
@@ -158,20 +153,6 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
               onChange={(e) => setTermValue(e.target.value.slice(0, 100))}
               maxLength={100}
               placeholder="e.g. API"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
-            />
-          </div>
-
-          {/* Full Form */}
-          <div>
-            <label className="mb-1.5 block text-label-nav uppercase tracking-wider text-text-faint">
-              Full Form
-            </label>
-            <input
-              type="text"
-              value={fullForm}
-              onChange={(e) => setFullForm(e.target.value)}
-              placeholder="e.g. Application Programming Interface"
               className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>

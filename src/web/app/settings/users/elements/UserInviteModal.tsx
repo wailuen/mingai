@@ -19,7 +19,7 @@ interface ParsedCSVRow {
 export function UserInviteModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"single" | "csv">("single");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"user" | "tenant_admin">("user");
+  const [role, setRole] = useState<"viewer" | "tenant_admin">("viewer");
   const [csvRows, setCsvRows] = useState<ParsedCSVRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const queryClient = useQueryClient();
@@ -67,15 +67,19 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
     try {
       if (mode === "single" && email.trim()) {
-        await apiPost("/api/v1/users/invite", {
+        await apiPost("/api/v1/admin/users/invite", {
           email: email.trim(),
           role,
         });
       } else if (mode === "csv") {
+        // Invite each valid CSV row sequentially via the single invite endpoint
         const validRows = csvRows.filter((r) => r.valid);
-        await apiPost("/api/v1/users/invite/bulk", {
-          users: validRows.map((r) => ({ email: r.email, role: r.role })),
-        });
+        for (const row of validRows) {
+          await apiPost("/api/v1/admin/users/invite", {
+            email: row.email,
+            role: row.role,
+          });
+        }
       }
       queryClient.invalidateQueries({ queryKey: ["users"] });
       onClose();
@@ -150,11 +154,11 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
                 <select
                   value={role}
                   onChange={(e) =>
-                    setRole(e.target.value as "user" | "tenant_admin")
+                    setRole(e.target.value as "viewer" | "tenant_admin")
                   }
                   className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
                 >
-                  <option value="user">User</option>
+                  <option value="viewer">User</option>
                   <option value="tenant_admin">Admin</option>
                 </select>
               </div>

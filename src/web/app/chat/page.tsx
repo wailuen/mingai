@@ -41,6 +41,9 @@ export default function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
+  // Incremented each time "New conversation" is clicked so ChatInterface
+  // can detect the reset request even when selectedConversationId was already null.
+  const [resetKey, setResetKey] = useState(0);
 
   const handleSelectConversation = useCallback((id: string) => {
     setSelectedConversationId(id);
@@ -50,6 +53,7 @@ export default function ChatPage() {
   const handleNewConversation = useCallback(() => {
     setSelectedConversationId(null);
     setActiveConversationId(null);
+    setResetKey((k) => k + 1);
   }, []);
 
   const handleConversationChange = useCallback((id: string | null) => {
@@ -75,6 +79,7 @@ export default function ChatPage() {
           agentId="auto"
           userName={userName}
           selectedConversationId={selectedConversationId}
+          resetKey={resetKey}
           onConversationChange={handleConversationChange}
         />
       </ErrorBoundary>

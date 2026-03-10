@@ -55,7 +55,7 @@ const TENANT_ADMIN_ACTIONS: QuickAction[] = [
   },
   {
     label: "View Issues",
-    href: "/settings/issue-queue",
+    href: "/settings/engineering-issues",
     icon: AlertCircle,
     description: "Check reported issues and escalations",
   },

@@ -15,6 +15,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [plan, setPlan] = useState<(typeof PLANS)[number]>("professional");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
         name: name.trim(),
         slug: slug.trim(),
         plan,
+        primary_contact_email: contactEmail.trim(),
       });
       queryClient.invalidateQueries({ queryKey: ["platform-tenants"] });
       onClose();
@@ -49,8 +51,12 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
     }
   }
 
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim());
   const canProceed =
-    step === 1 && name.trim().length > 0 && slug.trim().length > 0;
+    step === 1 &&
+    name.trim().length > 0 &&
+    slug.trim().length > 0 &&
+    emailValid;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-deep/70">
@@ -114,6 +120,18 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
               </div>
               <div>
                 <label className="mb-1.5 block text-label-nav uppercase tracking-wider text-text-faint">
+                  Primary Contact Email
+                </label>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="admin@acmecorp.com"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-label-nav uppercase tracking-wider text-text-faint">
                   Plan
                 </label>
                 <div className="flex gap-2">
@@ -144,6 +162,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
                   <ConfirmRow label="Name" value={name} />
                   <ConfirmRow label="Slug" value={slug} mono />
                   <ConfirmRow label="Plan" value={plan} mono />
+                  <ConfirmRow label="Contact" value={contactEmail} />
                 </div>
               </div>
               {error && <p className="text-sm text-alert">{error}</p>}
