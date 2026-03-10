@@ -1,99 +1,22 @@
-# /validate - Gold Standards Compliance
+# Implementation <> Validation Iteration
+Use a team of agents. Always follow procedural directives with specialist agent for the right task.
 
-## Purpose
+1. Review your implementation with red team agents using playwright mcp (web) and marionette mcp (flutter)
+   - test all the workflows end-to-end
+     - using backend api endpoints only
+     - using frontend api endpoints only
+     - using browser via Playwright MCP only
+2. Ensure that the red team agents peruse `workspaces/<project-directory>/03-user-flows` and fully understand the detailed storyboard for each user
+   - include tests written from these user workflow perspectives.
+     - workflows must be extremely detailed
+     - every step should include what is seen, what is clicked, what is expected, how to proceed, does it show value.
+     - every transition between steps must be analyzed and evaluated as well
+   - Focus on the intent, vision, and user requirements, and never naive technical assertions.
+   - Every action and expectation from user must be evaluated against implementation
+3. Ensure that you continuously engage the red team agents
+   - Identify the root causes to the gaps
+   - Implement the most optimal and elegant fix
+   - Tests and ensure no regressions
+   - Keep iterating until the red team agents find no more gaps/issues/improvements
+4. Report all the detailed steps and results that you have taken in these validation and testing tasks
 
-Load the gold standards skill for mandatory compliance checking including imports, patterns, security, and testing policies.
-
-## Quick Reference
-
-| Command | Action |
-|---------|--------|
-| `/validate` | Load gold standards compliance checks |
-| `/validate imports` | Check absolute import compliance |
-| `/validate patterns` | Check runtime execution patterns |
-| `/validate security` | Check security best practices |
-| `/validate testing` | Check NO MOCKING compliance |
-
-## What You Get
-
-- Mandatory best practices
-- Absolute imports enforcement
-- Parameter passing patterns
-- Error handling standards
-- Security validation
-- Testing policy (NO MOCKING)
-
-## Validation Checklist
-
-### Import Validation
-
-```python
-# ✅ Correct
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime import LocalRuntime
-
-# ❌ Wrong
-from .workflow.builder import WorkflowBuilder  # Relative import
-```
-
-### Runtime Pattern Validation
-
-```python
-# ✅ Correct
-results, run_id = runtime.execute(workflow.build())
-
-# ❌ Wrong
-workflow.execute(runtime)  # Anti-pattern
-runtime.execute(workflow)  # Missing .build()
-```
-
-### Testing Validation (Tier 2-3)
-
-```python
-# ❌ PROHIBITED in integration/e2e tests
-@patch('module.function')
-MagicMock()
-unittest.mock
-```
-
-### Security Validation
-
-```python
-# ❌ PROHIBITED
-api_key = "sk-..."  # Hardcoded secrets
-f"SELECT * FROM users WHERE id = {user_id}"  # SQL injection
-
-# ✅ Required
-api_key = os.environ.get("API_KEY")
-cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-```
-
-## Usage Examples
-
-```bash
-# Load gold standards compliance checks
-/validate
-
-# Check absolute import compliance
-/validate imports
-
-# Verify runtime execution patterns
-/validate patterns
-
-# Check security best practices
-/validate security
-
-# Verify NO MOCKING compliance
-/validate testing
-```
-
-## Related Commands
-
-- `/sdk` - Core SDK patterns
-- `/db` - DataFlow database operations
-- `/test` - Testing strategies
-- `/ai` - Kaizen AI agents
-
-## Skill Reference
-
-This command loads: `.claude/skills/17-gold-standards/SKILL.md`
