@@ -2,6 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
+import { isPlatformAdmin } from "@/lib/auth";
 import { Skeleton } from "@/components/shared/LoadingState";
 import { CheckCircle2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,10 +28,14 @@ interface ChecklistResponse {
  * Completed items shown with green checkmark.
  */
 export function SetupChecklist() {
+  const { claims } = useAuth();
+  const isPA = claims ? isPlatformAdmin(claims) : false;
+
   const { data, isLoading, isError } = useQuery<ChecklistResponse>({
     queryKey: ["setup-checklist"],
     queryFn: () => apiGet<ChecklistResponse>("/api/v1/admin/setup-checklist"),
     retry: false,
+    enabled: !isPA,
   });
 
   if (isLoading) {

@@ -14,6 +14,7 @@ Endpoints:
 Note: /teams/{id}/memory and /teams/{id}/members routes must be
 registered BEFORE /{id} routes to avoid path collision.
 """
+import re
 import uuid
 from typing import Optional
 
@@ -56,8 +57,23 @@ class AddMemberRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def _is_valid_uuid(value: str) -> bool:
+    """Return True if value is a standard lowercase UUID."""
+    return bool(_UUID_RE.match(value))
+
+
 async def list_teams_db(tenant_id: str, db) -> list:
-    """List all teams for the tenant."""
+    """List all teams for the tenant.
+
+    Returns an empty list for non-UUID tenant identifiers (e.g. the platform
+    admin sentinel value "default") rather than propagating an asyncpg type
+    error, since platform admins do not belong to a real tenant.
+    """
+    if not _is_valid_uuid(tenant_id):
+        return []
     result = await db.execute(
         text(
             "SELECT t.id, t.name, t.description, COUNT(m.user_id) as member_count, t.created_at "

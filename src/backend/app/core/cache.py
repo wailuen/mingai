@@ -49,6 +49,7 @@ VALID_CACHE_TYPES = frozenset(
         "profile",
         "intent_cache",
         "query_cache",
+        "sse_buffer",
     }
 )
 
@@ -64,6 +65,7 @@ DEFAULT_TTL: dict[str, int] = {
     "profile": 3_600,  # 1 h — L2 cache for profile reads
     "intent_cache": 900,  # 15 min — intent can change quickly
     "query_cache": 3_600,  # 1 h — short-lived query responses
+    "sse_buffer": 300,  # 5 min — SSE Last-Event-ID replay buffer
 }
 
 # Max cached payload size (1 MB). Larger values are rejected.

@@ -36,7 +36,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy import text
@@ -70,16 +70,61 @@ class UpdateTenantRequest(BaseModel):
     status: Optional[str] = Field(None, pattern="^(active|suspended)$")
 
 
+class LLMSlots(BaseModel):
+    """Slot-based model assignment used by the Platform Admin UI."""
+
+    primary: str = Field(..., min_length=1, max_length=255)
+    intent: str = Field(..., min_length=1, max_length=255)
+    embedding: str = Field(..., min_length=1, max_length=255)
+    vision: Optional[str] = Field(None, max_length=255)
+    router: Optional[str] = Field(None, max_length=255)
+    worker: Optional[str] = Field(None, max_length=255)
+
+
 class CreateLLMProfileRequest(BaseModel):
-    tenant_id: str = Field(..., description="Tenant this profile belongs to")
+    """Create an LLM profile.
+
+    Accepts either the flat-field format (primary_model, intent_model,
+    embedding_model) or the slot-based format (slots.primary, slots.intent,
+    slots.embedding) used by the Platform Admin UI.  When ``slots`` is
+    provided it takes precedence over the individual model fields.
+    """
+
+    tenant_id: Optional[str] = Field(
+        None,
+        description="Tenant this profile belongs to; defaults to platform default tenant",
+    )
     name: str = Field(..., min_length=1, max_length=200)
-    provider: str = Field(..., min_length=1, max_length=100)
-    primary_model: str = Field(..., min_length=1, max_length=255)
-    intent_model: str = Field(..., min_length=1, max_length=255)
-    embedding_model: str = Field(..., min_length=1, max_length=255)
+    provider: str = Field("azure_openai", min_length=1, max_length=100)
+    # Flat-field format
+    primary_model: Optional[str] = Field(None, min_length=1, max_length=255)
+    intent_model: Optional[str] = Field(None, min_length=1, max_length=255)
+    embedding_model: Optional[str] = Field(None, min_length=1, max_length=255)
+    # Slot-based format (alternative to flat fields)
+    slots: Optional[LLMSlots] = None
+    description: Optional[str] = Field(None, max_length=1000)
     endpoint_url: Optional[str] = Field(None, max_length=500)
     api_key_ref: Optional[str] = Field(None, max_length=500)
     is_default: bool = False
+
+    @model_validator(mode="after")
+    def resolve_model_fields(self) -> "CreateLLMProfileRequest":
+        """Map slots format to flat fields when slots is provided."""
+        if self.slots is not None:
+            self.primary_model = self.slots.primary
+            self.intent_model = self.slots.intent
+            self.embedding_model = self.slots.embedding
+        # After resolving, all three flat fields must be present
+        missing = [
+            f
+            for f in ("primary_model", "intent_model", "embedding_model")
+            if not getattr(self, f)
+        ]
+        if missing:
+            raise ValueError(
+                "Provide either 'slots' or all of: primary_model, intent_model, embedding_model"
+            )
+        return self
 
 
 class UpdateQuotaRequest(BaseModel):
@@ -927,9 +972,28 @@ async def create_llm_profile(
 
     Returns 409 Conflict if a profile with the same name already exists for the tenant.
     """
+    _uuid_re = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    # Resolve tenant_id: use provided value or fall back to platform default tenant
+    tenant_id = request.tenant_id
+    if not tenant_id:
+        # Platform Admin creating a global profile — attach to the default tenant
+        result = await session.execute(
+            text("SELECT id FROM tenants ORDER BY created_at LIMIT 1")
+        )
+        row = result.fetchone()
+        tenant_id = str(row[0]) if row else None
+    if not tenant_id or not _uuid_re.match(tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"tenant_id '{tenant_id}' is not a valid UUID. "
+            "Provide the UUID of an existing tenant.",
+        )
+
     try:
         result = await create_llm_profile_db(
-            tenant_id=request.tenant_id,
+            tenant_id=tenant_id,
             name=request.name,
             provider=request.provider,
             primary_model=request.primary_model,
@@ -1075,7 +1139,7 @@ async def get_tenant_health_components_db(tenant_id: str, db) -> dict:
             "SELECT "
             "  (SELECT COUNT(*) > 0 FROM conversations WHERE tenant_id = :t AND created_at >= NOW() - INTERVAL '30 days')::int, "
             "  (SELECT COUNT(*) > 0 FROM user_feedback WHERE tenant_id = :t AND created_at >= NOW() - INTERVAL '30 days')::int, "
-            "  (SELECT COUNT(*) > 0 FROM teams WHERE tenant_id = :t)::int, "
+            "  (SELECT COUNT(*) > 0 FROM tenant_teams WHERE tenant_id = :t)::int, "
             "  (SELECT COUNT(*) > 0 FROM glossary_terms WHERE tenant_id = :t)::int, "
             "  (SELECT COUNT(*) > 0 FROM memory_notes WHERE tenant_id = :t AND created_at >= NOW() - INTERVAL '30 days')::int"
         ),
@@ -1087,10 +1151,11 @@ async def get_tenant_health_components_db(tenant_id: str, db) -> dict:
     feature_breadth = features_active / 5.0
 
     # --- Satisfaction: positive feedback percentage (0-100) in past 30 days ---
+    # rating column is INTEGER: 1 = positive (thumbs up), -1 = negative (thumbs down)
     satisfaction_result = await db.execute(
         text(
             "SELECT "
-            "  COUNT(*) FILTER (WHERE rating = 'up') AS positive, "
+            "  COUNT(*) FILTER (WHERE rating = 1) AS positive, "
             "  COUNT(*) AS total "
             "FROM user_feedback "
             "WHERE tenant_id = :tenant_id AND created_at >= NOW() - INTERVAL '30 days'"

@@ -442,17 +442,21 @@ async def get_dashboard_stats(
     Returns platform-level dashboard statistics.
     Requires platform admin scope -- returns 403 for non-platform users.
     """
-    if current_user.scope != "platform":
+    # Both platform admins and tenant admins can access the dashboard.
+    # Platform admins see cross-tenant aggregated stats.
+    # Tenant admins see their own tenant's stats (RLS already scopes the session).
+    if current_user.scope not in ("platform", "tenant"):
         logger.warning(
             "dashboard_access_denied",
             user_id=current_user.id,
             scope=current_user.scope,
-            required_scope="platform",
         )
         raise HTTPException(
             status_code=403,
             detail="Access denied.",
         )
+
+    is_platform = current_user.scope == "platform"
 
     logger.info(
         "dashboard_stats_requested",
@@ -460,17 +464,37 @@ async def get_dashboard_stats(
         scope=current_user.scope,
     )
 
-    active_users_result = await session.execute(
-        text("SELECT COUNT(*) FROM users WHERE status = 'active'")
-    )
+    if is_platform:
+        active_users_result = await session.execute(
+            text("SELECT COUNT(*) FROM users WHERE status = 'active'")
+        )
+    else:
+        active_users_result = await session.execute(
+            text(
+                "SELECT COUNT(*) FROM users "
+                "WHERE status = 'active' AND tenant_id = :tid"
+            ),
+            {"tid": current_user.tenant_id},
+        )
     active_users = active_users_result.scalar_one()
 
-    docs_result = await session.execute(
-        text(
-            "SELECT COALESCE(SUM(files_synced), 0) "
-            "FROM sync_jobs WHERE status = 'completed'"
+    if is_platform:
+        docs_result = await session.execute(
+            text(
+                "SELECT COALESCE(SUM(files_synced), 0) "
+                "FROM sync_jobs WHERE status = 'completed'"
+            )
         )
-    )
+    else:
+        docs_result = await session.execute(
+            text(
+                "SELECT COALESCE(SUM(sj.files_synced), 0) "
+                "FROM sync_jobs sj "
+                "JOIN integrations i ON i.id = sj.integration_id "
+                "WHERE sj.status = 'completed' AND i.tenant_id = :tid"
+            ),
+            {"tid": current_user.tenant_id},
+        )
     documents_indexed = docs_result.scalar_one()
 
     from datetime import date
@@ -478,23 +502,48 @@ async def get_dashboard_stats(
     today_start = datetime.combine(
         date.today(), datetime.min.time(), tzinfo=timezone.utc
     )
-    queries_result = await session.execute(
-        text(
-            "SELECT COUNT(*) FROM messages "
-            "WHERE role = 'user' AND created_at >= :today_start"
-        ),
-        {"today_start": today_start},
-    )
+    if is_platform:
+        queries_result = await session.execute(
+            text(
+                "SELECT COUNT(*) FROM messages "
+                "WHERE role = 'user' AND created_at >= :today_start"
+            ),
+            {"today_start": today_start},
+        )
+    else:
+        queries_result = await session.execute(
+            text(
+                "SELECT COUNT(*) FROM messages m "
+                "JOIN conversations c ON c.id = m.conversation_id "
+                "WHERE m.role = 'user' AND m.created_at >= :today_start "
+                "AND c.tenant_id = :tid"
+            ),
+            {"today_start": today_start, "tid": current_user.tenant_id},
+        )
     queries_today = queries_result.scalar_one()
 
-    feedback_result = await session.execute(
-        text(
-            "SELECT "
-            "  COUNT(*) AS total, "
-            "  COUNT(*) FILTER (WHERE rating = 1) AS positive "
-            "FROM user_feedback"
+    if is_platform:
+        feedback_result = await session.execute(
+            text(
+                "SELECT "
+                "  COUNT(*) AS total, "
+                "  COUNT(*) FILTER (WHERE rating = 1) AS positive "
+                "FROM user_feedback"
+            )
         )
-    )
+    else:
+        feedback_result = await session.execute(
+            text(
+                "SELECT "
+                "  COUNT(*) AS total, "
+                "  COUNT(*) FILTER (WHERE rating = 1) AS positive "
+                "FROM user_feedback uf "
+                "JOIN messages m ON m.id = uf.message_id "
+                "JOIN conversations c ON c.id = m.conversation_id "
+                "WHERE c.tenant_id = :tid"
+            ),
+            {"tid": current_user.tenant_id},
+        )
     feedback_row = feedback_result.one()
     total_feedback = feedback_row.total
     positive_feedback = feedback_row.positive
