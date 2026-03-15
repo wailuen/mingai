@@ -13,23 +13,21 @@ import { AlertCircle } from "lucide-react";
 // Types
 // ---------------------------------------------------------------------------
 
-interface PlatformIssueListItem {
+interface AdminIssueListItem {
   id: string;
   severity: string;
   title: string;
   type: string;
-  tenant: { id: string; name: string } | null;
-  reporter: { name: string } | null;
+  reporter: { id: string; name: string } | null;
   status: string;
   created_at: string;
 }
 
-interface PlatformIssueListResponse {
-  items: PlatformIssueListItem[];
+interface AdminIssueListResponse {
+  items: AdminIssueListItem[];
   total: number;
   page: number;
   page_size: number;
-  stats: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,10 +83,10 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
   const params = new URLSearchParams({ page: "1", page_size: "50" });
   if (statusFilter !== "all") params.set("status", statusFilter);
 
-  const { data, isPending, error } = useQuery<PlatformIssueListResponse>({
-    queryKey: ["platform-issues", statusFilter],
+  const { data, isPending, error } = useQuery<AdminIssueListResponse>({
+    queryKey: ["admin-issues", statusFilter],
     queryFn: () =>
-      apiGet<PlatformIssueListResponse>(`/api/v1/platform/issues?${params}`),
+      apiGet<AdminIssueListResponse>(`/api/v1/admin/issues?${params}`),
     retry: 1,
   });
 
@@ -100,7 +98,7 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
     );
   }
 
-  const issues = data?.items;
+  const issues = data?.items as AdminIssueListItem[] | undefined;
 
   return (
     <div className="overflow-hidden rounded-card border border-border">
@@ -114,7 +112,7 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
               Title
             </th>
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
-              Tenant
+              Reported By
             </th>
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
               Status
@@ -167,7 +165,7 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
                   {issue.title}
                 </td>
                 <td className="px-3.5 py-3 text-xs text-text-muted">
-                  {issue.tenant?.name ?? "\u2014"}
+                  {issue.reporter?.name ?? "\u2014"}
                 </td>
                 <td className="px-3.5 py-3 text-xs text-text-muted">
                   {formatStatus(issue.status)}
@@ -197,7 +195,7 @@ export default function IssueQueuePage() {
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Issue Queue</h1>
           <p className="mt-1 text-sm text-text-muted">
-            Triage and manage cross-tenant engineering issues
+            View and manage issues reported by your users
           </p>
         </div>
 

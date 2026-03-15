@@ -77,11 +77,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Platform-only settings routes: require scope=platform
-  const platformOnlyRoutes = [
-    "/settings/tenants",
-    "/settings/llm-profiles",
-    "/settings/issue-queue",
-  ];
+  const platformOnlyRoutes = ["/settings/tenants", "/settings/llm-profiles"];
 
   const isPlatformRoute = platformOnlyRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route),
@@ -103,6 +99,7 @@ export function middleware(request: NextRequest) {
     "/settings/teams",
     "/settings/memory-policy",
     "/settings/analytics",
+    "/settings/issue-queue",
   ];
 
   const isAdminRoute = tenantAdminRoutes.some((route) =>
@@ -124,6 +121,8 @@ export const config = {
     "/admin/:path*",
     "/settings/:path*",
     "/platform/:path*",
+    "/discover/:path*",
+    "/discover",
     "/login",
   ],
 };

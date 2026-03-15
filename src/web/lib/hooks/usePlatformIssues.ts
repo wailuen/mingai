@@ -20,6 +20,20 @@ export interface PlatformIssue {
   created_at: string;
 }
 
+// Raw shape returned by the backend
+interface RawPlatformIssue {
+  id: string;
+  severity: IssueSeverity;
+  tenant?: { id: string; name: string };
+  tenant_name?: string;
+  reporter?: { name: string };
+  title: string;
+  type?: string;
+  status: IssueStatus;
+  ai_classification?: string;
+  created_at: string;
+}
+
 export interface IssueDetail extends PlatformIssue {
   description: string;
   session_data: string;
@@ -50,13 +64,28 @@ function buildFilterParams(filters?: IssueFilters): string {
   return qs ? `?${qs}` : "";
 }
 
+function mapRawIssue(raw: RawPlatformIssue): PlatformIssue {
+  return {
+    id: raw.id,
+    severity: raw.severity,
+    tenant_name: raw.tenant?.name ?? raw.tenant_name ?? "",
+    title: raw.title,
+    status: raw.status,
+    ai_classification: raw.ai_classification ?? raw.type ?? "",
+    created_at: raw.created_at,
+  };
+}
+
 export function usePlatformIssues(filters?: IssueFilters) {
   return useQuery({
     queryKey: ["platform-issues", filters],
-    queryFn: () =>
-      apiGet<PlatformIssue[]>(
-        `/api/v1/platform/issues${buildFilterParams(filters)}`,
-      ),
+    queryFn: async () => {
+      const res = await apiGet<
+        { items: RawPlatformIssue[] } | RawPlatformIssue[]
+      >(`/api/v1/platform/issues${buildFilterParams(filters)}`);
+      const items = Array.isArray(res) ? res : res.items ?? [];
+      return items.map(mapRawIssue);
+    },
   });
 }
 
@@ -67,7 +96,31 @@ export function usePlatformIssues(filters?: IssueFilters) {
 export function useIssueDetail(id: string | null) {
   return useQuery({
     queryKey: ["platform-issue-detail", id],
-    queryFn: () => apiGet<IssueDetail>(`/api/v1/platform/issues/${id}`),
+    queryFn: async () => {
+      // Platform issues list is at /api/v1/platform/issues (GET), but the
+      // per-issue GET is at /api/v1/issues/{id} (shared endpoint).
+      const raw = await apiGet<
+        RawPlatformIssue & {
+          description?: string;
+          issue_type?: string;
+          reporter_id?: string;
+        }
+      >(`/api/v1/issues/${id}`);
+      return {
+        id: raw.id,
+        severity: raw.severity ?? ("P3" as IssueSeverity),
+        tenant_name: raw.tenant?.name ?? raw.tenant_name ?? "",
+        title: raw.title ?? raw.issue_type ?? "",
+        status: raw.status,
+        ai_classification: raw.ai_classification ?? raw.type ?? "",
+        created_at: raw.created_at,
+        description: raw.description ?? "",
+        session_data: "",
+        browser_info: "",
+        ai_assessment: "",
+        reporter_email: raw.reporter?.name ?? "",
+      } as IssueDetail;
+    },
     enabled: !!id,
   });
 }

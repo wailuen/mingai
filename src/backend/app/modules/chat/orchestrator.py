@@ -503,10 +503,13 @@ class ChatOrchestrationService:
                 raise ValueError(
                     "AZURE_PLATFORM_OPENAI_ENDPOINT is required when CLOUD_PROVIDER=azure."
                 )
+            api_version = os.environ.get(
+                "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
+            ).strip()
             client = AsyncAzureOpenAI(
                 api_key=api_key,
                 azure_endpoint=endpoint,
-                api_version="2024-02-01",
+                api_version=api_version,
             )
         else:
             from openai import AsyncOpenAI

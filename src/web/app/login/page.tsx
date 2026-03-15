@@ -103,7 +103,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-6 text-center text-xs text-text-faint">
-          Phase 1: Local JWT authentication
+          Secure enterprise login
         </p>
       </div>
     </div>

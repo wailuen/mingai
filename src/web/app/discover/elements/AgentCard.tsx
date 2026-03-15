@@ -52,10 +52,14 @@ export function AgentCard({
         <span
           className={cn(
             "font-mono text-xs",
-            agent.satisfaction_rate >= 80 ? "text-accent" : "text-text-muted",
+            agent.satisfaction_rate != null && agent.satisfaction_rate >= 80
+              ? "text-accent"
+              : "text-text-muted",
           )}
         >
-          {agent.satisfaction_rate}% satisfaction
+          {agent.satisfaction_rate != null
+            ? `${agent.satisfaction_rate}% satisfaction`
+            : "New agent"}
         </span>
         <span className="font-mono text-xs text-text-faint">
           {agent.install_count.toLocaleString()} installs

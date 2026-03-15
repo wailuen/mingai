@@ -13,7 +13,7 @@ export interface PublicAgent {
   description: string;
   category: string;
   publisher: string;
-  satisfaction_rate: number;
+  satisfaction_rate: number | null;
   install_count: number;
   capabilities: string[];
   is_installed: boolean;
@@ -25,21 +25,50 @@ export interface PublicAgent {
 
 const PUBLIC_AGENTS_KEY = ["public-registry-agents"] as const;
 
+interface AgentListRaw {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  avatar?: string | null;
+}
+
 /**
- * FE-049: Fetch public registry agents.
- * GET /api/v1/registry/agents
- * Optionally filter by search term and/or category.
+ * FE-049: Fetch agents available in this workspace.
+ * Uses /api/v1/agents which is accessible to all authenticated users (viewers included).
  */
 export function usePublicAgents(search?: string, category?: string) {
   return useQuery({
     queryKey: [...PUBLIC_AGENTS_KEY, search, category],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (category && category !== "All") params.set("category", category);
-      const qs = params.toString();
-      return apiGet<PublicAgent[]>(
-        `/api/v1/registry/agents${qs ? `?${qs}` : ""}`,
+    queryFn: async () => {
+      const res = await apiGet<{ items: AgentListRaw[] }>("/api/v1/agents");
+      let items: AgentListRaw[] = res.items ?? [];
+
+      // Client-side filtering
+      if (search) {
+        const q = search.toLowerCase();
+        items = items.filter(
+          (a) =>
+            a.name.toLowerCase().includes(q) ||
+            a.description.toLowerCase().includes(q),
+        );
+      }
+      if (category && category !== "All") {
+        items = items.filter((a) => a.category === category);
+      }
+
+      return items.map(
+        (a): PublicAgent => ({
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          category: a.category,
+          publisher: "mingai Platform",
+          satisfaction_rate: null,
+          install_count: 0,
+          capabilities: [],
+          is_installed: true,
+        }),
       );
     },
   });
