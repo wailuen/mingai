@@ -427,9 +427,18 @@ async def list_platform_templates_db(
     return items
 
 
-def _get_platform_tenant_id() -> str:
-    """Return PLATFORM_TENANT_ID env var, defaulting to 'platform'."""
-    return os.environ.get("PLATFORM_TENANT_ID", "platform")
+def _get_platform_tenant_id() -> Optional[str]:
+    """Return PLATFORM_TENANT_ID env var. Returns None if not set or not a valid UUID."""
+    val = os.environ.get("PLATFORM_TENANT_ID", "")
+    if not val:
+        return None
+    try:
+        import uuid as _uuid
+
+        _uuid.UUID(val)
+        return val
+    except ValueError:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -470,16 +479,19 @@ async def list_agent_templates(
 
     platform_tenant_id = _get_platform_tenant_id()
 
-    # 1. Platform templates from DB
-    platform_items = await list_platform_templates_db(
-        platform_tenant_id=platform_tenant_id,
-        status_filter=template_status,
-        category_filter=category,
-        plan_tier_filter=plan_tier,
-        is_platform_admin=is_platform_admin,
-        caller_plan=current_user.plan,
-        db=session,
-    )
+    # 1. Platform templates from DB (skip if PLATFORM_TENANT_ID not configured)
+    if platform_tenant_id is not None:
+        platform_items = await list_platform_templates_db(
+            platform_tenant_id=platform_tenant_id,
+            status_filter=template_status,
+            category_filter=category,
+            plan_tier_filter=plan_tier,
+            is_platform_admin=is_platform_admin,
+            caller_plan=current_user.plan,
+            db=session,
+        )
+    else:
+        platform_items = []
 
     # 2. Tenant-own templates from DB (skip for platform admin, they manage via /platform routes)
     if not is_platform_admin:

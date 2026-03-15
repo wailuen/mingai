@@ -398,7 +398,7 @@ async def list_miss_signals_db(tenant_id: str, limit: int, db) -> dict:
     result = await db.execute(
         text(
             "SELECT unresolved_term, SUM(occurrence_count) AS total_count, "
-            "MAX(last_seen_at) AS last_seen "
+            "MAX(updated_at) AS last_seen "
             "FROM glossary_miss_signals "
             "WHERE tenant_id = :tenant_id "
             "GROUP BY unresolved_term "

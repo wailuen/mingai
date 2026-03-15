@@ -48,8 +48,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Platform admin routes: require scope=platform
+  // Admin routes (/admin/*) are for Tenant Admins. Platform admins also allowed.
   if (request.nextUrl.pathname.startsWith("/admin")) {
+    const isTenantAdmin =
+      claims.scope === "tenant" && claims.roles.includes("tenant_admin");
+    if (!isTenantAdmin && claims.scope !== "platform") {
+      return NextResponse.redirect(new URL("/chat", request.url));
+    }
+  }
+
+  // Platform routes (/platform/*) require scope=platform
+  if (request.nextUrl.pathname.startsWith("/platform")) {
     if (claims.scope !== "platform") {
       return NextResponse.redirect(new URL("/chat", request.url));
     }
@@ -110,5 +119,11 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/chat/:path*", "/admin/:path*", "/settings/:path*", "/login"],
+  matcher: [
+    "/chat/:path*",
+    "/admin/:path*",
+    "/settings/:path*",
+    "/platform/:path*",
+    "/login",
+  ],
 };

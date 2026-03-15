@@ -20,7 +20,7 @@ export default function LoginPage() {
     try {
       const claims = await login({ email, password });
       if (claims.scope === "platform") {
-        router.push("/settings/dashboard");
+        router.push("/platform");
       } else if (claims.roles.includes("tenant_admin")) {
         router.push("/settings/dashboard");
       } else {

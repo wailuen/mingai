@@ -14,6 +14,8 @@ import {
   Cpu,
   AlertCircle,
   Shield,
+  Wrench,
+  DollarSign,
   type LucideIcon,
 } from "lucide-react";
 import type { JWTClaims } from "@/lib/auth";
@@ -59,6 +61,7 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Insights",
     items: [
+      { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
       { label: "Issues", href: "/settings/engineering-issues", icon: AlertCircle },
       { label: "Settings", href: "/settings/workspace", icon: Settings },
     ],
@@ -72,15 +75,24 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Operations",
     items: [
-      { label: "Dashboard", href: "/settings/dashboard", icon: LayoutDashboard },
-      { label: "Tenants", href: "/settings/tenants", icon: Building2 },
-      { label: "Issue Queue", href: "/settings/issue-queue", icon: AlertCircle },
+      { label: "Dashboard", href: "/platform", icon: LayoutDashboard },
+      { label: "Tenants", href: "/platform/tenants", icon: Building2 },
+      { label: "Issue Queue", href: "/platform/issues/queue", icon: AlertCircle },
     ],
   },
   {
     title: "Intelligence",
     items: [
-      { label: "LLM Profiles", href: "/settings/llm-profiles", icon: Cpu },
+      { label: "LLM Profiles", href: "/platform/llm-profiles", icon: Cpu },
+      { label: "Agent Templates", href: "/platform/agent-templates", icon: Bot },
+      { label: "Analytics", href: "/platform/analytics", icon: BarChart3 },
+      { label: "Tool Catalog", href: "/platform/tool-catalog", icon: Wrench },
+    ],
+  },
+  {
+    title: "Finance",
+    items: [
+      { label: "Cost Analytics", href: "/platform/analytics/cost", icon: DollarSign },
     ],
   },
 ];
@@ -98,7 +110,12 @@ function AdminSidebar({ sections }: { sections: NavSection[] }) {
           <div className="space-y-0.5 px-2">
             {section.items.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname.startsWith(item.href);
+              // Use exact match for root paths (e.g. /platform) to avoid
+              // every sub-route lighting up the Dashboard link.
+              const isActive =
+                item.href === "/platform" || item.href === "/"
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}

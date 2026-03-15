@@ -885,6 +885,8 @@ async def admin_issue_action_db(
     db,
 ) -> Optional[dict]:
     """Perform a state-machine action on an issue (API-020)."""
+    import json as _json
+
     if action not in _VALID_ADMIN_ACTIONS:
         raise ValueError(f"Invalid action: {action}")
 
@@ -892,20 +894,13 @@ async def admin_issue_action_db(
     now = datetime.now(timezone.utc).isoformat()
 
     # Build update with allowlisted columns only — no user-controlled strings in SQL
+    # Note: issue_reports has no assignee_id / duplicate_of columns; status + updated_at only.
     update_params: dict = {
         "id": issue_id,
         "tenant_id": tenant_id,
         "status": new_status,
     }
     set_parts = ["status = :status", "updated_at = NOW()"]
-
-    if assignee_id and action == "assign":
-        set_parts.append("assignee_id = :assignee_id")
-        update_params["assignee_id"] = assignee_id
-
-    if duplicate_of and action == "close_duplicate":
-        set_parts.append("duplicate_of = :duplicate_of")
-        update_params["duplicate_of"] = duplicate_of
 
     set_clause = ", ".join(set_parts)
     result = await db.execute(
@@ -918,17 +913,35 @@ async def admin_issue_action_db(
     if (result.rowcount or 0) == 0:
         return None
 
+    # Build event data payload — data column is jsonb, must serialize + CAST
+    event_data: dict = {"action": action}
+    if note:
+        event_data["note"] = note
+    if assignee_id and action == "assign":
+        event_data["assignee_id"] = assignee_id
+    if duplicate_of and action == "close_duplicate":
+        event_data["duplicate_of"] = duplicate_of
+
+    # Validate actor_id is a real UUID before inserting — column is uuid type and nullable
+    try:
+        uuid.UUID(actor_id)
+        safe_actor_id: Optional[str] = actor_id
+    except (ValueError, AttributeError):
+        safe_actor_id = None
+
     event_id = str(uuid.uuid4())
     await db.execute(
         text(
-            "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, data) "
-            "VALUES (:id, :issue_id, :tenant_id, :event_type, :data)"
+            "INSERT INTO issue_report_events (id, issue_id, tenant_id, event_type, actor_id, data) "
+            "VALUES (:id, :issue_id, :tenant_id, :event_type, :actor_id, CAST(:data AS jsonb))"
         ),
         {
             "id": event_id,
             "issue_id": issue_id,
-            "user_id": actor_id,
-            "content": f"Action: {action}" + (f" — {note}" if note else ""),
+            "tenant_id": tenant_id,
+            "event_type": "admin_action",
+            "actor_id": safe_actor_id,
+            "data": _json.dumps(event_data),
         },
     )
     await db.commit()
@@ -1345,8 +1358,14 @@ async def platform_issue_stats(
 async def platform_list_issues(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[str] = Query(None, alias="status", max_length=50),
-    severity_filter: Optional[str] = Query(None, alias="severity", max_length=10),
+    status_filter: Optional[str] = Query(
+        None,
+        alias="status",
+        pattern=r"^(open|triaged|assigned|escalated|in_progress|routed|awaiting_info|resolved|closed)$",
+    ),
+    severity_filter: Optional[str] = Query(
+        None, alias="severity", pattern=r"^(P0|P1|P2|P3|P4)$"
+    ),
     tenant_id_filter: Optional[str] = Query(None, alias="tenant_id", max_length=64),
     sort_by: str = Query("created_at", max_length=20),
     current_user: CurrentUser = Depends(require_platform_admin),
@@ -1362,6 +1381,86 @@ async def platform_list_issues(
         sort_by=sort_by,
         db=session,
     )
+
+
+@platform_issues_router.get("/queue")
+async def platform_issue_queue(
+    filter: str = Query(
+        "incoming", pattern=r"^(incoming|triaged|in_progress|sla_at_risk|resolved)$"
+    ),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-021b: Platform admin issue queue — filtered by workflow stage.
+
+    Filter tabs:
+      incoming    → status 'open' (new, untriaged)
+      triaged     → status 'triaged'
+      in_progress → status 'in_progress'
+      sla_at_risk → open issues (all open issues are SLA-tracked)
+      resolved    → status 'resolved' OR 'closed'
+    """
+    _FILTER_STATUS_MAP = {
+        "incoming": ["open"],
+        "triaged": ["triaged"],
+        "in_progress": ["in_progress", "routed"],
+        "sla_at_risk": ["open"],  # all open issues are at risk until resolved
+        "resolved": ["resolved", "closed"],
+    }
+    statuses = _FILTER_STATUS_MAP.get(filter, ["open"])
+
+    # Count per tab using a single query
+    counts_sql = """
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'open') AS incoming,
+            COUNT(*) FILTER (WHERE status = 'triaged') AS triaged,
+            COUNT(*) FILTER (WHERE status IN ('in_progress', 'routed')) AS in_progress,
+            COUNT(*) FILTER (WHERE status = 'open') AS sla_at_risk,
+            COUNT(*) FILTER (WHERE status IN ('resolved', 'closed')) AS resolved
+        FROM issue_reports
+    """
+    counts_result = await session.execute(text(counts_sql))
+    counts_row = counts_result.fetchone()
+    counts = {
+        "incoming": counts_row[0] or 0,
+        "triaged": counts_row[1] or 0,
+        "in_progress": counts_row[2] or 0,
+        "sla_at_risk": counts_row[3] or 0,
+        "resolved": counts_row[4] or 0,
+    }
+
+    # Fetch items for the selected filter
+    placeholders = ", ".join(f":s{i}" for i in range(len(statuses)))
+    params = {f"s{i}": s for i, s in enumerate(statuses)}
+    items_sql = text(
+        "SELECT ir.id, ir.tenant_id, ir.reporter_id, ir.issue_type, ir.description, "
+        "ir.status, ir.severity, ir.created_at, "
+        "t.name AS tenant_name, u.name AS reporter_name "
+        "FROM issue_reports ir "
+        "LEFT JOIN tenants t ON t.id = ir.tenant_id "
+        "LEFT JOIN users u ON u.id = ir.reporter_id "
+        f"WHERE ir.status IN ({placeholders}) "
+        "ORDER BY ir.created_at DESC LIMIT 100"
+    )
+    rows_result = await session.execute(items_sql, params)
+    items = [
+        {
+            "id": str(r[0]),
+            "tenant_name": r[8] or str(r[1]),
+            "title": r[4] or r[3],
+            "description": r[4] or "",
+            "status": r[5],
+            "severity": r[6],
+            "reporter": {"name": r[9]} if r[9] else None,
+            "assigned_to": None,
+            "sla_at_risk": r[5] == "open",
+            "created_at": str(r[7]),
+        }
+        for r in rows_result.fetchall()
+    ]
+
+    return {"items": items, "counts": counts}
 
 
 @platform_issues_router.patch("/{issue_id}")

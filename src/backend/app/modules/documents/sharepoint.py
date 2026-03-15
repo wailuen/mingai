@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -480,7 +480,7 @@ async def list_sync_failures_db(
     rows_result = await db.execute(
         text(
             "SELECT sj.id, sj.integration_id, sj.error_message, sj.created_at, "
-            "i.name AS source_name "
+            "i.provider AS source_name "
             "FROM sync_jobs sj "
             "LEFT JOIN integrations i ON i.id = sj.integration_id "
             f"WHERE {base_where} "
@@ -526,9 +526,11 @@ async def list_sync_failures_db(
 
 @admin_sync_router.get("/sync/failures")
 async def list_sync_failures(
-    source_id: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
+    source_id: Optional[str] = Query(
+        None, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     current_user: CurrentUser = Depends(require_tenant_admin),
     db: AsyncSession = Depends(get_async_session),
 ):
