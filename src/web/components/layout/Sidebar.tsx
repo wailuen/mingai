@@ -54,7 +54,7 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
       },
       { label: "Documents", href: "/settings/knowledge-base", icon: FileText },
       { label: "Users", href: "/settings/users", icon: Users },
-      { label: "Agents", href: "/settings/agents", icon: Bot },
+      { label: "Agents", href: "/admin/agents", icon: Bot },
       { label: "Glossary", href: "/settings/glossary", icon: BookOpen },
     ],
   },
@@ -62,7 +62,11 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
     title: "Insights",
     items: [
       { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-      { label: "Issues", href: "/settings/engineering-issues", icon: AlertCircle },
+      {
+        label: "Issues",
+        href: "/settings/engineering-issues",
+        icon: AlertCircle,
+      },
       { label: "Settings", href: "/settings/workspace", icon: Settings },
     ],
   },
@@ -77,14 +81,22 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/platform", icon: LayoutDashboard },
       { label: "Tenants", href: "/platform/tenants", icon: Building2 },
-      { label: "Issue Queue", href: "/platform/issues/queue", icon: AlertCircle },
+      {
+        label: "Issue Queue",
+        href: "/platform/issues/queue",
+        icon: AlertCircle,
+      },
     ],
   },
   {
     title: "Intelligence",
     items: [
       { label: "LLM Profiles", href: "/platform/llm-profiles", icon: Cpu },
-      { label: "Agent Templates", href: "/platform/agent-templates", icon: Bot },
+      {
+        label: "Agent Templates",
+        href: "/platform/agent-templates",
+        icon: Bot,
+      },
       { label: "Analytics", href: "/platform/analytics", icon: BarChart3 },
       { label: "Tool Catalog", href: "/platform/tool-catalog", icon: Wrench },
     ],
@@ -92,7 +104,11 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Finance",
     items: [
-      { label: "Cost Analytics", href: "/platform/analytics/cost", icon: DollarSign },
+      {
+        label: "Cost Analytics",
+        href: "/platform/analytics/cost",
+        icon: DollarSign,
+      },
     ],
   },
 ];
