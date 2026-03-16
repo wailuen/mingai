@@ -1,5 +1,5 @@
 """
-Platform Cost Analytics API (P2LLM-012).
+Platform Cost Analytics API (P2LLM-012, PA-016).
 
 Endpoints (require platform admin):
     GET /platform/tenants/{id}/cost-usage
@@ -9,16 +9,24 @@ Endpoints (require platform admin):
     GET /platform/cost-analytics/summary
         Cross-tenant cost aggregates sorted by cost_usd DESC
 
-All queries use direct SQL against usage_events. Platform admin bypasses RLS
-via app.user_role = 'platform_admin' setting.
+    GET /platform/cost-analytics/export
+        ?month=YYYY-MM  OR  ?from=YYYY-MM-DD&to=YYYY-MM-DD
+        Returns: text/csv billing reconciliation export (PA-016)
+
+All queries use direct SQL against usage_events / cost_summary_daily.
+Platform admin bypasses RLS via app.user_role = 'platform_admin' setting.
 """
+import calendar
+import csv
+import io
 import re
 import uuid as _uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +45,26 @@ _VALID_PERIODS = frozenset({"7d", "30d", "90d"})
 
 # ISO date pattern YYYY-MM-DD
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# ISO month pattern YYYY-MM (for billing export)
+_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+
+# Characters that trigger formula interpretation in spreadsheet applications.
+# Prefix with "'" to neutralise injection when writing CSV fields.
+_CSV_INJECTION_CHARS = frozenset({"=", "+", "-", "@", "\t", "\r", "\n"})
+
+
+def _sanitize_csv_field(value: str) -> str:
+    """
+    Prevent spreadsheet formula injection in CSV exports.
+
+    Leading characters that spreadsheet applications (Excel, Google Sheets)
+    treat as formula triggers are prefixed with a single-quote so the cell
+    is interpreted as plain text.
+    """
+    if value and value[0] in _CSV_INJECTION_CHARS:
+        return "'" + value
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -254,8 +282,9 @@ async def get_cost_analytics_summary(
     """
     start_dt, end_dt = _parse_period(period, None, None)
 
-    # Set platform admin role for RLS bypass
+    # Set platform admin role + platform scope for RLS bypass
     await db.execute(text("SELECT set_config('app.user_role', 'platform_admin', true)"))
+    await db.execute(text("SELECT set_config('app.current_scope', 'platform', true)"))
 
     result = await db.execute(
         text(
@@ -296,3 +325,176 @@ async def get_cost_analytics_summary(
         "total_cost_usd": sum(t["cost_usd"] or 0 for t in tenants),
         "total_calls": sum(t["call_count"] for t in tenants),
     }
+
+
+# ---------------------------------------------------------------------------
+# PA-016: Billing reconciliation export
+# ---------------------------------------------------------------------------
+
+
+def _parse_export_period(
+    month: Optional[str],
+    from_date: Optional[str],
+    to_date: Optional[str],
+) -> tuple[date, date, str]:
+    """
+    Parse the billing export period into (start_date, end_date, filename_label).
+
+    Priority: month > from/to > current calendar month.
+
+    Returns:
+        Tuple of (start_date, end_date, period_label) where period_label is used
+        as the suffix in the CSV filename (e.g. "2026-03" or "2026-03-01_2026-03-16").
+    """
+    if month is not None:
+        if not _MONTH_RE.match(month):
+            raise HTTPException(
+                status_code=422,
+                detail="'month' must be in YYYY-MM format.",
+            )
+        try:
+            year, mon = int(month[:4]), int(month[5:7])
+            start = date(year, mon, 1)
+            last_day = calendar.monthrange(year, mon)[1]
+            end = date(year, mon, last_day)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"Invalid month: {exc}"
+            ) from exc
+        return start, end, month
+
+    if from_date or to_date:
+        if not from_date or not to_date:
+            raise HTTPException(
+                status_code=422,
+                detail="Both 'from' and 'to' must be provided together.",
+            )
+        if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
+            raise HTTPException(
+                status_code=422,
+                detail="'from' and 'to' must be ISO dates (YYYY-MM-DD).",
+            )
+        try:
+            start = date.fromisoformat(from_date)
+            end = date.fromisoformat(to_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid date: {exc}") from exc
+        if start > end:
+            raise HTTPException(status_code=422, detail="'from' must be before 'to'.")
+        return start, end, f"{from_date}_{to_date}"
+
+    # Default: current calendar month (UTC)
+    today = datetime.now(timezone.utc).date()
+    start = date(today.year, today.month, 1)
+    last_day = calendar.monthrange(today.year, today.month)[1]
+    end = date(today.year, today.month, last_day)
+    return start, end, today.strftime("%Y-%m")
+
+
+@router.get("/platform/cost-analytics/export")
+async def export_billing_csv(
+    month: Optional[str] = Query(
+        None, description="YYYY-MM — export full calendar month"
+    ),
+    from_date: Optional[str] = Query(None, alias="from", description="YYYY-MM-DD"),
+    to_date: Optional[str] = Query(None, alias="to", description="YYYY-MM-DD"),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+) -> Response:
+    """
+    Export per-tenant billing reconciliation data as CSV (PA-016).
+
+    Aggregates cost_summary_daily for every active tenant over the given period.
+
+    Columns: tenant_id, tenant_name, plan_tier, total_tokens_in, total_tokens_out,
+             total_cost_usd, gross_margin_pct, plan_revenue_usd, period_start, period_end.
+
+    Period: month=YYYY-MM  OR  from=YYYY-MM-DD&to=YYYY-MM-DD  (defaults to current month).
+    Response: text/csv with Content-Disposition: attachment.
+    Requires platform_admin scope.
+    """
+    start_date, end_date, period_label = _parse_export_period(month, from_date, to_date)
+
+    await db.execute(text("SELECT set_config('app.user_role', 'platform_admin', true)"))
+    await db.execute(text("SELECT set_config('app.current_scope', 'platform', true)"))
+
+    result = await db.execute(
+        text(
+            "SELECT "
+            "  csd.tenant_id, "
+            "  t.name AS tenant_name, "
+            "  t.plan AS plan_tier, "
+            "  COALESCE(SUM(csd.total_tokens_in), 0) AS total_tokens_in, "
+            "  COALESCE(SUM(csd.total_tokens_out), 0) AS total_tokens_out, "
+            "  COALESCE(SUM(csd.total_cost_usd), 0.0) AS total_cost_usd, "
+            # Gross margin is recomputed from period-aggregate components so that
+            # multi-day ranges are correctly weighted. NULLIF guards against any
+            # race-condition division-by-zero even though the CASE already requires sum > 0.
+            "  CASE "
+            "    WHEN COALESCE(SUM(csd.plan_revenue_usd), 0) > 0 "
+            "    THEN ROUND(("
+            "      COALESCE(SUM(csd.plan_revenue_usd), 0) "
+            "      - COALESCE(SUM(csd.total_cost_usd), 0) "
+            "      - COALESCE(SUM(csd.infra_cost_estimate_usd), 0)"
+            "    ) / NULLIF(SUM(csd.plan_revenue_usd), 0) * 100, 2) "
+            "    ELSE NULL "
+            "  END AS gross_margin_pct, "
+            "  COALESCE(SUM(csd.plan_revenue_usd), 0.0) AS plan_revenue_usd "
+            "FROM cost_summary_daily csd "
+            "LEFT JOIN tenants t ON t.id = csd.tenant_id "
+            "WHERE csd.date >= :start_date AND csd.date <= :end_date "
+            "GROUP BY csd.tenant_id, t.name, t.plan "
+            "ORDER BY SUM(csd.total_cost_usd) DESC NULLS LAST"
+        ),
+        {"start_date": start_date, "end_date": end_date},
+    )
+    rows = result.fetchall()
+
+    # Build CSV in-memory — csv.writer handles quoting of names with commas.
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+    writer.writerow(
+        [
+            "tenant_id",
+            "tenant_name",
+            "plan_tier",
+            "total_tokens_in",
+            "total_tokens_out",
+            "total_cost_usd",
+            "gross_margin_pct",
+            "plan_revenue_usd",
+            "period_start",
+            "period_end",
+        ]
+    )
+    for r in rows:
+        writer.writerow(
+            [
+                str(r[0]),
+                _sanitize_csv_field(r[1] or ""),
+                _sanitize_csv_field(r[2] or ""),
+                int(r[3]),
+                int(r[4]),
+                f"{float(r[5]):.6f}",
+                f"{float(r[6]):.2f}" if r[6] is not None else "",
+                f"{float(r[7]):.2f}" if r[7] is not None else "",
+                start_date.isoformat(),
+                end_date.isoformat(),
+            ]
+        )
+
+    csv_content = output.getvalue()
+    filename = f"billing-{period_label}.csv"
+
+    logger.info(
+        "billing_export_generated",
+        actor_user_id=current_user.id,
+        period_label=period_label,
+        tenant_count=len(rows),
+    )
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
