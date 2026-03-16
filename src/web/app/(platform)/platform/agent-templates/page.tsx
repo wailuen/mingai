@@ -9,12 +9,13 @@ import { TemplateList } from "./elements/TemplateList";
 import { TemplateAuthoringForm } from "./elements/TemplateAuthoringForm";
 import type { AgentTemplateAdmin } from "@/lib/hooks/useAgentTemplatesAdmin";
 
-type StatusTab = "all" | "published" | "draft";
+type StatusTab = "all" | "published" | "draft" | "deprecated";
 
 const TABS: { value: StatusTab; label: string }[] = [
   { value: "all", label: "All Templates" },
   { value: "published", label: "Published" },
   { value: "draft", label: "Draft" },
+  { value: "deprecated", label: "Deprecated" },
 ];
 
 /**

@@ -27,7 +27,17 @@ export function AgentCard({ template, onPreview, onDeploy }: AgentCardProps) {
       </div>
 
       {/* Description */}
-      <p className="text-sm leading-relaxed text-text-muted">
+      {/* Category chip */}
+      {template.category && (
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-badge bg-bg-elevated px-2 py-0.5 text-[11px] text-text-muted">
+            {template.category}
+          </span>
+        </div>
+      )}
+
+      {/* Description */}
+      <p className="line-clamp-2 text-sm leading-relaxed text-text-muted">
         {template.description ?? "No description available."}
       </p>
 

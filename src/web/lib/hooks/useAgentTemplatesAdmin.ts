@@ -10,50 +10,97 @@ import { apiGet, apiPost, apiPatch } from "@/lib/api";
 export interface AgentTemplateVariable {
   name: string;
   type: "text" | "number" | "select";
+  label: string;
   required: boolean;
+  options?: string[];
 }
 
-export interface AgentTemplateGuardrails {
-  blocked_topics: string;
-  confidence_threshold: number;
+export interface GuardrailRule {
+  pattern: string;
+  action: "block" | "warn";
+  reason: string;
 }
 
 export interface AgentTemplateAdmin {
   id: string;
   name: string;
-  category: string;
-  status: "published" | "draft";
+  description: string | null;
+  category: string | null;
+  status: "Draft" | "Published" | "Deprecated";
   version: number;
-  satisfaction_rate: number | null;
-  tenant_adoption_count: number;
   system_prompt: string;
-  variables: AgentTemplateVariable[];
-  guardrails: AgentTemplateGuardrails;
+  variable_definitions: AgentTemplateVariable[];
+  guardrails: GuardrailRule[];
+  confidence_threshold: number | null;
+  changelog: string | null;
+  parent_id: string | null;
+  created_by: string | null;
   created_at: string;
-  updated_at?: string;
+  updated_at: string | null;
+}
+
+/** Response wrapper for paginated list endpoint */
+export interface AgentTemplateListResponse {
+  items: AgentTemplateAdmin[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface AgentTemplateVersion {
+  id: string;
   version: number;
-  changelog: string;
-  published_at: string;
-  is_current: boolean;
+  status: string;
+  changelog: string | null;
+  system_prompt_preview: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface CreateAgentTemplatePayload {
   name: string;
-  category: string;
+  description?: string;
+  category?: string;
   system_prompt: string;
-  variables: AgentTemplateVariable[];
-  guardrails: AgentTemplateGuardrails;
+  variable_definitions?: AgentTemplateVariable[];
+  guardrails?: GuardrailRule[];
+  confidence_threshold?: number;
 }
 
 export interface UpdateAgentTemplatePayload {
   name?: string;
+  description?: string;
   category?: string;
   system_prompt?: string;
-  variables?: AgentTemplateVariable[];
-  guardrails?: AgentTemplateGuardrails;
+  variable_definitions?: AgentTemplateVariable[];
+  guardrails?: GuardrailRule[];
+  confidence_threshold?: number;
+  status?: "Published" | "Deprecated";
+  changelog?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Test Harness types (PA-021)
+// ---------------------------------------------------------------------------
+
+export interface TestTemplatePayload {
+  variable_values: Record<string, string>;
+  test_prompts: string[];
+}
+
+export interface TemplateTestResult {
+  prompt: string;
+  response: string;
+  tokens_in: number;
+  tokens_out: number;
+  latency_ms: number;
+  guardrail_triggered: boolean;
+  guardrail_reason: string;
+  timed_out: boolean;
+}
+
+export interface TemplateTestResponse {
+  tests: TemplateTestResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -63,11 +110,21 @@ export interface UpdateAgentTemplatePayload {
 const TEMPLATES_KEY = ["platform-agent-templates"] as const;
 
 /** GET /api/v1/platform/agent-templates — list all templates across tenants */
-export function useAgentTemplatesAdmin() {
+export function useAgentTemplatesAdmin(statusFilter?: string) {
+  const params = new URLSearchParams({ page: "1", page_size: "100" });
+  if (statusFilter && statusFilter !== "all") {
+    // Backend expects title-case status values
+    const titleCase =
+      statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1);
+    params.set("status", titleCase);
+  }
+
   return useQuery({
-    queryKey: TEMPLATES_KEY,
+    queryKey: [...TEMPLATES_KEY, statusFilter ?? "all"],
     queryFn: () =>
-      apiGet<AgentTemplateAdmin[]>("/api/v1/platform/agent-templates"),
+      apiGet<AgentTemplateListResponse>(
+        `/api/v1/platform/agent-templates?${params.toString()}`,
+      ),
   });
 }
 
@@ -84,7 +141,7 @@ export function useCreateAgentTemplate() {
   });
 }
 
-/** PATCH /api/v1/platform/agent-templates/:id — update template */
+/** PATCH /api/v1/platform/agent-templates/:id — update template fields or status */
 export function useUpdateAgentTemplate() {
   const queryClient = useQueryClient();
 
@@ -106,18 +163,57 @@ export function useUpdateAgentTemplate() {
   });
 }
 
-/** POST /api/v1/platform/agent-templates/:id/publish — publish template */
+/**
+ * Publish a template: PATCH with status=Published and changelog.
+ * Uses the same PATCH endpoint — no separate /publish route on the backend.
+ */
 export function usePublishAgentTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, changelog }: { id: string; changelog: string }) =>
+      apiPatch<AgentTemplateAdmin>(`/api/v1/platform/agent-templates/${id}`, {
+        status: "Published",
+        changelog,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+  });
+}
+
+/**
+ * Deprecate a template: PATCH with status=Deprecated.
+ */
+export function useDeprecateAgentTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiPatch<AgentTemplateAdmin>(`/api/v1/platform/agent-templates/${id}`, {
+        status: "Deprecated",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+  });
+}
+
+/** POST /api/v1/platform/agent-templates/:id/new-version — create draft version */
+export function useCreateTemplateVersion() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) =>
       apiPost<AgentTemplateAdmin>(
-        `/api/v1/platform/agent-templates/${id}/publish`,
+        `/api/v1/platform/agent-templates/${id}/new-version`,
         {},
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+      queryClient.invalidateQueries({
+        queryKey: ["platform-agent-template-versions"],
+      });
     },
   });
 }
@@ -126,10 +222,29 @@ export function usePublishAgentTemplate() {
 export function useAgentTemplateVersions(id: string | null) {
   return useQuery({
     queryKey: ["platform-agent-template-versions", id],
-    queryFn: () =>
-      apiGet<AgentTemplateVersion[]>(
+    queryFn: async () => {
+      const data = await apiGet<{ versions: AgentTemplateVersion[] }>(
         `/api/v1/platform/agent-templates/${id}/versions`,
-      ),
+      );
+      return data.versions;
+    },
     enabled: !!id,
+  });
+}
+
+/** POST /api/v1/platform/agent-templates/:id/test — test harness */
+export function useTestAgentTemplate() {
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: TestTemplatePayload;
+    }) =>
+      apiPost<TemplateTestResponse>(
+        `/api/v1/platform/agent-templates/${id}/test`,
+        payload,
+      ),
   });
 }

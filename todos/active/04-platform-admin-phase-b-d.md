@@ -452,18 +452,20 @@ Phase A (Platform Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### PA-023: Tenant template instance deployment API
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
 **Effort**: 6h
 **Depends on**: PA-020, PA-019
+**Completed**: 2026-03-16
 **Description**: `POST /admin/agents` — tenant admin deploys an agent from a template. Request: `{ "template_id": UUID, "name": "Our HR Bot", "variable_values": { "role": "HR Manager" }, "kb_ids": [UUID], "description": "..." }`. Creates agent instance in `agent_cards` table with `template_id` FK, resolved system_prompt (variables substituted), no system_prompt override allowed. `GET /admin/agents` lists deployed agents with version, satisfaction summary, status.
+**Evidence**: `deploy_from_library` route extended with agent_templates priority lookup. `_get_agent_template_by_id` helper queries agent_templates with UUID guard. `_validate_kb_ids_for_tenant` validates kb_ids against integrations table. `deploy_from_library_db` stores template_name with unconditional commit. `list_workspace_agents_db` returns template_id + template_name. Migration v022 adds template_name column to agent_cards. 13 unit tests in test_agent_deployment.py passing. 1621 total unit tests passing. Committed: 7d3c178.
 **Acceptance criteria**:
 
-- [ ] POST validates all required variables in template are provided
-- [ ] System_prompt stored in `agent_cards.system_prompt` with variables substituted (not template references)
-- [ ] `template_id` stored in `agent_cards` for future version tracking (PA-024)
-- [ ] GET `/admin/agents` returns: name, template_name, version, status, satisfaction_rate, created_at
-- [ ] `require_tenant_admin` on both routes
-- [ ] `kb_ids` validated: each KB must belong to calling tenant (403 if cross-tenant)
+- [x] POST validates all required variables in template are provided
+- [x] System_prompt stored in `agent_cards.system_prompt` with variables substituted (not template references)
+- [x] `template_id` stored in `agent_cards` for future version tracking (PA-024)
+- [x] GET `/admin/agents` returns: name, template_name, version, status, satisfaction_rate, created_at
+- [x] `require_tenant_admin` on both routes
+- [x] `kb_ids` validated: each KB must belong to calling tenant (403 if cross-tenant)
 
 ---
 

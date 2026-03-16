@@ -20,7 +20,10 @@ export function VariableDefinitions({
   onChange,
 }: VariableDefinitionsProps) {
   function handleAdd() {
-    onChange([...variables, { name: "", type: "text", required: false }]);
+    onChange([
+      ...variables,
+      { name: "", type: "text", label: "", required: false },
+    ]);
   }
 
   function handleRemove(index: number) {
@@ -49,44 +52,54 @@ export function VariableDefinitions({
           {variables.map((variable, index) => (
             <div
               key={index}
-              className="flex items-center gap-2 rounded-control border border-border bg-bg-elevated p-2"
+              className="flex items-start gap-2 rounded-control border border-border bg-bg-elevated p-2"
             >
-              <input
-                type="text"
-                value={variable.name}
-                onChange={(e) => handleUpdate(index, "name", e.target.value)}
-                placeholder="variable_name"
-                className="w-36 rounded-control border border-border bg-bg-base px-2 py-1 font-mono text-xs text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
-              />
-
-              <select
-                value={variable.type}
-                onChange={(e) => handleUpdate(index, "type", e.target.value)}
-                className="rounded-control border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
-              >
-                {TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-
-              <label className="flex items-center gap-1 text-xs text-text-muted">
+              <div className="flex flex-1 flex-wrap items-center gap-2">
                 <input
-                  type="checkbox"
-                  checked={variable.required}
-                  onChange={(e) =>
-                    handleUpdate(index, "required", e.target.checked)
-                  }
-                  className="accent-accent"
+                  type="text"
+                  value={variable.name}
+                  onChange={(e) => handleUpdate(index, "name", e.target.value)}
+                  placeholder="variable_name"
+                  className="w-28 rounded-control border border-border bg-bg-base px-2 py-1 font-mono text-xs text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
-                Required
-              </label>
+
+                <input
+                  type="text"
+                  value={variable.label}
+                  onChange={(e) => handleUpdate(index, "label", e.target.value)}
+                  placeholder="Display label"
+                  className="w-32 rounded-control border border-border bg-bg-base px-2 py-1 text-xs text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                />
+
+                <select
+                  value={variable.type}
+                  onChange={(e) => handleUpdate(index, "type", e.target.value)}
+                  className="rounded-control border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
+                >
+                  {TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="flex items-center gap-1 text-xs text-text-muted">
+                  <input
+                    type="checkbox"
+                    checked={variable.required}
+                    onChange={(e) =>
+                      handleUpdate(index, "required", e.target.checked)
+                    }
+                    className="accent-accent"
+                  />
+                  Required
+                </label>
+              </div>
 
               <button
                 type="button"
                 onClick={() => handleRemove(index)}
-                className="ml-auto flex h-6 w-6 items-center justify-center rounded-control text-text-faint transition-colors hover:bg-alert-dim hover:text-alert"
+                className="mt-1 flex h-6 w-6 items-center justify-center rounded-control text-text-faint transition-colors hover:bg-alert-dim hover:text-alert"
               >
                 <Trash2 size={12} />
               </button>

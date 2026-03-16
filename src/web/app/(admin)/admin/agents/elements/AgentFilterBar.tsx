@@ -1,6 +1,15 @@
 "use client";
 
-const CATEGORIES = ["All", "HR", "IT", "Procurement", "Onboarding"] as const;
+const CATEGORIES = [
+  "All",
+  "HR",
+  "IT",
+  "Procurement",
+  "Onboarding",
+  "Legal",
+  "Finance",
+  "Custom",
+] as const;
 
 interface AgentFilterBarProps {
   selected: string;

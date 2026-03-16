@@ -9,16 +9,15 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Pencil, Upload } from "lucide-react";
+import { ArrowUpDown, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useAgentTemplatesAdmin,
-  usePublishAgentTemplate,
   type AgentTemplateAdmin,
 } from "@/lib/hooks/useAgentTemplatesAdmin";
 
 interface TemplateListProps {
-  statusFilter: "all" | "published" | "draft";
+  statusFilter: "all" | "published" | "draft" | "deprecated";
   onEdit: (template: AgentTemplateAdmin) => void;
 }
 
@@ -27,7 +26,7 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <tr key={i} className="border-b border-border-faint">
-          {Array.from({ length: 7 }).map((__, j) => (
+          {Array.from({ length: 6 }).map((__, j) => (
             <td key={j} className="px-3.5 py-3">
               <div className="h-4 w-20 animate-pulse rounded-badge bg-bg-elevated" />
             </td>
@@ -66,11 +65,17 @@ function SortHeader({ label, canSort, sorted, onClick }: SortHeaderProps) {
   );
 }
 
-function StatusBadge({ status }: { status: "published" | "draft" }) {
+function StatusBadge({
+  status,
+}: {
+  status: "Draft" | "Published" | "Deprecated";
+}) {
   const styles =
-    status === "published"
+    status === "Published"
       ? "bg-accent-dim text-accent"
-      : "bg-warn-dim text-warn";
+      : status === "Deprecated"
+        ? "bg-alert-dim text-alert"
+        : "bg-warn-dim text-warn";
 
   return (
     <span
@@ -85,15 +90,10 @@ function StatusBadge({ status }: { status: "published" | "draft" }) {
 }
 
 export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
-  const { data, isPending, error } = useAgentTemplatesAdmin();
-  const publishMutation = usePublishAgentTemplate();
+  const { data, isPending, error } = useAgentTemplatesAdmin(statusFilter);
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const filteredData = useMemo(() => {
-    if (!data) return [];
-    if (statusFilter === "all") return data;
-    return data.filter((t) => t.status === statusFilter);
-  }, [data, statusFilter]);
+  const items = useMemo(() => data?.items ?? [], [data]);
 
   const columns = useMemo<ColumnDef<AgentTemplateAdmin>[]>(
     () => [
@@ -112,7 +112,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
         header: "Category",
         cell: (info) => (
           <span className="text-[13px] text-text-muted">
-            {info.getValue<string>()}
+            {info.getValue<string | null>() ?? "--"}
           </span>
         ),
         enableSorting: true,
@@ -131,38 +131,28 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
         accessorKey: "status",
         header: "Status",
         cell: (info) => (
-          <StatusBadge status={info.getValue<"published" | "draft">()} />
+          <StatusBadge
+            status={info.getValue<"Draft" | "Published" | "Deprecated">()}
+          />
         ),
         enableSorting: true,
       },
       {
-        accessorKey: "satisfaction_rate",
-        header: "Satisfaction",
+        accessorKey: "created_at",
+        header: "Created",
         cell: (info) => {
-          const value = info.getValue<number | null>();
-          if (value === null) {
-            return (
-              <span className="font-mono text-data-value text-text-faint">
-                --
-              </span>
-            );
-          }
+          const val = info.getValue<string | null>();
+          if (!val) return <span className="text-text-faint">--</span>;
           return (
-            <span className="font-mono text-data-value text-text-primary">
-              {value.toFixed(1)}%
+            <span className="font-mono text-[11px] text-text-faint">
+              {new Date(val).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
             </span>
           );
         },
-        enableSorting: true,
-      },
-      {
-        accessorKey: "tenant_adoption_count",
-        header: "Adoption",
-        cell: (info) => (
-          <span className="font-mono text-data-value text-text-primary">
-            {info.getValue<number>()}
-          </span>
-        ),
         enableSorting: true,
       },
       {
@@ -183,31 +173,17 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
                 <Pencil size={11} />
                 Edit
               </button>
-              {row.status === "draft" && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    publishMutation.mutate(row.id);
-                  }}
-                  disabled={publishMutation.isPending}
-                  className="inline-flex items-center gap-1 rounded-control border border-accent/30 px-2 py-1 text-[11px] text-accent transition-colors hover:bg-accent-dim disabled:opacity-30"
-                >
-                  <Upload size={11} />
-                  Publish
-                </button>
-              )}
             </div>
           );
         },
         enableSorting: false,
       },
     ],
-    [onEdit, publishMutation],
+    [onEdit],
   );
 
   const table = useReactTable({
-    data: filteredData,
+    data: items,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -254,7 +230,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
           <tbody>
             {isPending && <SkeletonRows />}
 
-            {data && filteredData.length === 0 && (
+            {data && items.length === 0 && (
               <tr>
                 <td
                   colSpan={columns.length}
@@ -282,10 +258,10 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
         </table>
       </div>
 
-      {data && filteredData.length > 0 && (
+      {data && items.length > 0 && (
         <div className="border-t border-border px-5 py-2.5">
           <p className="font-mono text-[11px] text-text-faint">
-            Showing {filteredData.length} of {data.length} templates
+            Showing {items.length} of {data.total} templates
           </p>
         </div>
       )}

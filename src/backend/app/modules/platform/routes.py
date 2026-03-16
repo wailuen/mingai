@@ -41,6 +41,7 @@ from app.core.dependencies import CurrentUser, get_current_user, require_platfor
 from app.core.redis_client import build_redis_key, get_redis
 from app.core.session import get_async_session
 from app.modules.platform.health_score import calculate_health_score
+from app.modules.platform.performance import run_template_performance_batch
 
 logger = structlog.get_logger()
 
@@ -2850,3 +2851,63 @@ async def get_tenant_health(
         "current": current,
         "trend": trend,
     }
+
+
+# ---------------------------------------------------------------------------
+# PA-025: Template performance batch trigger
+# ---------------------------------------------------------------------------
+
+
+class TemplatePerfBatchRequest(BaseModel):
+    target_date: Optional[str] = Field(
+        None,
+        description="ISO date (YYYY-MM-DD) to compute metrics for. Defaults to yesterday.",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    )
+
+
+@router.post(
+    "/platform/batch/template-performance",
+    status_code=200,
+    tags=["platform"],
+    summary="Run template performance aggregation for a given date (PA-025)",
+)
+async def run_template_performance(
+    body: TemplatePerfBatchRequest = TemplatePerfBatchRequest(),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """
+    Manually trigger the nightly template performance batch for a given date.
+
+    Computes satisfaction_rate, guardrail_trigger_rate, failure_count, and
+    session_count per template and upserts into template_performance_daily.
+
+    `target_date` defaults to yesterday. Idempotent — safe to re-run.
+    """
+    from datetime import date as _date
+
+    today = _date.today()
+    target_date: Optional[_date] = None
+    if body.target_date:
+        try:
+            target_date = _date.fromisoformat(body.target_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid date. Use YYYY-MM-DD.",
+            )
+        if target_date >= today:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="target_date must be before today — future dates have no data.",
+            )
+
+    result = await run_template_performance_batch(session, target_date=target_date)
+    await session.commit()
+    logger.info(
+        "platform_template_perf_batch_triggered",
+        actor_id=current_user.id,
+        **result,
+    )
+    return result
