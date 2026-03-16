@@ -122,23 +122,62 @@ class SearchCacheService:
         """
         Store search results in cache with current index version.
 
+        CACHE-005: Before storing, reads the per-index TTL from TenantConfigService
+        (key: f"index_cache_ttl.{index_id}"). If configured, the stored value
+        overrides the caller-supplied ttl argument. Falls back to
+        _DEFAULT_SEARCH_CACHE_TTL if neither is available.
+
+        A TTL of 0 disables caching for this index — the entry is not written.
+
         Args:
             tenant_id:  Tenant UUID string.
             index_id:   Index identifier.
             embedding:  Query embedding vector.
             params:     Search parameters dict.
             results:    List of result dicts to cache.
-            ttl:        TTL in seconds. Defaults to _DEFAULT_SEARCH_CACHE_TTL.
+            ttl:        TTL in seconds. Overridden by per-index config when present.
         """
         try:
             from app.core.redis_client import get_redis
             from app.core.cache_utils import get_index_version
+            from app.core.tenant_config_service import TenantConfigService
+
+            # CACHE-005: per-index TTL lookup
+            # Only query TenantConfigService when index_id is safe (no colons)
+            safe_index_id_for_config = index_id.replace(":", "_")
+            config_key = f"index_cache_ttl.{safe_index_id_for_config}"
+            try:
+                svc = TenantConfigService()
+                per_index_ttl = await svc.get(tenant_id, config_key)
+            except Exception as _exc:
+                logger.warning(
+                    "search_cache_per_index_ttl_lookup_failed",
+                    tenant_id=tenant_id,
+                    index_id=index_id,
+                    error=str(_exc),
+                )
+                per_index_ttl = None
+
+            if per_index_ttl is not None:
+                effective_ttl = max(int(per_index_ttl), 0)
+            elif ttl is not None:
+                effective_ttl = ttl
+            else:
+                effective_ttl = _DEFAULT_SEARCH_CACHE_TTL
+
+            # TTL of 0 disables caching for this index
+            if effective_ttl == 0:
+                logger.debug(
+                    "search_cache_set_skipped_ttl_zero",
+                    tenant_id=tenant_id,
+                    index_id=index_id,
+                )
+                return
 
             redis = get_redis()
             current_version = await get_index_version(tenant_id, index_id)
             payload = json.dumps({"version": current_version, "results": results})
             key = self._build_key(tenant_id, index_id, embedding, params)
-            effective_ttl = ttl if ttl is not None else _DEFAULT_SEARCH_CACHE_TTL
             await redis.setex(key, effective_ttl, payload)
             logger.debug(
                 "search_cache_set",

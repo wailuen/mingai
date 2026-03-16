@@ -147,6 +147,19 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # CACHE-006: Start query embedding warming scheduler (fires daily at 03:00 UTC).
+    _query_warming_task = None
+    try:
+        from app.modules.cache.query_warming import run_query_warming_scheduler
+
+        _query_warming_task = asyncio.create_task(run_query_warming_scheduler())
+        logger.info("query_warming_scheduler_started", schedule="daily at 03:00 UTC")
+    except Exception as exc:
+        logger.warning(
+            "query_warming_scheduler_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -178,6 +191,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("semantic_cache_cleanup_stopped")
+
+    if _query_warming_task is not None and not _query_warming_task.done():
+        _query_warming_task.cancel()
+        try:
+            await _query_warming_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("query_warming_scheduler_stopped")
 
     # Close Redis connections
     try:

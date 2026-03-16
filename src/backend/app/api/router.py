@@ -85,6 +85,11 @@ from app.modules.admin.cache_config import router as cache_config_router
 
 router.include_router(cache_config_router)
 
+# Admin per-index cache TTL configuration endpoints (CACHE-005)
+from app.modules.admin.index_cache_config import router as index_cache_config_router
+
+router.include_router(index_cache_config_router)
+
 # Admin cache analytics endpoints (CACHE-016)
 from app.modules.admin.cache_analytics_admin import (
     router as cache_analytics_admin_router,
