@@ -417,9 +417,11 @@ class TestCostUsageAPIMarginField:
         daily_result = MagicMock()
         daily_result.fetchall.return_value = []
 
-        # margin row — plain tuple or None
+        # margin row — plain 3-tuple (gross_margin_pct, infra_is_estimated,
+        # infra_last_updated_at) or None when no row exists.
+        # PA-014 extended the SELECT to 3 columns.
         if gross_margin_pct is not None:
-            margin_tuple: tuple | None = (Decimal(str(gross_margin_pct)),)
+            margin_tuple: tuple | None = (Decimal(str(gross_margin_pct)), True, None)
         else:
             margin_tuple = None
 
@@ -443,7 +445,6 @@ class TestCostUsageAPIMarginField:
     @pytest.mark.asyncio
     async def test_gross_margin_pct_in_response(self):
         """gross_margin_pct from cost_summary_daily flows into totals dict."""
-        from fastapi.testclient import TestClient
         from unittest.mock import AsyncMock, MagicMock, patch
         import uuid
 
@@ -538,9 +539,15 @@ class TestCostUsageAPIMarginField:
         daily_result = MagicMock()
         daily_result.fetchall.return_value = []
 
-        # Row exists but gross_margin_pct column value is SQL NULL → Python None
+        # Row exists but gross_margin_pct column value is SQL NULL → Python None.
+        # PA-014: query now returns 3 columns (gross_margin_pct, infra_is_estimated,
+        # MAX(infra_last_updated_at)).
         margin_result = MagicMock()
-        margin_result.fetchone.return_value = (None,)  # tuple with None at index 0
+        margin_result.fetchone.return_value = (
+            None,
+            True,
+            None,
+        )  # tuple with None at index 0
 
         mock_db = MagicMock()
         mock_db.execute = AsyncMock(

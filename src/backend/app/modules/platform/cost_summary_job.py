@@ -272,6 +272,9 @@ async def run_cost_summary_job() -> None:
 
     try:
         async with async_session_factory() as db:
+            # RLS bypass: tenants table requires platform scope and user_role.
+            await db.execute(text("SET LOCAL app.current_scope = 'platform'"))
+            await db.execute(text("SET LOCAL app.user_role = 'platform_admin'"))
             result = await db.execute(
                 text("SELECT id FROM tenants WHERE status = 'active'")
             )

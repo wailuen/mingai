@@ -186,6 +186,32 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # PA-014: Start Azure Cost Management pull job (fires daily at 03:45 UTC).
+    _azure_cost_task = None
+    try:
+        from app.modules.platform.azure_cost_job import start_azure_cost_scheduler
+
+        _azure_cost_task = asyncio.create_task(start_azure_cost_scheduler())
+        logger.info("azure_cost_scheduler_started", schedule="daily at 03:45 UTC")
+    except Exception as exc:
+        logger.warning(
+            "azure_cost_scheduler_startup_failed",
+            error=str(exc),
+        )
+
+    # PA-015: Start cost alert evaluation job (fires daily at 04:00 UTC).
+    _cost_alert_task = None
+    try:
+        from app.modules.platform.cost_alert_job import start_cost_alert_scheduler
+
+        _cost_alert_task = asyncio.create_task(start_cost_alert_scheduler())
+        logger.info("cost_alert_scheduler_started", schedule="daily at 04:00 UTC")
+    except Exception as exc:
+        logger.warning(
+            "cost_alert_scheduler_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -241,6 +267,22 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("cost_summary_scheduler_stopped")
+
+    if _azure_cost_task is not None and not _azure_cost_task.done():
+        _azure_cost_task.cancel()
+        try:
+            await _azure_cost_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("azure_cost_scheduler_stopped")
+
+    if _cost_alert_task is not None and not _cost_alert_task.done():
+        _cost_alert_task.cancel()
+        try:
+            await _cost_alert_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("cost_alert_scheduler_stopped")
 
     # Close Redis connections
     try:

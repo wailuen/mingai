@@ -200,15 +200,16 @@ async def get_tenant_cost_usage(
         for r in daily_result.fetchall()
     ]
 
-    # Gross margin — fetch the most recent cost_summary_daily row for this tenant.
+    # Gross margin + Azure cost estimation flags — fetch from cost_summary_daily.
     # The row is written by the nightly job and may not exist for very new tenants
-    # or when the job has not yet run; in that case gross_margin_pct is None.
+    # or when the job has not yet run; in that case all fields default to None/True.
     margin_result = await db.execute(
         text(
-            "SELECT gross_margin_pct "
+            "SELECT gross_margin_pct, infra_is_estimated, MAX(infra_last_updated_at) "
             "FROM cost_summary_daily "
             "WHERE tenant_id = :tid "
-            "ORDER BY date DESC "
+            "GROUP BY gross_margin_pct, infra_is_estimated "
+            "ORDER BY MAX(infra_last_updated_at) DESC NULLS LAST "
             "LIMIT 1"
         ),
         {"tid": tenant_id},
@@ -217,7 +218,16 @@ async def get_tenant_cost_usage(
     gross_margin_pct: float | None = (
         float(margin_row[0]) if margin_row and margin_row[0] is not None else None
     )
+    # infra_is_estimated defaults to True when no row exists (no Azure data available).
+    infra_is_estimated: bool = (
+        bool(margin_row[1]) if margin_row and margin_row[1] is not None else True
+    )
+    infra_last_updated_at: str | None = (
+        margin_row[2].isoformat() if margin_row and margin_row[2] is not None else None
+    )
     totals["gross_margin_pct"] = gross_margin_pct
+    totals["infra_is_estimated"] = infra_is_estimated
+    totals["infra_last_updated_at"] = infra_last_updated_at
 
     return {
         "tenant_id": tenant_id,
