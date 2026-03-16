@@ -3,10 +3,16 @@
 import { useState } from "react";
 import { CheckSquare, Route, XCircle, Loader2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useWontFix, useAssignIssue } from "@/lib/hooks/useEngineeringIssues";
+import { useAssignIssue } from "@/lib/hooks/useEngineeringIssues";
 import { apiPost } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { AssignDialog } from "./AssignDialog";
+
+// PA-018 batch action API response shape
+interface BatchActionResult {
+  succeeded: string[];
+  failed: { id: string; error: string }[];
+}
 
 interface BatchActionBarProps {
   selectedIds: string[];
@@ -23,7 +29,6 @@ export function BatchActionBar({
   onClearSelection,
 }: BatchActionBarProps) {
   const queryClient = useQueryClient();
-  const wontFixMutation = useWontFix();
   const assignMutation = useAssignIssue();
   const [isRouting, setIsRouting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -36,22 +41,21 @@ export function BatchActionBar({
   async function handleBulkClose() {
     setIsClosing(true);
     setPartialFailure(null);
-    const reason = "Bulk closed by platform admin";
-    let failCount = 0;
-    for (const id of selectedIds) {
-      try {
-        await wontFixMutation.mutateAsync({ id, reason });
-      } catch {
-        failCount++;
-      }
-    }
-    queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });
-    if (failCount > 0) {
-      setPartialFailure(
-        `${selectedIds.length - failCount} of ${selectedIds.length} closed. ${failCount} failed.`,
+    try {
+      const result = await apiPost<BatchActionResult>(
+        "/api/v1/platform/issues/batch-action",
+        { issue_ids: selectedIds, action: "close", payload: {} },
       );
-    } else {
-      onClearSelection();
+      queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });
+      if (result.failed.length > 0) {
+        setPartialFailure(
+          `${result.succeeded.length} of ${selectedIds.length} closed. ${result.failed.length} failed.`,
+        );
+      } else {
+        onClearSelection();
+      }
+    } catch {
+      setPartialFailure("Failed to close issues. Please try again.");
     }
     setIsClosing(false);
   }
@@ -60,6 +64,9 @@ export function BatchActionBar({
     setShowAssignDialog(false);
     setIsAssigning(true);
     setPartialFailure(null);
+    // Assign requires an email target per issue — there is no batch-assign
+    // endpoint, so we issue individual mutations sequentially. This is
+    // intentional: assign is the only action that takes a per-item target.
     let failCount = 0;
     for (const id of selectedIds) {
       try {
@@ -82,21 +89,25 @@ export function BatchActionBar({
   async function handleBulkRoute() {
     setIsRouting(true);
     setPartialFailure(null);
-    const results = await Promise.allSettled(
-      selectedIds.map((id) =>
-        apiPost(`/api/v1/platform/issues/${encodeURIComponent(id)}/route`, {
-          notify_tenant: true,
-        }),
-      ),
-    );
-    const failCount = results.filter((r) => r.status === "rejected").length;
-    queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });
-    if (failCount > 0) {
-      setPartialFailure(
-        `${selectedIds.length - failCount} of ${selectedIds.length} routed. ${failCount} failed.`,
+    try {
+      const result = await apiPost<BatchActionResult>(
+        "/api/v1/platform/issues/batch-action",
+        {
+          issue_ids: selectedIds,
+          action: "route",
+          payload: { notify_tenant: true },
+        },
       );
-    } else {
-      onClearSelection();
+      queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });
+      if (result.failed.length > 0) {
+        setPartialFailure(
+          `${result.succeeded.length} of ${selectedIds.length} routed. ${result.failed.length} failed.`,
+        );
+      } else {
+        onClearSelection();
+      }
+    } catch {
+      setPartialFailure("Failed to route issues. Please try again.");
     }
     setIsRouting(false);
   }

@@ -19,13 +19,19 @@ Schema: issue_reports(id, tenant_id, reporter_id, conversation_id, message_id,
 Note: /issues/{issue_id}/status and /issues/{issue_id}/events routes must
 be registered BEFORE /{issue_id} to avoid path collision.
 """
+import re
 import uuid
 from enum import Enum
+
+# Module-level UUID pattern — reused across batch validation and create_issue_db.
+_UUID_PATTERN_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,14 +169,10 @@ async def create_issue_db(
 ) -> dict:
     """Create a new issue report."""
     import json as _json
-    import re as _re
 
     # Validate tenant_id is a real UUID — the platform admin bootstrap uses
     # the sentinel value "default" which is not a valid UUID column value.
-    _uuid_re = _re.compile(
-        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    )
-    if not _uuid_re.match(tenant_id):
+    if not _UUID_PATTERN_RE.match(tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Issue creation requires a tenant-scoped user account.",
@@ -1408,7 +1410,7 @@ async def platform_issue_queue(
     _FILTER_STATUS_MAP = {
         "incoming": ["open"],
         "triaged": ["triaged"],
-        "in_progress": ["in_progress", "routed"],
+        "in_progress": ["in_progress", "routed", "escalated"],
         "sla_at_risk": ["open"],  # all open issues are at risk until resolved
         "resolved": ["resolved", "closed"],
     }
@@ -1419,7 +1421,7 @@ async def platform_issue_queue(
         SELECT
             COUNT(*) FILTER (WHERE status = 'open') AS incoming,
             COUNT(*) FILTER (WHERE status = 'triaged') AS triaged,
-            COUNT(*) FILTER (WHERE status IN ('in_progress', 'routed')) AS in_progress,
+            COUNT(*) FILTER (WHERE status IN ('in_progress', 'routed', 'escalated')) AS in_progress,
             COUNT(*) FILTER (WHERE status = 'open') AS sla_at_risk,
             COUNT(*) FILTER (WHERE status IN ('resolved', 'closed')) AS resolved
         FROM issue_reports
@@ -1606,6 +1608,131 @@ async def _send_issue_notifications(
                 tenant_id=tenant_id,
                 error=str(exc),
             )
+
+
+# ---------------------------------------------------------------------------
+# PA-018: Batch queue action
+# NOTE: Must be registered BEFORE /{issue_id}/... routes. The path /batch-action
+# is a fixed single segment and does not conflict with /{issue_id}/sub-path routes.
+# ---------------------------------------------------------------------------
+
+_BATCH_ACTION_STATUS_MAP = {
+    "close": "closed",
+    "route": "routed",
+    "escalate": "escalated",
+}
+
+
+class BatchActionRequest(BaseModel):
+    issue_ids: list[str] = Field(..., min_length=1, max_length=100)
+    action: str = Field(..., pattern=r"^(close|route|escalate)$")
+    # payload is action-specific. For "route": {"notify_tenant": bool, "note": str}.
+    # For "escalate": optionally {"reason": str} — stored in event data for audit trail.
+    # For "close": not used.
+    payload: dict = Field(default_factory=dict)
+
+    @field_validator("payload")
+    @classmethod
+    def _payload_size(cls, v: dict) -> dict:
+        import json as _j
+
+        if len(_j.dumps(v)) > 4096:
+            raise ValueError("payload must be 4 KB or smaller")
+        return v
+
+
+@platform_issues_router.post("/batch-action", status_code=status.HTTP_200_OK)
+async def platform_batch_action(
+    request: BatchActionRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-018: Batch triage actions across multiple issues.
+
+    Actions: close (→ closed), route (→ routed, notifies tenant admins), escalate (→ escalated).
+    Per-issue failures are isolated — partial success is returned rather than a full rollback.
+    """
+    succeeded: list = []
+    failed: list = []
+
+    for raw_id in request.issue_ids:
+        # Validate UUID format before touching the DB
+        if not isinstance(raw_id, str) or not _UUID_PATTERN_RE.match(raw_id):
+            failed.append({"id": str(raw_id), "error": "Invalid issue ID format"})
+            continue
+
+        issue_id = raw_id
+        try:
+            issue = await _platform_get_issue_row(issue_id, session)
+            if issue is None:
+                failed.append({"id": issue_id, "error": "Issue not found"})
+                continue
+
+            new_status = _BATCH_ACTION_STATUS_MAP[request.action]
+            await _platform_set_status_and_event(
+                issue_id=issue_id,
+                tenant_id=issue["tenant_id"],
+                new_status=new_status,
+                actor_id=current_user.id,
+                action_label=f"batch_{request.action}",
+                extra_data={"payload": request.payload},
+                db=session,
+            )
+
+            # For route action, notify tenant admins
+            if request.action == "route":
+                notify = request.payload.get("notify_tenant", True)
+                if notify:
+                    admins_result = await session.execute(
+                        text(
+                            "SELECT id FROM users "
+                            "WHERE tenant_id = :tid AND role = 'tenant_admin' AND status = 'active'"
+                        ),
+                        {"tid": issue["tenant_id"]},
+                    )
+                    admin_ids = [str(r[0]) for r in admins_result.fetchall()]
+                    if admin_ids:
+                        note = request.payload.get("note", "")
+                        await _send_issue_notifications(
+                            tenant_id=issue["tenant_id"],
+                            recipient_ids=admin_ids,
+                            notif_type="issue_routed",
+                            title="Issue routed to your workspace",
+                            body=note
+                            or f"Issue {issue_id} has been routed to your workspace by platform engineering.",
+                            db=session,
+                        )
+
+            await session.commit()
+            succeeded.append(issue_id)
+
+        except Exception as exc:
+            logger.error(
+                "platform_batch_action_failed",
+                issue_id=issue_id,
+                action=request.action,
+                error=str(exc),
+            )
+            try:
+                await session.rollback()
+            except Exception as rb_exc:
+                logger.warning(
+                    "platform_batch_action_rollback_failed",
+                    issue_id=issue_id,
+                    error=str(rb_exc),
+                )
+            failed.append({"id": issue_id, "error": "Internal error"})
+
+    logger.info(
+        "platform_batch_action_complete",
+        action=request.action,
+        total=len(request.issue_ids),
+        succeeded=len(succeeded),
+        failed=len(failed),
+        actor_id=current_user.id,
+    )
+    return {"succeeded": succeeded, "failed": failed}
 
 
 @platform_issues_router.post("/{issue_id}/accept", status_code=status.HTTP_200_OK)
