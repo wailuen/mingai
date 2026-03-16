@@ -21,7 +21,7 @@ import json
 import os
 import re
 import uuid
-from typing import Dict, List, Literal, Optional
+from typing import Annotated, Dict, List, Literal, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -100,6 +100,9 @@ _SEED_BY_ID = {t["id"]: t for t in SEED_TEMPLATES}
 _VALID_AGENT_STATUSES = {"draft", "published", "unpublished"}
 _VALID_AGENT_SOURCES = {"library", "custom", "seed"}
 _VALID_SORT_COLUMNS = {"created_at", "name", "status"}
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
 
 # Hardcoded SQL fragments for agent_cards UPDATE — column names never from user input.
 _AGENT_UPDATE_SQL: dict[str, str] = {
@@ -170,8 +173,13 @@ class UpdateAgentStatusRequest(BaseModel):
 class DeployFromLibraryRequest(BaseModel):
     template_id: str = Field(..., min_length=1, max_length=255)
     name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    # `variables` is the legacy field; `variable_values` is the PA-023 canonical name.
+    # Both are accepted; variable_values takes priority if both are sent.
+    # Per-value length cap prevents oversized prompt injection payloads.
     variables: Dict[str, str] = Field(default_factory=dict)
-    kb_ids: List[str] = Field(default_factory=list)
+    variable_values: Optional[Dict[str, Annotated[str, Field(max_length=500)]]] = None
+    kb_ids: List[str] = Field(default_factory=list, max_length=20)
     access_mode: Literal["workspace_wide", "role_restricted", "user_specific"] = Field(
         "workspace_wide"
     )
@@ -289,6 +297,8 @@ async def deploy_agent_template_db(
             "created_by": created_by,
         },
     )
+    # Commit the agent row unconditionally — keypair generation is best-effort.
+    await db.commit()
     # Generate Ed25519 keypair and store encrypted private key (AI-040)
     try:
         public_key, private_key_enc = generate_agent_keypair()
@@ -699,7 +709,8 @@ async def list_workspace_agents_db(
             "WHERE tenant_id = :tenant_id AND status = :status"
         )
         rows_sql = (
-            "SELECT id, name, description, category, source, status, version, created_at "
+            "SELECT id, name, description, category, source, status, version, "
+            "template_id, template_name, created_at "
             "FROM agent_cards "
             "WHERE tenant_id = :tenant_id AND status = :status "
             "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
@@ -708,7 +719,8 @@ async def list_workspace_agents_db(
     else:
         count_sql = "SELECT COUNT(*) FROM agent_cards WHERE tenant_id = :tenant_id"
         rows_sql = (
-            "SELECT id, name, description, category, source, status, version, created_at "
+            "SELECT id, name, description, category, source, status, version, "
+            "template_id, template_name, created_at "
             "FROM agent_cards "
             "WHERE tenant_id = :tenant_id "
             "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
@@ -764,6 +776,8 @@ async def list_workspace_agents_db(
                 "source": row["source"],
                 "status": row["status"],
                 "version": row["version"],
+                "template_id": row["template_id"],
+                "template_name": row["template_name"],
                 "satisfaction_rate": satisfaction_rate,
                 "user_count": user_count,
                 "created_at": str(row["created_at"]),
@@ -991,6 +1005,7 @@ async def deploy_from_library_db(
     tenant_id: str,
     template_id: str,
     template_version: int,
+    template_name: str,
     name: str,
     system_prompt: str,
     description: str,
@@ -1006,10 +1021,11 @@ async def deploy_from_library_db(
         text(
             "INSERT INTO agent_cards "
             "(id, tenant_id, name, description, category, system_prompt, "
-            "capabilities, status, version, source, template_id, template_version, created_by) "
+            "capabilities, status, version, source, template_id, template_version, "
+            "template_name, created_by) "
             "VALUES (:id, :tenant_id, :name, :description, :category, :system_prompt, "
             "CAST(:capabilities AS jsonb), 'published', 1, 'library', "
-            ":template_id, :template_version, :created_by)"
+            ":template_id, :template_version, :template_name, :created_by)"
         ),
         {
             "id": agent_id,
@@ -1021,9 +1037,12 @@ async def deploy_from_library_db(
             "capabilities": capabilities_json,
             "template_id": template_id,
             "template_version": template_version,
+            "template_name": template_name,
             "created_by": created_by,
         },
     )
+    # Commit the agent row unconditionally — keypair generation is best-effort.
+    await db.commit()
     try:
         public_key, private_key_enc = generate_agent_keypair()
         await db.execute(
@@ -1062,8 +1081,81 @@ async def deploy_from_library_db(
         "name": name,
         "template_id": template_id,
         "template_version": template_version,
+        "template_name": template_name,
         "status": "published",
     }
+
+
+async def _get_agent_template_by_id(
+    template_id: str, db: AsyncSession
+) -> Optional[dict]:
+    """
+    PA-023: Look up an agent_templates row (from PA-019 table) by id.
+
+    Only returns Published or seed templates — Draft and Deprecated cannot be deployed.
+    Returns None if not found, not in a deployable status, or if template_id is not a
+    valid UUID (e.g. seed IDs like 'seed-hr' fall through to the seed check instead).
+    """
+    if not _UUID_RE.match(str(template_id)):
+        return None
+    result = await db.execute(
+        text(
+            "SELECT id, name, description, category, system_prompt, "
+            "variable_definitions, guardrails, confidence_threshold, version "
+            "FROM agent_templates "
+            "WHERE id = :id AND status IN ('Published', 'seed')"
+        ),
+        {"id": template_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        return None
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "description": row["description"],
+        "category": row["category"],
+        "system_prompt": row["system_prompt"],
+        "variable_definitions": row["variable_definitions"] or [],
+        "guardrails": row["guardrails"] or [],
+        "version": row["version"],
+    }
+
+
+async def _validate_kb_ids_for_tenant(
+    kb_ids: list, tenant_id: str, db: AsyncSession
+) -> None:
+    """
+    PA-023: Validate that all kb_ids belong to the calling tenant.
+
+    Raises HTTPException 403 if any kb_id is not found in `integrations`
+    for this tenant (prevents cross-tenant KB linking).
+    """
+    if not kb_ids:
+        return
+    # Validate UUIDs before querying
+    for kb_id in kb_ids:
+        if not _UUID_RE.match(str(kb_id)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"kb_id '{kb_id}' is not a valid UUID.",
+            )
+
+    result = await db.execute(
+        text(
+            "SELECT id FROM integrations "
+            "WHERE tenant_id = :tenant_id "
+            "AND id = ANY(CAST(:ids AS uuid[]))"
+        ),
+        {"tenant_id": tenant_id, "ids": kb_ids},
+    )
+    found_ids = {str(r["id"]) for r in result.mappings()}
+    missing = [k for k in kb_ids if str(k) not in found_ids]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="One or more kb_ids do not belong to this workspace.",
+        )
 
 
 def _substitute_variables(prompt: str, variables: dict) -> str:
@@ -1274,24 +1366,75 @@ async def deploy_from_library(
     current_user: CurrentUser = Depends(require_tenant_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """API-073: Deploy an agent from the template library (seed or DB)."""
-    template_id = body.template_id
+    """
+    API-073 / PA-023: Deploy an agent from the template library.
 
-    if template_id in _SEED_BY_ID:
+    Template resolution priority:
+    1. agent_templates table (PA-019) — if template_id is a UUID found there
+    2. Legacy seed templates (hardcoded SEED_TEMPLATES)
+    3. Legacy agent_cards platform templates (status='published')
+
+    For agent_templates sources, required variables are validated and kb_ids are
+    checked for tenant ownership before deployment.
+    """
+    template_id = body.template_id
+    # variable_values takes priority over legacy variables field
+    effective_vars = (
+        body.variable_values if body.variable_values is not None else body.variables
+    )
+    template_display_name: str = ""
+
+    # 1. Check agent_templates (PA-019) first
+    agent_tmpl = await _get_agent_template_by_id(template_id, session)
+    if agent_tmpl is not None:
+        # Validate required variables
+        var_defs = agent_tmpl.get("variable_definitions") or []
+        for var_def in var_defs:
+            if var_def.get("required") and var_def["name"] not in effective_vars:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Missing required variable: '{var_def['name']}'.",
+                )
+        # Validate kb_ids belong to this tenant
+        await _validate_kb_ids_for_tenant(body.kb_ids, current_user.tenant_id, session)
+
+        source_version = agent_tmpl["version"]
+        system_prompt = _substitute_variables(
+            agent_tmpl["system_prompt"], effective_vars
+        )
+        description = body.description or agent_tmpl.get("description") or ""
+        category = agent_tmpl.get("category")
+        template_display_name = agent_tmpl["name"]
+        # Store kb_ids in capabilities for this agent
+        capabilities = [
+            {"type": "knowledge_base", "id": kb_id} for kb_id in body.kb_ids
+        ]
+
+    elif template_id in _SEED_BY_ID:
+        # 2. Legacy seed
         tmpl = _SEED_BY_ID[template_id]
         source_version = tmpl.get("version", 1)
-        system_prompt = tmpl["system_prompt"]
-        description = tmpl.get("description", "")
+        system_prompt = _substitute_variables(tmpl["system_prompt"], effective_vars)
+        description = body.description or tmpl.get("description", "")
         category = tmpl.get("category")
+        template_display_name = tmpl.get("name", template_id)
         capabilities = tmpl.get("capabilities", [])
     else:
+        # 3. Legacy agent_cards platform templates — scoped to PLATFORM_TENANT_ID only.
+        # Templates from other tenants must not be deployable cross-tenant.
+        ptid = _get_platform_tenant_id()
+        if ptid is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template '{template_id}' not found",
+            )
         db_result = await session.execute(
             text(
-                "SELECT id, description, system_prompt, capabilities, version, category "
+                "SELECT id, name, description, system_prompt, capabilities, version, category "
                 "FROM agent_cards "
-                "WHERE id = :id AND status = 'published'"
+                "WHERE id = :id AND tenant_id = :platform_tenant_id AND status = 'published'"
             ),
-            {"id": template_id},
+            {"id": template_id, "platform_tenant_id": ptid},
         )
         db_row = db_result.mappings().first()
         if db_row is None:
@@ -1303,17 +1446,17 @@ async def deploy_from_library(
         if isinstance(caps, str):
             caps = json.loads(caps)
         source_version = db_row["version"]
-        system_prompt = db_row["system_prompt"]
-        description = db_row["description"] or ""
+        system_prompt = _substitute_variables(db_row["system_prompt"], effective_vars)
+        description = body.description or db_row["description"] or ""
         category = db_row["category"]
+        template_display_name = db_row["name"] or template_id
         capabilities = caps if isinstance(caps, list) else []
-
-    system_prompt = _substitute_variables(system_prompt, body.variables)
 
     result = await deploy_from_library_db(
         tenant_id=current_user.tenant_id,
         template_id=template_id,
         template_version=source_version,
+        template_name=template_display_name,
         name=body.name,
         system_prompt=system_prompt,
         description=description,
