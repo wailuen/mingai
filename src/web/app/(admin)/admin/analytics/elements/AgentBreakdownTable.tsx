@@ -114,7 +114,7 @@ export function AgentBreakdownTable() {
                     <ArrowUpDown size={10} />
                   </button>
                 </th>
-                <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
+                <th className="hidden pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint sm:table-cell">
                   7-Day Trend
                 </th>
               </tr>
@@ -136,7 +136,7 @@ export function AgentBreakdownTable() {
                   <td className="py-3 pr-4 font-mono text-[13px] text-text-primary">
                     {agent.total_ratings.toLocaleString()}
                   </td>
-                  <td className="py-3">
+                  <td className="hidden py-3 sm:table-cell">
                     {agent.trend_7d.length > 0 ? (
                       <MiniSparkline data={agent.trend_7d} />
                     ) : (

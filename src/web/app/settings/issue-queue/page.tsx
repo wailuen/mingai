@@ -101,7 +101,7 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
   const issues = data?.items as AdminIssueListItem[] | undefined;
 
   return (
-    <div className="overflow-hidden rounded-card border border-border">
+    <div className="overflow-x-auto rounded-card border border-border">
       <table className="w-full">
         <thead>
           <tr className="border-b border-border bg-bg-surface">
@@ -111,13 +111,13 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
               Title
             </th>
-            <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
+            <th className="hidden px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
               Reported By
             </th>
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
               Status
             </th>
-            <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
+            <th className="hidden px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
               Reported
             </th>
           </tr>
@@ -164,13 +164,13 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
                 <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
                   {issue.title}
                 </td>
-                <td className="px-3.5 py-3 text-xs text-text-muted">
+                <td className="hidden px-3.5 py-3 text-xs text-text-muted sm:table-cell">
                   {issue.reporter?.name ?? "\u2014"}
                 </td>
                 <td className="px-3.5 py-3 text-xs text-text-muted">
                   {formatStatus(issue.status)}
                 </td>
-                <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
+                <td className="hidden px-3.5 py-3 font-mono text-data-value text-text-muted sm:table-cell">
                   {new Date(issue.created_at).toLocaleDateString()}
                 </td>
               </tr>
@@ -191,7 +191,7 @@ export default function IssueQueuePage() {
 
   return (
     <AppShell>
-      <div className="p-7">
+      <div className="p-4 sm:p-7">
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Issue Queue</h1>
           <p className="mt-1 text-sm text-text-muted">
@@ -200,7 +200,7 @@ export default function IssueQueuePage() {
         </div>
 
         {/* Filter tabs */}
-        <div className="mb-5 border-b border-border">
+        <div className="mb-5 overflow-x-auto border-b border-border">
           <div className="flex gap-0.5">
             {STATUS_TABS.map((tab) => (
               <button

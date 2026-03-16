@@ -35,7 +35,7 @@ export default function AnalyticsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 p-7">
+      <div className="space-y-6 p-4 sm:p-7">
         {/* Page header */}
         <div>
           <h1 className="text-page-title text-text-primary">Analytics</h1>
@@ -91,7 +91,7 @@ export default function AnalyticsPage() {
         </ErrorBoundary>
 
         {/* Issue queue and response workflow */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
           <ErrorBoundary>
             <IssueQueue
               onSelectIssue={setSelectedIssue}

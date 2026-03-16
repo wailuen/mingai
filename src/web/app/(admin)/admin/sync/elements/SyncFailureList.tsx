@@ -72,16 +72,16 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
                 <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
                   Integration
                 </th>
-                <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
+                <th className="hidden px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
                   Type
                 </th>
                 <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
                   Error Message
                 </th>
-                <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
+                <th className="hidden px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
                   Failed At
                 </th>
-                <th className="px-3.5 py-3 text-right text-[11px] font-medium uppercase tracking-wider text-text-faint">
+                <th className="hidden px-3.5 py-3 text-right text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
                   Docs Failed
                 </th>
                 <th className="px-3.5 py-3 text-right text-[11px] font-medium uppercase tracking-wider text-text-faint">
@@ -98,7 +98,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
                   <td className="px-3.5 py-3 text-body-row font-medium text-text-primary">
                     {failure.integration_name}
                   </td>
-                  <td className="px-3.5 py-3">
+                  <td className="hidden px-3.5 py-3 sm:table-cell">
                     <TypeBadge type={failure.integration_type} />
                   </td>
                   <td
@@ -109,10 +109,10 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
                       ? `${failure.error_message.slice(0, 80)}...`
                       : failure.error_message}
                   </td>
-                  <td className="whitespace-nowrap px-3.5 py-3 font-mono text-data-value text-text-muted">
+                  <td className="hidden whitespace-nowrap px-3.5 py-3 font-mono text-data-value text-text-muted sm:table-cell">
                     {new Date(failure.failed_at).toLocaleString()}
                   </td>
-                  <td className="px-3.5 py-3 text-right font-mono text-data-value text-text-primary">
+                  <td className="hidden px-3.5 py-3 text-right font-mono text-data-value text-text-primary sm:table-cell">
                     {failure.document_count_failed}
                     <span className="text-text-faint">
                       /{failure.document_count_attempted}

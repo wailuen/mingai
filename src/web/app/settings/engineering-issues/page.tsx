@@ -54,7 +54,7 @@ export default function EngineeringIssuesPage() {
 
   return (
     <AppShell>
-      <div className="p-7">
+      <div className="p-4 sm:p-7">
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Issue Queue</h1>

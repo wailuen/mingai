@@ -9,7 +9,7 @@ interface GlossaryTermRaw {
   id: string;
   term: string;
   full_form?: string | null;
-  aliases?: Array<{ term?: string; note?: string }> | null;
+  aliases?: string[] | null;
   created_at: string;
 }
 
@@ -18,14 +18,14 @@ export interface GlossaryTerm {
   term: string;
   full_form?: string | null;
   definition: string;
-  aliases?: Array<{ term?: string; note?: string }> | null;
+  aliases?: string[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 function transformTerm(raw: GlossaryTermRaw): GlossaryTerm {
-  const definition = raw.aliases?.[0]?.note ?? "";
+  const definition = raw.full_form ?? "";
   return {
     ...raw,
     definition,
@@ -78,9 +78,12 @@ export function useGlossaryTerms(
   return useQuery({
     queryKey: [GLOSSARY_KEY, page, search, statusFilter],
     queryFn: async () => {
-      const raw = await apiGet<{ items: GlossaryTermRaw[]; total: number; page: number; page_size: number }>(
-        `/api/v1/glossary/?${params.toString()}`,
-      );
+      const raw = await apiGet<{
+        items: GlossaryTermRaw[];
+        total: number;
+        page: number;
+        page_size: number;
+      }>(`/api/v1/glossary/?${params.toString()}`);
       return {
         ...raw,
         items: raw.items.map(transformTerm),
@@ -134,8 +137,7 @@ export interface VersionEntry {
 export function useVersionHistory(termId: string | null) {
   return useQuery({
     queryKey: [GLOSSARY_KEY, "history", termId],
-    queryFn: () =>
-      apiGet<VersionEntry[]>(`/api/v1/glossary/${termId}/history`),
+    queryFn: () => apiGet<VersionEntry[]>(`/api/v1/glossary/${termId}/history`),
     enabled: !!termId,
   });
 }

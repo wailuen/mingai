@@ -138,7 +138,7 @@ export function IssueTable({ filters }: IssueTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-card border border-border">
+    <div className="overflow-x-auto rounded-card border border-border">
       <table className="w-full">
         <thead>
           <tr className="border-b border-border bg-bg-surface">
@@ -148,13 +148,13 @@ export function IssueTable({ filters }: IssueTableProps) {
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
               Title
             </th>
-            <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
+            <th className="hidden px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
               Reporter
             </th>
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
               Status
             </th>
-            <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
+            <th className="hidden px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint sm:table-cell">
               Reported
             </th>
             <th className="w-8 px-3.5 py-3" />
@@ -227,13 +227,13 @@ function IssueRow({
         <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
           {issue.title}
         </td>
-        <td className="px-3.5 py-3 font-mono text-xs text-text-muted">
+        <td className="hidden px-3.5 py-3 font-mono text-xs text-text-muted sm:table-cell">
           {issue.reporter?.name ?? issue.reporter_email ?? "—"}
         </td>
         <td className="px-3.5 py-3">
           <StatusDropdown issueId={issue.id} currentStatus={issue.status} />
         </td>
-        <td className="px-3.5 py-3 font-mono text-xs text-text-muted">
+        <td className="hidden px-3.5 py-3 font-mono text-xs text-text-muted sm:table-cell">
           {new Date(issue.created_at).toLocaleDateString()}
         </td>
         <td className="px-3.5 py-3">

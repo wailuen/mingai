@@ -14,7 +14,7 @@ import { QuickActions } from "./elements/QuickActions";
 export default function TenantDashboardPage() {
   return (
     <AppShell>
-      <div className="space-y-6 p-7">
+      <div className="space-y-6 p-4 sm:p-7">
         <h1 className="text-page-title text-text-primary">Dashboard</h1>
 
         <ErrorBoundary>

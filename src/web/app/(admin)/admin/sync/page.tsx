@@ -26,7 +26,7 @@ export default function SyncHealthPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 p-7">
+      <div className="space-y-6 p-4 sm:p-7">
         {/* Page header */}
         <div>
           <h1 className="text-page-title text-text-primary">Sync Health</h1>

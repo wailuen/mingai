@@ -70,7 +70,7 @@ export function LowConfidenceList({
                 <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
                   Confidence
                 </th>
-                <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
+                <th className="hidden pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint sm:table-cell">
                   Date
                 </th>
               </tr>
@@ -87,7 +87,7 @@ export function LowConfidenceList({
                   <td className="py-3 pr-4 font-mono text-[13px] text-alert">
                     {(item.retrieval_confidence * 100).toFixed(0)}%
                   </td>
-                  <td className="py-3 font-mono text-[13px] text-text-muted">
+                  <td className="hidden py-3 font-mono text-[13px] text-text-muted sm:table-cell">
                     {formatDate(item.created_at)}
                   </td>
                 </tr>

@@ -159,7 +159,7 @@ export function IssueQueue({
               <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
                 Status
               </th>
-              <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
+              <th className="hidden pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint sm:table-cell">
                 Created
               </th>
             </tr>
@@ -192,7 +192,7 @@ export function IssueQueue({
                     {issue.title}
                   </td>
                   <td className="py-3 pr-4">{statusBadge(issue.status)}</td>
-                  <td className="py-3 font-mono text-[12px] text-text-muted">
+                  <td className="hidden py-3 font-mono text-[12px] text-text-muted sm:table-cell">
                     {formatDate(issue.created_at)}
                   </td>
                 </tr>

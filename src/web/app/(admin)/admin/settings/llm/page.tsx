@@ -39,7 +39,15 @@ export default function LLMSettingsPage() {
 
   return (
     <AppShell>
-      <div className="p-7">
+      <div className="p-4 sm:p-7">
+        {/* Desktop recommended banner for mobile */}
+        <div className="mb-4 flex items-center gap-2 rounded-control border border-warn bg-warn-dim px-3 py-2 text-xs text-warn md:hidden">
+          <span>
+            Desktop recommended for editing. Some features may be limited on
+            mobile.
+          </span>
+        </div>
+
         {/* Page header */}
         <div className="mb-6">
           <div className="mb-1 flex items-center gap-2.5">
