@@ -2911,3 +2911,119 @@ async def run_template_performance(
         **result,
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# PA-026: Template analytics API
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/platform/agent-templates/{template_id}/analytics",
+    tags=["platform"],
+    summary="30-day analytics for an agent template (PA-026)",
+)
+async def get_template_analytics(
+    template_id: str = Path(
+        ..., pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    ),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """
+    Return 30-day rolling analytics for an agent_template:
+      - daily_metrics: list of {date, satisfaction_rate, guardrail_trigger_rate,
+                                failure_count, session_count} for last 30 days
+      - tenant_count: number of distinct tenants with a deployed agent from this template
+      - top_failure_patterns: top 3 issue_type values from issue_reports linked to
+                              agents deployed from this template (cross-tenant aggregate)
+
+    No per-tenant data is exposed — only platform-level aggregates.
+    """
+    from datetime import date as _date, timedelta as _timedelta
+
+    # Set platform scope for template_performance_daily RLS bypass, and clear
+    # any stale app.tenant_id from pooled connections so tenant RLS policies on
+    # agent_cards and issue_reports do not filter cross-tenant aggregate queries.
+    await session.execute(text("SELECT set_config('app.scope', 'platform', true)"))
+    await session.execute(text("SELECT set_config('app.tenant_id', '', true)"))
+
+    # Verify template exists
+    exists = await session.execute(
+        text("SELECT 1 FROM agent_templates WHERE id = :id"),
+        {"id": template_id},
+    )
+    if exists.fetchone() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+
+    thirty_days_ago = _date.today() - _timedelta(days=30)
+
+    # 1. 30-day daily metrics from template_performance_daily
+    perf_result = await session.execute(
+        text(
+            "SELECT date, satisfaction_rate, guardrail_trigger_rate, "
+            "failure_count, session_count "
+            "FROM template_performance_daily "
+            "WHERE template_id = :template_id "
+            "  AND date >= :since "
+            "ORDER BY date ASC"
+        ),
+        {"template_id": template_id, "since": thirty_days_ago},
+    )
+    daily_metrics = [
+        {
+            "date": row["date"].isoformat()
+            if hasattr(row["date"], "isoformat")
+            else str(row["date"]),
+            "satisfaction_rate": row["satisfaction_rate"],
+            "guardrail_trigger_rate": row["guardrail_trigger_rate"],
+            "failure_count": row["failure_count"],
+            "session_count": row["session_count"],
+        }
+        for row in perf_result.mappings()
+    ]
+
+    # 2. Cross-tenant usage count (distinct tenants with deployed agents)
+    tenant_result = await session.execute(
+        text(
+            "SELECT COUNT(DISTINCT tenant_id) AS tenant_count "
+            "FROM agent_cards "
+            "WHERE template_id = :template_id"
+        ),
+        {"template_id": template_id},
+    )
+    tenant_count = tenant_result.scalar() or 0
+
+    # 3. Top-3 failure patterns: issue_type counts from issue_reports linked to
+    #    agents deployed from this template (via conversation → agent → template)
+    failure_result = await session.execute(
+        text(
+            "SELECT ir.issue_type, COUNT(*) AS issue_count "
+            "FROM issue_reports ir "
+            "JOIN conversations c  ON c.id = ir.conversation_id "
+            "JOIN agent_cards   ac ON ac.id = c.agent_id "
+            "WHERE ac.template_id = :template_id "
+            "GROUP BY ir.issue_type "
+            "ORDER BY issue_count DESC "
+            "LIMIT 3"
+        ),
+        {"template_id": template_id},
+    )
+    top_failure_patterns = [
+        {"issue_type": row["issue_type"], "count": row["issue_count"]}
+        for row in failure_result.mappings()
+    ]
+
+    # Commit ends the transaction, resetting transaction-local set_config values
+    # (app.scope, app.tenant_id) before the connection is returned to the pool.
+    await session.commit()
+
+    return {
+        "template_id": template_id,
+        "daily_metrics": daily_metrics,
+        "tenant_count": int(tenant_count),
+        "top_failure_patterns": top_failure_patterns,
+    }
