@@ -358,8 +358,9 @@ async def list_my_issues_db(
     if status_filter:
         rows_result = await db.execute(
             text(
-                "SELECT id, title, description, screenshot_url, status, "
-                "blur_acknowledged, created_at, updated_at FROM issue_reports "
+                "SELECT id, issue_type, description, screenshot_url, status, "
+                "blur_acknowledged, created_at, updated_at, metadata->>'title' AS title "
+                "FROM issue_reports "
                 "WHERE reporter_id = :reporter_id AND tenant_id = :tenant_id AND status = :status "
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
             ),
@@ -374,8 +375,9 @@ async def list_my_issues_db(
     else:
         rows_result = await db.execute(
             text(
-                "SELECT id, title, description, screenshot_url, status, "
-                "blur_acknowledged, created_at, updated_at FROM issue_reports "
+                "SELECT id, issue_type, description, screenshot_url, status, "
+                "blur_acknowledged, created_at, updated_at, metadata->>'title' AS title "
+                "FROM issue_reports "
                 "WHERE reporter_id = :reporter_id AND tenant_id = :tenant_id "
                 "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
             ),
@@ -391,7 +393,8 @@ async def list_my_issues_db(
     items = [
         {
             "id": str(r[0]),
-            "title": r[1],
+            "issue_type": r[1],
+            "title": r[8] or r[2] or r[1],  # metadata title → description → issue_type
             "description": r[2],
             "screenshot_url": r[3],
             "status": r[4],
@@ -410,8 +413,9 @@ async def get_my_issue_db(
     """Get a single issue report owned by the current user."""
     result = await db.execute(
         text(
-            "SELECT id, title, description, screenshot_url, status, "
-            "blur_acknowledged, created_at FROM issue_reports "
+            "SELECT id, issue_type, description, screenshot_url, status, "
+            "blur_acknowledged, created_at, updated_at, metadata->>'title' AS title "
+            "FROM issue_reports "
             "WHERE id = :id AND reporter_id = :reporter_id AND tenant_id = :tenant_id"
         ),
         {"id": issue_id, "reporter_id": user_id, "tenant_id": tenant_id},
@@ -435,12 +439,16 @@ async def get_my_issue_db(
 
     return {
         "id": str(row[0]),
-        "title": row[1],
+        "issue_type": row[1],
+        "title": row[8]
+        or row[2]
+        or row[1],  # metadata title → description → issue_type
         "description": row[2],
         "screenshot_url": row[3],
         "status": row[4],
         "blur_acknowledged": row[5],
         "created_at": str(row[6]),
+        "updated_at": str(row[7]) if row[7] else None,
         "timeline": timeline,
     }
 

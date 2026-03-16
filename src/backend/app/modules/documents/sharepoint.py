@@ -683,6 +683,66 @@ async def list_sync_failures(
     )
 
 
+@admin_sync_router.get("/sync/status")
+async def get_sync_status(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-057: Sync status summary for all integrations belonging to the tenant.
+
+    Returns each connected integration with its freshness (days since last sync)
+    and current status — used by the Analytics and Documents pages.
+    """
+    import datetime as _dt
+
+    # Use LATERAL join on sync_jobs to get the most recent completed sync per
+    # integration — mirrors the pattern in list_integrations_db.
+    result = await db.execute(
+        text(
+            "SELECT i.id, i.provider, i.status, "
+            "i.config->>'name' AS source_name, "
+            "sj.created_at AS last_sync_at "
+            "FROM integrations i "
+            "LEFT JOIN LATERAL ("
+            "  SELECT sj2.created_at "
+            "  FROM sync_jobs sj2 "
+            "  WHERE sj2.integration_id = i.id AND sj2.status = 'completed' "
+            "  ORDER BY sj2.created_at DESC LIMIT 1"
+            ") sj ON true "
+            "WHERE i.tenant_id = :tenant_id "
+            "ORDER BY i.provider, i.created_at DESC"
+        ),
+        {"tenant_id": current_user.tenant_id},
+    )
+    rows = result.mappings().fetchall()
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    items = []
+    for r in rows:
+        last_sync_at = r["last_sync_at"]
+        if last_sync_at is not None:
+            # Ensure timezone-aware comparison
+            if last_sync_at.tzinfo is None:
+                last_sync_at = last_sync_at.replace(tzinfo=_dt.timezone.utc)
+            freshness_days = (now - last_sync_at).days
+        else:
+            freshness_days = -1  # never completed a sync
+
+        items.append(
+            {
+                "source_id": str(r["id"]),
+                "source_name": r["source_name"] or r["provider"],
+                "source_type": r["provider"],
+                "last_synced_at": last_sync_at.isoformat() if last_sync_at else None,
+                "freshness_days": freshness_days,
+                "status": r["status"],
+            }
+        )
+
+    return {"items": items}
+
+
 # ---------------------------------------------------------------------------
 # TA-015: Sync schedule DB helper
 # ---------------------------------------------------------------------------

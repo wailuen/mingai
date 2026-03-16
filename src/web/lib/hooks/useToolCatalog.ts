@@ -51,7 +51,13 @@ const TOOLS_KEY = ["platform-tools"] as const;
 export function useTools() {
   return useQuery({
     queryKey: TOOLS_KEY,
-    queryFn: () => apiGet<Tool[]>("/api/v1/platform/tools"),
+    queryFn: async () => {
+      const res = await apiGet<{ tools: Tool[] } | Tool[]>(
+        "/api/v1/platform/tools",
+      );
+      // Backend returns {tools: [...], total: N} — extract the array
+      return Array.isArray(res) ? res : (res as { tools: Tool[] }).tools ?? [];
+    },
   });
 }
 
