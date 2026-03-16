@@ -1,7 +1,8 @@
 """
-PA-025: Template performance tracking batch job.
+PA-025 / PA-027: Template performance tracking batch job.
 
-Runs nightly; upserts one row per template into template_performance_daily.
+Runs nightly; upserts one row per template into template_performance_daily,
+then calls check_underperforming_alerts() to open/close P2 issue alerts.
 
 Metrics computed per template per date:
   - satisfaction_rate: (thumbs-up count) / (total feedback count)
@@ -105,9 +106,12 @@ async def run_template_performance_batch(
     target_date: Optional[date] = None,
 ) -> dict:
     """
-    Aggregate template performance metrics for `target_date` (defaults to yesterday).
+    Aggregate template performance metrics for `target_date` (defaults to yesterday),
+    then check for underperforming templates and manage P2 alerts.
 
-    Returns a summary dict: {"date": str, "templates_updated": int, "errors": int}.
+    Returns a summary dict:
+        {"date": str, "templates_updated": int, "errors": int,
+         "alerts_opened": int, "alerts_cleared": int, "alert_errors": int}.
 
     Safe to run multiple times for the same date — uses UPSERT.
     Does NOT commit — caller must commit after calling this function.
@@ -202,8 +206,19 @@ async def run_template_performance_batch(
         templates_updated=templates_updated,
         errors=errors,
     )
+
+    # PA-027: Check for underperforming templates and manage P2 alerts.
+    # Runs after daily metrics are upserted so the threshold comparison is
+    # based on fresh data. Uses the same platform-scope DB session.
+    from app.modules.platform.alerts import check_underperforming_alerts
+
+    alert_summary = await check_underperforming_alerts(db, target_date)
+
     return {
         "date": str(target_date),
         "templates_updated": templates_updated,
         "errors": errors,
+        "alerts_opened": alert_summary["alerts_opened"],
+        "alerts_cleared": alert_summary["alerts_cleared"],
+        "alert_errors": alert_summary["errors"],
     }

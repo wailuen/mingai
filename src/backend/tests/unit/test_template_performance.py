@@ -372,6 +372,7 @@ class TestAggregationFormulas:
             }
         ]
         # Calls: 1=set_config, 2=satisfaction, 3=sessions, 4=guardrail, 5=upsert (raises)
+        # Calls 6+ come from PA-027 check_underperforming_alerts; return safe defaults.
         call_count = 0
 
         async def _side_effect(*args, **kwargs):
@@ -387,8 +388,14 @@ class TestAggregationFormulas:
                 mock_result.mappings.return_value = []
             elif call_count == 4:
                 mock_result.mappings.return_value = []
-            else:
+            elif call_count == 5:
                 raise RuntimeError("DB error on upsert")
+            else:
+                # Alert queries — return safe defaults (no admin user → alerts skipped)
+                mock_result.mappings.return_value = []
+                mock_result.fetchone.return_value = None
+                mock_result.fetchall.return_value = []
+                mock_result.scalar.return_value = None
             return mock_result
 
         mock_db.execute = AsyncMock(side_effect=_side_effect)
@@ -431,14 +438,33 @@ def _mock_mappings(mock_db, sat_rows, session_rows, guardrail_rows):
         elif call_num == 4:
             mock_result.mappings.return_value = guardrail_rows
         else:
+            # Covers upsert calls AND subsequent PA-027 alert queries
+            # (platform_admin lookup, platform_avg, recent_daily, open_alert).
+            # All methods return safe defaults so the alert function exits cleanly.
             mock_result.mappings.return_value = []
+            mock_result.fetchone.return_value = (
+                None  # admin lookup → no admin → alerts skipped
+            )
+            mock_result.fetchall.return_value = []
+            mock_result.scalar.return_value = None
         return mock_result
 
     mock_db.execute = AsyncMock(side_effect=_execute)
 
 
 def _find_upsert_call(mock_db) -> dict:
-    """Extract the bind-parameter dict from the last db.execute() call (the upsert)."""
-    # Last call is always the upsert
-    last_call = mock_db.execute.call_args_list[-1]
-    return last_call.args[1]
+    """Extract the bind-parameter dict from the upsert db.execute() call.
+
+    Identifies the call by SQL text (contains 'template_performance_daily'),
+    rather than by position, to be robust against additional calls added
+    after the upsert (e.g. PA-027 alert checks).
+    """
+    for c in mock_db.execute.call_args_list:
+        sql = str(c.args[0])
+        if "template_performance_daily" in sql and "INSERT" in sql:
+            return c.args[1]
+    # Fallback: last call with a dict second arg (pre-PA-027 behaviour)
+    for c in reversed(mock_db.execute.call_args_list):
+        if len(c.args) > 1 and isinstance(c.args[1], dict):
+            return c.args[1]
+    raise AssertionError("No upsert call found in mock_db.execute calls")
