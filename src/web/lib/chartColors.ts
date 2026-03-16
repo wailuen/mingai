@@ -40,6 +40,14 @@ export function slaAdherenceColor(pct: number): string {
   return CHART_COLORS.alert; // --alert orange, not P0 red
 }
 
+/** Resolve accent/warn/alert from health score (0-100). */
+export function healthScoreColor(score: number | null): string {
+  if (score === null) return CHART_COLORS.textFaint;
+  if (score >= 70) return CHART_COLORS.accent;
+  if (score >= 50) return CHART_COLORS.warn;
+  return CHART_COLORS.alert;
+}
+
 /** Resolve color by issue severity string. */
 export function severityColor(severity: string): string {
   return (

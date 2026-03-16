@@ -2,71 +2,144 @@
 
 import { cn } from "@/lib/utils";
 import {
-  useTenantHealth,
-  type TenantHealthResponse,
-} from "@/lib/hooks/usePlatformDashboard";
+  useTenantHealthDrilldown,
+  type HealthCurrent,
+  type HealthTrendPoint,
+} from "@/lib/hooks/useHealthScores";
+import { CHART_COLORS, healthScoreColor } from "@/lib/chartColors";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 
 interface HealthBreakdownProps {
   tenantId: string;
 }
 
-function scoreColor(score: number): string {
+// ---------------------------------------------------------------------------
+// Color helpers (Tailwind classes for text)
+// ---------------------------------------------------------------------------
+
+function scoreColorClass(score: number | null): string {
+  if (score === null) return "text-text-faint";
   if (score >= 70) return "text-accent";
   if (score >= 50) return "text-warn";
   return "text-alert";
 }
 
-function scoreBgColor(score: number): string {
+function scoreBgClass(score: number | null): string {
+  if (score === null) return "bg-bg-elevated";
   if (score >= 70) return "bg-accent-dim";
   if (score >= 50) return "bg-warn-dim";
   return "bg-alert-dim";
 }
 
-function categoryLabel(category: string): string {
-  switch (category) {
-    case "healthy":
-      return "Healthy";
-    case "warning":
-      return "At Risk";
-    case "critical":
-      return "Critical";
-    default:
-      return category;
-  }
-}
+// ---------------------------------------------------------------------------
+// Component KPI card
+// ---------------------------------------------------------------------------
 
 interface ComponentCardProps {
   label: string;
-  weightPct: number;
-  score: number;
-  description: string;
+  score: number | null;
 }
 
-function ComponentCard({
-  label,
-  weightPct,
-  score,
-  description,
-}: ComponentCardProps) {
+function ComponentCard({ label, score }: ComponentCardProps) {
   return (
     <div className="rounded-card border border-border bg-bg-surface p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-label-nav uppercase tracking-wider text-text-faint">
-          {label}
-        </span>
-        <span className="font-mono text-[11px] text-text-faint">
-          {weightPct}% weight
-        </span>
-      </div>
+      <span className="text-label-nav uppercase tracking-wider text-text-faint">
+        {label}
+      </span>
       <p
-        className={cn("mt-2 font-mono text-xl font-medium", scoreColor(score))}
+        className={cn(
+          "mt-2 font-mono text-xl font-medium",
+          scoreColorClass(score),
+        )}
       >
-        {Math.round(score)}
+        {score !== null ? Math.round(score) : "--"}
       </p>
-      <p className="mt-1 text-[12px] text-text-muted">{description}</p>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Trend chart — 12-week composite line (300px wide)
+// ---------------------------------------------------------------------------
+
+function TrendChart({ trend }: { trend: HealthTrendPoint[] }) {
+  if (trend.length === 0) {
+    return (
+      <p className="py-4 text-center text-sm text-text-faint">
+        No trend data available
+      </p>
+    );
+  }
+
+  // Backend returns newest-first; reverse for chronological display
+  const points = [...trend].reverse();
+  const lastValue = points[points.length - 1]?.composite;
+  const lineColor = healthScoreColor(lastValue ?? null);
+
+  return (
+    <div className="mt-4">
+      <span className="text-label-nav uppercase tracking-wider text-text-faint">
+        12-Week Trend
+      </span>
+      <div className="mt-2">
+        <ResponsiveContainer width="100%" height={120}>
+          <LineChart
+            data={points}
+            margin={{ top: 4, right: 8, bottom: 4, left: 8 }}
+          >
+            <XAxis
+              dataKey="week"
+              tick={{ fontSize: 10, fill: CHART_COLORS.textFaint }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fontSize: 10, fill: CHART_COLORS.textFaint }}
+              tickLine={false}
+              axisLine={false}
+              width={28}
+            />
+            <Tooltip
+              contentStyle={{
+                background: CHART_COLORS.bgSurface,
+                border: `1px solid ${CHART_COLORS.border}`,
+                borderRadius: 7,
+                fontSize: 12,
+                fontFamily: "DM Mono, monospace",
+              }}
+              labelStyle={{ color: CHART_COLORS.textMuted }}
+            />
+            <Line
+              type="monotone"
+              dataKey="composite"
+              stroke={lineColor}
+              strokeWidth={2}
+              dot={false}
+              connectNulls
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Loading skeleton
+// ---------------------------------------------------------------------------
 
 function SkeletonCards() {
   return (
@@ -83,49 +156,20 @@ function SkeletonCards() {
           >
             <div className="h-3 w-20 animate-pulse rounded-badge bg-bg-elevated" />
             <div className="mt-3 h-6 w-10 animate-pulse rounded-badge bg-bg-elevated" />
-            <div className="mt-2 h-3 w-full animate-pulse rounded-badge bg-bg-elevated" />
           </div>
         ))}
       </div>
+      <div className="mt-4 h-[120px] animate-pulse rounded-badge bg-bg-elevated" />
     </div>
   );
 }
 
-function componentDescription(
-  key: string,
-  details: Record<string, number>,
-): string {
-  switch (key) {
-    case "usage_trend":
-      return `${details.recent_queries ?? 0} queries (last 30d) vs ${details.prior_queries ?? 0} prior`;
-    case "feature_breadth":
-      return `${details.features_active ?? 0} of ${details.features_total ?? 5} core features active`;
-    case "satisfaction":
-      return `${details.positive_feedback ?? 0} positive of ${details.total_feedback ?? 0} feedback`;
-    case "error_rate":
-      return `${details.open_issues ?? 0} open issues (last 30d)`;
-    default:
-      return "";
-  }
-}
-
-function componentLabel(key: string): string {
-  switch (key) {
-    case "usage_trend":
-      return "Usage Trend";
-    case "feature_breadth":
-      return "Feature Breadth";
-    case "satisfaction":
-      return "Satisfaction";
-    case "error_rate":
-      return "Error Rate";
-    default:
-      return key;
-  }
-}
+// ---------------------------------------------------------------------------
+// HealthBreakdown — wired to PA-009 drilldown
+// ---------------------------------------------------------------------------
 
 export function HealthBreakdown({ tenantId }: HealthBreakdownProps) {
-  const { data, isPending, error } = useTenantHealth(tenantId);
+  const { data, isPending, error } = useTenantHealthDrilldown(tenantId);
 
   if (isPending) return <SkeletonCards />;
 
@@ -141,43 +185,53 @@ export function HealthBreakdown({ tenantId }: HealthBreakdownProps) {
 
   if (!data) return null;
 
-  const overall = data as TenantHealthResponse;
+  const { current, trend } = data;
 
   return (
     <div className="rounded-card border border-border bg-bg-surface p-5">
-      {/* Overall score header */}
+      {/* Overall composite score header */}
       <div className="mb-4 flex items-center gap-3">
         <span
           className={cn(
             "font-mono text-2xl font-bold",
-            scoreColor(overall.overall_score),
+            scoreColorClass(current.composite),
           )}
         >
-          {Math.round(overall.overall_score)}
+          {current.composite !== null ? Math.round(current.composite) : "--"}
         </span>
-        <span
-          className={cn(
-            "rounded-badge px-2 py-0.5 font-mono text-[10px] uppercase",
-            scoreBgColor(overall.overall_score),
-            scoreColor(overall.overall_score),
-          )}
-        >
-          {categoryLabel(overall.category)}
-        </span>
+
+        {current.at_risk_flag && (
+          <span className="rounded-badge bg-alert-dim px-2 py-0.5 font-mono text-[10px] uppercase text-alert">
+            At Risk
+          </span>
+        )}
+
+        {!current.at_risk_flag && current.composite !== null && (
+          <span
+            className={cn(
+              "rounded-badge px-2 py-0.5 font-mono text-[10px] uppercase",
+              scoreBgClass(current.composite),
+              scoreColorClass(current.composite),
+            )}
+          >
+            {current.composite >= 70 ? "Healthy" : "Warning"}
+          </span>
+        )}
       </div>
 
-      {/* Component breakdown cards */}
+      {/* Component breakdown: 4 mini KPI cards */}
       <div className="grid grid-cols-2 gap-3">
-        {Object.entries(overall.components).map(([key, comp]) => (
-          <ComponentCard
-            key={key}
-            label={componentLabel(key)}
-            weightPct={Math.round(comp.weight * 100)}
-            score={comp.score}
-            description={componentDescription(key, comp.details)}
-          />
-        ))}
+        <ComponentCard label="Usage Trend" score={current.usage_trend} />
+        <ComponentCard
+          label="Feature Breadth"
+          score={current.feature_breadth}
+        />
+        <ComponentCard label="Satisfaction" score={current.satisfaction} />
+        <ComponentCard label="Error Rate" score={current.error_rate} />
       </div>
+
+      {/* 12-week trend chart */}
+      <TrendChart trend={trend} />
     </div>
   );
 }

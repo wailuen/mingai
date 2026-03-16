@@ -16,16 +16,20 @@ Endpoints:
 - GET    /platform/stats                  — Platform-wide stats
 - GET    /platform/tenants/at-risk        — At-risk tenant signal detection (PA-008)
 - GET    /platform/tenants/{id}/health    — Health score drilldown with trend (PA-009)
+- POST   /platform/tenants/{id}/message  — Platform admin proactive outreach to tenant admins (PA-011)
 
 Schema notes:
 - tenants: id, name, slug (UNIQUE NOT NULL), plan, status, primary_contact_email (NOT NULL)
 - llm_profiles: tenant-scoped, fields: name, provider, primary_model, intent_model,
   embedding_model, endpoint_url, api_key_ref, is_default
 """
+import asyncio
 import datetime
+import json
+import os
 import re
 import uuid
-from typing import Optional
+from typing import List, Optional
 
 import structlog
 from fastapi import (
@@ -144,6 +148,28 @@ class UpdateLLMProfileRequest(BaseModel):
     endpoint_url: Optional[str] = Field(None, max_length=500)
     api_key_ref: Optional[str] = Field(None, max_length=500)
     is_default: Optional[bool] = None
+
+
+_VALID_SEND_VIA = {"in_app", "email"}
+
+
+class ProactiveOutreachRequest(BaseModel):
+    """PA-011: Platform admin sends in-app/email notification to all tenant admins."""
+
+    subject: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=5000)
+    send_via: List[str] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_send_via(self) -> "ProactiveOutreachRequest":
+        if not self.send_via:
+            raise ValueError("send_via must contain at least one channel")
+        invalid = set(self.send_via) - _VALID_SEND_VIA
+        if invalid:
+            raise ValueError(
+                f"Invalid send_via values: {invalid}. Must be one of: {_VALID_SEND_VIA}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +339,133 @@ async def activate_tenant_db(tenant_id: str, db) -> Optional[dict]:
         return None
     logger.info("tenant_activated", tenant_id=tenant_id)
     return {"id": tenant_id, "status": "active"}
+
+
+async def get_tenant_admins_db(tenant_id: str, db) -> list[dict]:
+    """Return all active users with role 'tenant_admin' for a given tenant.
+
+    Used by the proactive outreach endpoint (PA-011) to identify recipients.
+    """
+    result = await db.execute(
+        text(
+            "SELECT id, email FROM users "
+            "WHERE tenant_id = :tenant_id AND role = 'tenant_admin' "
+            "AND status = 'active'"
+        ),
+        {"tenant_id": tenant_id},
+    )
+    rows = result.fetchall()
+    return [{"id": str(r[0]), "email": r[1]} for r in rows]
+
+
+async def insert_platform_outreach_notifications_db(
+    tenant_id: str,
+    recipients: list[dict],
+    subject: str,
+    body: str,
+    db,
+) -> None:
+    """Insert one notification row per recipient for a platform admin outreach.
+
+    Each row has from_platform_admin = TRUE and type = 'platform_outreach'.
+    Notifications are written inside a single transaction; the caller commits.
+    """
+    for recipient in recipients:
+        await db.execute(
+            text(
+                "INSERT INTO notifications "
+                "(id, tenant_id, user_id, type, title, body, read, from_platform_admin) "
+                "VALUES (:id, :tenant_id, :user_id, 'platform_outreach', "
+                ":title, :body, false, true)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "user_id": recipient["id"],
+                "title": subject,
+                "body": body,
+            },
+        )
+
+
+async def write_audit_log_db(
+    tenant_id: str,
+    actor_user_id: str,
+    action: str,
+    resource_type: str,
+    resource_id: str,
+    details: dict,
+    db,
+) -> None:
+    """Insert one row into audit_log.
+
+    Column names are hardcoded — not sourced from user input.
+    CAST(:details AS jsonb) avoids the asyncpg positional-rewriter issue.
+    """
+    await db.execute(
+        text(
+            "INSERT INTO audit_log "
+            "(id, tenant_id, user_id, action, resource_type, resource_id, details) "
+            "VALUES (:id, :tenant_id, :user_id, :action, :resource_type, "
+            ":resource_id, CAST(:details AS jsonb))"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "user_id": actor_user_id,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "details": json.dumps(details),
+        },
+    )
+
+
+async def send_outreach_email(
+    recipient_email: str,
+    subject: str,
+    body: str,
+) -> None:
+    """Send a plain-text email via SendGrid for platform admin outreach.
+
+    Silently skips (logs warning) if SENDGRID_API_KEY is not configured.
+    Any SendGrid exception is caught and logged — email failure never aborts
+    the overall request.
+    """
+    api_key = os.environ.get("SENDGRID_API_KEY")
+    if not api_key:
+        logger.warning(
+            "sendgrid_not_configured",
+            detail="SENDGRID_API_KEY env var is not set — skipping outreach email",
+            recipient_email=recipient_email,
+        )
+        return
+
+    try:
+        import sendgrid  # type: ignore[import]
+        from sendgrid.helpers.mail import Mail  # type: ignore[import]
+
+        sg = sendgrid.SendGridAPIClient(api_key=api_key)
+        from_email = os.environ.get("SENDGRID_FROM_EMAIL", "noreply@mingai.io")
+        message = Mail(
+            from_email=from_email,
+            to_emails=recipient_email,
+            subject=subject,
+            plain_text_content=body,
+        )
+        # sg.send is synchronous — run in executor to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, sg.send, message)
+        logger.info(
+            "outreach_email_sent",
+            recipient_email=recipient_email,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "outreach_email_failed",
+            recipient_email=recipient_email,
+            error=str(exc),
+        )
 
 
 async def list_llm_profiles_db(db) -> list:
@@ -1442,4 +1595,92 @@ async def get_tenant_health_score(
     return {
         "current": current,
         "trend": trend,
+    }
+
+
+@router.post("/tenants/{tenant_id}/message", status_code=status.HTTP_200_OK)
+async def proactive_outreach(
+    request: ProactiveOutreachRequest,
+    tenant_id: str = _UUID_PATH,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-011: Platform admin sends an in-app notification (and optionally email)
+    to all active tenant_admin users of the specified tenant.
+
+    Channels:
+    - in_app: Inserts a persistent row in the notifications table with
+              type='platform_outreach' and from_platform_admin=TRUE.
+    - email:  Sends via SendGrid if SENDGRID_API_KEY is configured; silently
+              skips (warns) if the env var is absent or SendGrid fails.
+
+    Writes an audit_log entry recording the actor, target tenant, recipient
+    count, and channels used.
+
+    Returns 404 if the tenant does not exist.
+    Returns 422 if subject/body are blank or send_via is empty.
+    """
+    # 1. Verify tenant exists
+    tenant = await get_tenant_db(tenant_id=tenant_id, db=session)
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tenant '{tenant_id}' not found",
+        )
+
+    # 2. Fetch all active tenant_admin recipients for this tenant
+    recipients = await get_tenant_admins_db(tenant_id=tenant_id, db=session)
+    send_via = list(set(request.send_via))  # deduplicate
+
+    # 3a. In-app: insert notification rows
+    if "in_app" in send_via and recipients:
+        await insert_platform_outreach_notifications_db(
+            tenant_id=tenant_id,
+            recipients=recipients,
+            subject=request.subject,
+            body=request.body,
+            db=session,
+        )
+
+    # 4. Write audit log (resource_id is the target tenant)
+    await write_audit_log_db(
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="proactive_outreach",
+        resource_type="tenant",
+        resource_id=tenant_id,
+        details={
+            "recipient_count": len(recipients),
+            "send_via": send_via,
+            "subject": request.subject,
+        },
+        db=session,
+    )
+
+    await session.commit()
+
+    # 3b. Email: fire after commit so DB rows are durable even if email fails.
+    # Runs synchronously but each call is non-blocking internally (logs on failure).
+    if "email" in send_via:
+        for recipient in recipients:
+            await send_outreach_email(
+                recipient_email=recipient["email"],
+                subject=request.subject,
+                body=request.body,
+            )
+
+    logger.info(
+        "platform_outreach_sent",
+        actor_user_id=current_user.id,
+        tenant_id=tenant_id,
+        recipient_count=len(recipients),
+        send_via=send_via,
+    )
+
+    return {
+        "tenant_id": tenant_id,
+        "recipients": len(recipients),
+        "send_via": send_via,
+        "message": "Outreach sent",
     }
