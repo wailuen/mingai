@@ -138,6 +138,26 @@ from app.modules.registry.routes import router as registry_router
 
 router.include_router(registry_router)
 
+# Platform LLM Library endpoints (P2LLM-005)
+from app.modules.platform.llm_library.routes import router as llm_library_router
+
+router.include_router(llm_library_router)
+
+# Platform Cost Analytics endpoints (P2LLM-012)
+from app.modules.platform.cost_analytics import router as cost_analytics_router
+
+router.include_router(cost_analytics_router)
+
+# Admin LLM Config endpoints (P2LLM-006)
+from app.modules.admin.llm_config import router as llm_config_router
+
+router.include_router(llm_config_router)
+
+# Admin BYOLLM endpoints (P2LLM-007)
+from app.modules.admin.byollm import router as byollm_router
+
+router.include_router(byollm_router)
+
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.
 # Cloud deployments (aws/azure/gcp) never receive requests at these routes.

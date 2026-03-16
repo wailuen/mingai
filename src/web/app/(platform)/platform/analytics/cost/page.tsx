@@ -8,6 +8,7 @@ import { PeriodSelector } from "./elements/PeriodSelector";
 import { PlatformCostSummary } from "./elements/PlatformCostSummary";
 import { MarginChart } from "./elements/MarginChart";
 import { TenantCostTable } from "./elements/TenantCostTable";
+import { CostAnalyticsSummaryTable } from "./elements/ModelBreakdownTable";
 
 /**
  * FE-046: Cross-Tenant Cost Analytics Dashboard.
@@ -42,6 +43,13 @@ export default function CostAnalyticsPage() {
         <div className="mt-7">
           <ErrorBoundary>
             <MarginChart period={period} />
+          </ErrorBoundary>
+        </div>
+
+        {/* Cost analytics summary (real data) */}
+        <div className="mt-7">
+          <ErrorBoundary>
+            <CostAnalyticsSummaryTable />
           </ErrorBoundary>
         </div>
 

@@ -1,0 +1,189 @@
+"use client";
+
+import { useState } from "react";
+import { Loader2, CheckCircle2, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useLLMLibrary, type LLMLibraryEntry } from "@/lib/hooks/useLLMLibrary";
+import { useUpdateLLMConfig, type LLMConfig } from "@/lib/hooks/useLLMConfig";
+
+interface LibraryModeTabProps {
+  config: LLMConfig;
+}
+
+function SkeletonCards() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-card border border-border bg-bg-surface p-4"
+        >
+          <div className="h-4 w-40 animate-pulse rounded-badge bg-bg-elevated" />
+          <div className="mt-2 h-3 w-64 animate-pulse rounded-badge bg-bg-elevated" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function LibraryModeTab({ config }: LibraryModeTabProps) {
+  const { data: entries, isPending, error } = useLLMLibrary("Published");
+  const updateConfig = useUpdateLLMConfig();
+  const [selectedId, setSelectedId] = useState<string | null>(
+    config.llm_library_id,
+  );
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  function handleApply() {
+    if (!selectedId) return;
+    setShowConfirm(true);
+  }
+
+  function handleConfirmApply() {
+    if (!selectedId) return;
+    updateConfig.mutate(
+      { model_source: "library", llm_library_id: selectedId },
+      { onSuccess: () => setShowConfirm(false) },
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-alert">
+        Failed to load published models: {error.message}
+      </p>
+    );
+  }
+
+  if (isPending) {
+    return <SkeletonCards />;
+  }
+
+  if (entries && entries.length === 0) {
+    return (
+      <div className="rounded-card border border-border bg-bg-surface p-8 text-center">
+        <p className="text-sm text-text-faint">
+          No published models available in the library yet.
+        </p>
+      </div>
+    );
+  }
+
+  const hasChanged = selectedId !== config.llm_library_id;
+
+  return (
+    <div>
+      <p className="mb-4 text-sm text-text-muted">
+        Select a model from the platform library to use for all AI conversations
+        in your workspace.
+      </p>
+
+      <div className="space-y-3">
+        {entries?.map((entry: LLMLibraryEntry) => {
+          const isSelected = selectedId === entry.id;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setSelectedId(entry.id)}
+              className={cn(
+                "w-full rounded-card border p-4 text-left transition-colors",
+                isSelected
+                  ? "border-accent bg-accent-dim"
+                  : "border-border bg-bg-surface hover:border-accent-ring hover:bg-bg-elevated",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-medium text-text-primary">
+                  {entry.display_name}
+                </span>
+                {entry.is_recommended && (
+                  <Star size={12} className="fill-accent text-accent" />
+                )}
+                <span className="ml-auto font-mono text-[11px] text-text-faint">
+                  {entry.provider}
+                </span>
+              </div>
+              {entry.best_practices_md && (
+                <p className="mt-1.5 line-clamp-2 text-[12px] text-text-muted">
+                  {entry.best_practices_md.slice(0, 200)}
+                </p>
+              )}
+              <div className="mt-2 flex items-center gap-3 font-mono text-[11px] text-text-faint">
+                <span>In: ${entry.pricing_per_1k_tokens_in.toFixed(6)}/1K</span>
+                <span>
+                  Out: ${entry.pricing_per_1k_tokens_out.toFixed(6)}/1K
+                </span>
+                <span className="capitalize">{entry.plan_tier} tier</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Apply button */}
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleApply}
+          disabled={!hasChanged || !selectedId || updateConfig.isPending}
+          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {updateConfig.isPending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <CheckCircle2 size={14} />
+          )}
+          Apply Profile
+        </button>
+        {config.llm_library_id && !hasChanged && (
+          <span className="text-[12px] text-accent">Currently active</span>
+        )}
+      </div>
+
+      {updateConfig.error && (
+        <p className="mt-3 text-sm text-alert">{updateConfig.error.message}</p>
+      )}
+
+      {/* Confirmation dialog */}
+      {showConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowConfirm(false);
+          }}
+        >
+          <div className="mx-4 w-full max-w-md rounded-card border border-border bg-bg-surface p-6">
+            <h3 className="text-section-heading text-text-primary">
+              Change LLM Profile
+            </h3>
+            <p className="mt-2 text-sm text-text-muted">
+              Changing LLM profile will affect all future conversations.
+              Existing conversation history will not be affected.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmApply}
+                disabled={updateConfig.isPending}
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {updateConfig.isPending && (
+                  <Loader2 size={14} className="animate-spin" />
+                )}
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

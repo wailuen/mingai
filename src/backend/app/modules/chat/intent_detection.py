@@ -123,15 +123,19 @@ class IntentDetectionService:
     PRIMARY_MODEL). Model names MUST come from env — never hardcoded.
     """
 
-    def __init__(self, *, redis_client=None, llm_client=None):
+    def __init__(self, *, redis_client=None, llm_client=None, instrumented_client=None):
         """
         Args:
-            redis_client: Async Redis client. If None, uses get_redis() at call time.
-            llm_client:   Injected async OpenAI-compatible client (for testing).
-                          If None, builds from env at call time.
+            redis_client:        Async Redis client. If None, uses get_redis() at call time.
+            llm_client:          Injected async OpenAI-compatible client (for testing).
+                                 If None, builds from env at call time.
+            instrumented_client: Optional InstrumentedLLMClient (Phase 2).
+                                 When provided, LLM calls route through it for usage
+                                 tracking. Falls back to direct API when None.
         """
         self._redis = redis_client
         self._llm_client = llm_client
+        self._instrumented_client = instrumented_client
 
     # ------------------------------------------------------------------
     # Public API
@@ -311,6 +315,25 @@ class IntentDetectionService:
             if role in ("user", "assistant") and content:
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": query})
+
+        # Route through InstrumentedLLMClient when available
+        if self._instrumented_client is not None:
+            try:
+                completion = await self._instrumented_client.complete(
+                    tenant_id=tenant_id,
+                    messages=messages,
+                    temperature=0.0,
+                    max_tokens=64,
+                    response_format={"type": "json_object"},
+                )
+                return self._parse_llm_response(completion.content)
+            except Exception as exc:
+                logger.warning(
+                    "intent_instrumented_client_failed",
+                    tenant_id=tenant_id,
+                    error=str(exc),
+                )
+                # Fall through to direct client
 
         response = await client.chat.completions.create(
             model=model,

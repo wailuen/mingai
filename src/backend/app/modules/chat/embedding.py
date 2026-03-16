@@ -25,9 +25,21 @@ class EmbeddingService:
     Model is read from EMBEDDING_MODEL environment variable.
     When tenant_id is provided, embeddings are cached in Redis with
     the key format: mingai:{tenant_id}:embedding_cache:{sha256_hash[:16]}.
+
+    Phase 2: Optionally accepts an InstrumentedLLMClient at construction.
+    When provided AND tenant_id is supplied, routing goes through the
+    instrumented client (for usage tracking). Falls back to direct API
+    for backwards compatibility when instrumented_client is None.
     """
 
-    def __init__(self):
+    def __init__(self, instrumented_client=None):
+        """
+        Args:
+            instrumented_client: Optional InstrumentedLLMClient instance.
+                                 When provided and tenant_id is given, embeddings
+                                 route through it for usage tracking.
+        """
+        self._instrumented_client = instrumented_client
         model = os.environ.get("EMBEDDING_MODEL", "").strip()
         if not model:
             raise ValueError(
@@ -99,12 +111,33 @@ class EmbeddingService:
                 )
                 return json.loads(cached)
 
-        # Call OpenAI API
-        response = await self._client.embeddings.create(
-            model=self._model,
-            input=text,
-        )
-        vector = response.data[0].embedding
+        # Route through InstrumentedLLMClient when available and tenant_id provided
+        if tenant_id and getattr(self, "_instrumented_client", None) is not None:
+            try:
+                vectors = await self._instrumented_client.embed(
+                    tenant_id=tenant_id,
+                    texts=[text],
+                )
+                vector = vectors[0] if vectors else []
+            except Exception as exc:
+                logger.warning(
+                    "embedding_instrumented_client_failed",
+                    tenant_id=tenant_id,
+                    error=str(exc),
+                )
+                # Fall back to direct API
+                response = await self._client.embeddings.create(
+                    model=self._model,
+                    input=text,
+                )
+                vector = response.data[0].embedding
+        else:
+            # Direct API call (legacy / no tenant_id path)
+            response = await self._client.embeddings.create(
+                model=self._model,
+                input=text,
+            )
+            vector = response.data[0].embedding
 
         # Store in Redis cache if tenant_id is provided
         if tenant_id:
