@@ -13,7 +13,14 @@ export type TenantIssueStatus =
   | "in_review"
   | "escalated"
   | "resolved"
-  | "closed";
+  | "closed"
+  // PA-017 platform action statuses
+  | "open"
+  | "triaged"
+  | "awaiting_info"
+  | "routed"
+  | "in_progress"
+  | "assigned";
 
 export interface TenantIssue {
   id: string;
@@ -22,7 +29,7 @@ export interface TenantIssue {
   description: string;
   status: TenantIssueStatus;
   reporter?: { id: string; name: string } | null;
-  reporter_email?: string;  // legacy field — use reporter.name if available
+  reporter_email?: string; // legacy field — use reporter.name if available
   created_at: string;
   updated_at?: string;
 }
@@ -246,6 +253,60 @@ export function useRequestInfo() {
       apiPost<PlatformIssue>(
         `/api/v1/platform/issues/${encodeURIComponent(id)}/request-info`,
         { message },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useRouteIssue — POST /api/v1/platform/issues/{id}/route
+// ---------------------------------------------------------------------------
+
+export function useRouteIssue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      notify_tenant = true,
+      note = "",
+    }: {
+      id: string;
+      notify_tenant?: boolean;
+      note?: string;
+    }) =>
+      apiPost<{ id: string; status: string }>(
+        `/api/v1/platform/issues/${encodeURIComponent(id)}/route`,
+        { notify_tenant, note },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useCloseDuplicate — POST /api/v1/platform/issues/{id}/close-duplicate
+// ---------------------------------------------------------------------------
+
+export function useCloseDuplicate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      duplicate_of,
+      note = "",
+    }: {
+      id: string;
+      duplicate_of: string;
+      note?: string;
+    }) =>
+      apiPost<{ id: string; status: string; duplicate_of: string }>(
+        `/api/v1/platform/issues/${encodeURIComponent(id)}/close-duplicate`,
+        { duplicate_of, note },
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });

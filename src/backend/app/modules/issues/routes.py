@@ -284,7 +284,7 @@ async def add_issue_event_db(
     if issue is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
+            detail="Issue not found",
         )
 
     event_id = str(uuid.uuid4())
@@ -469,7 +469,7 @@ async def record_still_happening_db(
     if orig is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
+            detail="Issue not found",
         )
 
     # Record occurrence in rate limiter
@@ -696,7 +696,7 @@ async def update_issue_status(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
+            detail="Issue not found",
         )
     return result
 
@@ -734,7 +734,7 @@ async def get_issue(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
+            detail="Issue not found",
         )
 
     # Authorization: tenant admins can see all issues; others can only see their own
@@ -1297,7 +1297,11 @@ async def admin_list_issues(
 
 @admin_issues_router.patch("/{issue_id}")
 async def admin_issue_action(
-    issue_id: str = Path(..., max_length=64),
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
     request: AdminIssueActionRequest = ...,
     current_user: CurrentUser = Depends(require_tenant_admin),
     session: AsyncSession = Depends(get_async_session),
@@ -1321,7 +1325,7 @@ async def admin_issue_action(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
+            detail="Issue not found",
         )
     return result
 
@@ -1463,9 +1467,495 @@ async def platform_issue_queue(
     return {"items": items, "counts": counts}
 
 
+# ---------------------------------------------------------------------------
+# PA-017: Individual issue action endpoints
+# NOTE: All sub-path routes MUST appear before the generic /{issue_id} handler
+# to avoid FastAPI path-matching ambiguity (sub-paths have two segments).
+# ---------------------------------------------------------------------------
+
+
+class AcceptIssueRequest(BaseModel):
+    """Accept a triage issue — no body required."""
+
+
+class WontFixIssueRequest(BaseModel):
+    reason: str = Field("", max_length=2000)
+
+
+class RouteIssueRequest(BaseModel):
+    notify_tenant: bool = True
+    note: str = Field("", max_length=2000)
+
+
+class RequestInfoRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+class OverrideSeverityRequest(BaseModel):
+    severity: str = Field(..., pattern=r"^P[0-4]$")
+    reason: str = Field("", max_length=2000)
+
+
+class AssignIssueRequest(BaseModel):
+    assignee_email: str = Field(
+        ...,
+        max_length=254,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+
+
+class CloseDuplicateRequest(BaseModel):
+    # UUID format enforced to prevent orphaned references from typos
+    duplicate_of: str = Field(
+        ...,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    )
+    note: str = Field("", max_length=2000)
+
+
+async def _platform_get_issue_row(issue_id: str, db) -> Optional[dict]:
+    """Fetch minimal issue data required by platform action endpoints."""
+    result = await db.execute(
+        text(
+            "SELECT id, tenant_id, reporter_id, status "
+            "FROM issue_reports WHERE id = :id"
+        ),
+        {"id": issue_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        return None
+    return {
+        "id": str(row[0]),
+        "tenant_id": str(row[1]),
+        "reporter_id": str(row[2]) if row[2] else None,
+        "status": row[3],
+    }
+
+
+async def _platform_set_status_and_event(
+    issue_id: str,
+    tenant_id: str,
+    new_status: str,
+    actor_id: str,
+    action_label: str,
+    extra_data: dict,
+    db,
+) -> None:
+    """Transition issue status and record a platform_action event."""
+    import json as _j
+
+    await db.execute(
+        text(
+            "UPDATE issue_reports SET status = :status, updated_at = NOW() "
+            "WHERE id = :id"
+        ),
+        {"id": issue_id, "status": new_status},
+    )
+    event_data = {"action": action_label, "actor_id": actor_id, **extra_data}
+    await db.execute(
+        text(
+            "INSERT INTO issue_report_events "
+            "(id, issue_id, tenant_id, event_type, data) "
+            "VALUES (:id, :issue_id, :tenant_id, 'platform_action', CAST(:data AS jsonb))"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "issue_id": issue_id,
+            "tenant_id": tenant_id,
+            "data": _j.dumps(event_data),
+        },
+    )
+
+
+async def _send_issue_notifications(
+    tenant_id: str,
+    recipient_ids: list,
+    notif_type: str,
+    title: str,
+    body: str,
+    db,
+) -> None:
+    """
+    Insert notification rows for the given recipient user IDs.
+
+    Per-recipient failures are isolated and logged — a stale user_id must not
+    roll back the parent issue status change.
+    """
+    for uid in recipient_ids:
+        try:
+            await db.execute(
+                text(
+                    "INSERT INTO notifications "
+                    "(id, tenant_id, user_id, type, title, body, read) "
+                    "VALUES (:id, :tenant_id, :user_id, :type, :title, :body, false)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "user_id": uid,
+                    "type": notif_type,
+                    "title": title,
+                    "body": body,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "issue_notification_insert_failed",
+                user_id=uid,
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+
+
+@platform_issues_router.post("/{issue_id}/accept", status_code=status.HTTP_200_OK)
+async def platform_accept_issue(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Accept an issue — transitions status to 'triaged'."""
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+    await _platform_set_status_and_event(
+        issue_id=issue_id,
+        tenant_id=issue["tenant_id"],
+        new_status="triaged",
+        actor_id=current_user.id,
+        action_label="accept",
+        extra_data={},
+        db=session,
+    )
+    await session.commit()
+    logger.info("platform_issue_accepted", issue_id=issue_id, actor_id=current_user.id)
+    return {"id": issue_id, "status": "triaged"}
+
+
+@platform_issues_router.patch("/{issue_id}/severity", status_code=status.HTTP_200_OK)
+async def platform_override_severity(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    request: OverrideSeverityRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Override issue severity."""
+    import json as _j
+
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+    await session.execute(
+        text(
+            "UPDATE issue_reports SET severity = :severity, updated_at = NOW() "
+            "WHERE id = :id"
+        ),
+        {"id": issue_id, "severity": request.severity},
+    )
+    event_data = {
+        "action": "override_severity",
+        "actor_id": current_user.id,
+        "severity": request.severity,
+        "reason": request.reason,
+    }
+    await session.execute(
+        text(
+            "INSERT INTO issue_report_events "
+            "(id, issue_id, tenant_id, event_type, data) "
+            "VALUES (:id, :issue_id, :tenant_id, 'platform_action', CAST(:data AS jsonb))"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "issue_id": issue_id,
+            "tenant_id": issue["tenant_id"],
+            "data": _j.dumps(event_data),
+        },
+    )
+    await session.commit()
+    logger.info(
+        "platform_severity_overridden",
+        issue_id=issue_id,
+        severity=request.severity,
+        actor_id=current_user.id,
+    )
+    return {"id": issue_id, "severity": request.severity}
+
+
+@platform_issues_router.post("/{issue_id}/wont-fix", status_code=status.HTTP_200_OK)
+async def platform_wont_fix(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    request: WontFixIssueRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Close issue as won't fix — transitions status to 'closed'."""
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+    await _platform_set_status_and_event(
+        issue_id=issue_id,
+        tenant_id=issue["tenant_id"],
+        new_status="closed",
+        actor_id=current_user.id,
+        action_label="wont_fix",
+        extra_data={"reason": request.reason},
+        db=session,
+    )
+    await session.commit()
+    logger.info("platform_issue_wont_fix", issue_id=issue_id, actor_id=current_user.id)
+    return {"id": issue_id, "status": "closed"}
+
+
+@platform_issues_router.patch("/{issue_id}/assign", status_code=status.HTTP_200_OK)
+async def platform_assign_issue(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    request: AssignIssueRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Assign issue to a platform admin user by email."""
+    import json as _j
+
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+
+    # Resolve assignee by email (platform scope — any active user)
+    assignee_result = await session.execute(
+        text("SELECT id, name FROM users WHERE email = :email LIMIT 1"),
+        {"email": request.assignee_email},
+    )
+    assignee_row = assignee_result.fetchone()
+    assignee_id = str(assignee_row[0]) if assignee_row else None
+    assignee_name = assignee_row[1] if assignee_row else request.assignee_email
+
+    # Store assignee in metadata JSONB — issue_reports has no dedicated column
+    meta_result = await session.execute(
+        text("SELECT metadata FROM issue_reports WHERE id = :id"),
+        {"id": issue_id},
+    )
+    meta_row = meta_result.fetchone()
+    current_meta: dict = meta_row[0] if meta_row and meta_row[0] else {}
+    current_meta["assigned_to"] = {
+        "email": request.assignee_email,
+        "id": assignee_id,
+        "name": assignee_name,
+    }
+    await session.execute(
+        text(
+            "UPDATE issue_reports SET metadata = CAST(:meta AS jsonb), updated_at = NOW() "
+            "WHERE id = :id"
+        ),
+        {"id": issue_id, "meta": _j.dumps(current_meta)},
+    )
+
+    event_data = {
+        "action": "assign",
+        "actor_id": current_user.id,
+        "assignee_email": request.assignee_email,
+        "assignee_id": assignee_id,
+    }
+    await session.execute(
+        text(
+            "INSERT INTO issue_report_events "
+            "(id, issue_id, tenant_id, event_type, data) "
+            "VALUES (:id, :issue_id, :tenant_id, 'platform_action', CAST(:data AS jsonb))"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "issue_id": issue_id,
+            "tenant_id": issue["tenant_id"],
+            "data": _j.dumps(event_data),
+        },
+    )
+    await session.commit()
+    logger.info(
+        "platform_issue_assigned",
+        issue_id=issue_id,
+        assignee_id=assignee_id,  # log ID, not email — PII guard
+        actor_id=current_user.id,
+    )
+    return {"id": issue_id, "assigned_to": assignee_name}
+
+
+@platform_issues_router.post("/{issue_id}/request-info", status_code=status.HTTP_200_OK)
+async def platform_request_info(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    request: RequestInfoRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Request more info from reporter — notifies reporter, transitions status to 'awaiting_info'."""
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+    await _platform_set_status_and_event(
+        issue_id=issue_id,
+        tenant_id=issue["tenant_id"],
+        new_status="awaiting_info",
+        actor_id=current_user.id,
+        action_label="request_info",
+        extra_data={"message": request.message},
+        db=session,
+    )
+    if issue["reporter_id"]:
+        await _send_issue_notifications(
+            tenant_id=issue["tenant_id"],
+            recipient_ids=[issue["reporter_id"]],
+            notif_type="issue_request_info",
+            title="More information requested",
+            body=request.message,
+            db=session,
+        )
+    await session.commit()
+    logger.info(
+        "platform_issue_request_info", issue_id=issue_id, actor_id=current_user.id
+    )
+    return {"id": issue_id, "status": "awaiting_info"}
+
+
+@platform_issues_router.post("/{issue_id}/route", status_code=status.HTTP_200_OK)
+async def platform_route_issue(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    request: RouteIssueRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Route issue to tenant — notifies tenant admins, transitions status to 'routed'."""
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+    await _platform_set_status_and_event(
+        issue_id=issue_id,
+        tenant_id=issue["tenant_id"],
+        new_status="routed",
+        actor_id=current_user.id,
+        action_label="route",
+        extra_data={"notify_tenant": request.notify_tenant, "note": request.note},
+        db=session,
+    )
+    if request.notify_tenant:
+        admins_result = await session.execute(
+            text(
+                "SELECT id FROM users "
+                "WHERE tenant_id = :tid AND role = 'tenant_admin' AND status = 'active'"
+            ),
+            {"tid": issue["tenant_id"]},
+        )
+        admin_ids = [str(r[0]) for r in admins_result.fetchall()]
+        if admin_ids:
+            await _send_issue_notifications(
+                tenant_id=issue["tenant_id"],
+                recipient_ids=admin_ids,
+                notif_type="issue_routed",
+                title="Issue routed to your workspace",
+                body=request.note
+                or f"Issue {issue_id} has been routed to your workspace by platform engineering.",
+                db=session,
+            )
+    await session.commit()
+    logger.info(
+        "platform_issue_routed",
+        issue_id=issue_id,
+        notify_tenant=request.notify_tenant,
+        actor_id=current_user.id,
+    )
+    return {"id": issue_id, "status": "routed"}
+
+
+@platform_issues_router.post(
+    "/{issue_id}/close-duplicate", status_code=status.HTTP_200_OK
+)
+async def platform_close_duplicate(
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    request: CloseDuplicateRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-017: Close issue as duplicate of another — transitions status to 'closed'."""
+    if issue_id == request.duplicate_of:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="An issue cannot be a duplicate of itself",
+        )
+    issue = await _platform_get_issue_row(issue_id, session)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+    await _platform_set_status_and_event(
+        issue_id=issue_id,
+        tenant_id=issue["tenant_id"],
+        new_status="closed",
+        actor_id=current_user.id,
+        action_label="close_duplicate",
+        extra_data={"duplicate_of": request.duplicate_of, "note": request.note},
+        db=session,
+    )
+    await session.commit()
+    logger.info(
+        "platform_issue_close_duplicate",
+        issue_id=issue_id,
+        duplicate_of=request.duplicate_of,
+        actor_id=current_user.id,
+    )
+    return {"id": issue_id, "status": "closed", "duplicate_of": request.duplicate_of}
+
+
 @platform_issues_router.patch("/{issue_id}")
 async def platform_issue_action(
-    issue_id: str = Path(..., max_length=64),
+    issue_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
     request: PlatformIssueActionRequest = ...,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
@@ -1494,7 +1984,7 @@ async def platform_issue_action(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{issue_id}' not found",
+            detail="Issue not found",
         )
     return result
 

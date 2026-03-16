@@ -20,6 +20,7 @@ import { BatchActionBar } from "./elements/BatchActionBar";
 import { AssignDialog } from "./elements/AssignDialog";
 import { SeverityOverrideDialog } from "./elements/SeverityOverrideDialog";
 import { RequestInfoDialog } from "./elements/RequestInfoDialog";
+import { CloseDuplicateDialog } from "./elements/CloseDuplicateDialog";
 
 // ---------------------------------------------------------------------------
 // Severity badge styling
@@ -54,14 +55,24 @@ function formatStatusLabel(status: TenantIssueStatus): string {
 function statusBadgeClass(status: TenantIssueStatus): string {
   switch (status) {
     case "new":
+    case "open":
       return "border-accent/30 bg-accent-dim text-accent";
+    case "triaged":
+    case "assigned":
+      return "border-accent/20 bg-accent-dim/50 text-accent";
     case "in_review":
+    case "in_progress":
+    case "routed":
+      return "border-warn/30 bg-warn-dim text-warn";
+    case "awaiting_info":
       return "border-warn/30 bg-warn-dim text-warn";
     case "escalated":
       return "border-alert/30 bg-alert-dim text-alert";
     case "resolved":
       return "border-border bg-bg-elevated text-text-muted";
     case "closed":
+      return "border-border bg-bg-elevated text-text-faint";
+    default:
       return "border-border bg-bg-elevated text-text-faint";
   }
 }
@@ -93,7 +104,9 @@ function IssueDetailRow({ issue }: { issue: PlatformIssue }) {
           <span>
             Last updated:{" "}
             <span className="font-mono text-text-muted">
-              {new Date(issue.updated_at).toLocaleString()}
+              {issue.updated_at
+                ? new Date(issue.updated_at).toLocaleString()
+                : "—"}
             </span>
           </span>
         </div>
@@ -327,6 +340,8 @@ export default function PlatformIssueQueuePage() {
   const [showSeverityDialog, setShowSeverityDialog] = useState(false);
   const [showRequestInfoDialog, setShowRequestInfoDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showCloseDuplicateDialog, setShowCloseDuplicateDialog] =
+    useState(false);
 
   const { data, isPending } = usePlatformIssueQueue(filter);
   const assignMutation = useAssignIssue();
@@ -399,6 +414,7 @@ export default function PlatformIssueQueuePage() {
               onOverrideSeverity={() => setShowSeverityDialog(true)}
               onRequestInfo={() => setShowRequestInfoDialog(true)}
               onAssign={() => setShowAssignDialog(true)}
+              onCloseDuplicate={() => setShowCloseDuplicateDialog(true)}
             />
           )}
         </div>
@@ -439,6 +455,14 @@ export default function PlatformIssueQueuePage() {
           <AssignDialog
             onConfirm={handleAssignConfirm}
             onClose={() => setShowAssignDialog(false)}
+          />
+        )}
+
+        {/* Close as duplicate dialog */}
+        {showCloseDuplicateDialog && selectedIssue && (
+          <CloseDuplicateDialog
+            issue={selectedIssue}
+            onClose={() => setShowCloseDuplicateDialog(false)}
           />
         )}
       </div>

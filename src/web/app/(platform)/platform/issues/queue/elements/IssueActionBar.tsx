@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
   UserPlus,
   MessageSquare,
+  ArrowUpRight,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useAcceptIssue,
   useWontFix,
+  useRouteIssue,
   type PlatformIssue,
 } from "@/lib/hooks/useEngineeringIssues";
 
@@ -24,6 +27,7 @@ interface IssueActionBarProps {
   onOverrideSeverity: () => void;
   onRequestInfo: () => void;
   onAssign: () => void;
+  onCloseDuplicate: () => void;
 }
 
 export function IssueActionBar({
@@ -31,13 +35,26 @@ export function IssueActionBar({
   onOverrideSeverity,
   onRequestInfo,
   onAssign,
+  onCloseDuplicate,
 }: IssueActionBarProps) {
   const acceptMutation = useAcceptIssue();
   const wontFixMutation = useWontFix();
+  const routeMutation = useRouteIssue();
   const [showWontFixConfirm, setShowWontFixConfirm] = useState(false);
+  const [showRouteConfirm, setShowRouteConfirm] = useState(false);
+
+  // Reset confirm states when the selected issue changes to prevent
+  // accidental destructive actions on the wrong issue.
+  useEffect(() => {
+    setShowWontFixConfirm(false);
+    setShowRouteConfirm(false);
+  }, [selectedIssue?.id]);
 
   const disabled = !selectedIssue;
-  const isProcessing = acceptMutation.isPending || wontFixMutation.isPending;
+  const isProcessing =
+    acceptMutation.isPending ||
+    wontFixMutation.isPending ||
+    routeMutation.isPending;
 
   function handleAccept() {
     if (!selectedIssue) return;
@@ -53,6 +70,18 @@ export function IssueActionBar({
     wontFixMutation.mutate(
       { id: selectedIssue.id, reason: "Marked as won't fix by platform admin" },
       { onSuccess: () => setShowWontFixConfirm(false) },
+    );
+  }
+
+  function handleRoute() {
+    if (!selectedIssue) return;
+    if (!showRouteConfirm) {
+      setShowRouteConfirm(true);
+      return;
+    }
+    routeMutation.mutate(
+      { id: selectedIssue.id, notify_tenant: true },
+      { onSuccess: () => setShowRouteConfirm(false) },
     );
   }
 
@@ -124,6 +153,44 @@ export function IssueActionBar({
       >
         <MessageSquare size={14} />
         Request Info
+      </button>
+
+      {/* Route to Tenant */}
+      <button
+        type="button"
+        disabled={disabled || isProcessing}
+        onClick={handleRoute}
+        className={cn(
+          "flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-xs font-medium transition-colors",
+          disabled
+            ? "cursor-not-allowed border-border bg-bg-elevated text-text-faint"
+            : showRouteConfirm
+              ? "border-accent bg-accent-dim text-accent"
+              : "border-border text-text-muted hover:border-accent-ring hover:text-text-primary",
+        )}
+      >
+        <ArrowUpRight size={14} />
+        {showRouteConfirm
+          ? "Confirm Route"
+          : routeMutation.isPending
+            ? "Routing..."
+            : "Route to Tenant"}
+      </button>
+
+      {/* Close as Duplicate */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onCloseDuplicate}
+        className={cn(
+          "flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-xs font-medium transition-colors",
+          disabled
+            ? "cursor-not-allowed border-border bg-bg-elevated text-text-faint"
+            : "border-border text-text-muted hover:border-accent-ring hover:text-text-primary",
+        )}
+      >
+        <Copy size={14} />
+        Close as Duplicate
       </button>
 
       {/* Won't Fix (destructive) */}
