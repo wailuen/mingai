@@ -185,8 +185,10 @@ async def update_glossary_term_db(
     tenant_id: str,
     updates: dict,
     db,
+    commit: bool = True,
 ) -> Optional[dict]:
     """Update glossary term fields."""
+    updates = dict(updates)  # avoid mutating caller's dict
     if "full_form" in updates and updates["full_form"]:
         updates["full_form"] = sanitize_glossary_definition(updates["full_form"])
     if "aliases" in updates:
@@ -212,7 +214,8 @@ async def update_glossary_term_db(
         ),
         params,
     )
-    await db.commit()
+    if commit:
+        await db.commit()
     if (result.rowcount or 0) == 0:
         return None
     return await get_glossary_term_db(term_id, tenant_id, db)
@@ -526,6 +529,69 @@ async def list_miss_signals(
     return result
 
 
+# ---------------------------------------------------------------------------
+# TA-013: Admin miss-signals endpoint — returns term + query_count +
+#         example_queries (up to 3 snippets, 40 chars each, truncated).
+# ---------------------------------------------------------------------------
+
+admin_router = APIRouter(prefix="/admin/glossary", tags=["admin-glossary"])
+
+
+async def get_admin_miss_signals_db(tenant_id: str, limit: int, db) -> list:
+    """
+    TA-013: Return top N uncovered terms with query_count and example_queries.
+
+    Groups by unresolved_term, sums occurrence_count as query_count, and
+    aggregates up to 3 distinct query_text samples (≤ 40 chars each).
+    """
+    result = await db.execute(
+        text(
+            "SELECT unresolved_term, "
+            "  SUM(occurrence_count) AS query_count, "
+            "  array_agg(DISTINCT LEFT(query_text, 40)) AS example_queries "
+            "FROM glossary_miss_signals "
+            "WHERE tenant_id = :tenant_id "
+            "GROUP BY unresolved_term "
+            "ORDER BY query_count DESC "
+            "LIMIT :limit"
+        ),
+        {"tenant_id": tenant_id, "limit": limit},
+    )
+    items = []
+    for row in result.mappings():
+        examples = list(row.get("example_queries") or [])
+        # Return at most 3, truncated to 40 chars (belt-and-suspenders guard)
+        examples = [str(e)[:40] for e in examples if e][:3]
+        items.append(
+            {
+                "term": row["unresolved_term"],
+                "query_count": int(row["query_count"]),
+                "example_queries": examples,
+            }
+        )
+    return items
+
+
+@admin_router.get("/miss-signals")
+async def admin_list_miss_signals(
+    limit: int = Query(50, ge=1, le=200),
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-013: List top unresolved glossary terms with query_count and example_queries.
+
+    Returns terms that appeared in user queries but are not yet in the tenant
+    glossary, ranked by occurrence frequency.
+    """
+    items = await get_admin_miss_signals_db(
+        tenant_id=current_user.tenant_id,
+        limit=limit,
+        db=session,
+    )
+    return {"items": items, "total": len(items)}
+
+
 _VALID_MISS_PERIODS = {"7d": "7 days", "30d": "30 days"}
 
 
@@ -662,3 +728,164 @@ async def delete_glossary_term(
         )
     await _invalidate_glossary_cache(current_user.tenant_id)
     return None
+
+
+# ---------------------------------------------------------------------------
+# TA-012: Glossary version history and rollback
+# ---------------------------------------------------------------------------
+
+_GLOSSARY_UPDATABLE_FIELDS = frozenset({"term", "full_form", "aliases"})
+
+
+@router.get("/{term_id}/history")
+async def get_glossary_history(
+    term_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-012: Return audit_log entries for a glossary term, newest first.
+
+    Each entry includes timestamp, actor email, changed_fields, before, and after values.
+    """
+    try:
+        uuid.UUID(term_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="term_id must be a valid UUID")
+
+    result = await session.execute(
+        text(
+            "SELECT al.id, al.user_id, al.action, al.details, al.created_at, "
+            "  u.email AS actor_email "
+            "FROM audit_log al "
+            "LEFT JOIN users u ON u.id::text = al.user_id "
+            "WHERE al.tenant_id = :tenant_id "
+            "  AND al.resource_type = 'glossary_term' "
+            "  AND al.resource_id = CAST(:term_id AS uuid) "
+            "ORDER BY al.created_at DESC "
+            "LIMIT 100"
+        ),
+        {"tenant_id": current_user.tenant_id, "term_id": term_id},
+    )
+    rows = result.fetchall()
+    items = []
+    for row in rows:
+        details = row[3] or {}
+        items.append(
+            {
+                "id": str(row[0]),
+                "actor_id": row[1],
+                "actor_email": row[5],
+                "action": row[2],
+                "changed_fields": details.get("changed_fields", []),
+                "before": details.get("before", {}),
+                "after": details.get("after", {}),
+                "created_at": row[4].isoformat() if row[4] else None,
+            }
+        )
+    return {"items": items, "total": len(items)}
+
+
+@router.patch("/{term_id}/rollback/{version_id}")
+async def rollback_glossary_term(
+    term_id: str,
+    version_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-012: Restore a glossary term to the state captured in the given audit_log entry.
+
+    The version_id refers to audit_log.id. The `before` JSON from that entry is applied.
+    A new audit_log entry is created to record the rollback.
+    """
+    try:
+        uuid.UUID(term_id)
+        uuid.UUID(version_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="term_id and version_id must be valid UUIDs"
+        )
+
+    # Fetch the audit log entry (scoped to tenant + term)
+    result = await session.execute(
+        text(
+            "SELECT id, details FROM audit_log "
+            "WHERE id = CAST(:version_id AS uuid) "
+            "  AND tenant_id = :tenant_id "
+            "  AND resource_type = 'glossary_term' "
+            "  AND resource_id = CAST(:term_id AS uuid)"
+        ),
+        {
+            "version_id": version_id,
+            "tenant_id": current_user.tenant_id,
+            "term_id": term_id,
+        },
+    )
+    audit_row = result.fetchone()
+    if audit_row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Version not found for this glossary term",
+        )
+
+    details = audit_row[1] or {}
+    before_state = details.get("before", {})
+    if not before_state:
+        raise HTTPException(
+            status_code=422,
+            detail="This version entry has no 'before' state to restore",
+        )
+
+    # Build SET clause from the before_state using the allowlist
+    updates = {k: v for k, v in before_state.items() if k in _GLOSSARY_UPDATABLE_FIELDS}
+    if not updates:
+        raise HTTPException(
+            status_code=422,
+            detail="No restorable fields in the selected version",
+        )
+
+    # Fetch current state for the after snapshot in the new audit entry
+    current = await get_glossary_term_db(term_id, current_user.tenant_id, session)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Glossary term not found")
+
+    # Apply the restore (deferred commit — audit INSERT must be in same transaction)
+    result = await update_glossary_term_db(
+        term_id=term_id,
+        tenant_id=current_user.tenant_id,
+        updates=updates,
+        db=session,
+        commit=False,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Glossary term not found")
+
+    # Write rollback audit_log entry in the same transaction
+    rollback_details = json.dumps(
+        {
+            "rollback_to_version": version_id,
+            "changed_fields": list(updates.keys()),
+            "before": {k: current.get(k) for k in updates},
+            "after": updates,
+        }
+    )
+    await session.execute(
+        text(
+            "INSERT INTO audit_log "
+            "(tenant_id, user_id, action, resource_type, resource_id, details) "
+            "VALUES (:tenant_id, :user_id, 'rollback', 'glossary_term', "
+            "CAST(:resource_id AS uuid), CAST(:details AS jsonb))"
+        ),
+        {
+            "tenant_id": current_user.tenant_id,
+            "user_id": current_user.id,
+            "resource_id": term_id,
+            "details": rollback_details,
+        },
+    )
+    # Commit both the term update and audit entry atomically
+    await session.commit()
+
+    await _invalidate_glossary_cache(current_user.tenant_id)
+    return result
