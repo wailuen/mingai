@@ -121,6 +121,8 @@ async def get_tenant_cost_usage(
 
     # Set platform admin role for RLS bypass
     await db.execute(text("SELECT set_config('app.user_role', 'platform_admin', true)"))
+    # cost_summary_daily RLS requires platform scope as well
+    await db.execute(text("SELECT set_config('app.current_scope', 'platform', true)"))
 
     # Totals
     totals_result = await db.execute(
@@ -197,6 +199,25 @@ async def get_tenant_cost_usage(
         }
         for r in daily_result.fetchall()
     ]
+
+    # Gross margin — fetch the most recent cost_summary_daily row for this tenant.
+    # The row is written by the nightly job and may not exist for very new tenants
+    # or when the job has not yet run; in that case gross_margin_pct is None.
+    margin_result = await db.execute(
+        text(
+            "SELECT gross_margin_pct "
+            "FROM cost_summary_daily "
+            "WHERE tenant_id = :tid "
+            "ORDER BY date DESC "
+            "LIMIT 1"
+        ),
+        {"tid": tenant_id},
+    )
+    margin_row = margin_result.fetchone()
+    gross_margin_pct: float | None = (
+        float(margin_row[0]) if margin_row and margin_row[0] is not None else None
+    )
+    totals["gross_margin_pct"] = gross_margin_pct
 
     return {
         "tenant_id": tenant_id,

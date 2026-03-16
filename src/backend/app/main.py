@@ -160,6 +160,32 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # PA-007: Start tenant health score batch job scheduler (fires daily at 02:00 UTC).
+    _health_score_task = None
+    try:
+        from app.modules.platform.health_score_job import run_health_score_scheduler
+
+        _health_score_task = asyncio.create_task(run_health_score_scheduler())
+        logger.info("health_score_scheduler_started", schedule="daily at 02:00 UTC")
+    except Exception as exc:
+        logger.warning(
+            "health_score_scheduler_startup_failed",
+            error=str(exc),
+        )
+
+    # PA-012: Start token attribution / cost summary batch job (fires daily at 03:30 UTC).
+    _cost_summary_task = None
+    try:
+        from app.modules.platform.cost_summary_job import start_cost_summary_scheduler
+
+        _cost_summary_task = asyncio.create_task(start_cost_summary_scheduler())
+        logger.info("cost_summary_scheduler_started", schedule="daily at 03:30 UTC")
+    except Exception as exc:
+        logger.warning(
+            "cost_summary_scheduler_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -199,6 +225,22 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("query_warming_scheduler_stopped")
+
+    if _health_score_task is not None and not _health_score_task.done():
+        _health_score_task.cancel()
+        try:
+            await _health_score_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("health_score_scheduler_stopped")
+
+    if _cost_summary_task is not None and not _cost_summary_task.done():
+        _cost_summary_task.cancel()
+        try:
+            await _cost_summary_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("cost_summary_scheduler_stopped")
 
     # Close Redis connections
     try:
