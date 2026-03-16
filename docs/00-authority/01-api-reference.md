@@ -154,16 +154,26 @@ All require `scope=platform` (i.e. `platform_admin` role).
 
 ## Glossary
 
-| Method | Path               | Auth         | Description                                               |
-| ------ | ------------------ | ------------ | --------------------------------------------------------- |
-| GET    | `/glossary`        | Any          | List terms (paginated).                                   |
-| POST   | `/glossary`        | tenant_admin | Create term. Body: `{ "term", "full_form", "aliases"? }`. |
-| POST   | `/glossary/import` | tenant_admin | Bulk CSV import. Multipart file upload.                   |
-| GET    | `/glossary/{id}`   | Any          | Get term.                                                 |
-| PATCH  | `/glossary/{id}`   | tenant_admin | Update term.                                              |
-| DELETE | `/glossary/{id}`   | tenant_admin | Delete term. Invalidates Redis cache.                     |
+| Method | Path                                   | Auth         | Description                                                                                               |
+| ------ | -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------- |
+| GET    | `/glossary`                            | Any          | List terms (paginated).                                                                                   |
+| POST   | `/glossary`                            | tenant_admin | Create term. Body: `{ "term", "full_form", "aliases"? }`.                                                 |
+| POST   | `/glossary/import`                     | tenant_admin | Bulk CSV import. Multipart file upload.                                                                   |
+| GET    | `/glossary/miss-signals`               | tenant_admin | Top uncovered terms from miss signals. Query: `?limit=20`.                                                |
+| GET    | `/glossary/{id}`                       | Any          | Get term.                                                                                                 |
+| PATCH  | `/glossary/{id}`                       | tenant_admin | Update term.                                                                                              |
+| DELETE | `/glossary/{id}`                       | tenant_admin | Delete term. Invalidates Redis cache.                                                                     |
+| GET    | `/glossary/{id}/history`               | tenant_admin | Audit log for a term (TA-012). Returns entries newest-first with before/after state.                      |
+| PATCH  | `/glossary/{id}/rollback/{version_id}` | tenant_admin | Restore term to a prior audit snapshot (TA-012). `version_id` = audit_log.id. Atomic (term+audit commit). |
 
-All writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
+### Admin Glossary
+
+| Method | Path                               | Auth         | Description                                                                        |
+| ------ | ---------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| POST   | `/admin/glossary/miss-signals`     | tenant_admin | Ingest miss signals (TA-013). Body: `[{ "unresolved_term", "conversation_id"? }]`. |
+| GET    | `/admin/analytics/glossary-impact` | tenant_admin | Glossary impact analytics (TA-029). Returns per-term usage/satisfaction delta.     |
+
+All glossary writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
 
 ---
 
@@ -193,6 +203,57 @@ All writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
 
 ---
 
+## Onboarding Wizard (TA-031)
+
+| Method | Path                         | Auth         | Description                                                                                   |
+| ------ | ---------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| GET    | `/admin/onboarding/status`   | tenant_admin | Get wizard state: `steps` dict (step→bool), `current_step`, `is_complete`, `dismissed_until`. |
+| PATCH  | `/admin/onboarding/progress` | tenant_admin | Mark a step complete. Body: `{ "step": "connect_datasource"\|"invite_users"\|...}`.           |
+| PATCH  | `/admin/onboarding/dismiss`  | tenant_admin | Dismiss wizard for 7 days.                                                                    |
+
+Steps: `connect_datasource`, `invite_users`, `configure_glossary`, `deploy_agent`, `test_chat`.
+
+---
+
+## Bulk User Actions (TA-032)
+
+| Method | Path                       | Auth         | Description                                                                                     |
+| ------ | -------------------------- | ------------ | ----------------------------------------------------------------------------------------------- |
+| POST   | `/admin/users/bulk-action` | tenant_admin | Bulk operation on up to 100 users. Returns `{ succeeded: [...], failed: [{user_id, reason}] }`. |
+
+Body: `{ "user_ids": [uuid, ...], "action": "suspend"\|"role_change"\|"kb_assignment", "payload"?: {...} }`.
+
+Action payloads:
+
+- `suspend`: no payload required. Acting user cannot suspend themselves.
+- `role_change`: `payload.role = "viewer"\|"tenant_admin"`. Acting user cannot demote themselves.
+- `kb_assignment`: `payload.kb_id = <uuid>`, `payload.scope = "workspace_wide"\|"role_restricted"\|"user_specific"\|"agent_only"`. KB must exist in caller's tenant.
+
+---
+
+## KB Source Management (TA-034)
+
+| Method | Path                                             | Auth         | Description                                                                              |
+| ------ | ------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------- |
+| GET    | `/admin/knowledge-base/{kb_id}/sources`          | tenant_admin | List all integrations attached to this KB with health indicators.                        |
+| GET    | `/admin/knowledge-base/{kb_id}/documents`        | tenant_admin | Search documents across all sources. Query: `?search=<term>` (optional, max_length=200). |
+| DELETE | `/admin/knowledge-base/{kb_id}/sources/{int_id}` | tenant_admin | Detach integration from KB (removes `kb_id` from integration config). 204 on success.    |
+
+Health indicator values: `healthy` (active + synced within 24h), `stale` (active + no recent sync), `unhealthy` (disabled/error/failed), `pending`.
+
+---
+
+## KB Access Control (TA-007)
+
+| Method | Path                                           | Auth         | Description                                                                          |
+| ------ | ---------------------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
+| GET    | `/admin/knowledge-base/{kb_id}/access-control` | tenant_admin | Get visibility mode + allowed_roles + allowed_user_ids.                              |
+| PATCH  | `/admin/knowledge-base/{kb_id}/access-control` | tenant_admin | Set visibility mode. Body: `{ visibility_mode, allowed_roles?, allowed_user_ids? }`. |
+
+Visibility modes: `workspace_wide`, `role_restricted`, `user_specific`, `agent_only`.
+
+---
+
 ## LLM Config (Tenant Admin)
 
 | Method | Path                       | Auth                           | Description                                                                                                                                                                                               |
@@ -203,6 +264,43 @@ All writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
 | DELETE | `/admin/llm-config/byollm` | tenant_admin (enterprise only) | Remove the BYOLLM key ref and revert `model_source` to `library`. 403 if tenant plan is not `enterprise`. 404 if no BYOLLM key is configured.                                                             |
 
 `PATCH /byollm` and `DELETE /byollm` must be registered before `PATCH /admin/llm-config` to avoid path shadowing.
+
+---
+
+## Agents (Tenant Admin)
+
+| Method | Path                             | Auth         | Description                                                                                                         |
+| ------ | -------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/agents`                        | tenant_admin | List workspace agents. Query: `?status=<filter>`.                                                                   |
+| POST   | `/agents`                        | tenant_admin | Create agent. Body: `{ name, system_prompt, kb_ids?, agent_type?, status?, template_id? }`.                         |
+| GET    | `/agents/{id}`                   | tenant_admin | Get agent.                                                                                                          |
+| PATCH  | `/agents/{id}`                   | tenant_admin | Update agent fields.                                                                                                |
+| DELETE | `/agents/{id}`                   | tenant_admin | Archive agent.                                                                                                      |
+| PATCH  | `/agents/{id}/status`            | tenant_admin | Update lifecycle status. Body: `{ "status": "draft"\|"published"\|"unpublished"\|"active"\|"paused"\|"archived" }`. |
+| POST   | `/agents/{id}/test`              | tenant_admin | Run test chat against agent. Body: `{ "query" }`. 504 if no response within 30s.                                    |
+| GET    | `/agents/{id}/upgrade-available` | tenant_admin | Check if a newer template version exists (TA-024). Returns `{ upgrade_available, current, latest }`.                |
+| PATCH  | `/agents/{id}/upgrade`           | tenant_admin | Apply template upgrade (TA-024). Updates `template_id` to latest version.                                           |
+| GET    | `/agents/templates/library`      | tenant_admin | Browse platform agent template library. Query: `?category=<cat>&page=1&page_size=20`.                               |
+| POST   | `/agents/deploy-from-library`    | tenant_admin | Deploy agent from a library template. Returns created agent with `status=active`.                                   |
+
+**Agent status semantics**: `active` = deployed to end users; `paused` = chat returns 503; `archived` = hidden from all lists.
+
+### Agent Analytics (TA-027)
+
+| Method | Path                           | Auth         | Description                                                                                                                 |
+| ------ | ------------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/admin/agents`                | tenant_admin | List workspace agents with 7-day satisfaction rate and session count (TA-021).                                              |
+| GET    | `/admin/agents/{id}/analytics` | tenant_admin | Per-agent analytics: `daily_satisfaction`, `low_confidence_responses`, `guardrail_events`, `correlation` (root cause data). |
+
+---
+
+## Analytics (Tenant Admin)
+
+| Method | Path                                      | Auth         | Description                                                                        |
+| ------ | ----------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| GET    | `/admin/analytics/satisfaction-dashboard` | tenant_admin | Rolling 7-day satisfaction rate, per-agent breakdown, 30-day daily trend (TA-026). |
+| GET    | `/admin/analytics/engagement-v2`          | tenant_admin | DAU/WAU/MAU aggregates, per-agent session counts, feature adoption rates (TA-030). |
+| GET    | `/admin/analytics/glossary-impact`        | tenant_admin | Per-term usage + satisfaction delta for terms in glossary (TA-029).                |
 
 ---
 

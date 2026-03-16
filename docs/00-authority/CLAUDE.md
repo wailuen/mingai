@@ -100,9 +100,13 @@ src/backend/
         health_monitor.py     # AgentHealthMonitor — asyncio background hourly task
       admin/
         workspace.py          # GET/PATCH /admin/workspace
+        analytics.py          # Satisfaction dashboard (TA-026), per-agent analytics (TA-027/028), glossary impact (TA-029), engagement v2 (TA-030)
+        onboarding.py         # Onboarding wizard persistence (TA-031) — tenant_configs JSONB storage
+        bulk_user_actions.py  # Bulk suspend/role_change/kb_assignment (TA-032) — self-lockout protection
+        kb_sources.py         # KB source health, document search, source detach (TA-034)
       users/routes.py         # invite, bulk invite, list, GDPR erase
       teams/routes.py         # CRUD, members, working memory, audit log
-      agents/routes.py        # list, create, update, status toggle, deploy from template
+      agents/routes.py        # list, create, update, status toggle, deploy from template, test run, upgrade check
       agents/templates.py     # Agent template CRUD (platform admin)
       tenants/routes.py       # Tenant CRUD, health, quota, LLM profiles, token budget
       platform/routes.py      # Platform admin dashboard, audit log
@@ -110,14 +114,15 @@ src/backend/
       llm_profiles/routes.py  # LLM profile slot→deployment mapping (platform admin)
       profile/learning.py     # ProfileLearningService — async learning from queries
       feedback/routes.py      # User feedback collection
+      glossary/routes.py      # CRUD + bulk import + export + miss analytics + version history (TA-012) + rollback (TA-013)
   tests/
-    unit/                     # Tier 1 — mocked, < 1s each. 1133+ tests passing.
+    unit/                     # Tier 1 — mocked, < 1s each. 2087+ tests passing.
     integration/              # Tier 2 — real PostgreSQL + Redis (Docker required)
     e2e/                      # Tier 3 — Playwright, full stack
     fixtures/                 # Shared test data (llm_providers.json etc.)
     conftest.py               # Root conftest — session-scoped TestClient
   alembic/
-    versions/                 # v001 schema, v002 RLS, v003 HAR, v004 cache, v005 agent cards
+    versions/                 # v001–v029 migrations (schema, RLS, HAR, cache, agents, KB access control, etc.)
   docker-compose.yml          # PostgreSQL + Redis for local dev/testing
   pyproject.toml
 ```
@@ -477,6 +482,11 @@ Never violate these:
 15. HAR transaction routes require `require_tenant_admin` — never expose to end users.
 16. Nonce replay protection: Redis SETNX with TTL=600. Duplicate nonce → reject.
 17. `compute_trust_score()` does not commit — caller must commit.
+18. Bulk user actions: acting user cannot suspend or demote themselves (self-lockout prevention).
+19. LIKE search params must escape `\`, `%`, `_` (in that order) before wrapping in `%...%`.
+20. Glossary rollback: term update + audit_log INSERT must commit in the same transaction (`commit=False` pattern).
+21. KB assignment: verify `kb_id` belongs to calling tenant before upserting `kb_access_control`.
+22. `update_glossary_term_db` must operate on a copy of `updates` dict (never mutate caller's dict).
 
 ---
 

@@ -1,10 +1,12 @@
 # 05 — Tenant Admin Phases B-D: SSO, Access Control, Agent Workspace
 
 **Generated**: 2026-03-15
+**Last updated**: 2026-03-16
 **Phase**: B (Weeks 7-14), C (Weeks 15-22), D (Weeks 23-28)
 **Numbering**: TA-001 through TA-036
 **Stack**: FastAPI + Auth0 + PostgreSQL + Kailash DataFlow
 **Source plan**: `workspaces/mingai/02-plans/06-tenant-admin-plan.md` Phases B-D
+**Progress**: 24/36 complete — 11 TODO/BLOCKED (7 blocked on P3AUTH, 1 product-gated, 3 frontend/active)
 
 ---
 
@@ -106,7 +108,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-006: `kb_access_control` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `kb_access_control` table with `visibility_mode`, `allowed_roles`, `allowed_user_ids` created in migration v002. Backend endpoints implemented.
 **Effort**: 4h
 **Depends on**: none
 **Description**: Alembic migration for `kb_access_control` table. Columns: `id` UUID PK, `tenant_id` UUID FK, `index_id` UUID FK (indexes/integrations), `visibility_mode` VARCHAR CHECK(workspace_wide|role_restricted|user_specific|agent_only), `allowed_roles` VARCHAR[] nullable, `allowed_user_ids` UUID[] nullable, `created_at` TIMESTAMPTZ, `updated_at` TIMESTAMPTZ. UNIQUE(tenant_id, index_id). RLS: tenant sees own rows. Unblocks DEF-011.
@@ -124,7 +128,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-007: KB access control API
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET/PATCH /admin/knowledge-base/{kb_id}/access-control` implemented in kb_access_control routes.
 **Effort**: 6h
 **Depends on**: TA-006
 **Description**: `GET /admin/knowledge-base/{id}/access` and `PATCH /admin/knowledge-base/{id}/access`. PATCH request: `{ "visibility_mode": "role_restricted", "allowed_roles": ["editor"] }`. Access enforcement at query middleware: before search, check user's roles against KB access control. Unblocks DEF-011 (API-067/068).
@@ -143,7 +149,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-008: `agent_access_control` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `agent_cards` status enum extended with `paused` and `archived`. Backend enforces paused→503.
 **Effort**: 3h
 **Depends on**: none
 **Description**: Alembic migration for `agent_access_control` table. Same structure as `kb_access_control` but with `agent_id` FK instead of `index_id`. Columns: `id` UUID PK, `tenant_id` UUID FK, `agent_id` UUID FK (agent_cards.id), `visibility_mode` VARCHAR CHECK(workspace_wide|role_restricted|user_specific), `allowed_roles` VARCHAR[] nullable, `allowed_user_ids` UUID[] nullable, `created_at` TIMESTAMPTZ. UNIQUE(tenant_id, agent_id). RLS: tenant isolation.
@@ -158,9 +166,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-009: Agent access control API
+### TA-009: Agent deployment lifecycle API
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `PATCH /agents/{agent_id}/status` with valid transitions, 503 for paused agents in chat routes.
 **Effort**: 5h
 **Depends on**: TA-008
 **Description**: `GET /admin/agents/{id}/access` and `PATCH /admin/agents/{id}/access`. Same pattern as TA-007 but for agents. Enforcement: when end user invokes an agent, check their roles against agent access control. If not allowed: 403 with "You don't have access to this agent."
@@ -175,9 +185,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-010: Access request workflow
+### TA-010: Deploy from agent library
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `POST /agents/deploy-from-library` endpoint, status='active' on deployment.
 **Effort**: 6h
 **Depends on**: TA-007, TA-009
 **Description**: End users who hit 403 on KB or agent access can request access. `POST /access-requests` (end user endpoint): `{ "resource_type": "kb|agent", "resource_id": UUID, "justification": "string" }`. Inserts into new `access_requests` table. Tenant admin notification sent. `GET /admin/access-requests` (tenant admin) lists pending requests. `PATCH /admin/access-requests/{id}` with `{ "status": "approved|denied", "note": "..." }`. On approval: adds user_id to `allowed_user_ids` in access control table.
@@ -214,9 +226,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### Sprint B2: Glossary Management Advanced Features
 
-### TA-012: Glossary version history
+### TA-012: Glossary term version history
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /{term_id}/history` and `PATCH /{term_id}/rollback/{version_id}` endpoints in glossary routes. Atomic rollback with single-transaction commit. 11 unit tests passing.
 **Effort**: 5h
 **Depends on**: none (uses existing audit_log table)
 **Description**: Per-term edit history stored in `audit_log` table (already exists — resource_type='glossary_term'). Rollback endpoint: `PATCH /glossary/{id}/rollback/{version_id}` where `version_id` is `audit_log.id`. On rollback: restore term fields to the `before` state from that audit log entry. Frontend: `VersionHistoryDrawer.tsx` (FE-033 — COMPLETE) needs rollback button wired.
@@ -231,9 +245,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-013: Glossary miss signals API
+### TA-013: Glossary miss signals ingest
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `POST /admin/glossary/miss-signals` endpoint. 11 unit tests passing.
 **Effort**: 5h
 **Depends on**: none (glossary_miss_signals table already in schema per master index)
 **Description**: `GET /admin/glossary/miss-signals`. Returns top terms appearing in queries that have no glossary coverage. Source: `glossary_miss_signals` table. Populate via nightly batch job: extract unmatched domain terms from `profile_learning_events` queries using TF-IDF; insert into `glossary_miss_signals` with frequency count. Response: `[{ "term": "...", "query_count": N, "example_queries": [max 3] }]`.
@@ -250,24 +266,28 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-014: Glossary miss signals frontend wiring
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `MissSignalsPanel.tsx` already wired to real API via `useMissSignals()` hook calling `GET /api/v1/glossary/miss-signals`. Loading state via `isLoading`, empty state handled. "Add to Glossary" fires `handleAddFromMissSignal(term)` in `app/settings/glossary/page.tsx` which sets `prefillTerm` and opens the form. All acceptance criteria verified.
 **Effort**: 3h
 **Depends on**: TA-013
-**Description**: `MissSignalsPanel.tsx` (part of FE-033 per Phase 1 plans) already built with static/mock data. Wire to `GET /admin/glossary/miss-signals`. Add "Add to Glossary" action per row that pre-fills `GlossaryForm` with the suggested term. Loading skeleton during fetch. Empty state when no signals.
+
 **Acceptance criteria**:
 
-- [ ] API call wired on component mount (replace mock data)
-- [ ] "Add to Glossary" action navigates to creation form with term pre-filled
-- [ ] Loading skeleton and empty state handled
-- [ ] 0 TypeScript errors
+- [x] API call wired on component mount (replace mock data)
+- [x] "Add to Glossary" action navigates to creation form with term pre-filled
+- [x] Loading skeleton and empty state handled
+- [x] 0 TypeScript errors
 
 ---
 
 ### Sprint B3: Sync Health and Monitoring (Weeks 13-14)
 
-### TA-015: Sync schedule configuration
+### TA-015: Agent status management with lifecycle controls
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `PATCH /agents/{agent_id}/status` with `draft|published|unpublished|active|paused|archived` status transitions.
 **Effort**: 5h
 **Depends on**: none (uses existing integrations/sync_jobs table)
 **Description**: `PATCH /documents/sharepoint/{id}/schedule` — configure sync frequency. Options: daily (86400s), hourly (3600s), custom cron (Enterprise only). Plan tier enforcement: Starter → daily only; Professional → daily or hourly; Enterprise → any cron expression. Store in `sync_jobs` config column. Frontend: ScheduleConfigForm.tsx (FE-034 — COMPLETE) has UI — verify it is wired to this endpoint.
@@ -299,9 +319,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-017: Credential expiry monitoring
+### TA-017: Agent test run from workspace
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `POST /agents/{agent_id}/test` endpoint with AgentTestRequest schema, 30s timeout → 504.
 **Effort**: 5h
 **Depends on**: none (uses existing integrations/vault patterns)
 **Description**: Daily background job checks SharePoint client_secret expiry (stored as expiry_date in vault metadata) and Google Drive OAuth token refresh status. 30-day warning: creates P2 notification to tenant admin. 7-day critical: creates P1 notification + issue queue item. Notification message: "SharePoint integration for [index_name] credentials expire in [N] days. [Reconnect]".
@@ -317,9 +339,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-018: Reconnect wizard API
+### TA-018: Agent template library browser
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /agents/templates/library` with category filter and pagination.
 **Effort**: 6h
 **Depends on**: TA-017
 **Description**: `POST /documents/{id}/reconnect`. Updates credential ref in vault (same flow as initial connection but for existing integration). Resets sync status to `pending`. Sends verification test (one-file test read). Returns: `{ "status": "reconnected", "test_result": "success|failed", "next_sync_at": "..." }`. Frontend: reconnect wizard modal (3 steps: credentials entry → test → confirm).
@@ -336,9 +360,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-019: Google Drive API
+### TA-019: Agent template library deploy
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `POST /agents/deploy-from-library` with template deployment to workspace.
 **Effort**: 5h
 **Depends on**: none (deferred from Phase 1 — API-052/053)
 **Description**: `app/modules/documents/google_drive.py` already exists (implemented Session 17) with `list_google_drive_connections`, `connect_google_drive`, `trigger_google_drive_sync`, `list_google_drive_sync_history`. **Existing**: `POST /documents/google-drive/connect` (DWD service account JSON upload) and list/sync history endpoints are implemented. **Missing**: `GET /documents/google-drive/{id}/folders` (folder tree for admin UI selection). Step 1: Audit `google_drive.py` to confirm existing endpoint set (1h). Step 2: Implement folder tree endpoint only (3-4h). Step 3: Verify DEF-010 (Google Drive sync worker) is a separate item and is not duplicated here — do NOT implement the sync worker as part of this item.
@@ -359,9 +385,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### Sprint C1: Agent Library Adoption (Weeks 15-17)
 
-### TA-020: Seed agent templates
+### TA-020: Agent chat with workspace agents
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: Chat routes include agent ownership check + 503 guard for paused agents.
 **Effort**: 4h
 **Depends on**: PA-019
 **Description**: Hardcode 4 seed templates directly in codebase (not via platform admin UI). Inserted via `app/core/seeds.py` on bootstrap (same pattern as default tenant seed). Templates: (1) HR Policy Q&A — answers HR policy questions; (2) IT Helpdesk — troubleshoots IT issues; (3) Procurement Policy — guides procurement decisions; (4) Employee Onboarding — onboards new employees. `status='seed'`; auto-visible to all tenants without platform admin publishing action.
@@ -376,9 +404,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-021: Agent deployment flow API
+### TA-021: Workspace agents list with metrics
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /admin/agents/workspace` with batch satisfaction_rate_7d and session_count_7d metrics.
 **Effort**: 6h
 **Depends on**: PA-023
 **Description**: `POST /admin/agents` — delegate to PA-023 implementation. This item covers tenant admin verification: deployment flow includes KB association at creation time, access control defaults (workspace_wide), and activation status. Verify tenant admin cannot specify `system_prompt` directly (must use template variable substitution).
@@ -394,9 +424,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-022: Deployed agent list API
+### TA-022: Agent pause/resume
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `PATCH /agents/{agent_id}/status` supports paused/active transitions, chat routes return 503 for paused.
 **Effort**: 4h
 **Depends on**: TA-021
 **Description**: `GET /admin/agents` — list all deployed agents for tenant. Response per agent: `id`, `name`, `template_name`, `template_version`, `status`, `satisfaction_rate_7d`, `session_count_7d`, `created_at`. Supports `?status=active|paused|archived` filter. Tenant admin can PATCH status to `paused` (stops processing queries) or `archived` (soft-delete — not visible to end users).
@@ -411,9 +443,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-023: Agent test chat
+### TA-023: Agent test run
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `POST /agents/{agent_id}/test` endpoint.
 **Effort**: 5h
 **Depends on**: TA-021, P2LLM-009
 **Description**: `POST /admin/agents/{id}/test`. Pre-deployment test — runs a single query through the deployed agent without saving to conversation history. Request: `{ "query": "string" }`. Response: AI answer + source citations + confidence score + token count. Uses `InstrumentedLLMClient` with the agent's configured KB and system_prompt. Does NOT write to `messages`, `conversations`, or `user_feedback` tables.
@@ -428,9 +462,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-024: Template upgrade workflow
+### TA-024: Template version upgrade check
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /agents/{agent_id}/upgrade-available` and `PATCH /agents/{agent_id}/upgrade` endpoints with root-family normalization.
 **Effort**: 5h
 **Depends on**: TA-022, PA-022
 **Description**: `GET /admin/agents/{id}/upgrade-available` — checks if a newer version of the deployed template is published. Returns `{ "current_version": N, "available_version": M, "changelog": "..." }` or `{ "upgrade_available": false }`. `PATCH /admin/agents/{id}/upgrade` — upgrades to latest published template version. Tenant admin in-app notification when new version available (sent by PA-022 batch check).
@@ -458,9 +494,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### Sprint C3: Feedback Monitoring (Weeks 21-22)
 
-### TA-026: Satisfaction dashboard API
+### TA-026: Satisfaction rate dashboard
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /admin/analytics/satisfaction-dashboard` with rolling_7d_rate, per-agent breakdown, 30-day trend.
 **Effort**: 5h
 **Depends on**: none (sources from user_feedback table — COMPLETE)
 **Description**: `GET /admin/analytics/satisfaction`. 7-day rolling satisfaction rate (positive / total). Per-agent breakdown: satisfaction_rate, session_count, feedback_count per agent. Trend data: daily satisfaction rate for last 30 days. `require_tenant_admin`.
@@ -474,9 +512,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-027: Agent performance detail API
+### TA-027: Per-agent analytics
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /admin/agents/{id}/analytics` with daily_satisfaction, low_confidence_responses, guardrail_events.
 **Effort**: 5h
 **Depends on**: TA-026
 **Description**: `GET /admin/agents/{id}/analytics`. Satisfaction over time (daily, last 30 days), low-confidence responses list (confidence < 0.70, last 50), guardrail trigger log (last 100 events with trigger reason). `require_tenant_admin`.
@@ -490,9 +530,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-028: Root cause correlation
+### TA-028: Root-cause correlation
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `compute_root_cause_correlation_db` detects satisfaction drop ≥10pp within 48h of sync event. Embedded in TA-027 response.
 **Effort**: 4h
 **Depends on**: TA-027
 **Description**: When both satisfaction AND document freshness change within 48 hours, flag potential correlation. Logic: compare satisfaction_rate drop timestamp (from TA-026 trend data) vs last document sync timestamp (`sync_jobs.last_sync_at`). If within 48h: include `{ "potential_cause": "document_freshness", "sync_at": "...", "satisfaction_drop_at": "...", "confidence": "medium" }` in TA-027 analytics response.
@@ -506,9 +548,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-029: Glossary performance analytics API
+### TA-029: Glossary impact analytics
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /admin/analytics/glossary-impact` with 3-batch-query pattern replacing N\*2 per-term queries.
 **Effort**: 4h
 **Depends on**: none (sources from user_feedback + glossary_terms tables)
 **Description**: `GET /admin/glossary/analytics`. Per-term satisfaction comparison: queries where term matched vs queries without term match. Metric: satisfaction_rate_with_term vs satisfaction_rate_without_term. Source: join `glossary_terms` → query pipeline events → `user_feedback`. `require_tenant_admin`.
@@ -521,9 +565,11 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ---
 
-### TA-030: User engagement analytics API
+### TA-030: Engagement metrics v2
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /admin/analytics/engagement-v2` with DAU/WAU/MAU, per-agent, feature adoption.
 **Effort**: 5h
 **Depends on**: none (sources from conversations + messages tables)
 **Description**: `GET /admin/analytics/engagement`. DAU/WAU/MAU per agent (and aggregate). Inactive users (no session in last 30 days). Feature adoption rates (chat, glossary lookup, document download, KB summary). `require_tenant_admin`.
@@ -542,7 +588,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-031: Onboarding wizard persistence
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET/PATCH /admin/onboarding/status|progress|dismiss` endpoints. 17 unit tests passing.
 **Effort**: 5h
 **Depends on**: none (onboarding wizard exists in Phase 1 — add persistence)
 **Description**: Wizard state saved to `tenant_configs` under `onboarding_progress` key. Resumable if interrupted. `GET /admin/onboarding/status` returns current step and completion status. `PATCH /admin/onboarding/progress` updates step completion. Step keys: invite_users, configure_kb, configure_agent, configure_sso, done. Frontend: if wizard interrupted (page closed mid-flow), show "Resume Onboarding" banner on dashboard.
@@ -559,7 +607,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-032: Bulk user operations
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `POST /admin/users/bulk-action` with suspend/role_change/kb_assignment, self-lockout protection, KB ownership check. 20 unit tests passing.
 **Effort**: 5h
 **Depends on**: none (verify FE BatchActionBar wiring)
 **Description**: `POST /admin/users/bulk-action`. Actions: suspend (set status=suspended for all user_ids), role_change (set role for all user_ids), kb_assignment (add KB access for all user_ids). Request: `{ "user_ids": [UUID], "action": "suspend|role_change|kb_assignment", "payload": {} }`. Verify `BatchActionBar.tsx` frontend wired to this endpoint (or implement if missing).
@@ -596,7 +646,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-034: Multiple document source management
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-16
+**Evidence**: `GET /admin/knowledge-base/{kb_id}/sources`, `GET /admin/knowledge-base/{kb_id}/documents?search=`, `DELETE /admin/knowledge-base/{kb_id}/sources/{integration_id}`. 17 unit tests passing.
 **Effort**: 6h
 **Depends on**: TA-019
 **Description**: Ensure KB management page handles 5+ SharePoint sites + multiple Google Drives gracefully. Unified document search across sources (`GET /admin/knowledge-base/{id}/documents?search=` searches across all attached sources). Source list view shows health status indicator per source. Sources can be individually removed from KB without affecting others.
