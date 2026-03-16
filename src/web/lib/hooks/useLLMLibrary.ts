@@ -14,6 +14,18 @@ export type LLMLibraryProvider =
 export type LLMLibraryStatus = "Draft" | "Published" | "Deprecated";
 export type PlanTier = "starter" | "professional" | "enterprise";
 
+export type ModelSlotKey =
+  | "intent_model"
+  | "primary_model"
+  | "vision_model"
+  | "embedding_model";
+
+export interface ModelSlot {
+  provider: LLMLibraryProvider;
+  deployment_name: string;
+  override: boolean;
+}
+
 export interface LLMLibraryEntry {
   id: string;
   provider: LLMLibraryProvider;
@@ -25,8 +37,22 @@ export interface LLMLibraryEntry {
   best_practices_md: string;
   pricing_per_1k_tokens_in: number;
   pricing_per_1k_tokens_out: number;
+  model_slots?: Record<ModelSlotKey, ModelSlot>;
   created_at: string;
   updated_at?: string;
+}
+
+export interface TenantAssignment {
+  tenant_id: string;
+  tenant_name: string;
+  assigned_at: string;
+}
+
+export interface TestProfileResult {
+  success: boolean;
+  latency_ms: number;
+  error?: string;
+  slot_results: Record<ModelSlotKey, { reachable: boolean; latency_ms: number; error?: string }>;
 }
 
 export interface CreateLLMLibraryPayload {
@@ -38,6 +64,7 @@ export interface CreateLLMLibraryPayload {
   best_practices_md?: string;
   pricing_per_1k_tokens_in: number;
   pricing_per_1k_tokens_out: number;
+  model_slots?: Record<ModelSlotKey, ModelSlot>;
 }
 
 export interface UpdateLLMLibraryPayload {
@@ -49,6 +76,7 @@ export interface UpdateLLMLibraryPayload {
   best_practices_md?: string;
   pricing_per_1k_tokens_in?: number;
   pricing_per_1k_tokens_out?: number;
+  model_slots?: Record<ModelSlotKey, ModelSlot>;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,5 +182,57 @@ export function useDeprecateLLMLibraryEntry() {
         queryKey: ["platform-llm-library-entry", id],
       });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Test Profile (POST /api/v1/platform/llm-library/:id/test)
+// ---------------------------------------------------------------------------
+
+/** Tests connectivity and latency for all model slots in a profile. */
+export function useTestProfile() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiPost<TestProfileResult>(
+        `/api/v1/platform/llm-library/${id}/test`,
+        {}
+      ),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tenant Assignments (GET /api/v1/platform/llm-library/:id/tenant-assignments)
+// ---------------------------------------------------------------------------
+
+/** Returns list of tenants currently assigned to a given library entry. */
+export function useTenantAssignments(id: string | null) {
+  return useQuery({
+    queryKey: ["platform-llm-library-assignments", id],
+    queryFn: () =>
+      apiGet<TenantAssignment[]>(
+        `/api/v1/platform/llm-library/${id}/tenant-assignments`
+      ),
+    enabled: !!id,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Library options for tenant selectors (GET /api/v1/admin/llm-config/library-options)
+// ---------------------------------------------------------------------------
+
+export interface LibraryOption {
+  id: string;
+  display_name: string;
+  provider: LLMLibraryProvider;
+  model_name: string;
+  best_practices_md: string;
+}
+
+/** Published library entries available for tenant assignment. */
+export function useLLMLibraryOptions() {
+  return useQuery({
+    queryKey: ["llm-library-options"],
+    queryFn: () =>
+      apiGet<LibraryOption[]>("/api/v1/admin/llm-config/library-options"),
   });
 }

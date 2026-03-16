@@ -10,14 +10,18 @@ Status lifecycle:
     Deprecated → any: BLOCKED with 409
 
 Endpoints:
-    POST   /platform/llm-library          — create Draft entry
-    GET    /platform/llm-library          — list all (filter: ?status=)
-    GET    /platform/llm-library/{id}     — get detail
-    PATCH  /platform/llm-library/{id}     — update (Deprecated blocked)
-    POST   /platform/llm-library/{id}/publish    — Draft → Published
-    POST   /platform/llm-library/{id}/deprecate  — Published → Deprecated
+    POST   /platform/llm-library                    — create Draft entry
+    GET    /platform/llm-library                    — list all (filter: ?status=)
+    GET    /platform/llm-library/{id}               — get detail
+    PATCH  /platform/llm-library/{id}               — update (Deprecated blocked)
+    POST   /platform/llm-library/{id}/publish       — Draft → Published
+    POST   /platform/llm-library/{id}/deprecate     — Published → Deprecated
+    POST   /platform/llm-library/{id}/test          — run 3 fixed prompts (PA-002)
+    GET    /platform/llm-library/{id}/tenant-assignments — tenants using this entry (PA-004)
 """
+import asyncio
 import json
+import time
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -30,6 +34,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_platform_admin
 from app.core.session import get_async_session
+
+# Test harness constants (PA-002)
+_TEST_PROMPTS = [
+    "What is the weather?",
+    "Summarize this text.",
+    "Translate: Bonjour",
+]
+_TEST_TIMEOUT_SECONDS = 30
 
 logger = structlog.get_logger()
 
@@ -107,6 +119,37 @@ class LLMLibraryEntry(BaseModel):
     model_config = {"protected_namespaces": ()}
 
 
+class TestPromptResult(BaseModel):
+    """Result of running one test prompt against the profile's models (PA-002)."""
+
+    prompt: str
+    response: str
+    tokens_in: int
+    tokens_out: int
+    latency_ms: int
+    estimated_cost_usd: Optional[float] = None
+
+    model_config = {"protected_namespaces": ()}
+
+
+class ProfileTestResponse(BaseModel):
+    """Response from POST /platform/llm-library/{id}/test (PA-002)."""
+
+    tests: list[TestPromptResult]
+
+    model_config = {"protected_namespaces": ()}
+
+
+class TenantAssignment(BaseModel):
+    """One tenant currently using an llm_library entry (PA-004)."""
+
+    tenant_id: str
+    tenant_name: str
+    assigned_at: str
+
+    model_config = {"protected_namespaces": ()}
+
+
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
@@ -131,7 +174,11 @@ def _row_to_entry(row) -> LLMLibraryEntry:
 
 
 async def _get_entry(entry_id: str, db: AsyncSession) -> LLMLibraryEntry | None:
-    """Fetch a single entry by ID. Returns None if not found."""
+    """Fetch a single entry by ID. Returns None if not found or if entry_id is not a valid UUID."""
+    try:
+        uuid.UUID(entry_id)
+    except (ValueError, AttributeError):
+        return None
     result = await db.execute(
         text(
             "SELECT id, provider, model_name, display_name, plan_tier, "
@@ -446,3 +493,184 @@ async def deprecate_llm_library_entry(
 
     logger.info("llm_library_entry_deprecated", entry_id=entry_id)
     return updated
+
+
+# ---------------------------------------------------------------------------
+# PA-002: Profile test harness
+# ---------------------------------------------------------------------------
+
+
+def _calculate_test_cost(
+    tokens_in: int,
+    tokens_out: int,
+    price_in: Optional[float],
+    price_out: Optional[float],
+) -> Optional[float]:
+    """
+    Compute estimated cost for one test call.
+
+    Formula: (tokens_in / 1000 * price_in) + (tokens_out / 1000 * price_out)
+    Returns None if either price is unavailable.
+    """
+    if price_in is None or price_out is None:
+        return None
+    cost = (tokens_in / 1000.0 * price_in) + (tokens_out / 1000.0 * price_out)
+    return round(cost, 8)
+
+
+async def _run_single_test_prompt(
+    prompt: str,
+    model: str,
+    price_in: Optional[float],
+    price_out: Optional[float],
+) -> TestPromptResult:
+    """
+    Call AzureOpenAIProvider with one prompt and return a TestPromptResult.
+
+    Uses PRIMARY_MODEL-equivalent env-derived adapter (not tenant config —
+    the test harness calls the profile's configured model directly).
+    """
+    from app.core.llm.azure_openai import AzureOpenAIProvider
+
+    adapter = AzureOpenAIProvider()
+    messages = [{"role": "user", "content": prompt}]
+    response = await adapter.complete(messages=messages, model=model)
+
+    cost = _calculate_test_cost(
+        tokens_in=response.tokens_in,
+        tokens_out=response.tokens_out,
+        price_in=price_in,
+        price_out=price_out,
+    )
+
+    return TestPromptResult(
+        prompt=prompt,
+        response=response.content,
+        tokens_in=response.tokens_in,
+        tokens_out=response.tokens_out,
+        latency_ms=response.latency_ms,
+        estimated_cost_usd=cost,
+    )
+
+
+@router.post("/{entry_id}/test", response_model=ProfileTestResponse)
+async def test_llm_library_profile(
+    entry_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Run 3 fixed test prompts against this library entry's configured model (PA-002).
+
+    Works on Draft and Published entries alike. Sends to the entry's model_name
+    via the platform AzureOpenAI adapter. Estimated cost is computed from the
+    entry's pricing_per_1k_tokens_in/out fields when available.
+
+    Returns 504 if the LLM calls exceed 30 seconds total.
+    """
+    entry = await _get_entry(entry_id, db)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="LLM Library entry not found")
+
+    if entry.status == "Deprecated":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot test a Deprecated entry.",
+        )
+
+    price_in = entry.pricing_per_1k_tokens_in
+    price_out = entry.pricing_per_1k_tokens_out
+    model = entry.model_name
+
+    try:
+        tasks = [
+            _run_single_test_prompt(
+                prompt=p,
+                model=model,
+                price_in=price_in,
+                price_out=price_out,
+            )
+            for p in _TEST_PROMPTS
+        ]
+        results = await asyncio.wait_for(
+            asyncio.gather(*tasks),
+            timeout=_TEST_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=f"LLM test calls exceeded {_TEST_TIMEOUT_SECONDS}s timeout.",
+        )
+    except Exception as exc:
+        logger.warning(
+            "llm_library_test_failed",
+            entry_id=entry_id,
+            model=model,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="LLM call failed — check server logs for details",
+        )
+
+    logger.info(
+        "llm_library_profile_tested",
+        entry_id=entry_id,
+        model=model,
+        prompt_count=len(_TEST_PROMPTS),
+    )
+    return ProfileTestResponse(tests=list(results))
+
+
+# ---------------------------------------------------------------------------
+# PA-004: Tenant assignment listing
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{entry_id}/tenant-assignments", response_model=list[TenantAssignment])
+async def list_tenant_assignments(
+    entry_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    List all tenants whose llm_config is set to model_source=library and
+    llm_library_id=this entry (PA-004).
+
+    Tenants continue using Deprecated profiles unaffected.
+    Returns tenant_id, tenant_name, and assigned_at (tenant_configs.updated_at).
+    """
+    # Verify entry exists (any status)
+    entry = await _get_entry(entry_id, db)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="LLM Library entry not found")
+
+    result = await db.execute(
+        text(
+            "SELECT tc.tenant_id, t.name, tc.updated_at "
+            "FROM tenant_configs tc "
+            "JOIN tenants t ON t.id = tc.tenant_id "
+            "WHERE tc.config_type = 'llm_config' "
+            "  AND tc.config_data->>'model_source' = 'library' "
+            "  AND tc.config_data->>'llm_library_id' = :entry_id "
+            "ORDER BY tc.updated_at DESC"
+        ),
+        {"entry_id": entry_id},
+    )
+    rows = result.fetchall()
+
+    assignments = [
+        TenantAssignment(
+            tenant_id=str(row[0]),
+            tenant_name=row[1],
+            assigned_at=row[2].isoformat() if row[2] else "",
+        )
+        for row in rows
+    ]
+
+    logger.info(
+        "llm_library_tenant_assignments_listed",
+        entry_id=entry_id,
+        count=len(assignments),
+    )
+    return assignments

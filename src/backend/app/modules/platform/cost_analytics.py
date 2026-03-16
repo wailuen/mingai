@@ -13,6 +13,7 @@ All queries use direct SQL against usage_events. Platform admin bypasses RLS
 via app.user_role = 'platform_admin' setting.
 """
 import re
+import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -112,6 +113,10 @@ async def get_tenant_cost_usage(
         - by_model: list of {provider, model, tokens_in, tokens_out, cost_usd}
         - daily: list of {date, tokens_in, tokens_out, cost_usd}
     """
+    try:
+        _uuid.UUID(tenant_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="tenant_id must be a valid UUID")
     start_dt, end_dt = _parse_period(period, from_date, to_date)
 
     # Set platform admin role for RLS bypass

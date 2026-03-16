@@ -5,6 +5,7 @@ import { Loader2, CheckCircle2, Archive } from "lucide-react";
 import {
   usePublishLLMLibraryEntry,
   useDeprecateLLMLibraryEntry,
+  useTenantAssignments,
   type LLMLibraryEntry,
 } from "@/lib/hooks/useLLMLibrary";
 
@@ -16,6 +17,12 @@ export function LifecycleActions({ entry }: LifecycleActionsProps) {
   const publishMutation = usePublishLLMLibraryEntry();
   const deprecateMutation = useDeprecateLLMLibraryEntry();
   const [showDeprecateConfirm, setShowDeprecateConfirm] = useState(false);
+
+  // Fetch tenant assignments when deprecation dialog is open
+  const { data: assignments } = useTenantAssignments(
+    showDeprecateConfirm ? entry.id : null,
+  );
+  const tenantCount = assignments?.length ?? 0;
 
   function handlePublish() {
     publishMutation.mutate(entry.id);
@@ -71,7 +78,9 @@ export function LifecycleActions({ entry }: LifecycleActionsProps) {
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-text-muted">
-                Existing assignments are preserved.
+                {tenantCount > 0
+                  ? `${tenantCount} tenant${tenantCount !== 1 ? "s" : ""} ${tenantCount !== 1 ? "are" : "is"} using this profile. Existing assignments are preserved.`
+                  : "No tenants are using this profile. Existing assignments are preserved."}
               </span>
               <button
                 type="button"

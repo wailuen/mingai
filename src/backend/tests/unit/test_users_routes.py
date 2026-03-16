@@ -121,14 +121,14 @@ class TestInviteUser:
 
     def test_invite_user_requires_auth(self, client):
         resp = client.post(
-            "/api/v1/users", json={"email": "new@test.com", "role": "end_user"}
+            "/api/v1/users", json={"email": "new@test.com", "role": "viewer"}
         )
         assert resp.status_code == 401
 
     def test_invite_user_requires_tenant_admin(self, client, user_headers):
         resp = client.post(
             "/api/v1/users",
-            json={"email": "new@test.com", "role": "end_user"},
+            json={"email": "new@test.com", "role": "viewer"},
             headers=user_headers,
         )
         assert resp.status_code == 403
@@ -144,7 +144,7 @@ class TestInviteUser:
             }
             resp = client.post(
                 "/api/v1/users",
-                json={"email": "new@test.com", "role": "end_user"},
+                json={"email": "new@test.com", "role": "viewer"},
                 headers=admin_headers,
             )
         assert resp.status_code == 201
@@ -154,7 +154,7 @@ class TestInviteUser:
     def test_invite_user_rejects_invalid_email(self, client, admin_headers):
         resp = client.post(
             "/api/v1/users",
-            json={"email": "not-an-email", "role": "end_user"},
+            json={"email": "not-an-email", "role": "viewer"},
             headers=admin_headers,
         )
         assert resp.status_code == 422
@@ -162,7 +162,7 @@ class TestInviteUser:
     def test_invite_user_rejects_missing_email(self, client, admin_headers):
         resp = client.post(
             "/api/v1/users",
-            json={"role": "end_user"},
+            json={"role": "viewer"},
             headers=admin_headers,
         )
         assert resp.status_code == 422
@@ -182,7 +182,7 @@ class TestGetUser:
             mock_get.return_value = {
                 "id": "user-001",
                 "email": "user@test.com",
-                "role": "end_user",
+                "role": "viewer",
             }
             resp = client.get("/api/v1/users/user-001", headers=admin_headers)
         assert resp.status_code == 200

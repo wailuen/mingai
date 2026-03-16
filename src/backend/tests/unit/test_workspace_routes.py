@@ -108,11 +108,14 @@ class TestGetWorkspaceSettings:
                 "locale": "en",
                 "auth_mode": "local",
                 "notification_preferences": {},
+                "tenant_name": "Acme Corp",
+                "slug": "acme-corp",
+                "plan": "professional",
             }
             resp = client.get("/api/v1/admin/workspace", headers=admin_headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert "name" in data
+        assert "tenant_name" in data
         assert "timezone" in data
         assert "locale" in data
 
@@ -129,6 +132,9 @@ class TestGetWorkspaceSettings:
                 "locale": "en",
                 "auth_mode": "local",
                 "notification_preferences": {},
+                "tenant_name": "",
+                "slug": "",
+                "plan": "starter",
             }
             resp = client.get("/api/v1/admin/workspace", headers=admin_headers)
         assert resp.status_code == 200
@@ -170,6 +176,9 @@ class TestPatchWorkspaceSettings:
                 "locale": "en",
                 "auth_mode": "local",
                 "notification_preferences": {},
+                "tenant_name": "Acme Corp",
+                "slug": "acme-corp",
+                "plan": "professional",
             }
             resp = client.patch(
                 "/api/v1/admin/workspace",
@@ -202,6 +211,9 @@ class TestPatchWorkspaceSettings:
                 "locale": "fr",
                 "auth_mode": "local",
                 "notification_preferences": {},
+                "tenant_name": "Acme Corp",
+                "slug": "acme-corp",
+                "plan": "professional",
             }
             resp = client.patch(
                 "/api/v1/admin/workspace",

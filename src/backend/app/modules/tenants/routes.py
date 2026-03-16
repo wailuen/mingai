@@ -14,6 +14,8 @@ Endpoints:
 - PATCH  /platform/llm-profiles/{id}      — Update LLM profile
 - DELETE /platform/llm-profiles/{id}      — Delete unused LLM profile
 - GET    /platform/stats                  — Platform-wide stats
+- GET    /platform/tenants/at-risk        — At-risk tenant signal detection (PA-008)
+- GET    /platform/tenants/{id}/health    — Health score drilldown with trend (PA-009)
 
 Schema notes:
 - tenants: id, name, slug (UNIQUE NOT NULL), plan, status, primary_contact_email (NOT NULL)
@@ -816,6 +818,121 @@ async def create_tenant(
 _UUID_PATH = Path(..., max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,64}$")
 
 
+# PA-008: literal-path route must be BEFORE /tenants/{tenant_id} in the same
+# router so FastAPI resolves it before the parameterised path.
+@router.get("/tenants/at-risk")
+async def list_at_risk_tenants(
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-008: Return tenants flagged at-risk from the latest health score snapshot.
+
+    Fetches the most recent tenant_health_scores row per tenant where
+    composite_score < 40, sorted by composite_score ASC (worst first).
+    Returns empty list — never 404 — when no tenants are at risk.
+    """
+    result = await session.execute(
+        text(
+            """
+            WITH latest AS (
+                SELECT DISTINCT ON (ths.tenant_id)
+                    ths.tenant_id,
+                    ths.date,
+                    ths.composite_score,
+                    ths.at_risk_flag,
+                    ths.at_risk_reason,
+                    ths.usage_trend_score,
+                    ths.feature_breadth_score,
+                    ths.satisfaction_score,
+                    ths.error_rate_score
+                FROM tenant_health_scores ths
+                ORDER BY ths.tenant_id, ths.date DESC
+            )
+            SELECT
+                l.tenant_id,
+                t.name,
+                l.composite_score,
+                l.at_risk_reason,
+                l.usage_trend_score,
+                l.feature_breadth_score,
+                l.satisfaction_score,
+                l.error_rate_score
+            FROM latest l
+            JOIN tenants t ON t.id = l.tenant_id
+            WHERE l.at_risk_flag = TRUE
+            ORDER BY l.composite_score ASC NULLS LAST
+            """
+        ),
+    )
+    rows = result.fetchall()
+
+    if not rows:
+        return []
+
+    items = []
+    for row in rows:
+        tid = str(row[0])
+        name = row[1]
+        composite_score = float(row[2]) if row[2] is not None else None
+        at_risk_reason = row[3]
+        usage_trend = float(row[4]) if row[4] is not None else None
+        feature_breadth = float(row[5]) if row[5] is not None else None
+        satisfaction = float(row[6]) if row[6] is not None else None
+        error_rate = float(row[7]) if row[7] is not None else None
+
+        # Count consecutive ISO-weeks at risk (1 row per week via DISTINCT ON)
+        # so daily snapshot jobs don't inflate the count.
+        weeks_result = await session.execute(
+            text(
+                """
+                SELECT at_risk_flag
+                FROM (
+                    SELECT DISTINCT ON (DATE_TRUNC('week', date))
+                        DATE_TRUNC('week', date) AS week_start,
+                        at_risk_flag
+                    FROM tenant_health_scores
+                    WHERE tenant_id = :tid
+                    ORDER BY DATE_TRUNC('week', date) DESC, date DESC
+                ) AS weekly
+                ORDER BY week_start DESC
+                LIMIT 52
+                """
+            ),
+            {"tid": tid},
+        )
+        week_rows = weeks_result.fetchall()
+        weeks_at_risk = 0
+        for wr in week_rows:
+            if wr[0]:
+                weeks_at_risk += 1
+            else:
+                break
+
+        items.append(
+            {
+                "tenant_id": tid,
+                "name": name,
+                "composite_score": composite_score,
+                "at_risk_reason": at_risk_reason,
+                "weeks_at_risk": weeks_at_risk,
+                "component_breakdown": {
+                    "usage_trend_score": usage_trend,
+                    "feature_breadth_score": feature_breadth,
+                    "satisfaction_score": satisfaction,
+                    "error_rate_score": error_rate,
+                },
+            }
+        )
+
+    logger.info(
+        "at_risk_tenants_listed",
+        user_id=current_user.id,
+        count=len(items),
+    )
+    return items
+
+
 @router.get("/tenants/{tenant_id}")
 async def get_tenant(
     tenant_id: str = _UUID_PATH,
@@ -1203,14 +1320,12 @@ async def get_tenant_health_score(
     session: AsyncSession = Depends(get_async_session),
 ):
     """
-    API-029: Compute and return the health score for a tenant.
+    PA-009 / API-029: Health score drilldown for a single tenant.
 
-    Returns 4 weighted component scores (usage_trend 30%, feature_breadth 20%,
-    satisfaction 35%, error_rate 15%) plus overall score, category, and at_risk flag.
-    Component data is derived from live DB queries over the past 30/60 days.
+    Returns the most recent stored snapshot from tenant_health_scores plus
+    12 weekly trend data points (ISO week format 'YYYY-Www').
+    Missing weeks return null values — they are never omitted.
     """
-    from app.modules.platform.health_score import calculate_health_score
-
     # Verify tenant exists
     tenant = await get_tenant_db(tenant_id=tenant_id, db=session)
     if tenant is None:
@@ -1219,49 +1334,112 @@ async def get_tenant_health_score(
             detail=f"Tenant '{tenant_id}' not found",
         )
 
-    components = await get_tenant_health_components_db(tenant_id=tenant_id, db=session)
+    # Fetch latest health score row for current snapshot
+    latest_result = await session.execute(
+        text(
+            """
+            SELECT composite_score, usage_trend_score, feature_breadth_score,
+                   satisfaction_score, error_rate_score, at_risk_flag
+            FROM tenant_health_scores
+            WHERE tenant_id = :tid
+            ORDER BY date DESC
+            LIMIT 1
+            """
+        ),
+        {"tid": tenant_id},
+    )
+    latest_row = latest_result.fetchone()
 
-    health = calculate_health_score(
-        usage_trend_pct=components["usage_trend_pct"],
-        feature_breadth=components["feature_breadth"],
-        satisfaction_pct=components["satisfaction_pct"],
-        error_rate_pct=components["error_rate_pct"],
+    if latest_row:
+        current = {
+            "composite": float(latest_row[0]) if latest_row[0] is not None else None,
+            "usage_trend": float(latest_row[1]) if latest_row[1] is not None else None,
+            "feature_breadth": float(latest_row[2])
+            if latest_row[2] is not None
+            else None,
+            "satisfaction": float(latest_row[3]) if latest_row[3] is not None else None,
+            "error_rate": float(latest_row[4]) if latest_row[4] is not None else None,
+            "at_risk_flag": bool(latest_row[5]) if latest_row[5] is not None else False,
+        }
+    else:
+        current = {
+            "composite": None,
+            "usage_trend": None,
+            "feature_breadth": None,
+            "satisfaction": None,
+            "error_rate": None,
+            "at_risk_flag": False,
+        }
+
+    # Fetch up to 12 stored rows ordered newest first for trend
+    trend_result = await session.execute(
+        text(
+            """
+            SELECT date, composite_score, usage_trend_score, satisfaction_score
+            FROM tenant_health_scores
+            WHERE tenant_id = :tid
+            ORDER BY date DESC
+            LIMIT 12
+            """
+        ),
+        {"tid": tenant_id},
+    )
+    trend_rows = trend_result.fetchall()
+
+    # Map date → row for ISO-week alignment
+    row_by_date: dict = {}
+    for tr in trend_rows:
+        row_by_date[tr[0]] = tr
+
+    # Generate 12 ISO weeks going backwards from the current week
+    today = datetime.date.today()
+    current_monday = today - datetime.timedelta(days=today.weekday())
+
+    trend = []
+    for i in range(12):
+        week_monday = current_monday - datetime.timedelta(weeks=i)
+        iso_cal = week_monday.isocalendar()
+        week_label = f"{iso_cal[0]}-W{iso_cal[1]:02d}"
+
+        matched_row = None
+        for d, r in row_by_date.items():
+            d_iso = d.isocalendar()
+            if d_iso[0] == iso_cal[0] and d_iso[1] == iso_cal[1]:
+                matched_row = r
+                break
+
+        if matched_row:
+            trend.append(
+                {
+                    "week": week_label,
+                    "composite": float(matched_row[1])
+                    if matched_row[1] is not None
+                    else None,
+                    "usage_trend": float(matched_row[2])
+                    if matched_row[2] is not None
+                    else None,
+                    "satisfaction": float(matched_row[3])
+                    if matched_row[3] is not None
+                    else None,
+                }
+            )
+        else:
+            trend.append(
+                {
+                    "week": week_label,
+                    "composite": None,
+                    "usage_trend": None,
+                    "satisfaction": None,
+                }
+            )
+
+    logger.info(
+        "tenant_health_drilldown",
+        user_id=current_user.id,
+        tenant_id=tenant_id,
     )
 
     return {
-        "tenant_id": tenant_id,
-        "overall_score": health.score,
-        "category": health.category,
-        "at_risk": health.category in ("warning", "critical"),
-        "components": {
-            "usage_trend": {
-                "score": health.components.get("usage_trend", 0),
-                "weight": 0.30,
-                "details": {
-                    "recent_queries": components["recent_queries"],
-                    "prior_queries": components["prior_queries"],
-                },
-            },
-            "feature_breadth": {
-                "score": health.components.get("feature_breadth", 0),
-                "weight": 0.20,
-                "details": {
-                    "features_active": components["features_active"],
-                    "features_total": 5,
-                },
-            },
-            "satisfaction": {
-                "score": health.components.get("satisfaction", 0),
-                "weight": 0.35,
-                "details": {
-                    "positive_feedback": components["positive_feedback"],
-                    "total_feedback": components["total_feedback"],
-                },
-            },
-            "error_rate": {
-                "score": health.components.get("error_rate", 0),
-                "weight": 0.15,
-                "details": {"open_issues": components["open_issues"]},
-            },
-        },
+        "current": current,
+        "trend": trend,
     }

@@ -10,6 +10,7 @@ import { TenantActions } from "./elements/TenantActions";
 import { HealthBreakdown } from "./elements/HealthBreakdown";
 import { QuotaUsageBar } from "./elements/QuotaUsageBar";
 import { TenantDetailSkeleton } from "./elements/TenantDetailSkeleton";
+import { TenantLLMConfig } from "./elements/TenantLLMConfig";
 
 /**
  * FE-042: Tenant Detail page with health breakdown.
@@ -63,6 +64,15 @@ export default function TenantDetailPage({
 
             {/* Actions */}
             <TenantActions tenantId={id} status={tenant.status} />
+
+            {/* LLM Configuration */}
+            <ErrorBoundary>
+              <TenantLLMConfig
+                tenantId={id}
+                currentProfileId={tenant.llm_profile_id ?? null}
+                isByollm={tenant.is_byollm ?? false}
+              />
+            </ErrorBoundary>
 
             {/* Health + Quota grid */}
             <div className="grid gap-6 lg:grid-cols-2">

@@ -85,7 +85,7 @@ class TestBulkInviteAuth:
 
     def test_bulk_invite_requires_tenant_admin(self, client, user_headers):
         """End users (non-admin) should get 403."""
-        csv_content = "email,name,role\nalice@acme.com,Alice Smith,end_user\n"
+        csv_content = "email,name,role\nalice@acme.com,Alice Smith,viewer\n"
         resp = client.post(
             BULK_INVITE_URL,
             files=_csv_file(csv_content),
@@ -95,7 +95,7 @@ class TestBulkInviteAuth:
 
     def test_bulk_invite_requires_auth(self, client):
         """No auth header should get 401."""
-        csv_content = "email,name,role\nalice@acme.com,Alice Smith,end_user\n"
+        csv_content = "email,name,role\nalice@acme.com,Alice Smith,viewer\n"
         resp = client.post(
             BULK_INVITE_URL,
             files=_csv_file(csv_content),
@@ -124,7 +124,7 @@ class TestBulkInviteValidation:
 
     def test_bulk_invite_rejects_invalid_email(self, client, admin_headers):
         """Rows with bad emails should appear in errors."""
-        csv_content = "email,name,role\nnot-an-email,Bad User,end_user\n"
+        csv_content = "email,name,role\nnot-an-email,Bad User,viewer\n"
         with patch(
             "app.modules.users.routes.bulk_invite_check_quota",
             new_callable=AsyncMock,
@@ -172,7 +172,7 @@ class TestBulkInviteValidation:
     def test_bulk_invite_max_500_rows_enforced(self, client, admin_headers):
         """CSV with more than 500 data rows should be rejected with 422."""
         header = "email,name,role\n"
-        rows = "".join(f"user{i}@acme.com,User {i},end_user\n" for i in range(501))
+        rows = "".join(f"user{i}@acme.com,User {i},viewer\n" for i in range(501))
         resp = client.post(
             BULK_INVITE_URL,
             files=_csv_file(header + rows),
@@ -184,7 +184,7 @@ class TestBulkInviteValidation:
         """Duplicate emails within the CSV should be reported as errors."""
         csv_content = (
             "email,name,role\n"
-            "alice@acme.com,Alice,end_user\n"
+            "alice@acme.com,Alice,viewer\n"
             "alice@acme.com,Alice Dup,tenant_admin\n"
         )
         with patch(
@@ -215,8 +215,8 @@ class TestBulkInviteValidation:
         """All rows should be validated before any invite is inserted."""
         csv_content = (
             "email,name,role\n"
-            "valid@acme.com,Valid User,end_user\n"
-            "bad-email,Bad User,end_user\n"
+            "valid@acme.com,Valid User,viewer\n"
+            "bad-email,Bad User,viewer\n"
         )
         with patch(
             "app.modules.users.routes.bulk_invite_check_quota",
@@ -252,7 +252,7 @@ class TestBulkInviteSuccess:
         """200 with total/successful/failed/errors on valid CSV."""
         csv_content = (
             "email,name,role\n"
-            "alice@acme.com,Alice Smith,end_user\n"
+            "alice@acme.com,Alice Smith,viewer\n"
             "bob@acme.com,Bob Jones,tenant_admin\n"
         )
         with patch(

@@ -230,7 +230,7 @@ class TestGetIssue:
                 "id": "issue-1",
                 "title": "Bug",
                 "description": "Details",
-                "user_id": TEST_USER_ID,
+                "reporter_id": TEST_USER_ID,
                 "status": "open",
             }
             resp = client.get("/api/v1/issues/issue-1", headers=user_headers)
@@ -257,7 +257,7 @@ class TestGetIssue:
                 "id": "issue-1",
                 "title": "Bug",
                 "description": "Details",
-                "user_id": "user-001",  # Different from user-other
+                "reporter_id": "user-001",  # Different from user-other
                 "status": "open",
             }
             resp = client.get("/api/v1/issues/issue-1", headers=other_user_headers)

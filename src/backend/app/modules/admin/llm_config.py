@@ -2,11 +2,14 @@
 Tenant LLM Configuration API (P2LLM-006).
 
 Endpoints (require tenant_admin):
-    GET  /admin/llm-config   — returns current llm_config + byollm key presence
-    PATCH /admin/llm-config  — set model_source (library/byollm) + llm_library_id
+    GET  /admin/llm-config                 — returns current llm_config + byollm key presence
+    PATCH /admin/llm-config                — set model_source (library/byollm) + llm_library_id
+    GET  /admin/llm-config/library-options — list Published llm_library entries available for
+                                             assignment (excludes Deprecated) (PA-003/PA-004)
 
 Config is stored in tenant_configs table under config_type='llm_config'.
-After PATCH: Redis key mingai:{tenant_id}:config is DEL'd to bust cache.
+After PATCH: Redis key mingai:{tenant_id}:config is DEL'd to bust cache (PA-003).
+SLA: 60s propagation — DEL forces cache miss → re-read from PostgreSQL on next call.
 """
 import json
 import uuid
@@ -61,6 +64,21 @@ class UpdateLLMConfigRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
 
 
+class LibraryOption(BaseModel):
+    """A Published llm_library entry available for tenant assignment (PA-003/PA-004)."""
+
+    id: str
+    provider: str
+    model_name: str
+    display_name: str
+    plan_tier: str
+    is_recommended: bool
+    pricing_per_1k_tokens_in: Optional[float] = None
+    pricing_per_1k_tokens_out: Optional[float] = None
+
+    model_config = {"protected_namespaces": ()}
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -87,17 +105,19 @@ async def _get_llm_config_raw(tenant_id: str, db: AsyncSession) -> dict:
 
 
 async def _invalidate_config_cache(tenant_id: str) -> None:
-    """DEL the tenant config Redis key after mutation.
+    """DEL tenant LLM config Redis keys after mutation.
 
     Key format matches TenantConfigService._redis_key():
     mingai:{tenant_id}:config:{key}
+
+    Both keys are deleted because byollm mutations change byollm_key_ref
+    and llm_config mutations change model_source — both affect routing.
     """
     try:
         redis = get_redis()
-        # Use raw key — not through CacheService type system (spec requirement).
-        # Key must match TenantConfigService._redis_key(tenant_id, "llm_config").
-        cache_key = f"mingai:{tenant_id}:config:llm_config"
-        await redis.delete(cache_key)
+        llm_key = f"mingai:{tenant_id}:config:llm_config"
+        byollm_key = f"mingai:{tenant_id}:config:byollm_key_ref"
+        await redis.delete(llm_key, byollm_key)
         logger.debug("llm_config_cache_invalidated", tenant_id=tenant_id)
     except Exception as exc:
         # Non-blocking — cache miss is acceptable
@@ -111,6 +131,42 @@ async def _invalidate_config_cache(tenant_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
+
+
+@router.get("/llm-config/library-options", response_model=list[LibraryOption])
+async def list_llm_library_options(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    List Published llm_library entries available for tenant assignment (PA-003/PA-004).
+
+    Excludes Deprecated entries — WHERE status = 'Published'.
+    Ordered by is_recommended DESC then display_name ASC.
+    """
+    result = await db.execute(
+        text(
+            "SELECT id, provider, model_name, display_name, plan_tier, "
+            "is_recommended, pricing_per_1k_tokens_in, pricing_per_1k_tokens_out "
+            "FROM llm_library "
+            "WHERE status = 'Published' "
+            "ORDER BY is_recommended DESC, display_name ASC"
+        )
+    )
+    rows = result.fetchall()
+    return [
+        LibraryOption(
+            id=str(row[0]),
+            provider=row[1],
+            model_name=row[2],
+            display_name=row[3],
+            plan_tier=row[4],
+            is_recommended=row[5],
+            pricing_per_1k_tokens_in=float(row[6]) if row[6] is not None else None,
+            pricing_per_1k_tokens_out=float(row[7]) if row[7] is not None else None,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/llm-config", response_model=LLMConfigResponse)
