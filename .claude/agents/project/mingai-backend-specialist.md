@@ -69,20 +69,29 @@ app/modules/
     routes.py         — tenant CRUD, LLM profiles, quota, provisioning SSE
     worker.py         — async provisioning worker
   users/              — user CRUD, bulk invite (API-044)
-  admin/workspace.py  — GET/PATCH /admin/workspace settings
+  admin/workspace.py         — GET/PATCH /admin/workspace settings
+  admin/analytics.py         — Satisfaction, per-agent analytics, glossary impact, engagement (TA-026–030)
+  admin/onboarding.py        — Onboarding wizard persistence — tenant_configs JSONB (TA-031)
+  admin/bulk_user_actions.py — Bulk suspend/role_change/kb_assignment — self-lockout protection (TA-032)
+  admin/kb_sources.py        — KB source health, document search, source detach (TA-034)
+  admin/kb_access_control.py — GET/PATCH /admin/knowledge-base/{index_id}/access (TA-011/007)
 ```
 
-## Alembic Migrations (8 total)
+## Alembic Migrations (31 total, v001–v029)
 
 ```
-v001_initial_schema.py      — base schema (21 tables, _V001_TABLES frozen constant)
-v002_rls_policies.py        — RLS policies (uses frozen _V001_TABLES; tenants added separately)
-v003_har_keypair_columns.py — HAR keypair columns on agent_cards
-v004_llm_profile_status.py  — status column on llm_profiles
+v001_initial_schema.py           — base schema (21 tables, _V001_TABLES frozen constant)
+v002_rls_policies.py             — RLS policies (uses frozen _V001_TABLES; tenants added separately)
+v003_har_keypair_columns.py      — HAR keypair columns on agent_cards
+v004_llm_profile_status.py       — status column on llm_profiles
 v005_agent_cards_studio_columns.py — studio columns on agent_cards
-v006_notifications_table.py — notifications(id, tenant_id, user_id, type, title, body, link, read, created_at) + RLS
-v007_registry_columns.py    — agent_cards: is_public, a2a_endpoint, transaction_types[], industries[], languages[], health_check_url
-v008_disputes_table.py      — disputes(id, transaction_id, filed_by_tenant_id, reason, category, evidence_urls, desired_resolution, status, resolved_by, resolution, resolution_notes, filed_at, resolved_at)
+v006_notifications_table.py      — notifications + RLS
+v007_registry_columns.py         — agent_cards: is_public, a2a_endpoint, transaction_types[], industries[]
+v008_disputes_table.py           — disputes table
+v009–v026                        — KB tables, analytics events, tool catalog, tenant_configs, etc.
+v027_kb_access_control.py        — kb_access_control(index_id, tenant_id, visibility_mode, allowed_roles[], allowed_user_ids[])
+v028_agent_access_control.py     — agent access control
+v029_access_requests.py          — access requests
 ```
 
 **CRITICAL**: v002 RLS policies use a frozen `_V001_TABLES` constant. When adding new tables, create a new migration that adds RLS to those tables separately — do NOT modify `_V001_TABLES`.
@@ -211,10 +220,15 @@ Error details MUST NOT disclose caller scope/roles — use generic messages only
 7. Input validation at Pydantic layer + DB helper layer for allowlisted fields
 8. `_VALID_*` constants for all allowlists (actions, severities, columns)
 9. `status` enum fields: use `Field(None, pattern="^(active|suspended)$")` not free-text
+10. Bulk user actions: acting user cannot suspend or demote themselves (self-lockout prevention — `acting_user_id` parameter required)
+11. LIKE search params: escape `\`, `%`, `_` (in that order) before wrapping in `%...%`
+12. Glossary rollback: term update + audit_log INSERT must commit in the same transaction (`commit=False` pattern in `update_glossary_term_db`)
+13. KB assignment: verify `kb_id` belongs to calling tenant via UNION ALL on `integrations.config->>'kb_id'` + `kb_access_control.index_id` — no `knowledge_bases` table exists
+14. `update_glossary_term_db`: always operate on `dict(updates)` copy — never mutate caller's dict
 
 ## Test Structure
 
-**1134 tests** (unit + integration), all passing.
+**2087+ tests** (unit + integration), all passing.
 
 ```bash
 # Unit tests (mocked dependencies)

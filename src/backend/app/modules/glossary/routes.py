@@ -92,22 +92,43 @@ class UpdateTermRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def list_glossary_db(tenant_id: str, page: int, page_size: int, db) -> dict:
-    """List glossary terms for a tenant, paginated."""
+async def list_glossary_db(
+    tenant_id: str,
+    page: int,
+    page_size: int,
+    db,
+    search: str | None = None,
+) -> dict:
+    """List glossary terms for a tenant, paginated. Optionally filter by search (term ILIKE)."""
     offset = (page - 1) * page_size
+
+    # Escape LIKE metacharacters in search input (must be in this order)
+    if search:
+        safe_search = (
+            search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        search_pattern = f"%{safe_search}%"
+        where_extra = " AND term ILIKE :search"
+        params_extra: dict = {"search": search_pattern}
+    else:
+        where_extra = ""
+        params_extra = {}
+
     count_result = await db.execute(
-        text("SELECT COUNT(*) FROM glossary_terms WHERE tenant_id = :tenant_id"),
-        {"tenant_id": tenant_id},
+        text(
+            f"SELECT COUNT(*) FROM glossary_terms WHERE tenant_id = :tenant_id{where_extra}"
+        ),
+        {"tenant_id": tenant_id, **params_extra},
     )
     total = count_result.scalar() or 0
 
     rows_result = await db.execute(
         text(
-            "SELECT id, term, full_form, aliases, created_at FROM glossary_terms "
-            "WHERE tenant_id = :tenant_id "
+            f"SELECT id, term, full_form, aliases, created_at FROM glossary_terms "
+            f"WHERE tenant_id = :tenant_id{where_extra} "
             "ORDER BY term ASC LIMIT :limit OFFSET :offset"
         ),
-        {"tenant_id": tenant_id, "limit": page_size, "offset": offset},
+        {"tenant_id": tenant_id, "limit": page_size, "offset": offset, **params_extra},
     )
     rows = rows_result.fetchall()
     items = [
@@ -624,6 +645,7 @@ async def get_miss_analytics(
 async def list_glossary(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
     current_user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -637,6 +659,7 @@ async def list_glossary(
         tenant_id=current_user.tenant_id,
         page=page,
         page_size=page_size,
+        search=search,
         db=session,
     )
     return result

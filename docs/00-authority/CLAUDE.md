@@ -3,7 +3,7 @@
 Preloaded instructions for AI codegen agents working on the mingai platform.
 Read this before writing any backend or frontend code.
 
-Last validated: 2026-03-09.
+Last validated: 2026-03-16.
 
 ---
 
@@ -135,7 +135,7 @@ alembic upgrade head                              # apply all
 alembic revision --autogenerate -m "description" # generate new
 ```
 
-6 migrations applied (v001–v005 + one additional).
+31 migrations applied (v001–v029 + **init**).
 
 ---
 

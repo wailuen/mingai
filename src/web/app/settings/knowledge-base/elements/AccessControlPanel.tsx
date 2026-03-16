@@ -66,7 +66,8 @@ const MODE_OPTIONS: {
 
 const ROLE_LABELS: Record<string, string> = {
   viewer: "Viewer",
-  tenant_admin: "Tenant Admin",
+  editor: "Editor",
+  admin: "Admin",
 };
 
 // ---------------------------------------------------------------------------

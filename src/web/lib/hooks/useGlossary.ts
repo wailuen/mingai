@@ -128,16 +128,28 @@ export function useDeleteTerm() {
 }
 
 export interface VersionEntry {
-  version_id: string;
+  id: string;
+  actor_id: string;
+  actor_email: string;
+  action: string;
+  changed_fields: string[];
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
   created_at: string;
-  editor_email: string;
-  change_summary: string;
+}
+
+export interface VersionHistoryResponse {
+  items: VersionEntry[];
+  total: number;
 }
 
 export function useVersionHistory(termId: string | null) {
   return useQuery({
     queryKey: [GLOSSARY_KEY, "history", termId],
-    queryFn: () => apiGet<VersionEntry[]>(`/api/v1/glossary/${termId}/history`),
+    queryFn: () =>
+      apiGet<VersionHistoryResponse>(
+        `/api/v1/glossary/${termId ?? ""}/history`,
+      ),
     enabled: !!termId,
   });
 }
@@ -153,9 +165,10 @@ export function useRollbackTerm() {
       termId: string;
       versionId: string;
     }) =>
-      apiPost<GlossaryTerm>(`/api/v1/glossary/${termId}/rollback`, {
-        version_id: versionId,
-      }),
+      apiPatch<GlossaryTerm>(
+        `/api/v1/glossary/${termId}/rollback/${versionId}`,
+        {},
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [GLOSSARY_KEY] });
     },

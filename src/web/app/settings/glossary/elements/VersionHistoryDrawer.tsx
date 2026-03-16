@@ -45,13 +45,13 @@ export function VersionHistoryDrawer({
 
   if (!isOpen) return null;
 
-  const entries = data ?? [];
+  const entries = data?.items ?? [];
 
   function handleRollback(entry: VersionEntry) {
     if (!termId) return;
-    setRollbackingVersionId(entry.version_id);
+    setRollbackingVersionId(entry.id);
     rollbackMutation.mutate(
-      { termId, versionId: entry.version_id },
+      { termId, versionId: entry.id },
       {
         onSuccess: () => setRollbackingVersionId(null),
         onError: () => setRollbackingVersionId(null),
@@ -73,8 +73,7 @@ export function VersionHistoryDrawer({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-section-heading text-text-primary">
-            History &mdash;{" "}
-            <span className="font-semibold">{termName}</span>
+            History &mdash; <span className="font-semibold">{termName}</span>
           </h2>
           <button
             type="button"
@@ -91,7 +90,10 @@ export function VersionHistoryDrawer({
           {isLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="space-y-2 rounded-card border border-border-faint p-4">
+                <div
+                  key={i}
+                  className="space-y-2 rounded-card border border-border-faint p-4"
+                >
                   <Skeleton className="h-3 w-32" />
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-3 w-24" />
@@ -106,12 +108,11 @@ export function VersionHistoryDrawer({
             <div className="space-y-3">
               {entries.map((entry, idx) => {
                 const isCurrent = idx === 0;
-                const isRollbacking =
-                  rollbackingVersionId === entry.version_id;
+                const isRollbacking = rollbackingVersionId === entry.id;
 
                 return (
                   <div
-                    key={entry.version_id}
+                    key={entry.id}
                     className={`rounded-card border p-4 ${
                       isCurrent
                         ? "border-accent bg-accent-dim"
@@ -134,14 +135,19 @@ export function VersionHistoryDrawer({
                     <p className="mt-1.5 text-xs text-text-faint">
                       by{" "}
                       <span className="font-mono text-text-muted">
-                        {entry.editor_email}
+                        {entry.actor_email ?? "system"}
                       </span>
                     </p>
 
-                    {/* Change summary */}
-                    <p className="mt-2 text-sm text-text-muted">
-                      {entry.change_summary}
-                    </p>
+                    {/* Changed fields */}
+                    {entry.changed_fields.length > 0 && (
+                      <p className="mt-2 text-xs text-text-faint">
+                        Changed:{" "}
+                        <span className="text-text-muted">
+                          {entry.changed_fields.join(", ")}
+                        </span>
+                      </p>
+                    )}
 
                     {/* Rollback button (not on current version) */}
                     {!isCurrent && (
