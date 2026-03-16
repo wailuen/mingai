@@ -32,7 +32,7 @@ app/
 ```
 lib/
   api.ts              — apiGet(), apiPost(), apiPatch(), apiDelete() — always use these
-  auth.ts             — getStoredToken(), getCurrentUser(), isTenantAdmin(), isPlatformAdmin()
+  auth.ts             — getStoredToken(), decodeToken(), isTokenExpired(), isTenantAdmin(), isPlatformAdmin(), hasRole()
   chartColors.ts      — CHART_COLORS — always use for Recharts series, never hardcode hex in SVG
   sanitize.ts         — DOMPurify wrapper — use for any user-generated HTML
   react-query.tsx     — QueryClientProvider
@@ -80,7 +80,8 @@ export function useKBAccessControl(kbId: string | null) {
 export function useUpdateKBAccessControl() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ kbId, payload }) => apiPatch(`.../access`, payload),
+    mutationFn: ({ kbId, payload }) =>
+      apiPatch(`/api/v1/admin/knowledge-base/${kbId}/access`, payload),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["kb-access-control", variables.kbId],
@@ -128,6 +129,7 @@ Never use `rounded-2xl`, `shadow-lg`, `rounded-sm` for badges, or hardcoded hex 
 // Hook: src/web/lib/hooks/useKBAccessControl.ts
 
 // Backend KB roles (MUST match backend _VALID_ROLES exactly)
+// Defined locally in AccessControlPanel.tsx — not exported from useKBAccessControl.ts
 const KB_ROLES = ["viewer", "editor", "admin"] as const;
 
 // Visibility modes

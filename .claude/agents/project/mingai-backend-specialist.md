@@ -102,7 +102,9 @@ v029_access_requests.py          — access requests
 
 ```python
 # Always set before ANY query against tenant-scoped tables
-await db.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant_id})
+sql, params = get_set_tenant_sql(tenant_id)
+await db.execute(text(sql), params)
+# Equivalent to: SELECT set_config('app.current_tenant_id', :tid, true)
 ```
 
 ### Redis Key Namespace
@@ -143,7 +145,7 @@ Terminal (no transitions): COMPLETED, ABANDONED, RESOLVED
 
 `record_transition_event()` creates a signed event chain entry — **never insert events directly** outside this function (double-insert bug was fixed in 8b2104b).
 
-Approval gate: `check_requires_approval()` checks value threshold — `APPROVAL_WINDOW_HOURS = 48`.
+Approval gate: `check_requires_approval(value, tenant_id, db)` checks monetary threshold (≥ $5,000.0 triggers approval). `APPROVAL_WINDOW_HOURS = 48` is the deadline set in `routes.py` after approval is required — it is NOT a parameter of `check_requires_approval()`.
 
 ### Glossary Expander
 

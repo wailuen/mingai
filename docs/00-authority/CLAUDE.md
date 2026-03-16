@@ -550,7 +550,7 @@ src/web/
     shared/                        # ErrorBoundary, LoadingState, SafeHTML
   lib/
     api.ts                         # apiClient — Bearer token injection, error handling
-    auth.ts                        # getToken(), getCurrentUser(), role helpers
+    auth.ts                        # getStoredToken(), decodeToken(), isTokenExpired(), isTenantAdmin(), isPlatformAdmin(), hasRole()
     chartColors.ts                 # CHART_COLORS.accent, CHART_COLORS.alert etc.
     react-query.tsx                # QueryClientProvider
     sanitize.ts                    # DOMPurify wrapper
