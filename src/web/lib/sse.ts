@@ -34,7 +34,16 @@ export type SSEEvent =
       type: "done";
       data: { conversation_id: string; message_id: string };
     }
-  | { type: "error"; data: { code: string; message: string } };
+  | { type: "error"; data: { code: string; message: string } }
+  | {
+      type: "cache_state";
+      data: {
+        hit: boolean;
+        similarity: number;
+        age_seconds: number;
+        stage: string;
+      };
+    };
 
 /** Maximum number of automatic reconnection attempts on stream drop */
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -59,10 +68,16 @@ export type SSEControlEvent =
  * Control events (__reconnecting, __reconnect_failed) are yielded so the UI
  * can show appropriate indicators.
  */
+export interface StreamChatOptions {
+  /** Additional headers to include in the request (e.g. X-Cache-Bypass) */
+  extraHeaders?: Record<string, string>;
+}
+
 export async function* streamChat(
   query: string,
   conversationId: string | null,
   agentId: string,
+  options?: StreamChatOptions,
 ): AsyncGenerator<SSEEvent | SSEControlEvent> {
   const token = getStoredToken();
   let lastEventId: string | null = null;
@@ -75,6 +90,7 @@ export async function* streamChat(
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      ...(options?.extraHeaders ?? {}),
     };
     if (lastEventId) {
       headers["Last-Event-ID"] = lastEventId;

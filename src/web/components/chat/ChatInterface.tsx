@@ -94,6 +94,9 @@ export function ChatInterface({
             onRetry={() => chat.retryLastMessage()}
             onViewSources={() => setSourcePanelOpen(true)}
             currentMode={chat.currentMode}
+            cacheHit={chat.cacheHit ?? undefined}
+            cacheAgeSeconds={chat.cacheAgeSeconds}
+            onBypassCache={() => chat.bypassCacheAndResend()}
           />
         ) : (
           <ChatEmptyState

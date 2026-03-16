@@ -42,6 +42,8 @@ interface ChatActiveStateProps {
   cacheHit?: boolean;
   /** FE-014: Age in seconds of the cached response */
   cacheAgeSeconds?: number | null;
+  /** CACHE-018: Callback to re-send last message with X-Cache-Bypass */
+  onBypassCache?: () => void;
 }
 
 /**
@@ -67,6 +69,7 @@ export function ChatActiveState({
   teamName,
   cacheHit,
   cacheAgeSeconds,
+  onBypassCache,
 }: ChatActiveStateProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -126,6 +129,9 @@ export function ChatActiveState({
                   cacheHit={idx === messages.length - 1 ? cacheHit : undefined}
                   cacheAgeSeconds={
                     idx === messages.length - 1 ? cacheAgeSeconds : null
+                  }
+                  onBypassCache={
+                    idx === messages.length - 1 ? onBypassCache : undefined
                   }
                 />
               )}
@@ -208,6 +214,7 @@ function AIMessage({
   teamName,
   cacheHit,
   cacheAgeSeconds,
+  onBypassCache,
 }: {
   message: ChatMessage;
   isStreaming: boolean;
@@ -222,6 +229,7 @@ function AIMessage({
   teamName?: string | null;
   cacheHit?: boolean;
   cacheAgeSeconds?: number | null;
+  onBypassCache?: () => void;
 }) {
   const hasSources = (message.sources?.length ?? 0) > 0;
   const modeLabel = currentMode === "auto" ? "AUTO" : currentMode.toUpperCase();
@@ -294,6 +302,7 @@ function AIMessage({
             <CacheStateChip
               cacheHit={cacheHit}
               cacheAgeSeconds={cacheAgeSeconds}
+              onBypassCache={onBypassCache}
             />
           )}
         </div>

@@ -6,6 +6,7 @@ import {
   type SSEEvent,
   type SSEControlEvent,
   type Source,
+  type StreamChatOptions,
 } from "@/lib/sse";
 import { apiGet } from "@/lib/api";
 import type { GlossaryExpansionApplied } from "@/components/chat/TermsInterpreted";
@@ -55,6 +56,10 @@ interface UseChatState {
   reconnecting: boolean;
   /** Non-null when all reconnect attempts have been exhausted */
   reconnectFailed: string | null;
+  /** CACHE-018: Whether the last response was a cache hit */
+  cacheHit: boolean | null;
+  /** CACHE-018: Age in seconds of the cached response */
+  cacheAgeSeconds: number | null;
 }
 
 export function useChat(agentId: string) {
@@ -73,12 +78,14 @@ export function useChat(agentId: string) {
     currentMode: "auto",
     reconnecting: false,
     reconnectFailed: null,
+    cacheHit: null,
+    cacheAgeSeconds: null,
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
-    async (query: string, mode?: string) => {
+    async (query: string, mode?: string, bypassCache?: boolean) => {
       // Add user message
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -108,6 +115,8 @@ export function useChat(agentId: string) {
         glossaryExpansionsApplied: [],
         reconnecting: false,
         reconnectFailed: null,
+        cacheHit: null,
+        cacheAgeSeconds: null,
       }));
 
       let currentSources: Source[] = [];
@@ -118,10 +127,15 @@ export function useChat(agentId: string) {
       let profileUsed = false;
 
       try {
+        const streamOpts: StreamChatOptions | undefined = bypassCache
+          ? { extraHeaders: { "X-Cache-Bypass": "true" } }
+          : undefined;
+
         for await (const event of streamChat(
           query,
           state.conversationId,
           agentId,
+          streamOpts,
         )) {
           switch (event.type) {
             case "__reconnecting":
@@ -229,6 +243,14 @@ export function useChat(agentId: string) {
               }));
               break;
 
+            case "cache_state":
+              setState((prev) => ({
+                ...prev,
+                cacheHit: event.data.hit,
+                cacheAgeSeconds: event.data.age_seconds,
+              }));
+              break;
+
             case "done":
               setState((prev) => {
                 const msgs = [...prev.messages];
@@ -304,6 +326,8 @@ export function useChat(agentId: string) {
       currentMode: "auto",
       reconnecting: false,
       reconnectFailed: null,
+      cacheHit: null,
+      cacheAgeSeconds: null,
     });
   }, []);
 
@@ -333,6 +357,8 @@ export function useChat(agentId: string) {
         currentMode: "auto",
         reconnecting: false,
         reconnectFailed: null,
+        cacheHit: null,
+        cacheAgeSeconds: null,
       });
     } catch (err) {
       setState((prev) => ({
@@ -342,6 +368,28 @@ export function useChat(agentId: string) {
       }));
     }
   }, []);
+
+  /** CACHE-018: Re-send the last user message with X-Cache-Bypass: true */
+  const bypassCacheAndResend = useCallback(() => {
+    const lastUserMsg = [...state.messages]
+      .reverse()
+      .find((m) => m.role === "user");
+    if (!lastUserMsg) return;
+
+    // Remove the cached assistant response + user message; sendMessage will re-add them
+    setState((prev) => {
+      const msgs = [...prev.messages];
+      if (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
+        msgs.pop();
+      }
+      if (msgs.length > 0 && msgs[msgs.length - 1].role === "user") {
+        msgs.pop();
+      }
+      return { ...prev, messages: msgs, error: null };
+    });
+
+    sendMessage(lastUserMsg.content, state.currentMode, true);
+  }, [state.messages, state.currentMode, sendMessage]);
 
   const retryLastMessage = useCallback(() => {
     // Find the last user message and re-send it
@@ -378,6 +426,7 @@ export function useChat(agentId: string) {
     resetChat,
     loadConversation,
     retryLastMessage,
+    bypassCacheAndResend,
     hasMessages: state.messages.length > 0,
   };
 }
