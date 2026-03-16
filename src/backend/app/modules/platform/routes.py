@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
 from jose import jwt
 from pydantic import BaseModel, Field
@@ -90,36 +90,62 @@ class DashboardStatsResponse(BaseModel):
     satisfaction_pct: float
 
 
-class TemplateVariable(BaseModel):
+_VALID_VARIABLE_TYPES = {"text", "number", "select"}
+# Status values that may be set directly via the API (seed is system-only)
+_WRITABLE_TEMPLATE_STATUSES = {"Draft", "Published", "Deprecated"}
+# Columns that may be updated via PATCH — enforces no dynamic column interpolation
+_TEMPLATE_UPDATE_ALLOWLIST = {
+    "name",
+    "description",
+    "category",
+    "system_prompt",
+    "variable_definitions",
+    "guardrails",
+    "confidence_threshold",
+    "status",
+    "changelog",
+}
+
+
+class TemplateVariableDef(BaseModel):
+    """PA-020: variable_definitions entry — validated at API layer."""
+
     name: str = Field(..., min_length=1, max_length=100)
-    type: str = Field(..., min_length=1, max_length=50)
-    description: str = Field(default="", max_length=500)
+    type: str = Field(..., pattern=r"^(text|number|select)$")
+    label: str = Field(..., min_length=1, max_length=200)
     required: bool = False
-    example: str = Field(default="", max_length=500)
+    options: List[str] = Field(default_factory=list)  # for select type
 
 
-class TemplateGuardrails(BaseModel):
-    blocked_topics: List[str] = Field(default_factory=list)
-    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-    max_response_length: int = Field(default=2000, ge=100, le=10000)
+class CreateAgentTemplateRequest(BaseModel):
+    """PA-020: Create a new Draft template."""
 
-
-class PublishAgentTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    category: str = Field(..., min_length=1, max_length=100)
-    description: str = Field(default="", max_length=1000)
-    system_prompt: str = Field(..., min_length=1)
-    variables: List[TemplateVariable] = Field(default_factory=list)
-    guardrails: TemplateGuardrails = Field(default_factory=TemplateGuardrails)
-    plan_tiers: List[str] = Field(..., min_length=1)
+    description: Optional[str] = Field(None, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+    system_prompt: str = Field(..., min_length=1, max_length=100_000)
+    variable_definitions: List[TemplateVariableDef] = Field(default_factory=list)
+    # guardrails: list of {pattern, action, reason} objects.
+    # Full schema validated at PA-021 test harness layer; here we only bound the list.
+    guardrails: List[dict] = Field(default_factory=list, max_length=50)
+    confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 
-class UpdateAgentTemplateRequest(BaseModel):
-    system_prompt: Optional[str] = None
-    variables: Optional[List[TemplateVariable]] = None
-    guardrails: Optional[TemplateGuardrails] = None
-    status: Optional[str] = Field(None, pattern="^(draft|published|deprecated)$")
-    changelog: Optional[str] = Field(None, max_length=2000)
+class PatchAgentTemplateRequest(BaseModel):
+    """PA-020: Partial update for a template. system_prompt rejected (409) on Published."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+    system_prompt: Optional[str] = Field(None, min_length=1, max_length=100_000)
+    variable_definitions: Optional[List[TemplateVariableDef]] = None
+    # guardrails: bounded list; full schema validation deferred to PA-021.
+    guardrails: Optional[List[dict]] = Field(None, max_length=50)
+    confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # Only forward transitions via API — no Draft (already default), no seed.
+    # Draft → Deprecated is intentionally allowed (abandon without publishing).
+    status: Optional[str] = Field(None, pattern=r"^(Published|Deprecated)$")
+    changelog: Optional[str] = Field(None, max_length=5000)
 
 
 class RegisterToolRequest(BaseModel):
@@ -138,155 +164,124 @@ class RegisterToolRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def publish_agent_template_db(
-    name: str,
-    category: str,
-    description: str,
-    system_prompt: str,
-    variables: list,
-    guardrails: dict,
-    plan_tiers: list,
-    platform_tenant_id: str,
+async def _create_agent_template_db(
+    body: "CreateAgentTemplateRequest",
+    created_by: str,
     db: AsyncSession,
 ) -> dict:
-    """Insert a new agent template into agent_cards under the platform tenant."""
+    """PA-020: Insert a new Draft agent template into agent_templates."""
     template_id = str(uuid.uuid4())
-    capabilities = {
-        "variables": variables,
-        "guardrails": guardrails,
-        "plan_tiers": plan_tiers,
-    }
-    capabilities_json = json.dumps(capabilities)
+    variable_defs_json = json.dumps([v.model_dump() for v in body.variable_definitions])
+    guardrails_json = json.dumps(body.guardrails)
 
     await db.execute(
         text(
-            "INSERT INTO agent_cards "
-            "(id, tenant_id, name, category, description, system_prompt, "
-            "capabilities, status, version, source) "
-            "VALUES (:id, :tenant_id, :name, :category, :description, :system_prompt, "
-            "CAST(:capabilities AS jsonb), 'draft', 1, 'platform')"
+            "INSERT INTO agent_templates "
+            "(id, name, description, category, system_prompt, variable_definitions, "
+            "guardrails, confidence_threshold, version, status, created_by) "
+            "VALUES (:id, :name, :description, :category, :system_prompt, "
+            "CAST(:variable_definitions AS jsonb), CAST(:guardrails AS jsonb), "
+            ":confidence_threshold, 1, 'Draft', :created_by)"
         ),
         {
             "id": template_id,
-            "tenant_id": platform_tenant_id,
-            "name": name,
-            "category": category,
-            "description": description,
-            "system_prompt": system_prompt,
-            "capabilities": capabilities_json,
+            "name": body.name,
+            "description": body.description,
+            "category": body.category,
+            "system_prompt": body.system_prompt,
+            "variable_definitions": variable_defs_json,
+            "guardrails": guardrails_json,
+            "confidence_threshold": body.confidence_threshold,
+            "created_by": created_by,
         },
     )
     await db.commit()
-
-    logger.info(
-        "agent_template_published",
-        template_id=template_id,
-        name=name,
-        category=category,
-    )
-    return {"id": template_id, "name": name, "version": 1, "status": "draft"}
+    # Re-fetch the full row so the 201 response has the same shape as GET detail.
+    return await _get_agent_template_db(template_id, db)
 
 
-async def get_platform_template_db(
-    template_id: str, platform_tenant_id: str, db: AsyncSession
-) -> Optional[dict]:
-    """Fetch a platform template by ID."""
+async def _get_agent_template_db(template_id: str, db: AsyncSession) -> Optional[dict]:
+    """PA-020: Fetch a single agent template by ID from agent_templates."""
     result = await db.execute(
         text(
-            "SELECT id, name, description, system_prompt, capabilities, status, "
-            "version, updated_at "
-            "FROM agent_cards "
-            "WHERE id = :id AND tenant_id = :tenant_id"
+            "SELECT id, name, description, category, system_prompt, "
+            "variable_definitions, guardrails, confidence_threshold, "
+            "version, status, changelog, created_by, created_at, updated_at "
+            "FROM agent_templates WHERE id = :id"
         ),
-        {"id": template_id, "tenant_id": platform_tenant_id},
+        {"id": template_id},
     )
     row = result.mappings().first()
     if row is None:
         return None
-    capabilities = row["capabilities"]
-    if isinstance(capabilities, str):
-        capabilities = json.loads(capabilities)
     return {
         "id": str(row["id"]),
         "name": row["name"],
         "description": row["description"],
+        "category": row["category"],
         "system_prompt": row["system_prompt"],
-        "capabilities": capabilities or {},
-        "status": row["status"],
+        "variable_definitions": row["variable_definitions"] or [],
+        "guardrails": row["guardrails"] or [],
+        "confidence_threshold": (
+            float(row["confidence_threshold"])
+            if row["confidence_threshold"] is not None
+            else None
+        ),
         "version": row["version"],
-        "updated_at": row["updated_at"],
+        "status": row["status"],
+        "changelog": row["changelog"],
+        "created_by": str(row["created_by"]) if row["created_by"] else None,
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
     }
 
 
-async def update_platform_template_db(
+async def _patch_agent_template_db(
     template_id: str,
-    current: dict,
-    system_prompt: Optional[str],
-    variables: Optional[list],
-    guardrails: Optional[dict],
-    new_status: Optional[str],
-    changelog: Optional[str],
-    platform_tenant_id: str,
+    body: "PatchAgentTemplateRequest",
     db: AsyncSession,
-) -> dict:
-    """Apply a partial update to a platform agent template."""
-    capabilities = current.get("capabilities") or {}
-    if isinstance(capabilities, str):
-        capabilities = json.loads(capabilities)
+) -> Optional[dict]:
+    """PA-020: Apply a partial update to an agent_templates row."""
+    set_parts = ["updated_at = NOW()"]
+    params: dict = {"id": template_id}
 
-    # Determine new version: bump if system_prompt changes on a published template
-    current_version = current["version"]
-    current_status = current["status"]
-    new_version = current_version
+    if body.name is not None:
+        set_parts.append("name = :name")
+        params["name"] = body.name
+    if body.description is not None:
+        set_parts.append("description = :description")
+        params["description"] = body.description
+    if body.category is not None:
+        set_parts.append("category = :category")
+        params["category"] = body.category
+    if body.system_prompt is not None:
+        set_parts.append("system_prompt = :system_prompt")
+        params["system_prompt"] = body.system_prompt
+    if body.variable_definitions is not None:
+        set_parts.append("variable_definitions = CAST(:variable_definitions AS jsonb)")
+        params["variable_definitions"] = json.dumps(
+            [v.model_dump() for v in body.variable_definitions]
+        )
+    if body.guardrails is not None:
+        set_parts.append("guardrails = CAST(:guardrails AS jsonb)")
+        params["guardrails"] = json.dumps(body.guardrails)
+    if body.confidence_threshold is not None:
+        set_parts.append("confidence_threshold = :confidence_threshold")
+        params["confidence_threshold"] = body.confidence_threshold
+    if body.status is not None:
+        set_parts.append("status = :status")
+        params["status"] = body.status
+    if body.changelog is not None:
+        set_parts.append("changelog = :changelog")
+        params["changelog"] = body.changelog
 
-    effective_prompt = (
-        system_prompt if system_prompt is not None else current["system_prompt"]
-    )
-
-    if system_prompt is not None and current_status == "published":
-        new_version = current_version + 1
-
-    # Update capabilities JSONB fields as requested
-    if variables is not None:
-        capabilities["variables"] = variables
-    if guardrails is not None:
-        capabilities["guardrails"] = guardrails
-    if changelog is not None:
-        capabilities["changelog"] = changelog
-
-    effective_status = new_status if new_status is not None else current_status
-
-    capabilities_json = json.dumps(capabilities)
-
+    set_clause = ", ".join(set_parts)
     await db.execute(
-        text(
-            "UPDATE agent_cards "
-            "SET system_prompt = :system_prompt, "
-            "    capabilities = CAST(:capabilities AS jsonb), "
-            "    status = :status, "
-            "    version = :version, "
-            "    updated_at = NOW() "
-            "WHERE id = :id AND tenant_id = :tenant_id"
-        ),
-        {
-            "system_prompt": effective_prompt,
-            "capabilities": capabilities_json,
-            "status": effective_status,
-            "version": new_version,
-            "id": template_id,
-            "tenant_id": platform_tenant_id,
-        },
+        text(f"UPDATE agent_templates SET {set_clause} WHERE id = :id"),
+        params,
     )
     await db.commit()
-
-    updated = await get_platform_template_db(template_id, platform_tenant_id, db)
-    logger.info(
-        "agent_template_updated",
-        template_id=template_id,
-        new_status=effective_status,
-        new_version=new_version,
-    )
-    return updated
+    return await _get_agent_template_db(template_id, db)
 
 
 async def list_tools_db(
@@ -571,7 +566,12 @@ async def get_dashboard_stats(
 
 
 # ---------------------------------------------------------------------------
-# Route: POST /platform/agent-templates  (API-038)
+# PA-020: Agent Template CRUD API
+# Endpoints:
+#   POST   /platform/agent-templates          — Create Draft
+#   GET    /platform/agent-templates          — List (platform admin + tenant admin)
+#   GET    /platform/agent-templates/{id}     — Detail (platform admin + tenant admin)
+#   PATCH  /platform/agent-templates/{id}     — Update (platform admin only)
 # ---------------------------------------------------------------------------
 
 
@@ -580,159 +580,245 @@ async def get_dashboard_stats(
     status_code=status.HTTP_201_CREATED,
     tags=["platform"],
 )
-async def publish_agent_template(
-    body: PublishAgentTemplateRequest,
+async def create_agent_template(
+    body: CreateAgentTemplateRequest,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
     """
-    API-038: Publish a new agent template to the platform library.
+    PA-020: Create a new Draft agent template.
 
-    Platform admins create templates here. Tenant admins can later deploy
-    published templates for their workspace via GET /agents/templates.
+    Templates start in Draft status. Draft → Published via PATCH with status=Published.
+    Published system_prompt is immutable — create a new version to change it (PA-022).
     """
-    # Validate plan_tiers values
-    invalid_tiers = set(body.plan_tiers) - _VALID_PLAN_TIERS
-    if invalid_tiers:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid plan_tiers: {sorted(invalid_tiers)}. "
-            f"Allowed: {sorted(_VALID_PLAN_TIERS)}",
-        )
-
-    # Validate at least one plan_tier
-    if not body.plan_tiers:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="At least one plan_tier is required.",
-        )
-
-    # Validate variables: no reserved names
+    # Validate reserved variable names
     reserved_used = {
-        v.name for v in body.variables if v.name in _RESERVED_VARIABLE_NAMES
+        v.name for v in body.variable_definitions if v.name in _RESERVED_VARIABLE_NAMES
     }
     if reserved_used:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Variable names are reserved by the platform: {sorted(reserved_used)}. "
-            f"Reserved names: {sorted(_RESERVED_VARIABLE_NAMES)}",
+            detail=f"Variable names are reserved: {sorted(reserved_used)}. "
+            f"Reserved: {sorted(_RESERVED_VARIABLE_NAMES)}",
         )
 
-    platform_tenant_id = _get_platform_tenant_id()
-
-    variables_list = [v.model_dump() for v in body.variables]
-    guardrails_dict = body.guardrails.model_dump()
-
-    result = await publish_agent_template_db(
-        name=body.name,
-        category=body.category,
-        description=body.description,
-        system_prompt=body.system_prompt,
-        variables=variables_list,
-        guardrails=guardrails_dict,
-        plan_tiers=body.plan_tiers,
-        platform_tenant_id=platform_tenant_id,
-        db=session,
-    )
+    result = await _create_agent_template_db(body, current_user.id, session)
 
     logger.info(
         "platform_agent_template_created",
         template_id=result["id"],
-        user_id=current_user.id,
+        actor_id=current_user.id,
         name=body.name,
     )
     return result
 
 
-# ---------------------------------------------------------------------------
-# Route: PATCH /platform/agent-templates/{template_id}  (API-040)
-# ---------------------------------------------------------------------------
+@router.get(
+    "/platform/agent-templates",
+    tags=["platform"],
+)
+async def list_agent_templates(
+    status_filter: Optional[str] = Query(
+        None,
+        alias="status",
+        pattern=r"^(Draft|Published|Deprecated|seed)$",
+    ),
+    category: Optional[str] = Query(None, max_length=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-020: List agent templates.
+
+    Platform admins see all statuses. Tenant admins see Published + seed only.
+    Supports ?status= and ?category= filters.
+    """
+    is_platform = current_user.scope == "platform"
+    is_tenant_admin = "tenant_admin" in current_user.roles
+
+    if not is_platform and not is_tenant_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform admin or tenant admin access required.",
+        )
+
+    where_parts = []
+    params: dict = {"limit": page_size, "offset": (page - 1) * page_size}
+
+    # Tenant admins can only see Published/seed templates; status filter is not supported.
+    if not is_platform:
+        if status_filter is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Tenant admins may not filter by status.",
+            )
+        where_parts.append("status IN ('Published', 'seed')")
+    elif status_filter is not None:
+        where_parts.append("status = :status_filter")
+        params["status_filter"] = status_filter
+
+    if category is not None:
+        where_parts.append("category = :category")
+        params["category"] = category
+
+    where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+    count_result = await session.execute(
+        text(f"SELECT COUNT(*) FROM agent_templates {where_clause}"),
+        params,
+    )
+    total = count_result.scalar() or 0
+
+    rows_result = await session.execute(
+        text(
+            f"SELECT id, name, description, category, version, status, "
+            f"confidence_threshold, created_at, updated_at "
+            f"FROM agent_templates {where_clause} "
+            f"ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+        ),
+        params,
+    )
+    items = [
+        {
+            "id": str(r[0]),
+            "name": r[1],
+            "description": r[2],
+            "category": r[3],
+            "version": r[4],
+            "status": r[5],
+            "confidence_threshold": float(r[6]) if r[6] is not None else None,
+            "created_at": r[7].isoformat() if r[7] else None,
+            "updated_at": r[8].isoformat() if r[8] else None,
+        }
+        for r in rows_result.fetchall()
+    ]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get(
+    "/platform/agent-templates/{template_id}",
+    tags=["platform"],
+)
+async def get_agent_template(
+    template_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-020: Get a single agent template by ID.
+
+    Platform admins can fetch any status. Tenant admins can only fetch Published/seed.
+    """
+    is_platform = current_user.scope == "platform"
+    is_tenant_admin = "tenant_admin" in current_user.roles
+
+    if not is_platform and not is_tenant_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform admin or tenant admin access required.",
+        )
+
+    template = await _get_agent_template_db(template_id, session)
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+
+    # Tenant admins cannot see Draft or Deprecated templates
+    if not is_platform and template["status"] not in ("Published", "seed"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+
+    return template
 
 
 @router.patch(
     "/platform/agent-templates/{template_id}",
     tags=["platform"],
 )
-async def update_agent_template(
-    template_id: str,
-    body: UpdateAgentTemplateRequest,
+async def patch_agent_template(
+    template_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    body: PatchAgentTemplateRequest = ...,
     current_user: CurrentUser = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
     """
-    API-040: Update or version an existing platform agent template.
+    PA-020: Partial update of an agent template.
 
-    - If current status is 'published' and system_prompt changes: version is incremented.
-    - Transitioning to 'published': system_prompt must exist and capabilities must
-      include at least one plan_tier.
-    - Transitioning to 'deprecated': allowed unconditionally.
-    - changelog is stored inside the capabilities JSONB.
+    Draft fields (all except status) are freely editable while status = 'Draft'.
+    Published templates: system_prompt is IMMUTABLE — returns 409.
+    Status transitions: Draft → Published (requires changelog), Published → Deprecated.
+    'seed' status is system-only and cannot be set or read back via this endpoint.
     """
-    platform_tenant_id = _get_platform_tenant_id()
-
-    current = await get_platform_template_db(template_id, platform_tenant_id, session)
+    current = await _get_agent_template_db(template_id, session)
     if current is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent template '{template_id}' not found.",
+            detail="Agent template not found.",
         )
 
-    # Validate transition to 'published'
-    if body.status == "published":
+    current_status = current["status"]
+
+    # Published system_prompt is immutable — reject, do not silently ignore
+    if body.system_prompt is not None and current_status == "Published":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "system_prompt is immutable on Published templates. "
+                "Create a new version via POST /platform/agent-templates/{id}/new-version."
+            ),
+        )
+
+    # Changelog required when publishing
+    if body.status == "Published" and not body.changelog:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="changelog is required when publishing a template.",
+        )
+
+    # Cannot transition out of Deprecated
+    if current_status == "Deprecated" and body.status is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Deprecated templates cannot change status.",
+        )
+
+    # system_prompt must exist before publishing
+    if body.status == "Published":
         effective_prompt = body.system_prompt or current["system_prompt"]
         if not effective_prompt:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Cannot publish: system_prompt is required.",
             )
-        caps = current.get("capabilities") or {}
-        if isinstance(caps, str):
-            caps = json.loads(caps)
-        plan_tiers = caps.get("plan_tiers", [])
-        if not plan_tiers:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Cannot publish: at least one plan_tier must be set in capabilities.",
-            )
 
-    variables_list = (
-        [v.model_dump() for v in body.variables] if body.variables is not None else None
-    )
-    guardrails_dict = (
-        body.guardrails.model_dump() if body.guardrails is not None else None
-    )
-
-    updated = await update_platform_template_db(
-        template_id=template_id,
-        current=current,
-        system_prompt=body.system_prompt,
-        variables=variables_list,
-        guardrails=guardrails_dict,
-        new_status=body.status,
-        changelog=body.changelog,
-        platform_tenant_id=platform_tenant_id,
-        db=session,
-    )
+    updated = await _patch_agent_template_db(template_id, body, session)
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
 
     logger.info(
-        "platform_agent_template_updated",
+        "platform_agent_template_patched",
         template_id=template_id,
-        user_id=current_user.id,
+        actor_id=current_user.id,
         new_status=updated["status"],
-        version=updated["version"],
     )
-
-    updated_at = updated["updated_at"]
-    updated_at_str = (
-        updated_at.isoformat() if hasattr(updated_at, "isoformat") else str(updated_at)
-    )
-
-    return {
-        "id": updated["id"],
-        "version": updated["version"],
-        "status": updated["status"],
-        "updated_at": updated_at_str,
-    }
+    return updated
 
 
 # ---------------------------------------------------------------------------
@@ -2022,4 +2108,268 @@ async def gdpr_delete_tenant(
         "job_id": job_id,
         "status": "in_progress",
         "estimated_completion": estimated_completion,
+    }
+
+
+# ---------------------------------------------------------------------------
+# PA-008 and PA-009 routes live in app/modules/tenants/routes.py
+# (must be in the same router as GET /tenants/{tenant_id} so literal-path
+# route /tenants/at-risk takes precedence over the parameterised path).
+# ---------------------------------------------------------------------------
+
+
+# placeholder kept intentionally blank — routes are in tenants/routes.py
+
+
+async def _placeholder_at_risk(
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-008: Return tenants flagged at-risk from the latest health score snapshot.
+
+    Fetches the most recent tenant_health_scores row per tenant where
+    at_risk_flag = true, annotated with weeks_at_risk count and component
+    breakdown. Sorted by composite_score ASC (worst first).
+
+    Returns empty list when no tenants are at risk — never 404.
+    """
+    # Fetch the latest health score row per tenant where at_risk_flag = true.
+    # Uses a lateral/subquery approach: for each tenant with at_risk in the
+    # latest snapshot, return that row.
+    result = await db.execute(
+        text(
+            """
+            WITH latest AS (
+                SELECT DISTINCT ON (ths.tenant_id)
+                    ths.tenant_id,
+                    ths.date,
+                    ths.composite_score,
+                    ths.at_risk_reason,
+                    ths.usage_trend_score,
+                    ths.feature_breadth_score,
+                    ths.satisfaction_score,
+                    ths.error_rate_score
+                FROM tenant_health_scores ths
+                ORDER BY ths.tenant_id, ths.date DESC
+            )
+            SELECT
+                l.tenant_id,
+                t.name,
+                l.composite_score,
+                l.at_risk_reason,
+                l.usage_trend_score,
+                l.feature_breadth_score,
+                l.satisfaction_score,
+                l.error_rate_score
+            FROM latest l
+            JOIN tenants t ON t.id = l.tenant_id
+            WHERE l.composite_score IS NOT NULL
+              AND l.composite_score < :at_risk_composite
+            ORDER BY l.composite_score ASC
+            """
+        ),
+        {"at_risk_composite": 40.0},
+    )
+    rows = result.fetchall()
+
+    if not rows:
+        return []
+
+    # For each at-risk tenant, count consecutive at_risk weeks
+    items = []
+    for row in rows:
+        tenant_id = str(row[0])
+        name = row[1]
+        composite_score = float(row[2]) if row[2] is not None else None
+        at_risk_reason = row[3]
+        usage_trend = float(row[4]) if row[4] is not None else None
+        feature_breadth = float(row[5]) if row[5] is not None else None
+        satisfaction = float(row[6]) if row[6] is not None else None
+        error_rate = float(row[7]) if row[7] is not None else None
+
+        # Count consecutive at-risk weeks (ordered newest first)
+        weeks_result = await db.execute(
+            text(
+                """
+                SELECT at_risk_flag
+                FROM tenant_health_scores
+                WHERE tenant_id = :tid
+                ORDER BY date DESC
+                LIMIT 52
+                """
+            ),
+            {"tid": tenant_id},
+        )
+        week_rows = weeks_result.fetchall()
+        weeks_at_risk = 0
+        for wr in week_rows:
+            if wr[0]:
+                weeks_at_risk += 1
+            else:
+                break
+
+        items.append(
+            {
+                "tenant_id": tenant_id,
+                "name": name,
+                "composite_score": composite_score,
+                "at_risk_reason": at_risk_reason,
+                "weeks_at_risk": weeks_at_risk,
+                "component_breakdown": {
+                    "usage_trend_score": usage_trend,
+                    "feature_breadth_score": feature_breadth,
+                    "satisfaction_score": satisfaction,
+                    "error_rate_score": error_rate,
+                },
+            }
+        )
+
+    logger.info(
+        "at_risk_tenants_listed",
+        user_id=current_user.id,
+        count=len(items),
+    )
+    return items
+
+
+# ---------------------------------------------------------------------------
+# PA-009: Health score drilldown for a single tenant
+# ---------------------------------------------------------------------------
+
+
+@router.get("/platform/tenants/{tenant_id}/health")
+async def get_tenant_health(
+    tenant_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-009: Health score drilldown for a single tenant.
+
+    Returns current snapshot and 12 weekly trend data points (ISO week
+    format 'YYYY-Www'). Missing weeks are returned with null component
+    values rather than omitted.
+    """
+    # Validate tenant exists
+    tenant_result = await db.execute(
+        text("SELECT id FROM tenants WHERE id = :tid"),
+        {"tid": tenant_id},
+    )
+    if not tenant_result.fetchone():
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # Fetch latest health score row for current snapshot
+    latest_result = await db.execute(
+        text(
+            """
+            SELECT composite_score, usage_trend_score, feature_breadth_score,
+                   satisfaction_score, error_rate_score, at_risk_flag
+            FROM tenant_health_scores
+            WHERE tenant_id = :tid
+            ORDER BY date DESC
+            LIMIT 1
+            """
+        ),
+        {"tid": tenant_id},
+    )
+    latest_row = latest_result.fetchone()
+
+    if latest_row:
+        current = {
+            "composite": float(latest_row[0]) if latest_row[0] is not None else None,
+            "usage_trend": float(latest_row[1]) if latest_row[1] is not None else None,
+            "feature_breadth": float(latest_row[2])
+            if latest_row[2] is not None
+            else None,
+            "satisfaction": float(latest_row[3]) if latest_row[3] is not None else None,
+            "error_rate": float(latest_row[4]) if latest_row[4] is not None else None,
+            "at_risk_flag": bool(latest_row[5]) if latest_row[5] is not None else False,
+        }
+    else:
+        current = {
+            "composite": None,
+            "usage_trend": None,
+            "feature_breadth": None,
+            "satisfaction": None,
+            "error_rate": None,
+            "at_risk_flag": False,
+        }
+
+    # Fetch up to 12 weekly rows ordered newest first
+    trend_result = await db.execute(
+        text(
+            """
+            SELECT date, composite_score, usage_trend_score, satisfaction_score
+            FROM tenant_health_scores
+            WHERE tenant_id = :tid
+            ORDER BY date DESC
+            LIMIT 12
+            """
+        ),
+        {"tid": tenant_id},
+    )
+    trend_rows = trend_result.fetchall()
+
+    # Build a date → row map
+    row_by_date: dict = {}
+    for tr in trend_rows:
+        row_by_date[tr[0]] = tr
+
+    # Generate 12 ISO weeks going backwards from today
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    today = _date.today()
+    # Start from the most recent Monday
+    current_monday = today - _timedelta(days=today.weekday())
+
+    trend = []
+    for i in range(12):
+        week_monday = current_monday - _timedelta(weeks=i)
+        iso_cal = week_monday.isocalendar()
+        week_label = f"{iso_cal[0]}-W{iso_cal[1]:02d}"
+
+        # Find the stored row whose date falls in this ISO week
+        matched_row = None
+        for d, r in row_by_date.items():
+            d_iso = d.isocalendar()
+            if d_iso[0] == iso_cal[0] and d_iso[1] == iso_cal[1]:
+                matched_row = r
+                break
+
+        if matched_row:
+            trend.append(
+                {
+                    "week": week_label,
+                    "composite": float(matched_row[1])
+                    if matched_row[1] is not None
+                    else None,
+                    "usage_trend": float(matched_row[2])
+                    if matched_row[2] is not None
+                    else None,
+                    "satisfaction": float(matched_row[3])
+                    if matched_row[3] is not None
+                    else None,
+                }
+            )
+        else:
+            trend.append(
+                {
+                    "week": week_label,
+                    "composite": None,
+                    "usage_trend": None,
+                    "satisfaction": None,
+                }
+            )
+
+    logger.info(
+        "tenant_health_drilldown",
+        user_id=current_user.id,
+        tenant_id=tenant_id,
+    )
+
+    return {
+        "current": current,
+        "trend": trend,
     }

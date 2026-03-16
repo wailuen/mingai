@@ -1,8 +1,11 @@
 """
 Unit tests for platform agent template and tool catalog endpoints.
 
-API-038: POST /platform/agent-templates — publish template
-API-040: PATCH /platform/agent-templates/{id} — update/version template
+PA-020: POST /platform/agent-templates — create Draft
+PA-020: GET  /platform/agent-templates — list templates
+PA-020: GET  /platform/agent-templates/{id} — detail
+PA-020: PATCH /platform/agent-templates/{id} — partial update
+
 API-041: GET /platform/tool-catalog — list tools
 API-042: POST /platform/tool-catalog — register tool
 
@@ -19,6 +22,9 @@ from jose import jwt
 TEST_JWT_SECRET = "a" * 64
 TEST_JWT_ALGORITHM = "HS256"
 TEST_TENANT_ID = "12345678-1234-5678-1234-567812345678"
+TEST_TEMPLATE_ID = "aaaabbbb-cccc-dddd-eeee-ffffffffffff"
+
+_MOD = "app.modules.platform.routes"
 
 
 def _make_platform_token() -> str:
@@ -84,31 +90,43 @@ def tenant_headers():
 
 
 # ---------------------------------------------------------------------------
-# POST /platform/agent-templates — API-038
+# POST /platform/agent-templates — PA-020
 # ---------------------------------------------------------------------------
 
+_VALID_CREATE_BODY = {
+    "name": "Finance Assistant",
+    "category": "Finance",
+    "description": "Answers finance queries.",
+    "system_prompt": "You are a finance assistant.",
+    "variable_definitions": [],
+    "guardrails": [],
+}
 
-class TestPublishAgentTemplate:
+_MOCK_TEMPLATE = {
+    "id": TEST_TEMPLATE_ID,
+    "name": "Finance Assistant",
+    "description": "Answers finance queries.",
+    "category": "Finance",
+    "system_prompt": "You are a finance assistant.",
+    "variable_definitions": [],
+    "guardrails": [],
+    "confidence_threshold": None,
+    "version": 1,
+    "status": "Draft",
+    "changelog": None,
+    "created_by": "platform-admin-001",
+    "created_at": "2026-03-16T00:00:00+00:00",
+    "updated_at": "2026-03-16T00:00:00+00:00",
+}
+
+
+class TestCreateAgentTemplate:
     """POST /api/v1/platform/agent-templates"""
-
-    _valid_body = {
-        "name": "Finance Assistant",
-        "category": "Finance",
-        "description": "Answers finance queries.",
-        "system_prompt": "You are a finance assistant.",
-        "variables": [],
-        "guardrails": {
-            "blocked_topics": [],
-            "confidence_threshold": 0.7,
-            "max_response_length": 2000,
-        },
-        "plan_tiers": ["professional", "enterprise"],
-    }
 
     def test_requires_platform_admin(self, client, tenant_headers):
         resp = client.post(
             "/api/v1/platform/agent-templates",
-            json=self._valid_body,
+            json=_VALID_CREATE_BODY,
             headers=tenant_headers,
         )
         assert resp.status_code == 403
@@ -116,14 +134,12 @@ class TestPublishAgentTemplate:
     def test_requires_auth(self, client):
         resp = client.post(
             "/api/v1/platform/agent-templates",
-            json=self._valid_body,
+            json=_VALID_CREATE_BODY,
         )
         assert resp.status_code == 401
 
-    def test_publish_template_validation_empty_name(self, client, platform_headers):
-        """Empty name should be rejected with 422."""
-        body = dict(self._valid_body)
-        body["name"] = ""
+    def test_rejects_empty_name(self, client, platform_headers):
+        body = {**_VALID_CREATE_BODY, "name": ""}
         resp = client.post(
             "/api/v1/platform/agent-templates",
             json=body,
@@ -131,12 +147,8 @@ class TestPublishAgentTemplate:
         )
         assert resp.status_code == 422
 
-    def test_publish_template_validation_empty_system_prompt(
-        self, client, platform_headers
-    ):
-        """Empty system_prompt should be rejected with 422."""
-        body = dict(self._valid_body)
-        body["system_prompt"] = ""
+    def test_rejects_empty_system_prompt(self, client, platform_headers):
+        body = {**_VALID_CREATE_BODY, "system_prompt": ""}
         resp = client.post(
             "/api/v1/platform/agent-templates",
             json=body,
@@ -144,10 +156,18 @@ class TestPublishAgentTemplate:
         )
         assert resp.status_code == 422
 
-    def test_publish_template_missing_plan_tiers(self, client, platform_headers):
-        """Missing plan_tiers should be rejected with 422."""
-        body = dict(self._valid_body)
-        body["plan_tiers"] = []
+    def test_rejects_reserved_variable_name(self, client, platform_headers):
+        body = {
+            **_VALID_CREATE_BODY,
+            "variable_definitions": [
+                {
+                    "name": "company_name",
+                    "type": "text",
+                    "label": "Company",
+                    "required": True,
+                }
+            ],
+        }
         resp = client.post(
             "/api/v1/platform/agent-templates",
             json=body,
@@ -155,10 +175,13 @@ class TestPublishAgentTemplate:
         )
         assert resp.status_code == 422
 
-    def test_publish_template_invalid_plan_tier(self, client, platform_headers):
-        """Unknown plan tier should be rejected with 422."""
-        body = dict(self._valid_body)
-        body["plan_tiers"] = ["premium"]
+    def test_rejects_invalid_variable_type(self, client, platform_headers):
+        body = {
+            **_VALID_CREATE_BODY,
+            "variable_definitions": [
+                {"name": "role", "type": "string", "label": "Role", "required": False}
+            ],
+        }
         resp = client.post(
             "/api/v1/platform/agent-templates",
             json=body,
@@ -166,18 +189,14 @@ class TestPublishAgentTemplate:
         )
         assert resp.status_code == 422
 
-    def test_publish_template_reserved_variable_name(self, client, platform_headers):
-        """Variable using reserved name should be rejected with 422."""
-        body = dict(self._valid_body)
-        body["variables"] = [
-            {
-                "name": "company_name",
-                "type": "string",
-                "description": "The company",
-                "required": True,
-                "example": "Acme",
-            }
-        ]
+    def test_rejects_variable_without_label(self, client, platform_headers):
+        body = {
+            **_VALID_CREATE_BODY,
+            "variable_definitions": [
+                {"name": "role", "type": "text", "required": False}
+                # missing "label"
+            ],
+        }
         resp = client.post(
             "/api/v1/platform/agent-templates",
             json=body,
@@ -185,127 +204,315 @@ class TestPublishAgentTemplate:
         )
         assert resp.status_code == 422
 
-    def test_publish_template_success(self, client, platform_headers):
-        """Valid request should call DB helper and return 201 with id/name/version/status."""
+    def test_create_success_returns_201_with_full_row(self, client, platform_headers):
         with patch(
-            "app.modules.platform.routes.publish_agent_template_db",
+            f"{_MOD}._create_agent_template_db",
             new_callable=AsyncMock,
         ) as mock_db:
-            mock_db.return_value = {
-                "id": "tpl-001",
-                "name": "Finance Assistant",
-                "version": 1,
-                "status": "draft",
-            }
+            mock_db.return_value = _MOCK_TEMPLATE
             resp = client.post(
                 "/api/v1/platform/agent-templates",
-                json=self._valid_body,
+                json=_VALID_CREATE_BODY,
                 headers=platform_headers,
             )
         assert resp.status_code == 201
         data = resp.json()
-        assert data["id"] == "tpl-001"
-        assert data["name"] == "Finance Assistant"
+        assert data["id"] == TEST_TEMPLATE_ID
+        assert data["status"] == "Draft"
         assert data["version"] == 1
-        assert data["status"] == "draft"
+        # Full row shape — created_at and system_prompt must be present
+        assert "created_at" in data
+        assert "system_prompt" in data
+
+    def test_confidence_threshold_validated(self, client, platform_headers):
+        """confidence_threshold must be 0.00–1.00."""
+        body = {**_VALID_CREATE_BODY, "confidence_threshold": 1.5}
+        resp = client.post(
+            "/api/v1/platform/agent-templates",
+            json=body,
+            headers=platform_headers,
+        )
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
-# PATCH /platform/agent-templates/{id} — API-040
+# GET /platform/agent-templates — PA-020
 # ---------------------------------------------------------------------------
 
 
-class TestUpdateAgentTemplate:
+class TestListAgentTemplates:
+    """GET /api/v1/platform/agent-templates"""
+
+    def test_requires_auth(self, client):
+        resp = client.get("/api/v1/platform/agent-templates")
+        assert resp.status_code == 401
+
+    def test_end_user_forbidden(self, client, env_vars):
+        now = datetime.now(timezone.utc)
+        payload = {
+            "sub": "user-001",
+            "tenant_id": TEST_TENANT_ID,
+            "roles": ["end_user"],
+            "scope": "tenant",
+            "plan": "professional",
+            "exp": now + timedelta(hours=1),
+            "iat": now,
+            "token_version": 2,
+        }
+        token = jwt.encode(payload, TEST_JWT_SECRET, algorithm=TEST_JWT_ALGORITHM)
+        resp = client.get(
+            "/api/v1/platform/agent-templates",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403
+
+    def test_platform_admin_sees_all_statuses(self, client, platform_headers):
+        """Platform admin list endpoint returns items+total+page."""
+        # Uses real DB session mock via dependency_overrides
+        from app.core.session import get_async_session
+        from app.main import app
+        from unittest.mock import MagicMock
+
+        session = AsyncMock()
+        count_result = MagicMock()
+        count_result.scalar = MagicMock(return_value=0)
+        rows_result = MagicMock()
+        rows_result.fetchall = MagicMock(return_value=[])
+        session.execute = AsyncMock(side_effect=[count_result, rows_result])
+
+        async def _dep():
+            yield session
+
+        app.dependency_overrides[get_async_session] = _dep
+        try:
+            resp = client.get(
+                "/api/v1/platform/agent-templates",
+                headers=platform_headers,
+            )
+        finally:
+            app.dependency_overrides.pop(get_async_session, None)
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert "total" in data
+
+    def test_rejects_invalid_status_filter(self, client, platform_headers):
+        resp = client.get(
+            "/api/v1/platform/agent-templates?status=Active",
+            headers=platform_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_tenant_admin_cannot_filter_by_status(self, client, tenant_headers):
+        """Tenant admins may not use ?status= filter — returns 422."""
+        resp = client.get(
+            "/api/v1/platform/agent-templates?status=Published",
+            headers=tenant_headers,
+        )
+        assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# GET /platform/agent-templates/{id} — PA-020
+# ---------------------------------------------------------------------------
+
+
+class TestGetAgentTemplate:
+    """GET /api/v1/platform/agent-templates/{id}"""
+
+    def test_returns_404_for_missing_template(self, client, platform_headers):
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = None
+            resp = client.get(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                headers=platform_headers,
+            )
+        assert resp.status_code == 404
+
+    def test_returns_template_for_platform_admin(self, client, platform_headers):
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = _MOCK_TEMPLATE
+            resp = client.get(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                headers=platform_headers,
+            )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == TEST_TEMPLATE_ID
+
+    def test_tenant_admin_cannot_see_draft(self, client, tenant_headers):
+        """Tenant admins only see Published/seed templates."""
+        draft_template = {**_MOCK_TEMPLATE, "status": "Draft"}
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = draft_template
+            resp = client.get(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                headers=tenant_headers,
+            )
+        assert resp.status_code == 404
+
+    def test_tenant_admin_can_see_published(self, client, tenant_headers):
+        published_template = {**_MOCK_TEMPLATE, "status": "Published"}
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = published_template
+            resp = client.get(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                headers=tenant_headers,
+            )
+        assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# PATCH /platform/agent-templates/{id} — PA-020
+# ---------------------------------------------------------------------------
+
+
+class TestPatchAgentTemplate:
     """PATCH /api/v1/platform/agent-templates/{template_id}"""
 
     def test_requires_platform_admin(self, client, tenant_headers):
         resp = client.patch(
-            "/api/v1/platform/agent-templates/some-id",
-            json={"status": "published"},
+            f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+            json={"status": "Published"},
             headers=tenant_headers,
         )
         assert resp.status_code == 403
 
     def test_returns_404_for_missing_template(self, client, platform_headers):
         with patch(
-            "app.modules.platform.routes.get_platform_template_db",
+            f"{_MOD}._get_agent_template_db",
             new_callable=AsyncMock,
         ) as mock_get:
             mock_get.return_value = None
             resp = client.patch(
-                "/api/v1/platform/agent-templates/nonexistent",
-                json={"status": "published"},
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"status": "Published"},
                 headers=platform_headers,
             )
         assert resp.status_code == 404
 
-    def test_update_status_to_published_success(self, client, platform_headers):
-        existing = {
-            "id": "tpl-001",
-            "name": "Finance",
-            "description": "Finance assistant",
-            "system_prompt": "You are a finance assistant.",
-            "capabilities": {
-                "plan_tiers": ["professional"],
-                "variables": [],
-                "guardrails": {},
-            },
-            "status": "draft",
-            "version": 1,
-            "updated_at": datetime.now(timezone.utc),
-        }
-        updated = dict(existing)
-        updated["status"] = "published"
-        updated["updated_at"] = datetime.now(timezone.utc)
-
-        with (
-            patch(
-                "app.modules.platform.routes.get_platform_template_db",
-                new_callable=AsyncMock,
-            ) as mock_get,
-            patch(
-                "app.modules.platform.routes.update_platform_template_db",
-                new_callable=AsyncMock,
-            ) as mock_update,
-        ):
-            mock_get.return_value = existing
-            mock_update.return_value = updated
-            resp = client.patch(
-                "/api/v1/platform/agent-templates/tpl-001",
-                json={"status": "published"},
-                headers=platform_headers,
-            )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "published"
-        assert "updated_at" in data
-
-    def test_update_to_published_fails_without_plan_tiers(
-        self, client, platform_headers
-    ):
-        """Transition to published must fail if no plan_tiers in capabilities."""
-        existing = {
-            "id": "tpl-002",
-            "name": "Empty",
-            "description": "",
-            "system_prompt": "You are an assistant.",
-            "capabilities": {"plan_tiers": [], "variables": []},
-            "status": "draft",
-            "version": 1,
-            "updated_at": datetime.now(timezone.utc),
-        }
+    def test_publish_requires_changelog(self, client, platform_headers):
+        """Transitioning to Published without changelog returns 422."""
+        draft = {**_MOCK_TEMPLATE, "status": "Draft"}
         with patch(
-            "app.modules.platform.routes.get_platform_template_db",
+            f"{_MOD}._get_agent_template_db",
             new_callable=AsyncMock,
         ) as mock_get:
-            mock_get.return_value = existing
+            mock_get.return_value = draft
             resp = client.patch(
-                "/api/v1/platform/agent-templates/tpl-002",
-                json={"status": "published"},
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"status": "Published"},  # no changelog
                 headers=platform_headers,
             )
         assert resp.status_code == 422
+        assert "changelog" in resp.json()["detail"].lower()
+
+    def test_published_system_prompt_immutable(self, client, platform_headers):
+        """PATCH system_prompt on Published template returns 409."""
+        published = {**_MOCK_TEMPLATE, "status": "Published"}
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = published
+            resp = client.patch(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"system_prompt": "new prompt"},
+                headers=platform_headers,
+            )
+        assert resp.status_code == 409
+        assert "immutable" in resp.json()["detail"].lower()
+
+    def test_deprecated_cannot_change_status(self, client, platform_headers):
+        deprecated = {**_MOCK_TEMPLATE, "status": "Deprecated"}
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = deprecated
+            resp = client.patch(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"status": "Published"},
+                headers=platform_headers,
+            )
+        assert resp.status_code == 422
+
+    def test_patch_status_rejects_seed(self, client, platform_headers):
+        """'seed' status cannot be set via API."""
+        draft = {**_MOCK_TEMPLATE, "status": "Draft"}
+        with patch(
+            f"{_MOD}._get_agent_template_db",
+            new_callable=AsyncMock,
+        ):
+            resp = client.patch(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"status": "seed"},
+                headers=platform_headers,
+            )
+        # Pydantic pattern validation blocks 'seed'
+        assert resp.status_code == 422
+
+    def test_patch_draft_name_success(self, client, platform_headers):
+        draft = {**_MOCK_TEMPLATE, "status": "Draft"}
+        updated = {**_MOCK_TEMPLATE, "name": "Updated Name"}
+        with (
+            patch(
+                f"{_MOD}._get_agent_template_db",
+                new_callable=AsyncMock,
+            ) as mock_get,
+            patch(
+                f"{_MOD}._patch_agent_template_db",
+                new_callable=AsyncMock,
+            ) as mock_patch,
+        ):
+            mock_get.return_value = draft
+            mock_patch.return_value = updated
+            resp = client.patch(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"name": "Updated Name"},
+                headers=platform_headers,
+            )
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Updated Name"
+
+    def test_publish_with_changelog_success(self, client, platform_headers):
+        draft = {**_MOCK_TEMPLATE, "status": "Draft"}
+        published = {
+            **_MOCK_TEMPLATE,
+            "status": "Published",
+            "changelog": "Initial release.",
+        }
+        with (
+            patch(
+                f"{_MOD}._get_agent_template_db",
+                new_callable=AsyncMock,
+            ) as mock_get,
+            patch(
+                f"{_MOD}._patch_agent_template_db",
+                new_callable=AsyncMock,
+            ) as mock_patch,
+        ):
+            mock_get.return_value = draft
+            mock_patch.return_value = published
+            resp = client.patch(
+                f"/api/v1/platform/agent-templates/{TEST_TEMPLATE_ID}",
+                json={"status": "Published", "changelog": "Initial release."},
+                headers=platform_headers,
+            )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "Published"
 
 
 # ---------------------------------------------------------------------------
