@@ -205,9 +205,9 @@ def _patch_db_kb_assignment(found_ids: list[str], kb_exists: bool = True):
         mock_result = MagicMock()
         sql = str(stmt)
 
-        if "kb_access_control" in sql and "SELECT" in sql:
+        if "config->>'kb_id'" in sql or ("kb_access_control" in sql and "UNION" in sql):
             # KB ownership check — returns a row if kb_exists
-            mock_result.fetchone.return_value = (_KB_ID,) if kb_exists else None
+            mock_result.fetchone.return_value = (1,) if kb_exists else None
         elif "SELECT id FROM users" in sql:
             mock_result.fetchall.return_value = [(fid,) for fid in found_ids]
         elif "INSERT INTO kb_access_control" in sql:

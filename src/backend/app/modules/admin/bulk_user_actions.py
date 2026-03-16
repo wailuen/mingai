@@ -259,14 +259,14 @@ async def bulk_kb_assignment_db(
             FailedUser(user_id=uid, reason="invalid kb_id UUID") for uid in user_ids
         ]
 
-    # Verify the KB belongs to this tenant
+    # Verify the KB belongs to this tenant — check via integrations or existing access control
     kb_check = await db.execute(
         text(
-            "SELECT index_id FROM kb_access_control "
-            "WHERE index_id = CAST(:kb_id AS uuid) AND tenant_id = :tenant_id "
+            "SELECT 1 FROM integrations "
+            "WHERE config->>'kb_id' = :kb_id AND tenant_id = :tenant_id "
             "UNION ALL "
-            "SELECT id FROM knowledge_bases "
-            "WHERE id = CAST(:kb_id AS uuid) AND tenant_id = :tenant_id "
+            "SELECT 1 FROM kb_access_control "
+            "WHERE index_id = CAST(:kb_id AS uuid) AND tenant_id = :tenant_id "
             "LIMIT 1"
         ),
         {"kb_id": kb_id, "tenant_id": tenant_id},
