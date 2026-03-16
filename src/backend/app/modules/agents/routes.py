@@ -2,17 +2,19 @@
 Agent Templates API routes (API-110 to API-115, API-039) and Agent Studio management (API-069 to API-073).
 
 Endpoints (public router /agents):
-- GET    /agents                                - List published agents for end user (API-117)
-- GET    /agents/templates                      - List agent templates (seed + DB + platform)
-- GET    /agents/templates/{template_id}        - Get template detail
-- POST   /agents/templates/{template_id}/deploy - Deploy template as new agent
+- GET    /agents                                        - List published agents for end user (API-117)
+- GET    /agents/templates                              - List agent templates (seed + DB + platform)
+- GET    /agents/templates/{template_id}                - Get template detail
+- POST   /agents/templates/{template_id}/deploy         - Deploy template as new agent
 
 Endpoints (admin router /admin/agents):
-- GET    /admin/agents                          - List workspace agents (API-069)
-- POST   /admin/agents                          - Create agent (API-070)
-- PUT    /admin/agents/{agent_id}               - Update agent (API-071)
-- PATCH  /admin/agents/{agent_id}/status        - Update agent status (API-072)
-- POST   /admin/agents/deploy                   - Deploy from template library (API-073)
+- GET    /admin/agents                                  - List workspace agents (API-069)
+- POST   /admin/agents                                  - Create agent (API-070)
+- PUT    /admin/agents/{agent_id}                       - Update agent (API-071)
+- PATCH  /admin/agents/{agent_id}/status                - Update agent status (API-072)
+- POST   /admin/agents/deploy                           - Deploy from template library (API-073)
+- GET    /admin/agents/{agent_id}/upgrade-available     - Check if newer template version exists (TA-024)
+- PATCH  /admin/agents/{agent_id}/upgrade               - Upgrade to latest published template version (TA-024)
 
 Seed templates are hardcoded and always available. DB templates come from agent_cards table.
 Platform templates are stored in agent_cards under PLATFORM_TENANT_ID.
@@ -1519,6 +1521,241 @@ async def deploy_from_library(
         db=session,
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# TA-024: Template upgrade workflow
+# GET  /admin/agents/{id}/upgrade-available — check if newer template version exists
+# PATCH /admin/agents/{id}/upgrade           — upgrade to latest published template version
+# ---------------------------------------------------------------------------
+
+
+async def _get_latest_published_template_version(
+    template_id: str, db: AsyncSession
+) -> Optional[dict]:
+    """
+    Return the highest-version Published (or seed) row for the given template family.
+
+    The family is defined as: root row (parent_id IS NULL) OR any child row whose
+    parent_id = template_id.  We pick the row with the highest version number.
+
+    Returns a dict with keys: id, name, version, changelog (may be None), or None
+    if no Published/seed row exists for this template family.
+    """
+    if not _UUID_RE.match(str(template_id)):
+        return None
+    # Normalize to root id: if this is a child row, follow parent_id up one level.
+    # This ensures we always search the full family (root + all children).
+    root_result = await db.execute(
+        text(
+            "SELECT COALESCE(parent_id, id) AS root_id "
+            "FROM agent_templates WHERE id = :tid"
+        ),
+        {"tid": template_id},
+    )
+    root_row = root_result.fetchone()
+    if root_row is None:
+        return None
+    root_id = str(root_row[0])
+
+    result = await db.execute(
+        text(
+            "SELECT id, name, version, changelog "
+            "FROM agent_templates "
+            "WHERE status IN ('Published', 'seed') "
+            "AND (id = :root_id OR parent_id = :root_id) "
+            "ORDER BY version DESC "
+            "LIMIT 1"
+        ),
+        {"root_id": root_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        return None
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "version": row["version"],
+        "changelog": row["changelog"],
+    }
+
+
+@admin_router.get("/{agent_id}/upgrade-available")
+async def check_agent_upgrade_available(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-024: Check whether a newer Published version of the agent's source template exists.
+
+    Compares agent_cards.template_version against the highest Published version in the
+    agent_templates family (root row + all sibling drafts published as new versions).
+
+    Returns:
+      { "upgrade_available": true,  "current_version": N, "available_version": M, "changelog": "..." }
+      { "upgrade_available": false }
+
+    If the agent has no template_id (custom/seed agent), returns upgrade_available: false.
+    """
+    # Set tenant RLS context
+    await session.execute(
+        text("SELECT set_config('app.tenant_id', :tid, true)"),
+        {"tid": current_user.tenant_id},
+    )
+    # Set tenant scope so agent_templates RLS policy allows SELECT
+    await session.execute(
+        text("SELECT set_config('app.current_scope', 'tenant', true)")
+    )
+
+    agent = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    template_id = agent.get("template_id")
+    if template_id is None:
+        logger.info(
+            "agent_upgrade_check_no_template",
+            agent_id=agent_id,
+            tenant_id=current_user.tenant_id,
+        )
+        return {"upgrade_available": False}
+
+    current_version = agent.get("template_version") or 0
+
+    latest = await _get_latest_published_template_version(str(template_id), session)
+    if latest is None or latest["version"] <= current_version:
+        logger.info(
+            "agent_upgrade_check_no_upgrade",
+            agent_id=agent_id,
+            tenant_id=current_user.tenant_id,
+            template_id=str(template_id),
+            current_version=current_version,
+        )
+        return {"upgrade_available": False}
+
+    # changelog: prefer the changelog column, fall back to description via name
+    changelog = latest.get("changelog") or ""
+
+    logger.info(
+        "agent_upgrade_available",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        template_id=str(template_id),
+        current_version=current_version,
+        available_version=latest["version"],
+    )
+    return {
+        "upgrade_available": True,
+        "current_version": current_version,
+        "available_version": latest["version"],
+        "changelog": changelog,
+    }
+
+
+@admin_router.patch("/{agent_id}/upgrade")
+async def upgrade_agent_template(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-024: Upgrade an agent's template reference to the latest Published version.
+
+    This is a metadata-only upgrade — it updates template_version and template_name
+    on the agent_cards row to match the latest Published version in the template
+    family.  The agent's system_prompt is NOT changed by this operation: the prompt
+    was already variable-substituted at deploy time, so re-substituting it here
+    would require the original variable values, which are not stored on the agent
+    row.  If the tenant admin wants the new prompt text they should re-deploy from
+    the library using POST /admin/agents/deploy with the desired variable values.
+
+    Returns 409 Conflict if the agent is already on the latest version (or has no
+    template_id).
+    """
+    # Set tenant RLS context
+    await session.execute(
+        text("SELECT set_config('app.tenant_id', :tid, true)"),
+        {"tid": current_user.tenant_id},
+    )
+    await session.execute(
+        text("SELECT set_config('app.current_scope', 'tenant', true)")
+    )
+
+    agent = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    template_id = agent.get("template_id")
+    if template_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Agent has no associated template — upgrade is not applicable.",
+        )
+
+    current_version = agent.get("template_version") or 0
+    latest = await _get_latest_published_template_version(str(template_id), session)
+
+    if latest is None or latest["version"] <= current_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Agent is already on the latest template version.",
+        )
+
+    new_version = latest["version"]
+    new_template_name = latest["name"]
+
+    result = await session.execute(
+        text(
+            "UPDATE agent_cards "
+            "SET template_version = :new_version, "
+            "template_name = :new_template_name, "
+            "updated_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {
+            "new_version": new_version,
+            "new_template_name": new_template_name,
+            "id": agent_id,
+            "tenant_id": current_user.tenant_id,
+        },
+    )
+    if (result.rowcount or 0) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+    await session.commit()
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="agent_template_upgraded",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={
+            "template_id": str(template_id),
+            "old_version": current_version,
+            "new_version": new_version,
+        },
+        db=session,
+    )
+
+    logger.info(
+        "agent_template_upgraded",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        template_id=str(template_id),
+        old_version=current_version,
+        new_version=new_version,
+    )
+    return {"id": agent_id, "template_version": new_version, "upgraded": True}
 
 
 # ---------------------------------------------------------------------------
