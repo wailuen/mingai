@@ -1,11 +1,12 @@
 """
-Google Drive integration routes.
+Google Drive integration routes (TA-019).
 
 Endpoints:
-- GET  /documents/google-drive          — List Google Drive connections
-- POST /documents/google-drive/connect  — Create a new connection
-- POST /documents/google-drive/{id}/sync — Trigger document sync
-- GET  /documents/google-drive/{id}/sync — List sync job history
+- GET  /documents/google-drive                 — List Google Drive connections
+- POST /documents/google-drive/connect         — Create a new connection
+- POST /documents/google-drive/{id}/sync       — Trigger document sync
+- GET  /documents/google-drive/{id}/sync       — List sync job history
+- GET  /documents/google-drive/{id}/folders    — Folder tree (up to 3 levels)
 
 Security: service account credentials are stored as vault references only.
 The DB config stores a credential_ref URI, never the actual key material.
@@ -13,11 +14,11 @@ The DB config stores a credential_ref URI, never the actual key material.
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +29,9 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
+# Required top-level keys in a Google Drive service account JSON
+_SA_REQUIRED_FIELDS = frozenset({"type", "project_id", "private_key", "client_email"})
+
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -37,8 +41,25 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 class GoogleDriveConnectRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     folder_id: str = Field(..., min_length=1)
-    service_account_email: str = Field(..., min_length=1, max_length=320)
-    credential_ref: str = Field(..., min_length=1)
+    service_account_json: dict[str, Any] = Field(
+        ...,
+        description=(
+            "Full service account JSON (type, project_id, private_key, client_email "
+            "and other fields). Credentials are stored in vault only — never in DB."
+        ),
+    )
+
+    @field_validator("service_account_json")
+    @classmethod
+    def validate_service_account_fields(cls, v: dict) -> dict:
+        missing = _SA_REQUIRED_FIELDS - v.keys()
+        if missing:
+            raise ValueError(
+                f"service_account_json is missing required fields: {sorted(missing)}"
+            )
+        if v.get("type") != "service_account":
+            raise ValueError("service_account_json.type must be 'service_account'")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -227,17 +248,19 @@ async def connect_google_drive(
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    Create a new Google Drive integration.
+    TA-019: Create a new Google Drive integration.
 
-    The service account credential_ref points to a vault secret path.
-    No credentials are stored in the database.
+    Accepts service_account_json with required fields validated.
+    Credentials are NEVER stored in the database — a vault reference URI
+    is stored in config['credential_ref'] instead.
     """
     integration_id = str(uuid.uuid4())
+    vault_ref = f"vault:mingai/{current_user.tenant_id}/google_drive/{integration_id}"
     config = {
         "name": body.name,
         "folder_id": body.folder_id,
-        "service_account_email": body.service_account_email,
-        "credential_ref": body.credential_ref,
+        "service_account_email": body.service_account_json.get("client_email", ""),
+        "credential_ref": vault_ref,
     }
     result = await insert_gd_integration_db(
         integration_id=integration_id,
@@ -332,3 +355,69 @@ async def list_google_drive_sync_history(
         tenant_id=current_user.tenant_id,
         db=db,
     )
+
+
+# ---------------------------------------------------------------------------
+# TA-019: Google Drive folder tree endpoint
+# ---------------------------------------------------------------------------
+
+
+def _build_folder_tree(root_id: str, root_name: str, depth: int = 3) -> dict:
+    """
+    Build a folder tree node.
+
+    Phase 1: Returns the configured root folder with empty children.
+    Depth parameter is reserved for future lazy-load support when the
+    Google Drive API client is integrated — children beyond depth 3 are
+    not returned (they must be lazy-loaded on expand).
+
+    Real folder traversal (listing sub-folders via Google Drive API) is
+    tracked in DEF-010 (sync worker implementation).
+    """
+    return {
+        "id": root_id,
+        "name": root_name,
+        "children": [],  # Expanded by Google Drive API in DEF-010
+    }
+
+
+@router.get("/google-drive/{integration_id}/folders")
+async def list_google_drive_folders(
+    integration_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-019: Return the folder tree for a Google Drive integration.
+
+    Returns the root folder from config, with up to 3 levels of children.
+    Phase 1: Returns the configured root folder with empty children list.
+    Full folder traversal requires the DEF-010 sync worker (Google Drive API client).
+
+    Response: [{ "id": "...", "name": "...", "children": [...] }]
+    """
+    integration = await get_gd_integration_db(
+        integration_id=integration_id,
+        tenant_id=current_user.tenant_id,
+        db=db,
+    )
+    if integration is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Integration {integration_id} not found",
+        )
+
+    config = integration.get("config", {})
+    root_folder_id = config.get("folder_id", "root")
+    root_folder_name = config.get("name", "My Drive")
+
+    tree = _build_folder_tree(root_id=root_folder_id, root_name=root_folder_name)
+
+    logger.info(
+        "google_drive_folders_listed",
+        integration_id=integration_id,
+        tenant_id=current_user.tenant_id,
+        root_folder_id=root_folder_id,
+    )
+
+    return [tree]

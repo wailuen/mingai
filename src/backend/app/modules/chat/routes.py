@@ -294,6 +294,26 @@ async def stream_chat(
         except (ValueError, TypeError):
             last_event_id = None
 
+    # TA-022: Reject requests to paused agents with 503
+    agent_status_result = await session.execute(
+        text(
+            "SELECT status FROM agent_cards "
+            "WHERE id = :agent_id AND tenant_id = :tenant_id"
+        ),
+        {"agent_id": request.agent_id, "tenant_id": current_user.tenant_id},
+    )
+    agent_status_row = agent_status_result.mappings().first()
+    if agent_status_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{request.agent_id}' not found.",
+        )
+    if agent_status_row["status"] == "paused":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="This agent is temporarily unavailable.",
+        )
+
     orchestrator = await build_orchestrator(
         db=session, redis=None, tenant_id=current_user.tenant_id
     )

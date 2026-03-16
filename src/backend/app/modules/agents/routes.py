@@ -97,7 +97,14 @@ _SEED_BY_ID = {t["id"]: t for t in SEED_TEMPLATES}
 # Allowlists
 # ---------------------------------------------------------------------------
 
-_VALID_AGENT_STATUSES = {"draft", "published", "unpublished"}
+_VALID_AGENT_STATUSES = {
+    "draft",
+    "published",
+    "unpublished",
+    "active",
+    "paused",
+    "archived",
+}
 _VALID_AGENT_SOURCES = {"library", "custom", "seed"}
 _VALID_SORT_COLUMNS = {"created_at", "name", "status"}
 _UUID_RE = re.compile(
@@ -139,7 +146,7 @@ class CreateAgentRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     category: Optional[str] = Field(None, max_length=100)
     avatar: Optional[str] = Field(None, max_length=500)
-    system_prompt: str = Field(..., min_length=1)
+    system_prompt: str = Field(..., min_length=1, max_length=32000)
     kb_ids: List[str] = Field(default_factory=list)
     kb_mode: Literal["grounded", "extended"] = Field("grounded")
     tool_ids: List[str] = Field(default_factory=list)
@@ -147,7 +154,9 @@ class CreateAgentRequest(BaseModel):
     access_mode: Literal["workspace_wide", "role_restricted", "user_specific"] = Field(
         "workspace_wide"
     )
-    status: Literal["draft", "published", "unpublished"] = Field("draft")
+    status: Literal[
+        "draft", "published", "unpublished", "active", "paused", "archived"
+    ] = Field("draft")
 
 
 class UpdateAgentRequest(BaseModel):
@@ -155,7 +164,7 @@ class UpdateAgentRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     category: Optional[str] = Field(None, max_length=100)
     avatar: Optional[str] = Field(None, max_length=500)
-    system_prompt: str = Field(..., min_length=1)
+    system_prompt: str = Field(..., min_length=1, max_length=32000)
     kb_ids: List[str] = Field(default_factory=list)
     kb_mode: Literal["grounded", "extended"] = Field("grounded")
     tool_ids: List[str] = Field(default_factory=list)
@@ -163,11 +172,19 @@ class UpdateAgentRequest(BaseModel):
     access_mode: Literal["workspace_wide", "role_restricted", "user_specific"] = Field(
         "workspace_wide"
     )
-    status: Literal["draft", "published", "unpublished"] = Field("draft")
+    status: Literal[
+        "draft", "published", "unpublished", "active", "paused", "archived"
+    ] = Field("draft")
 
 
 class UpdateAgentStatusRequest(BaseModel):
-    status: str = Field(..., pattern="^(draft|published|unpublished)$")
+    status: str = Field(
+        ..., pattern="^(draft|published|unpublished|active|paused|archived)$"
+    )
+
+
+class AgentTestRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
 
 
 class DeployFromLibraryRequest(BaseModel):
@@ -730,43 +747,57 @@ async def list_workspace_agents_db(
     total = count_result.scalar() or 0
 
     rows_result = await db.execute(text(rows_sql), params)
+    rows = list(rows_result.mappings())
+
+    if not rows:
+        return {"items": [], "total": total}
+
+    agent_ids = [str(r["id"]) for r in rows]
+
+    # Batch satisfaction_rate_7d — one query for all agents on this page
+    sr_batch_result = await db.execute(
+        text(
+            "SELECT c.agent_id, "
+            "  COUNT(*) FILTER (WHERE uf.rating = 1) AS positive, "
+            "  COUNT(*) AS total "
+            "FROM user_feedback uf "
+            "JOIN messages m ON m.id = uf.message_id "
+            "JOIN conversations c ON c.id = m.conversation_id "
+            "WHERE c.agent_id = ANY(CAST(:agent_ids AS uuid[])) "
+            "AND c.tenant_id = :tenant_id "
+            "AND uf.created_at >= NOW() - INTERVAL '7 days' "
+            "GROUP BY c.agent_id"
+        ),
+        {"agent_ids": agent_ids, "tenant_id": tenant_id},
+    )
+    sr_by_agent: dict = {}
+    for sr_row in sr_batch_result.mappings():
+        aid = str(sr_row["agent_id"])
+        total_ratings = int(sr_row["total"])
+        if total_ratings > 0:
+            sr_by_agent[aid] = round(int(sr_row["positive"]) / total_ratings * 100, 1)
+        else:
+            sr_by_agent[aid] = None
+
+    # Batch session_count_7d — one query for all agents on this page
+    sc_batch_result = await db.execute(
+        text(
+            "SELECT c.agent_id, COUNT(DISTINCT c.id) AS session_count "
+            "FROM conversations c "
+            "WHERE c.agent_id = ANY(CAST(:agent_ids AS uuid[])) "
+            "AND c.tenant_id = :tenant_id "
+            "AND c.created_at >= NOW() - INTERVAL '7 days' "
+            "GROUP BY c.agent_id"
+        ),
+        {"agent_ids": agent_ids, "tenant_id": tenant_id},
+    )
+    sc_by_agent: dict = {}
+    for sc_row in sc_batch_result.mappings():
+        sc_by_agent[str(sc_row["agent_id"])] = int(sc_row["session_count"])
+
     items = []
-    for row in rows_result.mappings():
+    for row in rows:
         agent_id_str = str(row["id"])
-
-        # user_count: distinct users who sent messages via this agent in the last 30 days
-        uc_result = await db.execute(
-            text(
-                "SELECT COUNT(DISTINCT c.user_id) FROM conversations c "
-                "JOIN messages m ON m.conversation_id = c.id "
-                "WHERE c.agent_id = :agent_id "
-                "AND c.tenant_id = :tenant_id "
-                "AND m.created_at >= NOW() - INTERVAL '30 days'"
-            ),
-            {"agent_id": agent_id_str, "tenant_id": tenant_id},
-        )
-        user_count = uc_result.scalar() or 0
-
-        # satisfaction_rate: ratio of +1 ratings to total ratings (null if no ratings)
-        sr_result = await db.execute(
-            text(
-                "SELECT "
-                "  COUNT(*) FILTER (WHERE uf.rating = 1) AS positive, "
-                "  COUNT(*) AS total "
-                "FROM user_feedback uf "
-                "JOIN messages m ON m.id = uf.message_id "
-                "JOIN conversations c ON c.id = m.conversation_id "
-                "WHERE c.agent_id = :agent_id AND c.tenant_id = :tenant_id"
-            ),
-            {"agent_id": agent_id_str, "tenant_id": tenant_id},
-        )
-        sr_row = sr_result.mappings().first()
-        satisfaction_rate = None
-        if sr_row and sr_row["total"] and int(sr_row["total"]) > 0:
-            satisfaction_rate = round(
-                int(sr_row["positive"]) / int(sr_row["total"]) * 100, 1
-            )
-
         items.append(
             {
                 "id": agent_id_str,
@@ -778,8 +809,8 @@ async def list_workspace_agents_db(
                 "version": row["version"],
                 "template_id": row["template_id"],
                 "template_name": row["template_name"],
-                "satisfaction_rate": satisfaction_rate,
-                "user_count": user_count,
+                "satisfaction_rate_7d": sr_by_agent.get(agent_id_str),
+                "session_count_7d": sc_by_agent.get(agent_id_str, 0),
                 "created_at": str(row["created_at"]),
             }
         )
@@ -1024,7 +1055,7 @@ async def deploy_from_library_db(
             "capabilities, status, version, source, template_id, template_version, "
             "template_name, created_by) "
             "VALUES (:id, :tenant_id, :name, :description, :category, :system_prompt, "
-            "CAST(:capabilities AS jsonb), 'published', 1, 'library', "
+            "CAST(:capabilities AS jsonb), 'active', 1, 'library', "
             ":template_id, :template_version, :template_name, :created_by)"
         ),
         {
@@ -1070,6 +1101,17 @@ async def deploy_from_library_db(
             error=str(exc),
         )
 
+    # Fetch created_at from the inserted row
+    ts_result = await db.execute(
+        text(
+            "SELECT created_at FROM agent_cards "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": agent_id, "tenant_id": tenant_id},
+    )
+    ts_row = ts_result.mappings().first()
+    created_at = str(ts_row["created_at"]) if ts_row else None
+
     logger.info(
         "agent_deployed_from_library",
         agent_id=agent_id,
@@ -1082,7 +1124,8 @@ async def deploy_from_library_db(
         "template_id": template_id,
         "template_version": template_version,
         "template_name": template_name,
-        "status": "published",
+        "status": "active",
+        "created_at": created_at,
     }
 
 
@@ -1178,7 +1221,8 @@ def _substitute_variables(prompt: str, variables: dict) -> str:
 @admin_router.get("")
 async def list_workspace_agents(
     status: Optional[str] = Query(
-        None, description="Filter by status: draft|published|unpublished"
+        None,
+        description="Filter by status: draft|published|unpublished|active|paused|archived",
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -1478,6 +1522,163 @@ async def deploy_from_library(
 
 
 # ---------------------------------------------------------------------------
+# TA-023: Agent test harness — POST /admin/agents/{id}/test
+# Runs a one-shot query against the agent's KB + LLM without writing to DB.
+# ---------------------------------------------------------------------------
+
+
+@admin_router.post("/{agent_id}/test")
+async def test_agent(
+    agent_id: str,
+    body: AgentTestRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TA-023: Run a one-shot test query against an agent.
+
+    Uses the agent's system_prompt and KB (via vector search) to produce a
+    response, but writes nothing to conversations, messages, or user_feedback.
+    Returns answer, sources, confidence, token counts, and latency_ms.
+    Wraps the LLM call with a 30-second timeout — raises 504 on timeout.
+    """
+    import asyncio
+    import os
+    import time
+
+    # 1. Fetch agent — 404 if not found for this tenant
+    agent = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    system_prompt = agent.get("system_prompt") or ""
+
+    # 2. Extract KB ids from capabilities
+    capabilities = agent.get("capabilities") or []
+    kb_ids: list = []
+    if isinstance(capabilities, list):
+        for cap in capabilities:
+            if isinstance(cap, dict) and cap.get("type") == "knowledge_base":
+                kb_ids.append(cap.get("id", ""))
+    elif isinstance(capabilities, dict):
+        kb_ids = capabilities.get("kb_ids", [])
+
+    # 3. KB retrieval via vector search (best-effort — skip on any failure)
+    sources: list = []
+    retrieval_confidence = 0.0
+    try:
+        from app.modules.chat.embedding import EmbeddingService
+        from app.modules.chat.vector_search import VectorSearchService
+
+        embedding_service = EmbeddingService()
+        query_vector = await embedding_service.embed(
+            body.query, tenant_id=current_user.tenant_id
+        )
+
+        vector_service = VectorSearchService()
+        search_results = await vector_service.search(
+            query_vector=query_vector,
+            tenant_id=current_user.tenant_id,
+            agent_id=agent_id,
+        )
+
+        for r in search_results:
+            r_dict = r.to_dict() if hasattr(r, "to_dict") else r
+            sources.append(
+                {
+                    "doc_id": r_dict.get("document_id", ""),
+                    "chunk_text": r_dict.get("content", ""),
+                    "relevance_score": float(r_dict.get("score", 0.0)),
+                }
+            )
+        retrieval_confidence = (
+            min(1.0, len(search_results) * 0.2) if search_results else 0.0
+        )
+    except Exception as kb_err:
+        logger.warning(
+            "agent_test_kb_retrieval_failed",
+            agent_id=agent_id,
+            tenant_id=current_user.tenant_id,
+            error=str(kb_err),
+        )
+
+    # 4. LLM call — non-streaming, with 30-second timeout
+    model = os.environ.get("PRIMARY_MODEL", "").strip()
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM not configured: PRIMARY_MODEL environment variable is required.",
+        )
+
+    cloud_provider = os.environ.get("CLOUD_PROVIDER", "local").strip()
+
+    if cloud_provider == "azure":
+        from openai import AsyncAzureOpenAI
+
+        api_key = os.environ.get("AZURE_PLATFORM_OPENAI_API_KEY", "").strip()
+        endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "").strip()
+        api_version = os.environ.get(
+            "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
+        ).strip()
+        llm_client = AsyncAzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=endpoint,
+            api_version=api_version,
+        )
+    else:
+        from openai import AsyncOpenAI
+
+        llm_client = AsyncOpenAI()
+
+    start_ms = time.monotonic()
+
+    async def _call_llm() -> dict:
+        completion = await llm_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": body.query},
+            ],
+            stream=False,
+        )
+        answer = completion.choices[0].message.content or ""
+        usage = completion.usage
+        tokens_in = usage.prompt_tokens if usage else 0
+        tokens_out = usage.completion_tokens if usage else 0
+        return {"answer": answer, "tokens_in": tokens_in, "tokens_out": tokens_out}
+
+    try:
+        llm_result = await asyncio.wait_for(_call_llm(), timeout=30.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Agent test timed out after 30 seconds.",
+        )
+
+    latency_ms = int((time.monotonic() - start_ms) * 1000)
+
+    logger.info(
+        "agent_test_completed",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        latency_ms=latency_ms,
+        sources_count=len(sources),
+    )
+
+    return {
+        "answer": llm_result["answer"],
+        "sources": sources,
+        "confidence": retrieval_confidence,
+        "tokens_in": llm_result["tokens_in"],
+        "tokens_out": llm_result["tokens_out"],
+        "latency_ms": latency_ms,
+    }
+
+
+# ---------------------------------------------------------------------------
 # API-117: End-user agent list — GET /agents
 # Lists published agents visible to any authenticated end user.
 # Distinct from /admin/agents (which includes drafts + metrics).
@@ -1498,7 +1699,7 @@ async def list_published_agents_db(
     count_result = await db.execute(
         text(
             "SELECT COUNT(*) FROM agent_cards "
-            "WHERE tenant_id = :tenant_id AND status = 'published'"
+            "WHERE tenant_id = :tenant_id AND status IN ('published', 'active')"
         ),
         {"tenant_id": tenant_id},
     )
@@ -1508,7 +1709,7 @@ async def list_published_agents_db(
         text(
             "SELECT id, name, description, category, avatar "
             "FROM agent_cards "
-            "WHERE tenant_id = :tenant_id AND status = 'published' "
+            "WHERE tenant_id = :tenant_id AND status IN ('published', 'active') "
             "ORDER BY name ASC LIMIT :limit OFFSET :offset"
         ),
         {"tenant_id": tenant_id, "limit": page_size, "offset": offset},

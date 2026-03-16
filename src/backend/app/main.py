@@ -212,6 +212,44 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # TA-020: Seed agent templates into agent_templates table on startup.
+    try:
+        from app.core.seeds import seed_agent_templates
+
+        await seed_agent_templates()
+    except Exception as exc:
+        logger.warning("agent_templates_seed_failed", error=str(exc))
+
+    # TA-013: Start glossary miss signals batch job (fires daily at 04:30 UTC).
+    _miss_signals_task = None
+    try:
+        from app.modules.glossary.miss_signals_job import run_miss_signals_scheduler
+
+        _miss_signals_task = asyncio.create_task(run_miss_signals_scheduler())
+        logger.info("miss_signals_scheduler_started", schedule="daily at 04:30 UTC")
+    except Exception as exc:
+        logger.warning(
+            "miss_signals_scheduler_startup_failed",
+            error=str(exc),
+        )
+
+    # TA-017: Start credential expiry monitoring job (fires daily at 05:00 UTC).
+    _credential_expiry_task = None
+    try:
+        from app.modules.documents.credential_expiry_job import (
+            run_credential_expiry_scheduler,
+        )
+
+        _credential_expiry_task = asyncio.create_task(run_credential_expiry_scheduler())
+        logger.info(
+            "credential_expiry_scheduler_started", schedule="daily at 05:00 UTC"
+        )
+    except Exception as exc:
+        logger.warning(
+            "credential_expiry_scheduler_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -283,6 +321,22 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("cost_alert_scheduler_stopped")
+
+    if _miss_signals_task is not None and not _miss_signals_task.done():
+        _miss_signals_task.cancel()
+        try:
+            await _miss_signals_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("miss_signals_scheduler_stopped")
+
+    if _credential_expiry_task is not None and not _credential_expiry_task.done():
+        _credential_expiry_task.cancel()
+        try:
+            await _credential_expiry_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("credential_expiry_scheduler_stopped")
 
     # Close Redis connections
     try:
