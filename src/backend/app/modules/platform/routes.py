@@ -206,12 +206,13 @@ async def _create_agent_template_db(
 
 
 async def _get_agent_template_db(template_id: str, db: AsyncSession) -> Optional[dict]:
-    """PA-020: Fetch a single agent template by ID from agent_templates."""
+    """PA-020/022: Fetch a single agent template by ID from agent_templates."""
     result = await db.execute(
         text(
             "SELECT id, name, description, category, system_prompt, "
             "variable_definitions, guardrails, confidence_threshold, "
-            "version, status, changelog, created_by, created_at, updated_at "
+            "version, status, changelog, created_by, parent_id, "
+            "created_at, updated_at "
             "FROM agent_templates WHERE id = :id"
         ),
         {"id": template_id},
@@ -236,6 +237,7 @@ async def _get_agent_template_db(template_id: str, db: AsyncSession) -> Optional
         "status": row["status"],
         "changelog": row["changelog"],
         "created_by": str(row["created_by"]) if row["created_by"] else None,
+        "parent_id": str(row["parent_id"]) if row["parent_id"] else None,
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
     }
@@ -854,6 +856,216 @@ async def patch_agent_template(
         new_status=updated["status"],
     )
     return updated
+
+
+# ---------------------------------------------------------------------------
+# PA-022: Template Versioning
+# POST /platform/agent-templates/{id}/new-version
+# GET  /platform/agent-templates/{id}/versions
+# ---------------------------------------------------------------------------
+
+
+async def _create_template_version_db(
+    source_id: str,
+    actor_id: str,
+    db: AsyncSession,
+) -> Optional[dict]:
+    """
+    PA-022: Create a new Draft version of a template family.
+
+    Copies all fields from the source template, increments version, sets
+    status=Draft, and stores parent_id = root_id of the family.
+    Returns the new template row or None if source not found.
+
+    Concurrency safety: locks all family rows with FOR UPDATE before reading
+    MAX(version), preventing duplicate version numbers from concurrent calls.
+    The unique index idx_agent_templates_family_version is a DB-level safety net.
+    """
+    source = await _get_agent_template_db(source_id, db)
+    if source is None:
+        return None
+
+    # Determine the root of this version family (always depth-1 tree)
+    root_id = source.get("parent_id") or source["id"]
+
+    # Lock the entire family to prevent concurrent MAX(version) races.
+    # FOR UPDATE serializes concurrent new-version requests for the same family.
+    await db.execute(
+        text(
+            "SELECT id FROM agent_templates "
+            "WHERE id = :root_id OR parent_id = :root_id "
+            "FOR UPDATE"
+        ),
+        {"root_id": root_id},
+    )
+
+    # Compute next version while holding the lock
+    result = await db.execute(
+        text(
+            "SELECT COALESCE(MAX(version), 0) AS max_ver "
+            "FROM agent_templates "
+            "WHERE id = :root_id OR parent_id = :root_id"
+        ),
+        {"root_id": root_id},
+    )
+    row = result.mappings().first()
+    next_version = (row["max_ver"] if row else 0) + 1
+
+    new_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO agent_templates "
+            "(id, name, description, category, system_prompt, variable_definitions, "
+            "guardrails, confidence_threshold, version, status, changelog, "
+            "created_by, parent_id) "
+            "VALUES (:id, :name, :description, :category, :system_prompt, "
+            "CAST(:variable_definitions AS jsonb), CAST(:guardrails AS jsonb), "
+            ":confidence_threshold, :version, 'Draft', NULL, :created_by, :parent_id)"
+        ),
+        {
+            "id": new_id,
+            "name": source["name"],
+            "description": source.get("description"),
+            "category": source.get("category"),
+            "system_prompt": source["system_prompt"],
+            "variable_definitions": json.dumps(
+                source.get("variable_definitions") or []
+            ),
+            "guardrails": json.dumps(source.get("guardrails") or []),
+            "confidence_threshold": source.get("confidence_threshold"),
+            "version": next_version,
+            "created_by": actor_id,  # attribute to the actor, not the original author
+            "parent_id": root_id,
+        },
+    )
+    await db.commit()
+    return await _get_agent_template_db(new_id, db)
+
+
+async def _list_template_versions_db(
+    template_id: str,
+    db: AsyncSession,
+) -> Optional[List[dict]]:
+    """
+    PA-022: Return all versions in a template family sorted by version DESC.
+
+    Returns None if template_id does not exist.
+    """
+    # Verify the template exists and determine its root
+    source = await _get_agent_template_db(template_id, db)
+    if source is None:
+        return None
+
+    root_id = source.get("parent_id") or source["id"]
+
+    result = await db.execute(
+        text(
+            "SELECT id, version, status, changelog, "
+            "LEFT(system_prompt, 100) AS system_prompt_preview, "
+            "created_at, updated_at "
+            "FROM agent_templates "
+            "WHERE id = :root_id OR parent_id = :root_id "
+            "ORDER BY version DESC LIMIT 100"
+        ),
+        {"root_id": root_id},
+    )
+    rows = result.mappings().all()
+    return [
+        {
+            "id": str(r["id"]),
+            "version": r["version"],
+            "status": r["status"],
+            "changelog": r["changelog"],
+            "system_prompt_preview": r["system_prompt_preview"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post(
+    "/platform/agent-templates/{template_id}/new-version",
+    status_code=status.HTTP_201_CREATED,
+    tags=["platform"],
+)
+async def create_template_new_version(
+    template_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-022: Create a new Draft version of a template.
+
+    Copies all fields from the source template (variable_definitions, guardrails,
+    system_prompt, etc.) and sets version = max(family_version) + 1, status = Draft.
+    Published versions are never modified — use this endpoint instead of PATCH.
+    Deprecated templates cannot produce new versions (409).
+    """
+    source = await _get_agent_template_db(template_id, session)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+    if source["status"] == "Deprecated":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Cannot create a new version from a Deprecated template. "
+                "Only Draft or Published templates can be versioned."
+            ),
+        )
+
+    result = await _create_template_version_db(template_id, current_user.id, session)
+    if result is None:
+        # Defensive — source was validated above; this guards against a race
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+
+    logger.info(
+        "platform_agent_template_new_version_created",
+        source_id=template_id,
+        new_id=result["id"],
+        new_version=result["version"],
+        actor_id=current_user.id,
+    )
+    return result
+
+
+@router.get(
+    "/platform/agent-templates/{template_id}/versions",
+    tags=["platform"],
+)
+async def list_template_versions(
+    template_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-022: Return version history for a template family.
+
+    Returns all versions (root + all drafts/published siblings) sorted by
+    version DESC. Each entry includes: id, version, status, changelog,
+    system_prompt_preview (first 100 chars), created_at, updated_at.
+    """
+    versions = await _list_template_versions_db(template_id, session)
+    if versions is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+    return {"versions": versions}
 
 
 # ---------------------------------------------------------------------------

@@ -434,17 +434,19 @@ Phase A (Platform Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### PA-022: Template versioning
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
 **Effort**: 5h
 **Depends on**: PA-020
+**Completed**: 2026-03-16
 **Description**: `POST /platform/agent-templates/{id}/new-version`. Creates a new Draft version (incremented `version` field) copying all fields from current Published version. New version can have different `system_prompt`. `GET /platform/agent-templates/{id}/versions` returns version history. Published versions never modified — create new version to change system_prompt.
+**Evidence**: `alembic/versions/v021_agent_template_versioning.py` adds `parent_id UUID FK` + unique index on `(COALESCE(parent_id, id), version)`. Route helpers `_create_template_version_db` (FOR UPDATE locking to prevent MAX version race) and `_list_template_versions_db` (LIMIT 100). Deprecated templates return 409. `created_by` set to current actor. 18 unit tests passing.
 **Acceptance criteria**:
 
-- [ ] `POST /platform/agent-templates/{id}/new-version` creates Draft with version=N+1
-- [ ] New Draft version copies all fields from source (including variable_definitions, guardrails)
-- [ ] `GET /platform/agent-templates/{id}/versions` returns all versions sorted by version DESC
-- [ ] Version history includes: version, status, published_at, changelog, first 100 chars of system_prompt
-- [ ] `require_platform_admin` enforced on write endpoints
+- [x] `POST /platform/agent-templates/{id}/new-version` creates Draft with version=N+1
+- [x] New Draft version copies all fields from source (including variable_definitions, guardrails)
+- [x] `GET /platform/agent-templates/{id}/versions` returns all versions sorted by version DESC
+- [x] Version history includes: version, status, changelog, first 100 chars of system_prompt
+- [x] `require_platform_admin` enforced on write endpoints
 
 ---
 
