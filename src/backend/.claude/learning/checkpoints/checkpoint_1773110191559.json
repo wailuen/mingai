@@ -1,13 +1,637 @@
 {
-  "id": "checkpoint_1773562377538",
-  "name": "pre-compact-1773562377538",
-  "created_at": "2026-03-15T08:12:57.539Z",
+  "id": "checkpoint_1773110191559",
+  "name": "pre-compact-1773110191559",
+  "created_at": "2026-03-10T02:36:31.560Z",
   "observations": [
+    {
+      "id": "obs_1773063789916_ys1t8v68p",
+      "timestamp": "2026-03-09T13:43:09.916Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773063834949_ozlbf072z",
+      "timestamp": "2026-03-09T13:43:54.949Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773063855847_2dh91eyct",
+      "timestamp": "2026-03-09T13:44:15.847Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773063866374_97956qvkq",
+      "timestamp": "2026-03-09T13:44:26.374Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773063884812_fswxd5he6",
+      "timestamp": "2026-03-09T13:44:44.812Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773063905666_f2e4rqsek",
+      "timestamp": "2026-03-09T13:45:05.666Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773063922035_c5h6ino77",
+      "timestamp": "2026-03-09T13:45:22.035Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773064794746_agpiox8mc",
+      "timestamp": "2026-03-09T13:59:54.746Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773064799780_cqog7wx0s",
+      "timestamp": "2026-03-09T13:59:59.780Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773064999892_xjd636id8",
+      "timestamp": "2026-03-09T14:03:19.892Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065395609_d0ngtjgwv",
+      "timestamp": "2026-03-09T14:09:55.609Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065409958_7u3uy3j5x",
+      "timestamp": "2026-03-09T14:10:09.958Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065416506_90y7ul367",
+      "timestamp": "2026-03-09T14:10:16.506Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065479107_j3sil09cn",
+      "timestamp": "2026-03-09T14:11:19.107Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065497244_hygj82n54",
+      "timestamp": "2026-03-09T14:11:37.244Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065502138_zoq7z9tmg",
+      "timestamp": "2026-03-09T14:11:42.138Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065604218_l01ufv9nv",
+      "timestamp": "2026-03-09T14:13:24.218Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065608279_7037ihu9n",
+      "timestamp": "2026-03-09T14:13:28.279Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065614872_wruzxqezp",
+      "timestamp": "2026-03-09T14:13:34.872Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065650984_ltj0d7bqm",
+      "timestamp": "2026-03-09T14:14:10.984Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065720841_mm5i6f6gt",
+      "timestamp": "2026-03-09T14:15:20.841Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065725598_4czsrei3d",
+      "timestamp": "2026-03-09T14:15:25.598Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065790896_24eek7ncs",
+      "timestamp": "2026-03-09T14:16:30.896Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065885877_nurmi54un",
+      "timestamp": "2026-03-09T14:18:05.877Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065910227_5leyax9en",
+      "timestamp": "2026-03-09T14:18:30.227Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065916747_pj0kpor59",
+      "timestamp": "2026-03-09T14:18:36.747Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065983821_4cwuzpf9t",
+      "timestamp": "2026-03-09T14:19:43.821Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773065999842_i6egv8qbe",
+      "timestamp": "2026-03-09T14:19:59.842Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066009319_veblt0n1z",
+      "timestamp": "2026-03-09T14:20:09.319Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066016084_f9z95c9bc",
+      "timestamp": "2026-03-09T14:20:16.084Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066024789_m205gd1cm",
+      "timestamp": "2026-03-09T14:20:24.789Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066072451_y5rlkxwsb",
+      "timestamp": "2026-03-09T14:21:12.451Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066098416_mzmpcpswa",
+      "timestamp": "2026-03-09T14:21:38.416Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066190277_l92tp02r2",
+      "timestamp": "2026-03-09T14:23:10.277Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066211807_jd3fzi8hq",
+      "timestamp": "2026-03-09T14:23:31.807Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066294757_n0qim6jxv",
+      "timestamp": "2026-03-09T14:24:54.757Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066315227_zgppfyfuz",
+      "timestamp": "2026-03-09T14:25:15.227Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066386082_hyo62hvw6",
+      "timestamp": "2026-03-09T14:26:26.082Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066408099_p9ulcb5t7",
+      "timestamp": "2026-03-09T14:26:48.099Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066457527_7c9yid8iu",
+      "timestamp": "2026-03-09T14:27:37.527Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066478946_q8c9a9mg7",
+      "timestamp": "2026-03-09T14:27:58.946Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066502270_649lmdmwx",
+      "timestamp": "2026-03-09T14:28:22.270Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066515812_502vgxevt",
+      "timestamp": "2026-03-09T14:28:35.812Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1773066533690_xlu2yehec",
+      "timestamp": "2026-03-09T14:28:53.690Z",
+      "type": "connection_pattern",
+      "data": {
+        "framework": "core-sdk",
+        "active_workflows": [],
+        "critical_patterns": {
+          "hasDataFlowModels": false,
+          "hasNexusApp": false,
+          "hasKaizenAgent": false,
+          "hasCyclicWorkflow": false,
+          "hasAsyncRuntime": false
+        },
+        "recently_modified_count": 0
+      },
+      "context": {
+        "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
     {
       "type": "session_start",
       "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
       "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-      "timestamp": "2026-03-10T02:38:00.371Z",
+      "timestamp": "2026-03-09T14:30:31.815Z",
       "envExists": true,
       "framework": "core-sdk",
       "models": {
@@ -21,8 +645,8 @@
       ]
     },
     {
-      "id": "obs_1773110589479_i4yjnx2rs",
-      "timestamp": "2026-03-10T02:43:09.479Z",
+      "id": "obs_1773066902647_rmfuix9da",
+      "timestamp": "2026-03-09T14:35:02.647Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -35,8 +659,8 @@
       }
     },
     {
-      "id": "obs_1773110593576_kjee8g2p4",
-      "timestamp": "2026-03-10T02:43:13.576Z",
+      "id": "obs_1773066906291_p20ib70up",
+      "timestamp": "2026-03-09T14:35:06.291Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -49,8 +673,8 @@
       }
     },
     {
-      "id": "obs_1773110597146_7g3g3zq4m",
-      "timestamp": "2026-03-10T02:43:17.146Z",
+      "id": "obs_1773066909794_zfoyi4v95",
+      "timestamp": "2026-03-09T14:35:09.794Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -63,8 +687,8 @@
       }
     },
     {
-      "id": "obs_1773110601751_qk9rz387u",
-      "timestamp": "2026-03-10T02:43:21.751Z",
+      "id": "obs_1773066915045_k3zlvz8rv",
+      "timestamp": "2026-03-09T14:35:15.045Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -77,8 +701,8 @@
       }
     },
     {
-      "id": "obs_1773110606808_0qv3s9ehd",
-      "timestamp": "2026-03-10T02:43:26.808Z",
+      "id": "obs_1773066922112_47qlh5pzt",
+      "timestamp": "2026-03-09T14:35:22.112Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -91,8 +715,8 @@
       }
     },
     {
-      "id": "obs_1773110611434_6tzholsy6",
-      "timestamp": "2026-03-10T02:43:31.434Z",
+      "id": "obs_1773066923442_z7zl7mkop",
+      "timestamp": "2026-03-09T14:35:23.442Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -105,8 +729,8 @@
       }
     },
     {
-      "id": "obs_1773110615729_b7aiu8y32",
-      "timestamp": "2026-03-10T02:43:35.729Z",
+      "id": "obs_1773066925349_lw3ovqrkd",
+      "timestamp": "2026-03-09T14:35:25.349Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -119,8 +743,8 @@
       }
     },
     {
-      "id": "obs_1773110618849_rx7a8l4xn",
-      "timestamp": "2026-03-10T02:43:38.849Z",
+      "id": "obs_1773066946336_j9wjf2k7t",
+      "timestamp": "2026-03-09T14:35:46.336Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -133,8 +757,8 @@
       }
     },
     {
-      "id": "obs_1773110622670_46jow4y8z",
-      "timestamp": "2026-03-10T02:43:42.670Z",
+      "id": "obs_1773066950854_5ivstivmi",
+      "timestamp": "2026-03-09T14:35:50.854Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -147,8 +771,8 @@
       }
     },
     {
-      "id": "obs_1773110628401_t7cqwsdwg",
-      "timestamp": "2026-03-10T02:43:48.401Z",
+      "id": "obs_1773067479720_vmwy6wxi5",
+      "timestamp": "2026-03-09T14:44:39.720Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -161,8 +785,8 @@
       }
     },
     {
-      "id": "obs_1773110646837_zyjq8dchw",
-      "timestamp": "2026-03-10T02:44:06.837Z",
+      "id": "obs_1773067486926_liugc3aav",
+      "timestamp": "2026-03-09T14:44:46.926Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -175,8 +799,8 @@
       }
     },
     {
-      "id": "obs_1773110998566_dw1ncrr96",
-      "timestamp": "2026-03-10T02:49:58.566Z",
+      "id": "obs_1773068148684_s8b51jdxv",
+      "timestamp": "2026-03-09T14:55:48.684Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -189,8 +813,8 @@
       }
     },
     {
-      "id": "obs_1773111014179_vzkv5r966",
-      "timestamp": "2026-03-10T02:50:14.179Z",
+      "id": "obs_1773068162043_uc4h4ikqk",
+      "timestamp": "2026-03-09T14:56:02.043Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -203,8 +827,8 @@
       }
     },
     {
-      "id": "obs_1773111018639_r7ndbj45m",
-      "timestamp": "2026-03-10T02:50:18.639Z",
+      "id": "obs_1773068211086_erc4r1op1",
+      "timestamp": "2026-03-09T14:56:51.086Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -217,8 +841,8 @@
       }
     },
     {
-      "id": "obs_1773111022676_wh78w8b9w",
-      "timestamp": "2026-03-10T02:50:22.676Z",
+      "id": "obs_1773068232248_4ix62ztkf",
+      "timestamp": "2026-03-09T14:57:12.248Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -231,8 +855,8 @@
       }
     },
     {
-      "id": "obs_1773111035576_oa3h4wodw",
-      "timestamp": "2026-03-10T02:50:35.576Z",
+      "id": "obs_1773068270412_w2zoqlxd1",
+      "timestamp": "2026-03-09T14:57:50.412Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -245,8 +869,8 @@
       }
     },
     {
-      "id": "obs_1773111064436_5k53and47",
-      "timestamp": "2026-03-10T02:51:04.436Z",
+      "id": "obs_1773068278726_vs9b1fwhi",
+      "timestamp": "2026-03-09T14:57:58.726Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -259,8 +883,8 @@
       }
     },
     {
-      "id": "obs_1773111086420_gw45r7ovz",
-      "timestamp": "2026-03-10T02:51:26.420Z",
+      "id": "obs_1773068292654_g600y10jk",
+      "timestamp": "2026-03-09T14:58:12.654Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -273,8 +897,8 @@
       }
     },
     {
-      "id": "obs_1773111104311_xntydyd19",
-      "timestamp": "2026-03-10T02:51:44.311Z",
+      "id": "obs_1773068297297_s4dva5nd4",
+      "timestamp": "2026-03-09T14:58:17.297Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -287,8 +911,8 @@
       }
     },
     {
-      "id": "obs_1773111138830_i1bkm9jkv",
-      "timestamp": "2026-03-10T02:52:18.830Z",
+      "id": "obs_1773068301233_3fekbz0jr",
+      "timestamp": "2026-03-09T14:58:21.233Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -301,8 +925,8 @@
       }
     },
     {
-      "id": "obs_1773111142291_ayl8b1ybc",
-      "timestamp": "2026-03-10T02:52:22.291Z",
+      "id": "obs_1773068322430_802a7u2vm",
+      "timestamp": "2026-03-09T14:58:42.430Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -315,8 +939,8 @@
       }
     },
     {
-      "id": "obs_1773111146105_bj288u1ms",
-      "timestamp": "2026-03-10T02:52:26.105Z",
+      "id": "obs_1773068330150_5nm5y2fu8",
+      "timestamp": "2026-03-09T14:58:50.150Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -329,8 +953,8 @@
       }
     },
     {
-      "id": "obs_1773111149776_kpyjk5hwo",
-      "timestamp": "2026-03-10T02:52:29.776Z",
+      "id": "obs_1773068337912_eufvlhv02",
+      "timestamp": "2026-03-09T14:58:57.912Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -343,8 +967,8 @@
       }
     },
     {
-      "id": "obs_1773111154952_e1lx9de5y",
-      "timestamp": "2026-03-10T02:52:34.952Z",
+      "id": "obs_1773068341837_860qxkhx7",
+      "timestamp": "2026-03-09T14:59:01.837Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -357,8 +981,8 @@
       }
     },
     {
-      "id": "obs_1773111179956_o1fggsnlg",
-      "timestamp": "2026-03-10T02:52:59.956Z",
+      "id": "obs_1773068346082_b1aomebix",
+      "timestamp": "2026-03-09T14:59:06.083Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -371,8 +995,8 @@
       }
     },
     {
-      "id": "obs_1773111191634_fc84yj02g",
-      "timestamp": "2026-03-10T02:53:11.634Z",
+      "id": "obs_1773068349886_cs0wmhd5i",
+      "timestamp": "2026-03-09T14:59:09.886Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -385,8 +1009,8 @@
       }
     },
     {
-      "id": "obs_1773111205034_9ps662pu2",
-      "timestamp": "2026-03-10T02:53:25.034Z",
+      "id": "obs_1773068354482_e3nwkrwo9",
+      "timestamp": "2026-03-09T14:59:14.482Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -399,8 +1023,8 @@
       }
     },
     {
-      "id": "obs_1773111209780_lkp1w45x8",
-      "timestamp": "2026-03-10T02:53:29.780Z",
+      "id": "obs_1773068361647_3n6f6um00",
+      "timestamp": "2026-03-09T14:59:21.647Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -413,8 +1037,8 @@
       }
     },
     {
-      "id": "obs_1773111216901_xipz4fpnl",
-      "timestamp": "2026-03-10T02:53:36.901Z",
+      "id": "obs_1773068369861_6arx48di8",
+      "timestamp": "2026-03-09T14:59:29.861Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -427,8 +1051,8 @@
       }
     },
     {
-      "id": "obs_1773111221021_bkhdmfxuk",
-      "timestamp": "2026-03-10T02:53:41.021Z",
+      "id": "obs_1773068378898_ydvd8nxd8",
+      "timestamp": "2026-03-09T14:59:38.898Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -441,8 +1065,8 @@
       }
     },
     {
-      "id": "obs_1773111225796_1bt4czys7",
-      "timestamp": "2026-03-10T02:53:45.796Z",
+      "id": "obs_1773068412460_wv7ovvfs7",
+      "timestamp": "2026-03-09T15:00:12.460Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -455,8 +1079,8 @@
       }
     },
     {
-      "id": "obs_1773111232200_qim2jvhs6",
-      "timestamp": "2026-03-10T02:53:52.200Z",
+      "id": "obs_1773068454950_seiv7fj8c",
+      "timestamp": "2026-03-09T15:00:54.950Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -469,8 +1093,8 @@
       }
     },
     {
-      "id": "obs_1773111235652_wyregd28n",
-      "timestamp": "2026-03-10T02:53:55.652Z",
+      "id": "obs_1773068468629_z7mlmxiuq",
+      "timestamp": "2026-03-09T15:01:08.629Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -483,8 +1107,8 @@
       }
     },
     {
-      "id": "obs_1773111239201_x3jy85t1c",
-      "timestamp": "2026-03-10T02:53:59.201Z",
+      "id": "obs_1773068722807_31zvsbopu",
+      "timestamp": "2026-03-09T15:05:22.807Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -497,8 +1121,8 @@
       }
     },
     {
-      "id": "obs_1773111249590_c91w1jq9t",
-      "timestamp": "2026-03-10T02:54:09.590Z",
+      "id": "obs_1773068730299_2nzb5o5zj",
+      "timestamp": "2026-03-09T15:05:30.299Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -511,8 +1135,8 @@
       }
     },
     {
-      "id": "obs_1773111255371_w6s2ewajo",
-      "timestamp": "2026-03-10T02:54:15.371Z",
+      "id": "obs_1773068737289_p35jyksqu",
+      "timestamp": "2026-03-09T15:05:37.289Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -525,8 +1149,8 @@
       }
     },
     {
-      "id": "obs_1773111704068_219b20d25",
-      "timestamp": "2026-03-10T03:01:44.068Z",
+      "id": "obs_1773068752403_0o64kgrvx",
+      "timestamp": "2026-03-09T15:05:52.403Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -539,8 +1163,8 @@
       }
     },
     {
-      "id": "obs_1773111718870_p8g3batba",
-      "timestamp": "2026-03-10T03:01:58.870Z",
+      "id": "obs_1773068757981_5ti3wm4gb",
+      "timestamp": "2026-03-09T15:05:57.981Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -553,8 +1177,8 @@
       }
     },
     {
-      "id": "obs_1773111723589_rw4rn316o",
-      "timestamp": "2026-03-10T03:02:03.589Z",
+      "id": "obs_1773068763759_17vsjowe7",
+      "timestamp": "2026-03-09T15:06:03.759Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -567,8 +1191,8 @@
       }
     },
     {
-      "id": "obs_1773112026708_b69gauu5j",
-      "timestamp": "2026-03-10T03:07:06.708Z",
+      "id": "obs_1773068770327_g37rerblm",
+      "timestamp": "2026-03-09T15:06:10.327Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -581,8 +1205,8 @@
       }
     },
     {
-      "id": "obs_1773112032123_9zmgbamai",
-      "timestamp": "2026-03-10T03:07:12.123Z",
+      "id": "obs_1773069135596_gg1uy04as",
+      "timestamp": "2026-03-09T15:12:15.596Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -595,8 +1219,8 @@
       }
     },
     {
-      "id": "obs_1773112034637_wexhum7s6",
-      "timestamp": "2026-03-10T03:07:14.637Z",
+      "id": "obs_1773069308839_4hlfko5cb",
+      "timestamp": "2026-03-09T15:15:08.839Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -609,8 +1233,8 @@
       }
     },
     {
-      "id": "obs_1773112038337_gwzl9l5iz",
-      "timestamp": "2026-03-10T03:07:18.337Z",
+      "id": "obs_1773069677302_n6u90rr3k",
+      "timestamp": "2026-03-09T15:21:17.302Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -623,652 +1247,47 @@
       }
     },
     {
-      "id": "obs_1773112043096_vpfqrfstb",
-      "timestamp": "2026-03-10T03:07:23.096Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112045772_xcbp4y4ub",
-      "timestamp": "2026-03-10T03:07:25.772Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112048629_lkxnkaf85",
-      "timestamp": "2026-03-10T03:07:28.629Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112051641_prgukg6qn",
-      "timestamp": "2026-03-10T03:07:31.641Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112054157_inc4oj6zn",
-      "timestamp": "2026-03-10T03:07:34.157Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112058005_k1a0utt6n",
-      "timestamp": "2026-03-10T03:07:38.005Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112063632_hqzza5dki",
-      "timestamp": "2026-03-10T03:07:43.632Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112077180_0031jstav",
-      "timestamp": "2026-03-10T03:07:57.180Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773112138804_paaluvlnz",
-      "timestamp": "2026-03-10T03:08:58.804Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561324041_xhuafvgx1",
-      "timestamp": "2026-03-15T07:55:24.041Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561333058_jgu5qcqka",
-      "timestamp": "2026-03-15T07:55:33.058Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561725406_oglrux3n2",
-      "timestamp": "2026-03-15T08:02:05.406Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561729032_nv6kv89fb",
-      "timestamp": "2026-03-15T08:02:09.032Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561736722_xdijx7np7",
-      "timestamp": "2026-03-15T08:02:16.722Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561992596_teps25kft",
-      "timestamp": "2026-03-15T08:06:32.596Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561993777_cwscfzdm1",
-      "timestamp": "2026-03-15T08:06:33.777Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561994440_453lzc70w",
-      "timestamp": "2026-03-15T08:06:34.440Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773561999267_eppc2p8hx",
-      "timestamp": "2026-03-15T08:06:39.267Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562000041_e5z0y65yg",
-      "timestamp": "2026-03-15T08:06:40.041Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562004062_4thblwhjd",
-      "timestamp": "2026-03-15T08:06:44.062Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562004804_s8i09ve6o",
-      "timestamp": "2026-03-15T08:06:44.804Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562005499_ui5reyl0l",
-      "timestamp": "2026-03-15T08:06:45.499Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562010060_wwavdqwqv",
-      "timestamp": "2026-03-15T08:06:50.060Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562011457_1ns376nga",
-      "timestamp": "2026-03-15T08:06:51.458Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562012212_rnrncbd6y",
-      "timestamp": "2026-03-15T08:06:52.212Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562020304_wqb2fyiq2",
-      "timestamp": "2026-03-15T08:07:00.304Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562024820_4sik4ns1l",
-      "timestamp": "2026-03-15T08:07:04.820Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562028609_svv18yy1n",
-      "timestamp": "2026-03-15T08:07:08.609Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562033236_b5iczmxu4",
-      "timestamp": "2026-03-15T08:07:13.236Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562033958_sv9njow7f",
-      "timestamp": "2026-03-15T08:07:13.958Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562043045_crwhcsw2r",
-      "timestamp": "2026-03-15T08:07:23.045Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562049243_i1nx8u5pl",
-      "timestamp": "2026-03-15T08:07:29.243Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562057258_celgbndur",
-      "timestamp": "2026-03-15T08:07:37.258Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562063616_0lzx538kg",
-      "timestamp": "2026-03-15T08:07:43.616Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562078471_qc5lrvbdi",
-      "timestamp": "2026-03-15T08:07:58.471Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562085833_1q8iygjcu",
-      "timestamp": "2026-03-15T08:08:05.833Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562091685_0zid03ih7",
-      "timestamp": "2026-03-15T08:08:11.685Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562111301_0husmvrn8",
-      "timestamp": "2026-03-15T08:08:31.301Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562121342_q30k3tc0e",
-      "timestamp": "2026-03-15T08:08:41.342Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562128991_ez2bjhvf2",
-      "timestamp": "2026-03-15T08:08:48.991Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562169869_91bh30b19",
-      "timestamp": "2026-03-15T08:09:29.869Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562190664_yhwwsw1wx",
-      "timestamp": "2026-03-15T08:09:50.664Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562199657_e8iimbg4m",
-      "timestamp": "2026-03-15T08:09:59.657Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562212670_icjgc7euo",
-      "timestamp": "2026-03-15T08:10:12.670Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773562227532_bpjezk70s",
-      "timestamp": "2026-03-15T08:10:27.532Z",
-      "type": "test_pattern",
+      "id": "obs_1773070147130_7y9v3hyuo",
+      "timestamp": "2026-03-09T15:29:07.130Z",
+      "type": "connection_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "framework": "core-sdk",
+        "active_workflows": [],
+        "critical_patterns": {
+          "hasDataFlowModels": false,
+          "hasNexusApp": false,
+          "hasKaizenAgent": false,
+          "hasCyclicWorkflow": false,
+          "hasAsyncRuntime": false
+        },
+        "recently_modified_count": 0
       },
       "context": {
-        "session_id": "unknown",
+        "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
         "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
         "framework": "unknown"
       }
     },
     {
-      "id": "obs_1773562247529_i4lfbjef4",
-      "timestamp": "2026-03-15T08:10:47.529Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
+      "type": "session_start",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+      "timestamp": "2026-03-09T15:31:06.503Z",
+      "envExists": true,
+      "framework": "core-sdk",
+      "models": {
+        "PRIMARY_MODEL": "agentic-worker",
+        "INTENT_MODEL": "agentic-router",
+        "EMBEDDING_MODEL": "text-embedding-3-small"
       },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "keyCount": 3,
+      "validationFailures": [
+        "MISSING: OPENAI_API_KEY required for text-embedding-3-small"
+      ]
     },
     {
-      "id": "obs_1773562262558_utuzmoy4q",
-      "timestamp": "2026-03-15T08:11:02.558Z",
+      "id": "obs_1773070425691_fsmgcwbyl",
+      "timestamp": "2026-03-09T15:33:45.691Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1281,8 +1300,8 @@
       }
     },
     {
-      "id": "obs_1773562268581_sj38fy3l5",
-      "timestamp": "2026-03-15T08:11:08.581Z",
+      "id": "obs_1773070429434_zu3qvm421",
+      "timestamp": "2026-03-09T15:33:49.434Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1295,8 +1314,8 @@
       }
     },
     {
-      "id": "obs_1773562269612_6arektnh4",
-      "timestamp": "2026-03-15T08:11:09.612Z",
+      "id": "obs_1773070432688_18kv895h3",
+      "timestamp": "2026-03-09T15:33:52.688Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1309,8 +1328,8 @@
       }
     },
     {
-      "id": "obs_1773562278801_mu720f8v4",
-      "timestamp": "2026-03-15T08:11:18.801Z",
+      "id": "obs_1773070436005_gf57vnea7",
+      "timestamp": "2026-03-09T15:33:56.005Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1323,8 +1342,8 @@
       }
     },
     {
-      "id": "obs_1773562292477_y5t6dm10i",
-      "timestamp": "2026-03-15T08:11:32.477Z",
+      "id": "obs_1773070439795_mb3eftxka",
+      "timestamp": "2026-03-09T15:33:59.795Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1337,8 +1356,8 @@
       }
     },
     {
-      "id": "obs_1773562298202_i55lhafjz",
-      "timestamp": "2026-03-15T08:11:38.202Z",
+      "id": "obs_1773070865371_zjwi75fil",
+      "timestamp": "2026-03-09T15:41:05.371Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1351,8 +1370,8 @@
       }
     },
     {
-      "id": "obs_1773562342612_tkky02yw4",
-      "timestamp": "2026-03-15T08:12:22.612Z",
+      "id": "obs_1773110089928_xgz8v7140",
+      "timestamp": "2026-03-10T02:34:49.928Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1365,8 +1384,8 @@
       }
     },
     {
-      "id": "obs_1773562353445_gaknqy39h",
-      "timestamp": "2026-03-15T08:12:33.445Z",
+      "id": "obs_1773110135850_amq0vp8cq",
+      "timestamp": "2026-03-10T02:35:35.850Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1379,8 +1398,8 @@
       }
     },
     {
-      "id": "obs_1773562362275_ijfo5ewn9",
-      "timestamp": "2026-03-15T08:12:42.275Z",
+      "id": "obs_1773110161235_92w5v501m",
+      "timestamp": "2026-03-10T02:36:01.235Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1393,8 +1412,8 @@
       }
     },
     {
-      "id": "obs_1773562377536_p6aalsvpp",
-      "timestamp": "2026-03-15T08:12:57.536Z",
+      "id": "obs_1773110191558_o23e2zmqd",
+      "timestamp": "2026-03-10T02:36:31.558Z",
       "type": "connection_pattern",
       "data": {
         "framework": "core-sdk",
@@ -1431,7 +1450,7 @@
     ]
   },
   "stats": {
-    "observation_count": 486,
+    "observation_count": 386,
     "instinct_categories": 0
   }
 }

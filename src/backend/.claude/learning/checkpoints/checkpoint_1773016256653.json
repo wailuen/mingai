@@ -1,144 +1,154 @@
 {
-  "id": "checkpoint_1773562377538",
-  "name": "pre-compact-1773562377538",
-  "created_at": "2026-03-15T08:12:57.539Z",
+  "id": "checkpoint_1773016256653",
+  "name": "pre-compact-1773016256653",
+  "created_at": "2026-03-09T00:30:56.654Z",
   "observations": [
     {
+      "id": "obs_1772917784594_6nlrs84w4",
+      "timestamp": "2026-03-07T21:09:44.594Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_har_a2a_integration.py::TestHARCryptoIntegration::test_keypair_generation_and_storage"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917790185_u4ueoot4y",
+      "timestamp": "2026-03-07T21:09:50.185Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_har_a2a_integration.py::TestHARCryptoIntegration::test_keypair_generation_and_storage"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917797062_6lfilaygz",
+      "timestamp": "2026-03-07T21:09:57.062Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "python",
+        "test_path": null
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917885044_cp3h0v86n",
+      "timestamp": "2026-03-07T21:11:25.044Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917900719_9r1cd9ocb",
+      "timestamp": "2026-03-07T21:11:40.719Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_har_a2a_integration.py::TestHARSignatureChainIntegration::test_event_signature_verified_from_db"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917940144_zt60g0759",
+      "timestamp": "2026-03-07T21:12:20.144Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917955134_z1ht2hkre",
+      "timestamp": "2026-03-07T21:12:35.134Z",
+      "type": "test_pattern",
+      "data": {
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_profile_memory_integration.py::TestProfileLearningIntegration::test_profile_not_extracted_below_threshold"
+      },
+      "context": {
+        "session_id": "unknown",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
+      "id": "obs_1772917956295_fj4le801y",
+      "timestamp": "2026-03-07T21:12:36.295Z",
+      "type": "connection_pattern",
+      "data": {
+        "framework": "core-sdk",
+        "active_workflows": [],
+        "critical_patterns": {
+          "hasDataFlowModels": false,
+          "hasNexusApp": false,
+          "hasKaizenAgent": false,
+          "hasCyclicWorkflow": false,
+          "hasAsyncRuntime": false
+        },
+        "recently_modified_count": 0
+      },
+      "context": {
+        "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
+        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+        "framework": "unknown"
+      }
+    },
+    {
       "type": "session_start",
-      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "session_id": "0ce7a676-06c6-45b6-8c35-c1b6ab03fb6e",
       "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-      "timestamp": "2026-03-10T02:38:00.371Z",
+      "timestamp": "2026-03-07T21:14:28.991Z",
       "envExists": true,
       "framework": "core-sdk",
       "models": {
-        "PRIMARY_MODEL": "agentic-worker",
-        "INTENT_MODEL": "agentic-router",
+        "PRIMARY_MODEL": "gpt-5.2-chat",
+        "INTENT_MODEL": "gpt-5-mini",
         "EMBEDDING_MODEL": "text-embedding-3-small"
       },
-      "keyCount": 3,
+      "keyCount": 1,
       "validationFailures": [
+        "MISSING: OPENAI_API_KEY required for gpt-5.2-chat",
+        "MISSING: OPENAI_API_KEY required for gpt-5-mini",
         "MISSING: OPENAI_API_KEY required for text-embedding-3-small"
       ]
     },
     {
-      "id": "obs_1773110589479_i4yjnx2rs",
-      "timestamp": "2026-03-10T02:43:09.479Z",
+      "id": "obs_1772918076399_y1db7t36r",
+      "timestamp": "2026-03-07T21:14:36.399Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110593576_kjee8g2p4",
-      "timestamp": "2026-03-10T02:43:13.576Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110597146_7g3g3zq4m",
-      "timestamp": "2026-03-10T02:43:17.146Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110601751_qk9rz387u",
-      "timestamp": "2026-03-10T02:43:21.751Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110606808_0qv3s9ehd",
-      "timestamp": "2026-03-10T02:43:26.808Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110611434_6tzholsy6",
-      "timestamp": "2026-03-10T02:43:31.434Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110615729_b7aiu8y32",
-      "timestamp": "2026-03-10T02:43:35.729Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110618849_rx7a8l4xn",
-      "timestamp": "2026-03-10T02:43:38.849Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
-    },
-    {
-      "id": "obs_1773110622670_46jow4y8z",
-      "timestamp": "2026-03-10T02:43:42.670Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
       },
       "context": {
         "session_id": "unknown",
@@ -147,12 +157,12 @@
       }
     },
     {
-      "id": "obs_1773110628401_t7cqwsdwg",
-      "timestamp": "2026-03-10T02:43:48.401Z",
+      "id": "obs_1772918091826_1d7ge4pvu",
+      "timestamp": "2026-03-07T21:14:51.826Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_profile_memory_integration.py::TestProfileLearningIntegration::test_profile_not_extracted_below_threshold"
       },
       "context": {
         "session_id": "unknown",
@@ -161,12 +171,12 @@
       }
     },
     {
-      "id": "obs_1773110646837_zyjq8dchw",
-      "timestamp": "2026-03-10T02:44:06.837Z",
+      "id": "obs_1772918098195_j6sqnb601",
+      "timestamp": "2026-03-07T21:14:58.195Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_profile_memory_integration.py"
       },
       "context": {
         "session_id": "unknown",
@@ -175,12 +185,12 @@
       }
     },
     {
-      "id": "obs_1773110998566_dw1ncrr96",
-      "timestamp": "2026-03-10T02:49:58.566Z",
+      "id": "obs_1772918131985_br33yt6d1",
+      "timestamp": "2026-03-07T21:15:31.985Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
       },
       "context": {
         "session_id": "unknown",
@@ -189,12 +199,12 @@
       }
     },
     {
-      "id": "obs_1773111014179_vzkv5r966",
-      "timestamp": "2026-03-10T02:50:14.179Z",
+      "id": "obs_1772918147116_u3oc9b33t",
+      "timestamp": "2026-03-07T21:15:47.116Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_profile_memory_integration.py"
       },
       "context": {
         "session_id": "unknown",
@@ -203,12 +213,12 @@
       }
     },
     {
-      "id": "obs_1773111018639_r7ndbj45m",
-      "timestamp": "2026-03-10T02:50:18.639Z",
+      "id": "obs_1772918192772_00mlxfuyp",
+      "timestamp": "2026-03-07T21:16:32.772Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
       },
       "context": {
         "session_id": "unknown",
@@ -217,12 +227,12 @@
       }
     },
     {
-      "id": "obs_1773111022676_wh78w8b9w",
-      "timestamp": "2026-03-10T02:50:22.676Z",
+      "id": "obs_1772918206639_90waj1f59",
+      "timestamp": "2026-03-07T21:16:46.639Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -231,8 +241,8 @@
       }
     },
     {
-      "id": "obs_1773111035576_oa3h4wodw",
-      "timestamp": "2026-03-10T02:50:35.576Z",
+      "id": "obs_1772918508271_mf2wzrppr",
+      "timestamp": "2026-03-07T21:21:48.271Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -245,8 +255,8 @@
       }
     },
     {
-      "id": "obs_1773111064436_5k53and47",
-      "timestamp": "2026-03-10T02:51:04.436Z",
+      "id": "obs_1772918515908_czz9d7ua0",
+      "timestamp": "2026-03-07T21:21:55.908Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -259,8 +269,8 @@
       }
     },
     {
-      "id": "obs_1773111086420_gw45r7ovz",
-      "timestamp": "2026-03-10T02:51:26.420Z",
+      "id": "obs_1772918520151_c3m5vkb8o",
+      "timestamp": "2026-03-07T21:22:00.151Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -273,12 +283,12 @@
       }
     },
     {
-      "id": "obs_1773111104311_xntydyd19",
-      "timestamp": "2026-03-10T02:51:44.311Z",
+      "id": "obs_1772918722665_6do5drx30",
+      "timestamp": "2026-03-07T21:25:22.665Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_har_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -287,12 +297,12 @@
       }
     },
     {
-      "id": "obs_1773111138830_i1bkm9jkv",
-      "timestamp": "2026-03-10T02:52:18.830Z",
+      "id": "obs_1772918730906_f38v5mduk",
+      "timestamp": "2026-03-07T21:25:30.906Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
       },
       "context": {
         "session_id": "unknown",
@@ -301,12 +311,12 @@
       }
     },
     {
-      "id": "obs_1773111142291_ayl8b1ybc",
-      "timestamp": "2026-03-10T02:52:22.291Z",
+      "id": "obs_1772918746546_qpgbrhi3w",
+      "timestamp": "2026-03-07T21:25:46.546Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_har_a2a_integration.py::TestHARStateMachineIntegration"
       },
       "context": {
         "session_id": "unknown",
@@ -315,12 +325,12 @@
       }
     },
     {
-      "id": "obs_1773111146105_bj288u1ms",
-      "timestamp": "2026-03-10T02:52:26.105Z",
+      "id": "obs_1772918782525_wbz3vnv4u",
+      "timestamp": "2026-03-07T21:26:22.525Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/"
       },
       "context": {
         "session_id": "unknown",
@@ -329,12 +339,12 @@
       }
     },
     {
-      "id": "obs_1773111149776_kpyjk5hwo",
-      "timestamp": "2026-03-10T02:52:29.776Z",
+      "id": "obs_1772918801974_r3kaxfa0q",
+      "timestamp": "2026-03-07T21:26:41.974Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_document_indexing.py::TestExtractText::test_unsupported_extension_raises"
       },
       "context": {
         "session_id": "unknown",
@@ -343,12 +353,12 @@
       }
     },
     {
-      "id": "obs_1773111154952_e1lx9de5y",
-      "timestamp": "2026-03-10T02:52:34.952Z",
+      "id": "obs_1772918810522_56gt4uw40",
+      "timestamp": "2026-03-07T21:26:50.522Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_document_indexing.py"
       },
       "context": {
         "session_id": "unknown",
@@ -357,12 +367,12 @@
       }
     },
     {
-      "id": "obs_1773111179956_o1fggsnlg",
-      "timestamp": "2026-03-10T02:52:59.956Z",
+      "id": "obs_1772918814200_760t0rtct",
+      "timestamp": "2026-03-07T21:26:54.200Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_document_indexing.py::TestExtractText::test_unsupported_extension_raises"
       },
       "context": {
         "session_id": "unknown",
@@ -371,12 +381,12 @@
       }
     },
     {
-      "id": "obs_1773111191634_fc84yj02g",
-      "timestamp": "2026-03-10T02:53:11.634Z",
+      "id": "obs_1772918817569_swj8gjffw",
+      "timestamp": "2026-03-07T21:26:57.569Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -385,12 +395,12 @@
       }
     },
     {
-      "id": "obs_1773111205034_9ps662pu2",
-      "timestamp": "2026-03-10T02:53:25.034Z",
+      "id": "obs_1772918841241_zcma8wj3v",
+      "timestamp": "2026-03-07T21:27:21.241Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/"
       },
       "context": {
         "session_id": "unknown",
@@ -399,8 +409,8 @@
       }
     },
     {
-      "id": "obs_1773111209780_lkp1w45x8",
-      "timestamp": "2026-03-10T02:53:29.780Z",
+      "id": "obs_1772918871125_ff9wr0uhx",
+      "timestamp": "2026-03-07T21:27:51.125Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -413,12 +423,12 @@
       }
     },
     {
-      "id": "obs_1773111216901_xipz4fpnl",
-      "timestamp": "2026-03-10T02:53:36.901Z",
+      "id": "obs_1772919171344_1z4mnf9of",
+      "timestamp": "2026-03-07T21:32:51.344Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_cross_tenant_isolation.py::TestGlossaryTenantIsolation::test_tenant_a_terms_not_visible_to_tenant_b"
       },
       "context": {
         "session_id": "unknown",
@@ -427,12 +437,12 @@
       }
     },
     {
-      "id": "obs_1773111221021_bkhdmfxuk",
-      "timestamp": "2026-03-10T02:53:41.021Z",
+      "id": "obs_1772919178746_thxisjh9i",
+      "timestamp": "2026-03-07T21:32:58.746Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -441,12 +451,12 @@
       }
     },
     {
-      "id": "obs_1773111225796_1bt4czys7",
-      "timestamp": "2026-03-10T02:53:45.796Z",
+      "id": "obs_1772919198787_i9h2nrhb4",
+      "timestamp": "2026-03-07T21:33:18.787Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_cross_tenant_isolation.py"
       },
       "context": {
         "session_id": "unknown",
@@ -455,12 +465,12 @@
       }
     },
     {
-      "id": "obs_1773111232200_qim2jvhs6",
-      "timestamp": "2026-03-10T02:53:52.200Z",
+      "id": "obs_1772919219713_ifbn0173s",
+      "timestamp": "2026-03-07T21:33:39.713Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -469,12 +479,12 @@
       }
     },
     {
-      "id": "obs_1773111235652_wyregd28n",
-      "timestamp": "2026-03-10T02:53:55.652Z",
+      "id": "obs_1772919229261_fjt0wpteg",
+      "timestamp": "2026-03-07T21:33:49.261Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -483,12 +493,12 @@
       }
     },
     {
-      "id": "obs_1773111239201_x3jy85t1c",
-      "timestamp": "2026-03-10T02:53:59.201Z",
+      "id": "obs_1772919272476_veqpzyo4o",
+      "timestamp": "2026-03-07T21:34:32.476Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -497,12 +507,12 @@
       }
     },
     {
-      "id": "obs_1773111249590_c91w1jq9t",
-      "timestamp": "2026-03-10T02:54:09.590Z",
+      "id": "obs_1772919436097_9jbpju648",
+      "timestamp": "2026-03-07T21:37:16.097Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -511,12 +521,12 @@
       }
     },
     {
-      "id": "obs_1773111255371_w6s2ewajo",
-      "timestamp": "2026-03-10T02:54:15.371Z",
+      "id": "obs_1772919540240_0owng1oig",
+      "timestamp": "2026-03-07T21:39:00.240Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -525,12 +535,12 @@
       }
     },
     {
-      "id": "obs_1773111704068_219b20d25",
-      "timestamp": "2026-03-10T03:01:44.068Z",
+      "id": "obs_1772919826674_s12ejat4p",
+      "timestamp": "2026-03-07T21:43:46.674Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_har_signing.py::TestCreateSignedEvent::test_signed_event_calls_db_insert"
       },
       "context": {
         "session_id": "unknown",
@@ -539,12 +549,12 @@
       }
     },
     {
-      "id": "obs_1773111718870_p8g3batba",
-      "timestamp": "2026-03-10T03:01:58.870Z",
+      "id": "obs_1772919855008_v3b7f8a4r",
+      "timestamp": "2026-03-07T21:44:15.008Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -553,54 +563,60 @@
       }
     },
     {
-      "id": "obs_1773111723589_rw4rn316o",
-      "timestamp": "2026-03-10T03:02:03.589Z",
-      "type": "test_pattern",
+      "id": "obs_1772973602621_k2xp2rc8y",
+      "timestamp": "2026-03-08T12:40:02.621Z",
+      "type": "connection_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "framework": "core-sdk",
+        "active_workflows": [],
+        "critical_patterns": {
+          "hasDataFlowModels": false,
+          "hasNexusApp": false,
+          "hasKaizenAgent": false,
+          "hasCyclicWorkflow": false,
+          "hasAsyncRuntime": false
+        },
+        "recently_modified_count": 0
       },
       "context": {
-        "session_id": "unknown",
+        "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
         "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
         "framework": "unknown"
       }
     },
     {
-      "id": "obs_1773112026708_b69gauu5j",
-      "timestamp": "2026-03-10T03:07:06.708Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
+      "type": "session_start",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
+      "timestamp": "2026-03-08T12:41:49.748Z",
+      "envExists": true,
+      "framework": "core-sdk",
+      "models": {
+        "PRIMARY_MODEL": "gpt-5.2-chat",
+        "INTENT_MODEL": "gpt-5-mini",
+        "EMBEDDING_MODEL": "text-embedding-3-small"
       },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "keyCount": 1,
+      "validationFailures": [
+        "MISSING: OPENAI_API_KEY required for gpt-5.2-chat",
+        "MISSING: OPENAI_API_KEY required for gpt-5-mini",
+        "MISSING: OPENAI_API_KEY required for text-embedding-3-small"
+      ]
     },
     {
-      "id": "obs_1773112032123_9zmgbamai",
-      "timestamp": "2026-03-10T03:07:12.123Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-08T12:44:19.555Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773112034637_wexhum7s6",
-      "timestamp": "2026-03-10T03:07:14.637Z",
+      "id": "obs_1772974088782_kytqnxa64",
+      "timestamp": "2026-03-08T12:48:08.782Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_registry_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -609,12 +625,12 @@
       }
     },
     {
-      "id": "obs_1773112038337_gwzl9l5iz",
-      "timestamp": "2026-03-10T03:07:18.337Z",
+      "id": "obs_1772974142174_4sm4t2snj",
+      "timestamp": "2026-03-08T12:49:02.174Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_registry_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -623,12 +639,12 @@
       }
     },
     {
-      "id": "obs_1773112043096_vpfqrfstb",
-      "timestamp": "2026-03-10T03:07:23.096Z",
+      "id": "obs_1772974201505_ola2gn95n",
+      "timestamp": "2026-03-08T12:50:01.505Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_registry.py"
       },
       "context": {
         "session_id": "unknown",
@@ -637,12 +653,12 @@
       }
     },
     {
-      "id": "obs_1773112045772_xcbp4y4ub",
-      "timestamp": "2026-03-10T03:07:25.772Z",
+      "id": "obs_1772974208063_1fm7yta3n",
+      "timestamp": "2026-03-08T12:50:08.063Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_registry.py::TestRegisterAndListAgent"
       },
       "context": {
         "session_id": "unknown",
@@ -651,12 +667,12 @@
       }
     },
     {
-      "id": "obs_1773112048629_lkxnkaf85",
-      "timestamp": "2026-03-10T03:07:28.629Z",
+      "id": "obs_1772974266211_uakicbcf5",
+      "timestamp": "2026-03-08T12:51:06.211Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_registry.py"
       },
       "context": {
         "session_id": "unknown",
@@ -665,12 +681,12 @@
       }
     },
     {
-      "id": "obs_1773112051641_prgukg6qn",
-      "timestamp": "2026-03-10T03:07:31.641Z",
+      "id": "obs_1772974272280_fwfsifeyl",
+      "timestamp": "2026-03-08T12:51:12.280Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_registry.py::TestRegisterAndListAgent"
       },
       "context": {
         "session_id": "unknown",
@@ -679,12 +695,12 @@
       }
     },
     {
-      "id": "obs_1773112054157_inc4oj6zn",
-      "timestamp": "2026-03-10T03:07:34.157Z",
+      "id": "obs_1772974301098_ytqm30730",
+      "timestamp": "2026-03-08T12:51:41.098Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_registry_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -693,12 +709,12 @@
       }
     },
     {
-      "id": "obs_1773112058005_k1a0utt6n",
-      "timestamp": "2026-03-10T03:07:38.005Z",
+      "id": "obs_1772974308026_76eihic4r",
+      "timestamp": "2026-03-08T12:51:48.026Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_registry.py::TestApproveTransactionWorkflow"
       },
       "context": {
         "session_id": "unknown",
@@ -707,12 +723,12 @@
       }
     },
     {
-      "id": "obs_1773112063632_hqzza5dki",
-      "timestamp": "2026-03-10T03:07:43.632Z",
+      "id": "obs_1772974335556_5dxh5ofa1",
+      "timestamp": "2026-03-08T12:52:15.556Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_registry_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -721,12 +737,12 @@
       }
     },
     {
-      "id": "obs_1773112077180_0031jstav",
-      "timestamp": "2026-03-10T03:07:57.180Z",
+      "id": "obs_1772974341995_zrs886p8y",
+      "timestamp": "2026-03-08T12:52:21.995Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -735,26 +751,19 @@
       }
     },
     {
-      "id": "obs_1773112138804_paaluvlnz",
-      "timestamp": "2026-03-10T03:08:58.804Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-08T12:52:40.330Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773561324041_xhuafvgx1",
-      "timestamp": "2026-03-15T07:55:24.041Z",
+      "id": "obs_1772974360428_uqgvh591i",
+      "timestamp": "2026-03-08T12:52:40.428Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_notifications_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -763,26 +772,19 @@
       }
     },
     {
-      "id": "obs_1773561333058_jgu5qcqka",
-      "timestamp": "2026-03-15T07:55:33.058Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-08T12:52:45.275Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773561725406_oglrux3n2",
-      "timestamp": "2026-03-15T08:02:05.406Z",
+      "id": "obs_1772974366249_5csvdiopo",
+      "timestamp": "2026-03-08T12:52:46.249Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -791,12 +793,12 @@
       }
     },
     {
-      "id": "obs_1773561729032_nv6kv89fb",
-      "timestamp": "2026-03-15T08:02:09.032Z",
+      "id": "obs_1772974375664_ppnuge0az",
+      "timestamp": "2026-03-08T12:52:55.664Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_notifications_routes.py"
       },
       "context": {
         "session_id": "unknown",
@@ -805,12 +807,12 @@
       }
     },
     {
-      "id": "obs_1773561736722_xdijx7np7",
-      "timestamp": "2026-03-15T08:02:16.722Z",
+      "id": "obs_1772974401145_2rydl8zie",
+      "timestamp": "2026-03-08T12:53:21.145Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -819,12 +821,12 @@
       }
     },
     {
-      "id": "obs_1773561992596_teps25kft",
-      "timestamp": "2026-03-15T08:06:32.596Z",
+      "id": "obs_1772974411532_l5x3bz3gu",
+      "timestamp": "2026-03-08T12:53:31.532Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/"
       },
       "context": {
         "session_id": "unknown",
@@ -833,12 +835,12 @@
       }
     },
     {
-      "id": "obs_1773561993777_cwscfzdm1",
-      "timestamp": "2026-03-15T08:06:33.777Z",
+      "id": "obs_1772974541421_7bt25teqq",
+      "timestamp": "2026-03-08T12:55:41.421Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_registry.py"
       },
       "context": {
         "session_id": "unknown",
@@ -847,12 +849,12 @@
       }
     },
     {
-      "id": "obs_1773561994440_453lzc70w",
-      "timestamp": "2026-03-15T08:06:34.440Z",
+      "id": "obs_1772974758950_ejheg9sby",
+      "timestamp": "2026-03-08T12:59:18.950Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -861,12 +863,12 @@
       }
     },
     {
-      "id": "obs_1773561999267_eppc2p8hx",
-      "timestamp": "2026-03-15T08:06:39.267Z",
+      "id": "obs_1772974901511_0jicfswvv",
+      "timestamp": "2026-03-08T13:01:41.511Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -875,12 +877,12 @@
       }
     },
     {
-      "id": "obs_1773562000041_e5z0y65yg",
-      "timestamp": "2026-03-15T08:06:40.041Z",
+      "id": "obs_1772974910541_0qgbv7zxr",
+      "timestamp": "2026-03-08T13:01:50.541Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_platform_impersonation.py::TestImpersonate::test_impersonate_generates_token_with_claims"
       },
       "context": {
         "session_id": "unknown",
@@ -889,12 +891,12 @@
       }
     },
     {
-      "id": "obs_1773562004062_4thblwhjd",
-      "timestamp": "2026-03-15T08:06:44.062Z",
+      "id": "obs_1772974934747_9i3l4whyw",
+      "timestamp": "2026-03-08T13:02:14.747Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -903,12 +905,12 @@
       }
     },
     {
-      "id": "obs_1773562004804_s8i09ve6o",
-      "timestamp": "2026-03-15T08:06:44.804Z",
+      "id": "obs_1773014252432_nrlc1nbal",
+      "timestamp": "2026-03-08T23:57:32.432Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_har_signing.py"
       },
       "context": {
         "session_id": "unknown",
@@ -917,12 +919,12 @@
       }
     },
     {
-      "id": "obs_1773562005499_ui5reyl0l",
-      "timestamp": "2026-03-15T08:06:45.499Z",
+      "id": "obs_1773014256283_yukx6jyj2",
+      "timestamp": "2026-03-08T23:57:36.283Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_trust_score.py"
       },
       "context": {
         "session_id": "unknown",
@@ -931,12 +933,12 @@
       }
     },
     {
-      "id": "obs_1773562010060_wwavdqwqv",
-      "timestamp": "2026-03-15T08:06:50.060Z",
+      "id": "obs_1773014266310_ol854vl56",
+      "timestamp": "2026-03-08T23:57:46.310Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_har_crypto.py"
       },
       "context": {
         "session_id": "unknown",
@@ -945,12 +947,12 @@
       }
     },
     {
-      "id": "obs_1773562011457_1ns376nga",
-      "timestamp": "2026-03-15T08:06:51.458Z",
+      "id": "obs_1773014266708_raslolyen",
+      "timestamp": "2026-03-08T23:57:46.708Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_trust_score.py"
       },
       "context": {
         "session_id": "unknown",
@@ -959,12 +961,12 @@
       }
     },
     {
-      "id": "obs_1773562012212_rnrncbd6y",
-      "timestamp": "2026-03-15T08:06:52.212Z",
+      "id": "obs_1773014277371_1pzmgz0oo",
+      "timestamp": "2026-03-08T23:57:57.371Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/${f}.py"
       },
       "context": {
         "session_id": "unknown",
@@ -973,26 +975,19 @@
       }
     },
     {
-      "id": "obs_1773562020304_wqb2fyiq2",
-      "timestamp": "2026-03-15T08:07:00.304Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-09T00:00:20.209Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773562024820_4sik4ns1l",
-      "timestamp": "2026-03-15T08:07:04.820Z",
+      "id": "obs_1773014462085_inuh7pq6d",
+      "timestamp": "2026-03-09T00:01:02.085Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_working_memory.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1001,12 +996,12 @@
       }
     },
     {
-      "id": "obs_1773562028609_svv18yy1n",
-      "timestamp": "2026-03-15T08:07:08.609Z",
+      "id": "obs_1773014482289_bjbau7xgt",
+      "timestamp": "2026-03-09T00:01:22.289Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_working_memory.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1015,12 +1010,12 @@
       }
     },
     {
-      "id": "obs_1773562033236_b5iczmxu4",
-      "timestamp": "2026-03-15T08:07:13.236Z",
+      "id": "obs_1773014490266_v8o7m1v3r",
+      "timestamp": "2026-03-09T00:01:30.266Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_working_memory.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1029,12 +1024,12 @@
       }
     },
     {
-      "id": "obs_1773562033958_sv9njow7f",
-      "timestamp": "2026-03-15T08:07:13.958Z",
+      "id": "obs_1773014497908_1e21mryy3",
+      "timestamp": "2026-03-09T00:01:37.908Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_working_memory.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1043,26 +1038,19 @@
       }
     },
     {
-      "id": "obs_1773562043045_crwhcsw2r",
-      "timestamp": "2026-03-15T08:07:23.045Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-09T00:02:07.368Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773562049243_i1nx8u5pl",
-      "timestamp": "2026-03-15T08:07:29.243Z",
+      "id": "obs_1773014585782_y2zgcrhkr",
+      "timestamp": "2026-03-09T00:03:05.782Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_approval_threshold.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1071,12 +1059,12 @@
       }
     },
     {
-      "id": "obs_1773562057258_celgbndur",
-      "timestamp": "2026-03-15T08:07:37.258Z",
+      "id": "obs_1773014593239_1errmbrxa",
+      "timestamp": "2026-03-09T00:03:13.239Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_approval_threshold.py::TestRegistryApprovalLogic::test_rfq_always_requires_approval"
       },
       "context": {
         "session_id": "unknown",
@@ -1085,26 +1073,19 @@
       }
     },
     {
-      "id": "obs_1773562063616_0lzx538kg",
-      "timestamp": "2026-03-15T08:07:43.616Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-09T00:03:22.016Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773562078471_qc5lrvbdi",
-      "timestamp": "2026-03-15T08:07:58.471Z",
+      "id": "obs_1773014622564_8duotyaty",
+      "timestamp": "2026-03-09T00:03:42.564Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_audit_tamper_evidence.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1113,26 +1094,19 @@
       }
     },
     {
-      "id": "obs_1773562085833_1q8iygjcu",
-      "timestamp": "2026-03-15T08:08:05.833Z",
-      "type": "test_pattern",
-      "data": {
-        "test_tier": "python",
-        "test_path": null
-      },
-      "context": {
-        "session_id": "unknown",
-        "cwd": "/Users/cheongwailuen/Development/mingai/src/backend",
-        "framework": "unknown"
-      }
+      "timestamp": "2026-03-09T00:04:13.643Z",
+      "type": "stop",
+      "session_id": "3080030c-bb1a-40ce-9a3b-48467da15640",
+      "reason": "signal",
+      "success": true
     },
     {
-      "id": "obs_1773562091685_0zid03ih7",
-      "timestamp": "2026-03-15T08:08:11.685Z",
+      "id": "obs_1773014712940_vifyi7d3l",
+      "timestamp": "2026-03-09T00:05:12.940Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_approval_threshold.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1141,12 +1115,12 @@
       }
     },
     {
-      "id": "obs_1773562111301_0husmvrn8",
-      "timestamp": "2026-03-15T08:08:31.301Z",
+      "id": "obs_1773014719166_u1pkzs3hn",
+      "timestamp": "2026-03-09T00:05:19.166Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_kb_access_control.py::TestAgentWithSpecificKbIds"
       },
       "context": {
         "session_id": "unknown",
@@ -1155,12 +1129,12 @@
       }
     },
     {
-      "id": "obs_1773562121342_q30k3tc0e",
-      "timestamp": "2026-03-15T08:08:41.342Z",
+      "id": "obs_1773014726256_t7eyxmb03",
+      "timestamp": "2026-03-09T00:05:26.256Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_kb_access_control.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1169,12 +1143,12 @@
       }
     },
     {
-      "id": "obs_1773562128991_ez2bjhvf2",
-      "timestamp": "2026-03-15T08:08:48.991Z",
+      "id": "obs_1773014809830_5pfngi5nf",
+      "timestamp": "2026-03-09T00:06:49.830Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_approval_threshold.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1183,12 +1157,12 @@
       }
     },
     {
-      "id": "obs_1773562169869_91bh30b19",
-      "timestamp": "2026-03-15T08:09:29.869Z",
+      "id": "obs_1773014817050_how41utsc",
+      "timestamp": "2026-03-09T00:06:57.050Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_approval_threshold.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1197,12 +1171,12 @@
       }
     },
     {
-      "id": "obs_1773562190664_yhwwsw1wx",
-      "timestamp": "2026-03-15T08:09:50.664Z",
+      "id": "obs_1773014845862_5z0r3bi1u",
+      "timestamp": "2026-03-09T00:07:25.862Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -1211,12 +1185,12 @@
       }
     },
     {
-      "id": "obs_1773562199657_e8iimbg4m",
-      "timestamp": "2026-03-15T08:09:59.657Z",
+      "id": "obs_1773014857628_nr3zo3jd2",
+      "timestamp": "2026-03-09T00:07:37.628Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_audit_tamper_evidence.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1225,12 +1199,12 @@
       }
     },
     {
-      "id": "obs_1773562212670_icjgc7euo",
-      "timestamp": "2026-03-15T08:10:12.670Z",
+      "id": "obs_1773015500291_yousao2kg",
+      "timestamp": "2026-03-09T00:18:20.291Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_active_team_session.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1239,12 +1213,12 @@
       }
     },
     {
-      "id": "obs_1773562227532_bpjezk70s",
-      "timestamp": "2026-03-15T08:10:27.532Z",
+      "id": "obs_1773015574101_qh5yk49hv",
+      "timestamp": "2026-03-09T00:19:34.101Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -1253,12 +1227,12 @@
       }
     },
     {
-      "id": "obs_1773562247529_i4lfbjef4",
-      "timestamp": "2026-03-15T08:10:47.529Z",
+      "id": "obs_1773015713009_phuehfovr",
+      "timestamp": "2026-03-09T00:21:53.009Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_migration_rollback.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1267,8 +1241,8 @@
       }
     },
     {
-      "id": "obs_1773562262558_utuzmoy4q",
-      "timestamp": "2026-03-15T08:11:02.558Z",
+      "id": "obs_1773015718868_hwsoe2n26",
+      "timestamp": "2026-03-09T00:21:58.868Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1281,8 +1255,8 @@
       }
     },
     {
-      "id": "obs_1773562268581_sj38fy3l5",
-      "timestamp": "2026-03-15T08:11:08.581Z",
+      "id": "obs_1773015722670_gbfh6cnjc",
+      "timestamp": "2026-03-09T00:22:02.670Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1295,8 +1269,8 @@
       }
     },
     {
-      "id": "obs_1773562269612_6arektnh4",
-      "timestamp": "2026-03-15T08:11:09.612Z",
+      "id": "obs_1773015726448_ysu6avjr0",
+      "timestamp": "2026-03-09T00:22:06.448Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1309,8 +1283,8 @@
       }
     },
     {
-      "id": "obs_1773562278801_mu720f8v4",
-      "timestamp": "2026-03-15T08:11:18.801Z",
+      "id": "obs_1773015731752_zl2v9tg0r",
+      "timestamp": "2026-03-09T00:22:11.752Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1323,12 +1297,12 @@
       }
     },
     {
-      "id": "obs_1773562292477_y5t6dm10i",
-      "timestamp": "2026-03-15T08:11:32.477Z",
+      "id": "obs_1773015746808_yy2l9j8in",
+      "timestamp": "2026-03-09T00:22:26.808Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_migration_rollback.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1337,8 +1311,8 @@
       }
     },
     {
-      "id": "obs_1773562298202_i55lhafjz",
-      "timestamp": "2026-03-15T08:11:38.202Z",
+      "id": "obs_1773015764601_lgrxwwrlg",
+      "timestamp": "2026-03-09T00:22:44.601Z",
       "type": "test_pattern",
       "data": {
         "test_tier": "python",
@@ -1351,12 +1325,12 @@
       }
     },
     {
-      "id": "obs_1773562342612_tkky02yw4",
-      "timestamp": "2026-03-15T08:12:22.612Z",
+      "id": "obs_1773015791113_ht3rpwlwk",
+      "timestamp": "2026-03-09T00:23:11.113Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/test_auth0_group_sync.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1365,12 +1339,12 @@
       }
     },
     {
-      "id": "obs_1773562353445_gaknqy39h",
-      "timestamp": "2026-03-15T08:12:33.445Z",
+      "id": "obs_1773015794975_321d1jzmw",
+      "timestamp": "2026-03-09T00:23:14.975Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/unit/"
       },
       "context": {
         "session_id": "unknown",
@@ -1379,12 +1353,12 @@
       }
     },
     {
-      "id": "obs_1773562362275_ijfo5ewn9",
-      "timestamp": "2026-03-15T08:12:42.275Z",
+      "id": "obs_1773015795901_lhtx5fdi9",
+      "timestamp": "2026-03-09T00:23:15.901Z",
       "type": "test_pattern",
       "data": {
-        "test_tier": "python",
-        "test_path": null
+        "test_tier": "pytest",
+        "test_path": "tests/integration/test_migration_rollback.py"
       },
       "context": {
         "session_id": "unknown",
@@ -1393,8 +1367,8 @@
       }
     },
     {
-      "id": "obs_1773562377536_p6aalsvpp",
-      "timestamp": "2026-03-15T08:12:57.536Z",
+      "id": "obs_1773016256650_m4ruivs5z",
+      "timestamp": "2026-03-09T00:30:56.650Z",
       "type": "connection_pattern",
       "data": {
         "framework": "core-sdk",
@@ -1431,7 +1405,7 @@
     ]
   },
   "stats": {
-    "observation_count": 486,
+    "observation_count": 189,
     "instinct_categories": 0
   }
 }

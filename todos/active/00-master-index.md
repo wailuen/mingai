@@ -2,8 +2,96 @@
 
 **Project**: mingai Enterprise RAG Platform
 **Generated**: 2026-03-07
+**Last updated**: 2026-03-15 (Session 20 — Phase 2+ todo files created: 01-phase2-llm-library.md, 02-phase3-auth-flexibility.md, 03-caching-c2-c4.md, 04-platform-admin-phase-b-d.md, 05-tenant-admin-phase-b-d.md, 06-agent-registry.md, 07-deferred-phase1.md. Phase 1 COMPLETE — all Phase 1 todos moved to completed/. 1134 unit tests passing as of last commit ea7481e.)
 **Last audited**: 2026-03-09 (Session 19 — evidence-based audit of 05-testing.md: 53 COMPLETED (with file evidence), 2 DEFERRED (Auth0 test tenant), 14 PENDING with investigation notes, 3 BLOCKED (SharePoint/Google Drive credentials, SSO depends on Auth0). TEST-023/028/033/054 newly marked COMPLETE with evidence. TEST-011/012/013/020/025/026/027/034/035/037/038/039/040/049/059/066/070/072/074 have investigation notes explaining why pending. Session 18 — evidence-based review of 01-database-schema.md, 02-api-endpoints.md, 03-ai-services.md. 02-api-endpoints.md: API-052/053 (Google Drive), API-064/065/066 (SSO SAML/OIDC), API-067/068 (KB access control), API-086 (Auth0 group sync PATCH route), API-121 (Stripe webhook) all confirmed NOT IMPLEMENTED — status notes added with evidence. Auth0 group sync logic in app/modules/auth/group_sync.py has sync_auth0_groups() + build_group_sync_config() (tested in test_auth0_group_sync.py) but no HTTP route to configure the allowlist. 03-ai-services.md: no edits needed — AI-052 Phase 2 gate and AI-029 COMPLETE already recorded. 01-database-schema.md: DB-023–DB-045 audited; DB-025/028/031/032/034/035/036/040/041/042 marked COMPLETE with migration evidence (v001–v008); DB-026/027/029/030/033/037/038/039/043/044/045 confirmed NOT IMPLEMENTED (Phase 2 scope). Also: evidence-based audit of 06-infrastructure.md open items. No new COMPLETE markings: all checked open items (INFRA-015, 016, 022, 023, 024, 025, 027, 028, 029, 030, 031, 035, 045, 047, 048, 049, 050, 053, 055, 056, 057, 058, 059, 061, 067) confirmed NOT fully implemented. Investigation notes added to 5 partial items: INFRA-027 (Ed25519 crypto exists but private key in PostgreSQL not secrets manager), INFRA-028 (health_monitor.py is trust score monitor not URL-pinging; URL-pinging still needed), INFRA-029 (state machine + signing + nonce built; missing: outbound routing to a2a_endpoint + JSON Schema per message_type), INFRA-030 (approve/reject routes + 48h window exist; missing: email notification + timeout job), INFRA-035 (group_sync.py logic built; not wired to login flow or DB writes), INFRA-050 (multi_tenant_enabled flag defined in config but not consumed by any component). Session 17 — evidence-based review of 04-frontend.md and 05-testing.md: FE-034 criterion "Cost estimate uses DM Mono font" confirmed COMPLETE (ReindexButton.tsx uses font-mono). FE-013/FE-014/FE-033 partial gaps confirmed real. TEST-004 and TEST-005 corrected from ✅ COMPLETED to DEFERRED — blocked on Auth0 test tenant. TEST-041–048 (HAR) marked COMPLETE with file evidence. TEST-051/052/053/055/057 marked COMPLETE (working_memory 55 tests, memory_notes 14, prompt_builder 31, org_context, team_working_memory 30). TEST-061–065 (Teams) marked COMPLETE. Remaining open tests with no file evidence: TEST-011/012/013 (embedding cache), TEST-018/019/020 (issue reporting integration/E2E), TEST-024/025 (tenant provisioning integration/E2E), TEST-026/027 (SAML/OIDC), TEST-033/034/035 (glossary pipeline integration), TEST-038/039/040 (SSO/glossary E2E), TEST-049 (registry E2E), TEST-059 (profile/memory E2E), TEST-066 (teams E2E), TEST-070/071/072/074 (CI/contract/load tests). Session 16: Evidence-based audit of 06-infrastructure.md + 07-gap-analysis.md. INFRA-006/007/021/039/040/041/042/043/044/046 confirmed COMPLETE with file evidence. Gap remediation: INFRA-051 COMPLETE (CORS — middleware.py), INFRA-052 COMPLETE (security headers — middleware.py, backend only; frontend CSP + next.config.js pending), INFRA-066 COMPLETE (platform bootstrap — bootstrap.py). GAP-001/002/017/018/019/049/054/055 marked RESOLVED in 07-gap-analysis.md. Critical path: 6 of 7 blockers resolved; only GAP-028 (database backup strategy / INFRA-056) remains open. Session 15: FE-033 COMPLETE (VersionHistoryDrawer.tsx confirmed); FE-034 COMPLETE (ScheduleConfigForm.tsx + ReindexButton.tsx confirmed); FE-035 COMPLETE (KBSelector.tsx + AccessControlSelector.tsx + UpgradeNotificationBanner.tsx confirmed, 0 TS errors); FE-037 COMPLETE (AgentBreakdownTable/RootCausePanel/IssueQueue/IssueResponseWorkflow all confirmed, CHART_COLORS.accent used); FE-039 COMPLETE (Auth0SyncSettings/TeamMemoryControls/MembershipAuditLog/BulkAddMembers all confirmed); FE-040 COMPLETE (AlertSummary.tsx confirmed, AtRiskBadge embedded in TenantHealthTable); FE-041 COMPLETE (ProvisioningProgress.tsx confirmed); FE-047 COMPLETE (GitHubIssueButton/BatchActions/IssueHeatmap all confirmed); FE-054 COMPLETE (BatchActionBar/AssignDialog/QueueFilterTabs/IssueActionBar/SeverityOverrideDialog/RequestInfoDialog all confirmed, 0 TS errors); FE-055 COMPLETE (MTTRChart/TopBugsTable/TrendChart/DuplicateView/SLAAdherence all confirmed, SLAAdherence uses CHART_COLORS.alert); TEST-056 COMPLETE (10 unit tests passing); TEST-058 COMPLETE (5 integration tests passing); TEST-060 COMPLETE (5 integration tests passing); TEST-073 COMPLETE (9 integration tests passing); 1133 unit tests total passing. Session 14: frontend file-system audit correcting status on FE-036 NOT STARTED, FE-040 PARTIAL (AlertSummary missing), FE-041 PARTIAL (ProvisioningProgress.tsx missing), FE-047 PARTIAL (GitHubIssueButton/BatchActions/IssueHeatmap missing), FE-054 PARTIAL (queue sub-components not found as separate files), FE-055 PARTIAL (MTTRChart/TopBugsTable/TrendChart/DuplicateView/SLAAdherence missing). Session 13: 21 APIs COMPLETE — API-089–098 (Registry), API-113–120 (Platform extras + Notifications), API-122/124/125 (error middleware + disputes); 1033 unit tests; commits 5fea852 + c96dd16; API-121 (Stripe) deferred. Session 12: Phase 2 API endpoints batch — all COMPLETE; 1082 tests passing; migrations v004 + v005 applied; commit b48d9f0. Session 11: HAR A2A backend AI-040–051, AI-060 COMPLETE; 979/979 tests. Session 10: Playwright E2E FE-058–061 COMPLETE. Session 9: FE-030, FE-031, FE-032, FE-038, FE-054, FE-055 COMPLETE. Session 8: FE-044–FE-057 COMPLETE. Session 7: FE-042, FE-043, FE-051, FE-052, FE-062, FE-063 COMPLETE)
-**Total items across all files**: 359 todos (44 DB + 125 API + 51 AI + 61 FE + 72 TEST + 50 INFRA + overhead tests counted in TEST file = 403 work items when including sub-file test counts)
+**Phase 1 total**: 403 work items across 6 domains — all moved to `todos/completed/`
+**Phase 2+ total**: 167 new work items (177 including 8 gated and 2 blocked) across 7 active todo files (created 2026-03-15)
+
+---
+
+## 1. Phase 2+ Active Todo Files (as of 2026-03-15)
+
+All Phase 1 todos are in `todos/completed/`. New active work tracked in these files:
+
+| File                                          | Description                                                  | Items               | Status                                  |
+| --------------------------------------------- | ------------------------------------------------------------ | ------------------- | --------------------------------------- |
+| `todos/active/01-phase2-llm-library.md`       | LLM abstraction layer, multi-provider support, cost tracking | 19 (P2LLM-001–019)  | All TODO                                |
+| `todos/active/02-phase3-auth-flexibility.md`  | Auth0 SSO, SAML/OIDC wizards, JIT provisioning, group sync   | 20 (P3AUTH-001–020) | All TODO                                |
+| `todos/active/03-caching-c2-c4.md`            | Pipeline caches, semantic cache (pgvector), cache analytics  | 19 (CACHE-001–019)  | All TODO                                |
+| `todos/active/04-platform-admin-phase-b-d.md` | PA health scoring, cost monitoring, templates, tool catalog  | 36 (PA-001–036)     | All TODO                                |
+| `todos/active/05-tenant-admin-phase-b-d.md`   | SSO wiring, access control, agent workspace, mobile          | 36 (TA-001–036)     | All TODO; TA-025 BLOCKED (product gate) |
+| `todos/active/06-agent-registry.md`           | HAR Phase 0-3: registry catalog, A2A gaps, KYB, blockchain   | 17 (HAR-001–017)    | Phase 0-1 TODO; HAR-013–017 GATED       |
+| `todos/active/07-deferred-phase1.md`          | Phase 1 deferred items — now actionable with Phase 2         | 20 (DEF-001–020)    | Mix: TODO / GATED                       |
+
+**Total new Phase 2+ items**: 167 actionable + 8 gated + 2 blocked = 177 items
+
+> **Phase 4 (Agentic Upgrade) — intentionally deferred.** Will be specced in a future session after Phase 3 ships. The roadmap Phase 4 covers Kaizen multi-agent orchestration, A2A protocol, guardrail enforcement, synthesis context management, and DAG failure policy (6 weeks, HIGH risk). No todo file exists yet — this is intentional, not an oversight.
+
+### Critical Path (Phase 2 start)
+
+```
+Week 1-2:
+  P2LLM-001 → P2LLM-002/003 (LLM adapters)
+  P2LLM-004 (llm_library table) → P2LLM-005/006 (APIs)
+  CACHE-007 (pgvector migration) → DEF-001/013 (unblocked by this)
+
+Week 3-4:
+  P2LLM-007 (BYOLLM) + P2LLM-008 (config migration)
+  CACHE-001/002/003/004 (pipeline caches)
+  HAR-001 (agent_cards audit) → HAR-002–004 (Phase 0)
+
+Week 5-8:
+  P2LLM-009/010/011 (instrumented client + usage_events)
+  CACHE-008–011 (semantic cache service + chat integration)
+  P3AUTH-001 (Auth0 setup) → P3AUTH-002 (JWKS)
+```
+
+### Gated Items Summary
+
+| Item                          | Gate Condition                              |
+| ----------------------------- | ------------------------------------------- |
+| TA-025 (Agent Studio)         | 5-10 persona interviews completed           |
+| HAR-013 (Hyperledger Fabric)  | 100+ real A2A transactions                  |
+| HAR-014 (Polygon CDK)         | HAR-013 complete                            |
+| HAR-015 (Tier 3 finance)      | HAR-013 + HAR-014 complete                  |
+| HAR-016 (Developer portal)    | Phase 2 + 500+ transactions                 |
+| HAR-017 (External onboarding) | HAR-016 complete                            |
+| DEF-006 (DAG tables)          | Phase 5 implementation                      |
+| DEF-020 (Load tests)          | All Phase 2-5 complete + 30 days production |
+
+### Deferred Item Quick Pickup Guide
+
+See `todos/active/07-deferred-phase1.md` section "Quick Pickup Guide" for which DEF items to pick up alongside each Phase 2 implementation task.
+
+---
+
+## Phase 2+ Alembic Migration Sequence
+
+v001–v008 are Phase 1 complete. All new tables must add their own RLS policies in the same migration — the v002 RLS migration uses a frozen `_V001_TABLES` list and does NOT cover new tables.
+
+| Version | Migration                                                                            | Todo Item  | Depends on                 |
+| ------- | ------------------------------------------------------------------------------------ | ---------- | -------------------------- |
+| v009    | `llm_library` table                                                                  | P2LLM-004  | v008                       |
+| v010    | `usage_events` table                                                                 | P2LLM-010  | v009                       |
+| v011    | pgvector extension + `semantic_cache` table                                          | CACHE-007  | v010                       |
+| v012    | `issue_embeddings` table (pgvector HNSW)                                             | DEF-001    | v011 (pgvector must exist) |
+| v013    | `consent_events` table                                                               | DEF-002    | v009                       |
+| v014    | `notification_preferences` table                                                     | DEF-003    | v009                       |
+| v015    | `user_privacy_settings` table                                                        | DEF-004    | v009                       |
+| v016    | `mcp_servers` table                                                                  | DEF-005    | v009                       |
+| v017    | `tenant_health_scores` table                                                         | PA-006     | v009                       |
+| v018    | `agent_templates` table                                                              | PA-019     | v009                       |
+| v019    | `tool_catalog` table                                                                 | PA-030     | v009                       |
+| v020    | `kb_access_control` table                                                            | TA-006     | v009                       |
+| v021    | `agent_access_control` table                                                         | TA-008     | v020                       |
+| v022    | `access_requests` table                                                              | TA-010     | v009                       |
+| v023    | `users.auth0_user_id` column                                                         | P3AUTH-012 | v009                       |
+| v024    | `agent_cards` additional columns (a2a_endpoint, health_check_url, trust_score, etc.) | HAR-001    | v009                       |
+| v025    | `har_fee_records` table                                                              | HAR-011    | v009                       |
+| v026    | `cost_summary_daily` table                                                           | PA-012     | v010 (usage_events)        |
+| v027    | `user_delegations` table                                                             | TA-035     | v009                       |
+
+**Sequencing rule**: v009 is the Phase 2 foundation — all subsequent migrations depend on it directly or transitively. v011 (pgvector) must precede v012 (issue_embeddings) because the `vector` extension must exist before `VECTOR(1536)` column types are usable.
 
 ---
 
@@ -294,16 +382,16 @@ Note: The Phase 1 todo list covers DB-001–DB-044. The implementation delivered
 
 ## 1. Summary Table
 
-| File                    | Domain             | Items   | ID Range              | Total Effort | Status (2026-03-07)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------- | ------------------ | ------- | --------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `01-database-schema.md` | DB + Redis         | 45      | DB-001 – DB-045       | ~120h        | **Session 19 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/01-database-schema.md. 36 COMPLETE / 9 DEFERRED Phase 2+ (issue_embeddings, tenant_health_scores, tool_catalog, agent_templates, glossary embeddings, har_fee_records, consent_events, dag_runs, billing tables).**                                                                                                                                                                                                                                                                                                     |
-| `02-api-endpoints.md`   | API Endpoints      | 124     | API-001 – API-124     | ~466h        | **Session 19 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/02-api-endpoints.md. 115 COMPLETE / 9 DEFERRED Phase 2 (API-052/053 Google Drive, API-064–066 SSO, API-067/068 KB access, API-086 Auth0 sync PATCH, API-121 Stripe webhook).**                                                                                                                                                                                                                                                                                                                                          |
-| `03-ai-services.md`     | AI / Intelligence  | 58      | AI-001 – AI-058       | ~171h        | **Session 19 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/03-ai-services.md. 57 COMPLETE / 1 DEFERRED Phase 2 (AI-052 AML/sanctions screening for HAR Tier 3).**                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `04-frontend.md`        | Frontend (Next.js) | 63      | FE-001 – FE-063       | ~379h        | **Session 18 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/04-frontend.md. 62 COMPLETE / 1 PRODUCT GATED (FE-036 awaiting 5-10 persona interviews). All acceptance criteria confirmed; 0 TypeScript errors; SafeHTML/ErrorBoundary added.**                                                                                                                                                                                                                                                                                                                                        |
-| `05-testing.md`         | Tests (all tiers)  | 74      | TEST-001 – TEST-074   | ~248h        | **Session 20 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/05-testing.md. 65 COMPLETE / 9 DEFERRED Phase 2 (SSO, pgvector, SharePoint, load tests). TEST-040 (KB E2E: 5 tests) + TEST-066 (Teams E2E: 7 tests) completed this session.** |
-| `06-infrastructure.md`  | Infra / DevOps     | 61      | INFRA-001 – INFRA-067 | ~309h        | **Session 20 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/06-infrastructure.md. 42 COMPLETE / 19 DEFERRED Phase 2 (secrets manager, cloud infra, monitoring, job framework, Auth0 Management API).** |
-| `07-gap-analysis.md`    | Gap Remediation    | 62      | GAP-001 – GAP-062     | ~400h        | **Session 20 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/07-gap-analysis.md. 28 RESOLVED / 34 DEFERRED Phase 2 (AML, billing, SSO, Google Drive, CDN, production ops).** |
-| **Totals**              |                    | **493** |                       | **~2,011h**  | **Session 20 (2026-03-09): ALL 7 todo files moved to completed/. 1272+ unit tests passing. Phase 1 COMPLETE. Phase 2 deferred: 9 DB + 9 API + 1 AI + 9 TEST + 19 INFRA + 34 GAP = 81 items. todos/active/ contains only 00-master-index.md.** |
+| File                    | Domain             | Items   | ID Range              | Total Effort | Status (2026-03-07)                                                                                                                                                                                                                                                                          |
+| ----------------------- | ------------------ | ------- | --------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-database-schema.md` | DB + Redis         | 45      | DB-001 – DB-045       | ~120h        | **Session 19 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/01-database-schema.md. 36 COMPLETE / 9 DEFERRED Phase 2+ (issue_embeddings, tenant_health_scores, tool_catalog, agent_templates, glossary embeddings, har_fee_records, consent_events, dag_runs, billing tables).** |
+| `02-api-endpoints.md`   | API Endpoints      | 124     | API-001 – API-124     | ~466h        | **Session 19 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/02-api-endpoints.md. 115 COMPLETE / 9 DEFERRED Phase 2 (API-052/053 Google Drive, API-064–066 SSO, API-067/068 KB access, API-086 Auth0 sync PATCH, API-121 Stripe webhook).**                                      |
+| `03-ai-services.md`     | AI / Intelligence  | 58      | AI-001 – AI-058       | ~171h        | **Session 19 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/03-ai-services.md. 57 COMPLETE / 1 DEFERRED Phase 2 (AI-052 AML/sanctions screening for HAR Tier 3).**                                                                                                              |
+| `04-frontend.md`        | Frontend (Next.js) | 63      | FE-001 – FE-063       | ~379h        | **Session 18 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/04-frontend.md. 62 COMPLETE / 1 PRODUCT GATED (FE-036 awaiting 5-10 persona interviews). All acceptance criteria confirmed; 0 TypeScript errors; SafeHTML/ErrorBoundary added.**                                    |
+| `05-testing.md`         | Tests (all tiers)  | 74      | TEST-001 – TEST-074   | ~248h        | **Session 20 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/05-testing.md. 65 COMPLETE / 9 DEFERRED Phase 2 (SSO, pgvector, SharePoint, load tests). TEST-040 (KB E2E: 5 tests) + TEST-066 (Teams E2E: 7 tests) completed this session.**                                       |
+| `06-infrastructure.md`  | Infra / DevOps     | 61      | INFRA-001 – INFRA-067 | ~309h        | **Session 20 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/06-infrastructure.md. 42 COMPLETE / 19 DEFERRED Phase 2 (secrets manager, cloud infra, monitoring, job framework, Auth0 Management API).**                                                                          |
+| `07-gap-analysis.md`    | Gap Remediation    | 62      | GAP-001 – GAP-062     | ~400h        | **Session 20 (2026-03-09): ✅ FULLY ADDRESSED — moved to todos/completed/07-gap-analysis.md. 28 RESOLVED / 34 DEFERRED Phase 2 (AML, billing, SSO, Google Drive, CDN, production ops).**                                                                                                     |
+| **Totals**              |                    | **493** |                       | **~2,011h**  | **Session 20 (2026-03-09): ALL 7 todo files moved to completed/. 1272+ unit tests passing. Phase 1 COMPLETE. Phase 2 deferred: 9 DB + 9 API + 1 AI + 9 TEST + 19 INFRA + 34 GAP = 81 items. todos/active/ contains only 00-master-index.md.**                                                |
 
 > Effort estimate: ~1,594 hours total. At 2 engineers full-time = ~100 working days (~20 weeks). Parallelism across domains reduces calendar time significantly.
 
