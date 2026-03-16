@@ -27,7 +27,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, Annotated, Dict, List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
@@ -117,6 +117,14 @@ class TemplateVariableDef(BaseModel):
     options: List[str] = Field(default_factory=list)  # for select type
 
 
+class GuardrailRule(BaseModel):
+    """A single guardrail rule: pattern (regex/substring), action, and reason."""
+
+    pattern: str = Field(..., min_length=1, max_length=200)
+    action: str = Field(..., pattern=r"^(block|warn)$")
+    reason: str = Field(default="", max_length=500)
+
+
 class CreateAgentTemplateRequest(BaseModel):
     """PA-020: Create a new Draft template."""
 
@@ -125,9 +133,7 @@ class CreateAgentTemplateRequest(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     system_prompt: str = Field(..., min_length=1, max_length=100_000)
     variable_definitions: List[TemplateVariableDef] = Field(default_factory=list)
-    # guardrails: list of {pattern, action, reason} objects.
-    # Full schema validated at PA-021 test harness layer; here we only bound the list.
-    guardrails: List[dict] = Field(default_factory=list, max_length=50)
+    guardrails: List[GuardrailRule] = Field(default_factory=list, max_length=50)
     confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 
@@ -139,8 +145,7 @@ class PatchAgentTemplateRequest(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     system_prompt: Optional[str] = Field(None, min_length=1, max_length=100_000)
     variable_definitions: Optional[List[TemplateVariableDef]] = None
-    # guardrails: bounded list; full schema validation deferred to PA-021.
-    guardrails: Optional[List[dict]] = Field(None, max_length=50)
+    guardrails: Optional[List[GuardrailRule]] = Field(None, max_length=50)
     confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     # Only forward transitions via API — no Draft (already default), no seed.
     # Draft → Deprecated is intentionally allowed (abandon without publishing).
@@ -172,7 +177,7 @@ async def _create_agent_template_db(
     """PA-020: Insert a new Draft agent template into agent_templates."""
     template_id = str(uuid.uuid4())
     variable_defs_json = json.dumps([v.model_dump() for v in body.variable_definitions])
-    guardrails_json = json.dumps(body.guardrails)
+    guardrails_json = json.dumps([g.model_dump() for g in body.guardrails])
 
     await db.execute(
         text(
@@ -264,7 +269,7 @@ async def _patch_agent_template_db(
         )
     if body.guardrails is not None:
         set_parts.append("guardrails = CAST(:guardrails AS jsonb)")
-        params["guardrails"] = json.dumps(body.guardrails)
+        params["guardrails"] = json.dumps([g.model_dump() for g in body.guardrails])
     if body.confidence_threshold is not None:
         set_parts.append("confidence_threshold = :confidence_threshold")
         params["confidence_threshold"] = body.confidence_threshold
@@ -575,6 +580,29 @@ async def get_dashboard_stats(
 # ---------------------------------------------------------------------------
 
 
+def _validate_guardrail_patterns(guardrails: list) -> None:
+    """
+    Validate guardrail patterns at write-time.
+
+    Rejects patterns that are not valid regular expressions.
+    NOTE: `re.compile()` only checks syntax — it does not prevent
+    catastrophically backtracking (ReDoS) patterns. Patterns are bounded to
+    200 chars by GuardrailRule.pattern to limit blast radius.
+    """
+    for i, rule in enumerate(guardrails):
+        # GuardrailRule objects after Pydantic parsing; dicts from DB/tests
+        pattern = rule.pattern if hasattr(rule, "pattern") else rule.get("pattern", "")
+        if not pattern:
+            continue
+        try:
+            re.compile(pattern)
+        except re.error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"guardrails[{i}].pattern is not a valid regular expression.",
+            )
+
+
 @router.post(
     "/platform/agent-templates",
     status_code=status.HTTP_201_CREATED,
@@ -601,6 +629,9 @@ async def create_agent_template(
             detail=f"Variable names are reserved: {sorted(reserved_used)}. "
             f"Reserved: {sorted(_RESERVED_VARIABLE_NAMES)}",
         )
+
+    # Validate guardrail patterns at write-time to prevent invalid/ReDoS patterns
+    _validate_guardrail_patterns(body.guardrails)
 
     result = await _create_agent_template_db(body, current_user.id, session)
 
@@ -805,6 +836,10 @@ async def patch_agent_template(
                 detail="Cannot publish: system_prompt is required.",
             )
 
+    # Validate guardrail patterns at write-time to prevent invalid/ReDoS patterns
+    if body.guardrails is not None:
+        _validate_guardrail_patterns(body.guardrails)
+
     updated = await _patch_agent_template_db(template_id, body, session)
     if updated is None:
         raise HTTPException(
@@ -819,6 +854,236 @@ async def patch_agent_template(
         new_status=updated["status"],
     )
     return updated
+
+
+# ---------------------------------------------------------------------------
+# PA-021: Agent Template Test Harness
+# POST /platform/agent-templates/{id}/test
+# ---------------------------------------------------------------------------
+
+_TEMPLATE_TEST_MAX_PROMPTS = 5
+_TEMPLATE_TEST_TIMEOUT_SECONDS = 30
+# Double-brace variable substitution: {{variable_name}} in system_prompt
+_TEMPLATE_VAR_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+class TestTemplateRequest(BaseModel):
+    variable_values: Dict[str, Annotated[str, Field(max_length=1000)]] = Field(
+        default_factory=dict, max_length=50
+    )
+    test_prompts: List[Annotated[str, Field(min_length=1, max_length=4000)]] = Field(
+        ..., min_length=1, max_length=_TEMPLATE_TEST_MAX_PROMPTS
+    )
+
+
+class TemplateTestResult(BaseModel):
+    prompt: str
+    response: str
+    tokens_in: int
+    tokens_out: int
+    latency_ms: int
+    guardrail_triggered: bool
+    guardrail_reason: str
+    timed_out: bool = False
+
+
+class TemplateTestResponse(BaseModel):
+    tests: List[TemplateTestResult]
+
+
+_CTRL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _substitute_variables(system_prompt: str, variable_values: dict) -> str:
+    """
+    Replace {{variable_name}} placeholders with values from variable_values.
+
+    Control characters (including newlines) are stripped from substituted values
+    to reduce prompt injection risk via crafted variable values.
+    Unknown placeholders are left as-is.
+    """
+
+    def replacer(match: re.Match) -> str:
+        raw = str(variable_values.get(match.group(1), match.group(0)))
+        # Strip control characters to prevent newline-based instruction injection
+        return _CTRL_CHAR_RE.sub("", raw)
+
+    return _TEMPLATE_VAR_RE.sub(replacer, system_prompt)
+
+
+def _evaluate_guardrails(response_text: str, guardrails: list) -> tuple[bool, str]:
+    """
+    Check if response_text triggers any guardrail.
+
+    Supports both GuardrailRule objects (after Pydantic parsing) and raw dicts
+    (from DB JSONB or tests). Returns (triggered, reason_string).
+    """
+    for rule in guardrails:
+        # Support both GuardrailRule objects and raw dicts
+        if hasattr(rule, "pattern"):
+            pattern = rule.pattern
+            reason = rule.reason
+        else:
+            pattern = rule.get("pattern", "")
+            reason = rule.get("reason", pattern)
+        if not pattern:
+            continue
+        try:
+            if re.search(pattern, response_text, re.IGNORECASE):
+                return True, reason
+        except re.error:
+            # Invalid pattern reached runtime (e.g., direct DB edit) — log and
+            # fall back to substring match as defense-in-depth.
+            logger.warning(
+                "guardrail_invalid_pattern_at_runtime",
+                pattern=pattern[:80],
+            )
+            if pattern.lower() in response_text.lower():
+                return True, reason
+    return False, ""
+
+
+async def _run_template_prompt(
+    prompt: str,
+    resolved_system_prompt: str,
+    guardrails: list,
+    adapter: Any = None,
+) -> TemplateTestResult:
+    """Run a single test prompt against the resolved system prompt via AzureOpenAIProvider."""
+    import os as _os
+
+    if adapter is None:
+        from app.core.llm.azure_openai import AzureOpenAIProvider
+
+        adapter = AzureOpenAIProvider()
+    model = _os.environ.get("PRIMARY_MODEL", "agentic-worker")
+    messages = [
+        {"role": "system", "content": resolved_system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        resp = await asyncio.wait_for(
+            adapter.complete(messages=messages, model=model),
+            timeout=_TEMPLATE_TEST_TIMEOUT_SECONDS,
+        )
+        triggered, reason = _evaluate_guardrails(resp.content, guardrails)
+        return TemplateTestResult(
+            prompt=prompt,
+            response=resp.content,
+            tokens_in=resp.tokens_in,
+            tokens_out=resp.tokens_out,
+            latency_ms=resp.latency_ms,
+            guardrail_triggered=triggered,
+            guardrail_reason=reason,
+            timed_out=False,
+        )
+    except asyncio.TimeoutError:
+        return TemplateTestResult(
+            prompt=prompt,
+            response="",
+            tokens_in=0,
+            tokens_out=0,
+            latency_ms=_TEMPLATE_TEST_TIMEOUT_SECONDS * 1000,
+            guardrail_triggered=False,
+            guardrail_reason="",
+            timed_out=True,
+        )
+
+
+@router.post(
+    "/platform/agent-templates/{template_id}/test",
+    response_model=TemplateTestResponse,
+    tags=["platform"],
+)
+async def test_agent_template(
+    template_id: str = Path(
+        ...,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    body: TestTemplateRequest = ...,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    PA-021: Run test prompts against a template's resolved system_prompt.
+
+    - Substitutes {{variable_name}} placeholders using variable_values.
+    - Missing required variables return 422.
+    - Max 5 prompts per request (enforced by Pydantic).
+    - Each prompt runs with a 30s timeout; timed-out entries have timed_out=True.
+    - Guardrails in the template's guardrails JSONB are evaluated against each response.
+    - Partial results: if some prompts time out, completed ones are still returned.
+    """
+    template = await _get_agent_template_db(template_id, session)
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent template not found.",
+        )
+
+    # Validate that all required variables are provided
+    variable_defs = template.get("variable_definitions") or []
+    for var_def in variable_defs:
+        if var_def.get("required") and var_def["name"] not in body.variable_values:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Missing required variable: '{var_def['name']}'.",
+            )
+
+    resolved_prompt = _substitute_variables(
+        template["system_prompt"], body.variable_values
+    )
+    guardrails = template.get("guardrails") or []
+
+    # Instantiate adapter once per request (shared across all concurrent prompt calls)
+    from app.core.llm.azure_openai import AzureOpenAIProvider
+
+    adapter = AzureOpenAIProvider()
+
+    # Run all prompts concurrently (each has its own internal timeout).
+    # return_exceptions=True ensures partial results are returned even if a
+    # prompt raises an unexpected non-timeout exception.
+    tasks = [
+        _run_template_prompt(p, resolved_prompt, guardrails, adapter)
+        for p in body.test_prompts
+    ]
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Convert any unexpected exceptions into timed-out sentinel results so that
+    # partial success is preserved.
+    results = []
+    for i, r in enumerate(raw_results):
+        if isinstance(r, BaseException):
+            logger.warning(
+                "agent_template_test_prompt_error",
+                template_id=template_id,
+                prompt_index=i,
+                error=str(r),
+            )
+            results.append(
+                TemplateTestResult(
+                    prompt=body.test_prompts[i],
+                    response="",
+                    tokens_in=0,
+                    tokens_out=0,
+                    latency_ms=0,
+                    guardrail_triggered=False,
+                    guardrail_reason="",
+                    timed_out=True,
+                )
+            )
+        else:
+            results.append(r)
+
+    logger.info(
+        "agent_template_tested",
+        template_id=template_id,
+        actor_id=current_user.id,
+        prompt_count=len(body.test_prompts),
+        timed_out=sum(1 for r in results if r.timed_out),
+    )
+    return TemplateTestResponse(tests=list(results))
 
 
 # ---------------------------------------------------------------------------
