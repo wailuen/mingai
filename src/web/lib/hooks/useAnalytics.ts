@@ -109,7 +109,7 @@ export function useSatisfactionFull() {
 export function useSyncStatus() {
   return useQuery({
     queryKey: [ANALYTICS_KEY, "sync-status"],
-    queryFn: () => apiGet<SyncStatusResponse>("/api/v1/sync/status"),
+    queryFn: () => apiGet<SyncStatusResponse>("/api/v1/admin/sync/status"),
     staleTime: 60 * 1000,
   });
 }
