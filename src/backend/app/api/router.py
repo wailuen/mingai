@@ -80,6 +80,18 @@ from app.modules.admin.workspace import router as admin_workspace_router
 
 router.include_router(admin_workspace_router)
 
+# Admin semantic cache config endpoints (CACHE-013)
+from app.modules.admin.cache_config import router as cache_config_router
+
+router.include_router(cache_config_router)
+
+# Admin cache analytics endpoints (CACHE-016)
+from app.modules.admin.cache_analytics_admin import (
+    router as cache_analytics_admin_router,
+)
+
+router.include_router(cache_analytics_admin_router)
+
 # Admin memory policy endpoints (API-076/077)
 from app.modules.admin.memory_policy import router as memory_policy_router
 

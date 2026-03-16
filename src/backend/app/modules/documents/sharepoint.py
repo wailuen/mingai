@@ -360,6 +360,26 @@ async def trigger_sharepoint_sync(
         db=db,
     )
 
+    # CACHE-011: Invalidate search and semantic caches for this index on sync trigger.
+    # Both calls are fire-and-forget — sync job creation is not blocked by cache ops.
+    try:
+        from app.core.cache_utils import increment_index_version
+        from app.core.cache.semantic_cache_service import SemanticCacheService
+        import asyncio
+
+        asyncio.create_task(
+            increment_index_version(current_user.tenant_id, integration_id)
+        )
+        sem_cache = SemanticCacheService()
+        await sem_cache.invalidate_tenant(current_user.tenant_id)
+    except Exception as exc:
+        logger.warning(
+            "sharepoint_sync_cache_invalidation_failed",
+            tenant_id=current_user.tenant_id,
+            integration_id=integration_id,
+            error=str(exc),
+        )
+
     logger.info(
         "sharepoint_sync_triggered",
         integration_id=integration_id,

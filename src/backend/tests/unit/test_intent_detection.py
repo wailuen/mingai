@@ -356,7 +356,7 @@ class TestIntentCache:
 
     @pytest.mark.asyncio
     async def test_cache_key_includes_tenant_namespace(self):
-        """Cache key follows mingai:{tenant_id}:intent_cache:{hash} pattern."""
+        """CACHE-001: Cache key follows mingai:{tenant_id}:intent:{sha256} pattern."""
         redis_mock = _make_redis_mock(cached_raw=None)
         llm_mock = AsyncMock()
         llm_mock.chat.completions.create = AsyncMock(
@@ -371,9 +371,9 @@ class TestIntentCache:
                 tenant_id="tenant-abc",
             )
 
-        # redis.get should have been called with a key starting with the tenant namespace
+        # CACHE-001: key type changed from intent_cache to intent
         get_call_key = redis_mock.get.call_args[0][0]
-        assert get_call_key.startswith("mingai:tenant-abc:intent_cache:")
+        assert get_call_key.startswith("mingai:tenant-abc:intent:")
 
     @pytest.mark.asyncio
     async def test_redis_error_during_get_falls_through_to_llm(self):

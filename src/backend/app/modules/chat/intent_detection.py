@@ -11,8 +11,8 @@ Intents:
   remember      — "remember that...", "save this...", "note that..."
   feedback      — thumbs up/down, "that was helpful"
 
-Redis cache key:  mingai:{tenant_id}:intent_cache:{cache_key}
-Cache TTL:        300 seconds (5 minutes)
+Redis cache key:  mingai:{tenant_id}:intent:{sha256(normalize_query(query))}
+Cache TTL:        86400 seconds (24 hours)
 LLM timeout:      200ms — falls back to rag_query on timeout
 """
 import asyncio
@@ -38,8 +38,8 @@ _VALID_INTENTS = frozenset(
 # Default fallback intent used when LLM call fails or times out
 _FALLBACK_INTENT = "rag_query"
 
-# Redis TTL for cached intent results (seconds)
-_INTENT_CACHE_TTL_SECONDS = 300
+# Redis TTL for cached intent results (seconds) — CACHE-001: 24h
+_INTENT_CACHE_TTL_SECONDS = 86400
 
 # LLM call timeout in seconds (200ms)
 _INTENT_DETECTION_TIMEOUT = 0.2
@@ -413,15 +413,18 @@ class IntentDetectionService:
     @staticmethod
     def _build_cache_key(query: str, tenant_id: str) -> str:
         """
-        Build a stable, collision-resistant cache key for query+tenant.
+        Build a stable, collision-resistant cache key for a query.
 
-        Uses SHA-256 of the lowercased, stripped query so that identical
-        queries from the same tenant share a cache entry.
+        CACHE-001: Uses SHA-256 of normalize_query(query) only (NOT tenant-prefixed
+        here — the tenant namespace is enforced by the Redis key prefix in
+        build_redis_key(tenant_id, 'intent', cache_key)).
 
         The key is a hex digest (no colons) — safe for Redis key construction.
         """
-        normalized = query.strip().lower()
-        digest = hashlib.sha256(f"{tenant_id}:{normalized}".encode("utf-8")).hexdigest()
+        from app.core.cache_utils import normalize_query
+
+        normalized = normalize_query(query)
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
         return digest
 
     async def _cache_get(self, tenant_id: str, cache_key: str) -> IntentResult | None:
@@ -430,7 +433,8 @@ class IntentDetectionService:
             from app.core.redis_client import build_redis_key
 
             redis = self._get_redis()
-            key = build_redis_key(tenant_id, "intent_cache", cache_key)
+            # CACHE-001: key type changed from intent_cache to intent
+            key = build_redis_key(tenant_id, "intent", cache_key)
             raw = await redis.get(key)
             if raw is None:
                 return None
@@ -456,7 +460,8 @@ class IntentDetectionService:
             from app.core.redis_client import build_redis_key
 
             redis = self._get_redis()
-            key = build_redis_key(tenant_id, "intent_cache", cache_key)
+            # CACHE-001: key type changed from intent_cache to intent
+            key = build_redis_key(tenant_id, "intent", cache_key)
             payload = json.dumps(
                 {
                     "intent": result.intent,

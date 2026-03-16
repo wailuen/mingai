@@ -1,12 +1,17 @@
 """
 EmbeddingService (AI-054) - Query embedding generation with Redis caching.
 
+CACHE-002 updates:
+- Cache key includes model_id: mingai:{tenant_id}:emb:{model_id}:{sha256(text)}
+- Serialization: float16 binary (struct.pack) instead of JSON
+- TTL: 604800s (7 days) instead of 86400s (24h)
+
 Model from EMBEDDING_MODEL env var - NEVER hardcoded.
-Cache TTL: 24 hours. Cache key: mingai:{tenant_id}:embedding_cache:{hash}.
+Cache key type: emb (registered in VALID_CACHE_TYPES).
 """
 import hashlib
-import json
 import os
+import struct
 
 import structlog
 
@@ -14,8 +19,8 @@ from app.core.redis_client import get_redis
 
 logger = structlog.get_logger()
 
-# Cache TTL: 24 hours
-EMBEDDING_CACHE_TTL_SECONDS = 86400
+# CACHE-002: 7-day TTL for embedding cache
+EMBEDDING_CACHE_TTL_SECONDS = 604800
 
 
 class EmbeddingService:
@@ -24,7 +29,11 @@ class EmbeddingService:
 
     Model is read from EMBEDDING_MODEL environment variable.
     When tenant_id is provided, embeddings are cached in Redis with
-    the key format: mingai:{tenant_id}:embedding_cache:{sha256_hash[:16]}.
+    the key format: mingai:{tenant_id}:emb:{model_id}:{sha256(text)}.
+
+    Serialization uses float16 binary (struct.pack 'e' format) for
+    ~50% storage reduction versus JSON. Deserialization converts back
+    to float32 list transparently.
 
     Phase 2: Optionally accepts an InstrumentedLLMClient at construction.
     When provided AND tenant_id is supplied, routing goes through the
@@ -100,16 +109,17 @@ class EmbeddingService:
 
         # Check Redis cache if tenant_id is provided
         if tenant_id:
-            cache_key = self._build_cache_key(tenant_id, text)
+            cache_key = self._build_cache_key(tenant_id, text, self._model)
             redis = get_redis()
-            cached = await redis.get(cache_key)
-            if cached:
+            # CACHE-002: value is binary float16 bytes (not JSON string)
+            cached_raw = await redis.get(cache_key)
+            if cached_raw:
                 logger.debug(
                     "embedding_cache_hit",
                     tenant_id=tenant_id,
-                    text_hash=cache_key.split(":")[-1],
+                    model_id=self._model,
                 )
-                return json.loads(cached)
+                return _deserialize_float16(cached_raw)
 
         # Route through InstrumentedLLMClient when available and tenant_id provided
         if tenant_id and getattr(self, "_instrumented_client", None) is not None:
@@ -141,26 +151,124 @@ class EmbeddingService:
 
         # Store in Redis cache if tenant_id is provided
         if tenant_id:
-            await redis.setex(
-                cache_key,
-                EMBEDDING_CACHE_TTL_SECONDS,
-                json.dumps(vector),
+            # CACHE-002: serialize as float16 binary bytes for compact storage
+            binary_payload = _serialize_float16(vector)
+            redis = get_redis()
+            # Redis client has decode_responses=True; we need to bypass it for binary.
+            # Use a dedicated binary client for this key.
+            await _set_binary(
+                redis, cache_key, binary_payload, EMBEDDING_CACHE_TTL_SECONDS
             )
             logger.debug(
                 "embedding_cached",
                 tenant_id=tenant_id,
-                text_hash=cache_key.split(":")[-1],
+                model_id=self._model,
                 vector_dim=len(vector),
+                bytes_stored=len(binary_payload),
             )
 
         return vector
 
     @staticmethod
-    def _build_cache_key(tenant_id: str, text: str) -> str:
+    def _build_cache_key(tenant_id: str, text: str, model_id: str) -> str:
         """
         Build a Redis cache key for an embedding.
 
-        Format: mingai:{tenant_id}:embedding_cache:{sha256_hash[:16]}
+        CACHE-002 format: mingai:{tenant_id}:emb:{model_id}:{sha256(text)}
+
+        The model_id is sanitized (replace special chars with underscore) to
+        ensure it is safe for the Redis key namespace. The key type 'emb' is
+        registered in VALID_CACHE_TYPES.
+
+        Note: We build the key directly (not via build_redis_key) because
+        model_id may contain hyphens/dots which are allowed by the safe-segment
+        regex but we include it as a namespace segment, not a suffix part.
         """
-        text_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
-        return f"mingai:{tenant_id}:embedding_cache:{text_hash}"
+        text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        # Sanitize model_id: keep only alphanumeric, hyphens, dots, underscores
+        safe_model_id = _sanitize_model_id(model_id)
+        return f"mingai:{tenant_id}:emb:{safe_model_id}:{text_hash}"
+
+
+# ---------------------------------------------------------------------------
+# Float16 binary serialization helpers (CACHE-002)
+# ---------------------------------------------------------------------------
+
+
+def _serialize_float16(vector: list[float]) -> bytes:
+    """
+    Serialize a float32 embedding vector as packed float16 bytes.
+
+    Uses struct.pack with 'e' (16-bit float) format.
+    Reduces storage by ~50% compared to JSON.
+
+    Args:
+        vector: List of float values (float32 precision).
+
+    Returns:
+        Bytes object, length = len(vector) * 2.
+    """
+    n = len(vector)
+    return struct.pack(f"{n}e", *vector)
+
+
+def _deserialize_float16(raw: bytes) -> list[float]:
+    """
+    Deserialize packed float16 bytes back to a list of floats.
+
+    The returned values are float32 precision (Python float).
+
+    Args:
+        raw: Bytes from Redis (length must be even).
+
+    Returns:
+        List of float values.
+    """
+    if isinstance(raw, str):
+        # decode_responses=True mode returns strings; encode back to bytes
+        raw = raw.encode("latin-1")
+    n = len(raw) // 2
+    return list(struct.unpack(f"{n}e", raw))
+
+
+def _sanitize_model_id(model_id: str) -> str:
+    """
+    Sanitize a model deployment name for use in a Redis key segment.
+
+    Replaces characters that are not alphanumeric, hyphens, dots, or
+    underscores with underscores.
+    """
+    import re
+
+    return re.sub(r"[^A-Za-z0-9._-]", "_", model_id)
+
+
+async def _set_binary(redis, key: str, value: bytes, ttl: int) -> None:
+    """
+    Store binary bytes in Redis, bypassing decode_responses mode.
+
+    The global Redis pool uses decode_responses=True which means it cannot
+    store raw bytes. We use a separate binary client for float16 payloads.
+    Redis stores bytes transparently when decode_responses=False.
+    """
+    import os
+    import urllib.parse
+
+    import redis.asyncio as aioredis
+
+    redis_url = os.environ.get("REDIS_URL")
+    if not redis_url:
+        raise ValueError("REDIS_URL environment variable is not set.")
+
+    # Create a short-lived binary connection for this write only.
+    # This avoids holding a connection open permanently for the rare binary writes.
+    binary_client = aioredis.from_url(
+        redis_url,
+        max_connections=5,
+        socket_timeout=5,
+        decode_responses=False,
+    )
+    try:
+        await binary_client.setex(key, ttl, value)
+    finally:
+        await binary_client.aclose()

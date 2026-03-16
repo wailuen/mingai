@@ -677,5 +677,7 @@ class TestEmbeddingUseOriginalQuery:
             )
         )
 
-        # Embedding should use the ORIGINAL query
-        mocks["embedding_service"].embed.assert_called_once_with("What is AWS?")
+        # Embedding should use the ORIGINAL query (with tenant_id for cache)
+        mocks["embedding_service"].embed.assert_called_once_with(
+            "What is AWS?", tenant_id="t1"
+        )

@@ -158,7 +158,7 @@ class ChatOrchestrationService:
         # --- Stage 3: Embedding (uses ORIGINAL query, NOT expanded) ---
         yield {"event": "status", "data": {"stage": "embedding"}}
 
-        query_vector = await self._embedding.embed(query)
+        query_vector = await self._embedding.embed(query, tenant_id=tenant_id)
 
         logger.info(
             "stage_3_embedding",
@@ -166,6 +166,106 @@ class ChatOrchestrationService:
             vector_dim=len(query_vector),
             tenant_id=tenant_id,
         )
+
+        # --- CACHE-012: Semantic cache lookup ---
+        _cache_hit = False
+        _cache_similarity = 0.0
+        _cache_age_seconds = 0
+        _ttl_seconds = (
+            86400  # default TTL; overridden by tenant config inside try block
+        )
+        try:
+            from app.core.cache.semantic_cache_service import SemanticCacheService
+            from app.core.tenant_config_service import TenantConfigService
+
+            _sem_cache = SemanticCacheService()
+            _cfg_svc = TenantConfigService()
+            _cache_cfg = await _cfg_svc.get(tenant_id, "semantic_cache_config") or {}
+            _threshold = float(_cache_cfg.get("threshold", 0.92))
+            _ttl_seconds = int(_cache_cfg.get("ttl_seconds", 86400))
+
+            _cache_result = await _sem_cache.lookup(
+                tenant_id=tenant_id,
+                query_embedding=query_vector,
+                threshold=_threshold,
+            )
+        except Exception as _cache_err:
+            logger.warning(
+                "semantic_cache_lookup_failed",
+                tenant_id=tenant_id,
+                error=str(_cache_err),
+            )
+            _cache_result = None
+
+        if _cache_result is not None:
+            _cache_hit = True
+            _cache_similarity = _cache_result.similarity
+            _cache_age_seconds = _cache_result.age_seconds
+
+        # Emit cache_state SSE event (CACHE-012)
+        yield {
+            "event": "cache_state",
+            "data": {
+                "hit": _cache_hit,
+                "similarity": _cache_similarity,
+                "age_seconds": _cache_age_seconds,
+                "stage": "semantic",
+            },
+        }
+
+        # CACHE-015: emit cache analytics event fire-and-forget
+        try:
+            from app.core.cache.cache_metrics import emit_cache_event
+
+            emit_cache_event(
+                tenant_id=tenant_id,
+                cache_type="semantic",
+                hit=_cache_hit,
+                query=query,
+            )
+        except Exception:
+            pass  # analytics path must never block the response
+
+        if _cache_hit and _cache_result is not None:
+            # Serve from cache — skip stages 4-7
+            _cached_resp = _cache_result.response
+            yield {
+                "event": "sources",
+                "data": {"sources": [s.model_dump() for s in _cached_resp.sources]},
+            }
+            yield {
+                "event": "response_chunk",
+                "data": {"chunk": _cached_resp.raw_answer},
+            }
+            yield {"event": "status", "data": {"stage": "post_processing"}}
+
+            # Persist the exchange even on cache hit
+            message_id, final_conversation_id = await self._persistence.save_exchange(
+                user_id=user_id,
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                query=query,
+                response=_cached_resp.raw_answer,
+                sources=[],
+            )
+            yield {
+                "event": "metadata",
+                "data": {
+                    "retrieval_confidence": _cached_resp.confidence,
+                    "glossary_expansions": glossary_expansions,
+                    "profile_context_used": False,
+                    "layers_active": [],
+                    "from_cache": True,
+                },
+            }
+            yield {
+                "event": "done",
+                "data": {
+                    "conversation_id": final_conversation_id,
+                    "message_id": message_id,
+                },
+            }
+            return
 
         # --- Stage 4: Vector Search ---
         yield {"event": "status", "data": {"stage": "vector_search"}}
@@ -326,6 +426,49 @@ class ChatOrchestrationService:
                 "layers_active": layers_active,
             },
         }
+
+        # CACHE-012: Store response in semantic cache non-blocking (cache miss path)
+        try:
+            import os as _os
+            from app.core.cache.semantic_cache_service import (
+                SemanticCacheService as _SemCache,
+            )
+            from app.modules.chat.response_models import (
+                CacheableResponse as _CacheableResp,
+                Source as _Source,
+            )
+
+            _sources_for_cache = [
+                _Source(
+                    document_id=r.document_id if hasattr(r, "document_id") else "",
+                    chunk_text=r.content if hasattr(r, "content") else "",
+                    score=r.score if hasattr(r, "score") else 0.0,
+                    document_name=r.title if hasattr(r, "title") else None,
+                    url=r.source_url if hasattr(r, "source_url") else None,
+                )
+                for r in search_results
+            ]
+            _cacheable = _CacheableResp(
+                sources=_sources_for_cache,
+                raw_answer=response_text,
+                confidence=retrieval_confidence,
+                model=_os.environ.get("PRIMARY_MODEL", ""),
+                latency_ms=0,
+            )
+            _sem_cache_store = _SemCache()
+            await _sem_cache_store.store(
+                tenant_id=tenant_id,
+                query_text=query,
+                query_embedding=query_vector,
+                response=_cacheable,
+                ttl_seconds=_ttl_seconds,
+            )
+        except Exception as _store_err:
+            logger.warning(
+                "semantic_cache_store_failed",
+                tenant_id=tenant_id,
+                error=str(_store_err),
+            )
 
         # Emit done event (always last)
         yield {

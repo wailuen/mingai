@@ -132,6 +132,21 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # CACHE-014: Start semantic cache cleanup background job (runs hourly).
+    _semantic_cache_cleanup_task = None
+    try:
+        from app.core.cache.cleanup_job import run_semantic_cache_cleanup_loop
+
+        _semantic_cache_cleanup_task = asyncio.create_task(
+            run_semantic_cache_cleanup_loop()
+        )
+        logger.info("semantic_cache_cleanup_scheduled", interval_seconds=3600)
+    except Exception as exc:
+        logger.warning(
+            "semantic_cache_cleanup_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -152,6 +167,17 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("agent_health_monitor_stopped")
+
+    if (
+        _semantic_cache_cleanup_task is not None
+        and not _semantic_cache_cleanup_task.done()
+    ):
+        _semantic_cache_cleanup_task.cancel()
+        try:
+            await _semantic_cache_cleanup_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("semantic_cache_cleanup_stopped")
 
     # Close Redis connections
     try:

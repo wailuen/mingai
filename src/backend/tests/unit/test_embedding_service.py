@@ -102,39 +102,47 @@ class TestEmbedMethod:
 
 
 class TestEmbeddingCaching:
-    """Test Redis caching for embeddings."""
+    """Test Redis caching for embeddings (CACHE-002: float16 binary, 7-day TTL)."""
 
     @pytest.mark.asyncio
     async def test_cached_result_returned_without_api_call(self):
-        """If Redis has a cached embedding, do not call OpenAI API."""
-        import json
+        """If Redis has a cached embedding (float16 bytes), do not call OpenAI API."""
+        import struct
 
-        from app.modules.chat.embedding import EmbeddingService
+        from app.modules.chat.embedding import EmbeddingService, _serialize_float16
 
         cached_vector = [0.5, 0.6, 0.7]
+        # CACHE-002: stored as float16 binary bytes, not JSON
+        cached_bytes = _serialize_float16(cached_vector)
 
         service = EmbeddingService.__new__(EmbeddingService)
         service._model = "test-model"
         service._client = AsyncMock()
+        service._instrumented_client = None
 
         mock_redis = AsyncMock()
-        mock_redis.get = AsyncMock(return_value=json.dumps(cached_vector))
+        # get() returns bytes (float16 binary)
+        mock_redis.get = AsyncMock(return_value=cached_bytes)
 
         with patch("app.modules.chat.embedding.get_redis", return_value=mock_redis):
             result = await service.embed("test query", tenant_id="tenant-abc")
 
-        assert result == cached_vector
+        # Result should be float32 list recovered from float16
+        assert len(result) == len(cached_vector)
+        for orig, rec in zip(cached_vector, result):
+            assert abs(orig - rec) < 0.01, f"float16 precision error: {orig} vs {rec}"
         service._client.embeddings.create.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_cache_miss_calls_api_and_stores(self):
-        """On cache miss, call OpenAI API and store result in Redis."""
+        """On cache miss, call OpenAI API and store result via _set_binary."""
         from app.modules.chat.embedding import EmbeddingService
 
         new_vector = [0.1, 0.2, 0.3]
 
         service = EmbeddingService.__new__(EmbeddingService)
         service._model = "test-model"
+        service._instrumented_client = None
 
         mock_response = MagicMock()
         mock_response.data = [MagicMock(embedding=new_vector)]
@@ -143,22 +151,28 @@ class TestEmbeddingCaching:
 
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)  # Cache miss
-        mock_redis.setex = AsyncMock()
 
-        with patch("app.modules.chat.embedding.get_redis", return_value=mock_redis):
+        # CACHE-002: storage goes through _set_binary (separate binary client)
+        # Patch _set_binary to avoid creating a real Redis connection
+        with patch(
+            "app.modules.chat.embedding.get_redis", return_value=mock_redis
+        ), patch(
+            "app.modules.chat.embedding._set_binary", new_callable=AsyncMock
+        ) as mock_set_binary:
             result = await service.embed("test query", tenant_id="tenant-abc")
 
         assert result == new_vector
         service._client.embeddings.create.assert_called_once()
-        mock_redis.setex.assert_called_once()
+        mock_set_binary.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cache_key_uses_mingai_prefix(self):
-        """Cache key must follow mingai:{tenant_id}:embedding_cache:{hash} format."""
+    async def test_cache_key_uses_emb_prefix(self):
+        """CACHE-002: Cache key format is mingai:{tenant_id}:emb:{model_id}:{hash}."""
         from app.modules.chat.embedding import EmbeddingService
 
         service = EmbeddingService.__new__(EmbeddingService)
         service._model = "test-model"
+        service._instrumented_client = None
 
         mock_response = MagicMock()
         mock_response.data = [MagicMock(embedding=[0.1])]
@@ -167,21 +181,30 @@ class TestEmbeddingCaching:
 
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
-        mock_redis.setex = AsyncMock()
 
-        with patch("app.modules.chat.embedding.get_redis", return_value=mock_redis):
+        with patch(
+            "app.modules.chat.embedding.get_redis", return_value=mock_redis
+        ), patch("app.modules.chat.embedding._set_binary", new_callable=AsyncMock):
             await service.embed("test query", tenant_id="my-tenant")
 
         cache_key = mock_redis.get.call_args[0][0]
-        assert cache_key.startswith("mingai:my-tenant:embedding_cache:")
+        # CACHE-002: key is mingai:{tenant}:emb:{model}:{hash}
+        assert cache_key.startswith("mingai:my-tenant:emb:")
+        assert "test-model" in cache_key
 
     @pytest.mark.asyncio
-    async def test_cache_ttl_is_24_hours(self):
-        """Embedding cache TTL must be 86400 seconds (24 hours)."""
-        from app.modules.chat.embedding import EmbeddingService
+    async def test_cache_ttl_is_7_days(self):
+        """CACHE-002: Embedding cache TTL must be 604800 seconds (7 days)."""
+        from app.modules.chat.embedding import (
+            EmbeddingService,
+            EMBEDDING_CACHE_TTL_SECONDS,
+        )
+
+        assert EMBEDDING_CACHE_TTL_SECONDS == 604800
 
         service = EmbeddingService.__new__(EmbeddingService)
         service._model = "test-model"
+        service._instrumented_client = None
 
         mock_response = MagicMock()
         mock_response.data = [MagicMock(embedding=[0.1])]
@@ -190,13 +213,19 @@ class TestEmbeddingCaching:
 
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
-        mock_redis.setex = AsyncMock()
 
-        with patch("app.modules.chat.embedding.get_redis", return_value=mock_redis):
+        captured_ttl = []
+
+        async def mock_set_binary(redis, key, value, ttl):
+            captured_ttl.append(ttl)
+
+        with patch(
+            "app.modules.chat.embedding.get_redis", return_value=mock_redis
+        ), patch("app.modules.chat.embedding._set_binary", side_effect=mock_set_binary):
             await service.embed("query", tenant_id="t1")
 
-        ttl_arg = mock_redis.setex.call_args[0][1]
-        assert ttl_arg == 86400
+        assert len(captured_ttl) == 1
+        assert captured_ttl[0] == 604800
 
     @pytest.mark.asyncio
     async def test_no_caching_without_tenant_id(self):
