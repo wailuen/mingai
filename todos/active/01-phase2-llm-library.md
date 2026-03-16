@@ -342,47 +342,53 @@ Phase 2 delivers the LLM abstraction layer that decouples the RAG pipeline from 
 
 ### P2LLM-017: BYOLLM key storage security tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
+**Completed**: 2026-03-16
+**Evidence**: `tests/integration/test_byollm_security.py` — 5/5 security tests pass (no plaintext key in DB, response, log; DELETE removes key; non-enterprise gets 403). Real PostgreSQL.
 **Effort**: 3h
 **Depends on**: P2LLM-007
 **Description**: Security-focused integration tests in `tests/integration/test_byollm_security.py`. Tier 2 — real PostgreSQL. Tests: (1) plaintext key never in any DB column after storage, (2) API response never contains plaintext key, (3) only vault ref stored in `tenant_configs`, (4) DELETE removes all key material, (5) non-Enterprise tenant receives 403.
 **Acceptance criteria**:
 
-- [ ] All 5 security scenarios covered
-- [ ] Test executes actual DB query after API call and asserts no plaintext key present
-- [ ] Tests use real PostgreSQL (not mock)
-- [ ] All tests pass: `pytest tests/integration/test_byollm_security.py`
+- [x] All 5 security scenarios covered
+- [x] Test executes actual DB query after API call and asserts no plaintext key present
+- [x] Tests use real PostgreSQL (not mock)
+- [x] All tests pass: `pytest tests/integration/test_byollm_security.py`
 
 ---
 
 ### P2LLM-018: Cost tracking accuracy integration tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
+**Completed**: 2026-03-16
+**Evidence**: `tests/integration/test_cost_tracking.py` — 5/5 cost tracking tests pass. Real PostgreSQL.
 **Effort**: 4h
 **Depends on**: P2LLM-009, P2LLM-010, P2LLM-011
 **Description**: Integration tests in `tests/integration/test_cost_tracking.py`. Tier 2 — real PostgreSQL. Tests: token count in usage_events matches actual LLM response token count (use known-size fixture response), cost_usd calculation within 1% of expected formula result, model_source field set correctly for library vs BYOLLM calls.
 **Acceptance criteria**:
 
-- [ ] Token count assertion: `abs(recorded_tokens - actual_tokens) <= 1` (off-by-one tolerance for tokenizer variance)
-- [ ] Cost calculation assertion: within 1% of `(tokens_in/1000 * price_in) + (tokens_out/1000 * price_out)`
-- [ ] `model_source` correctly set to "library" or "byollm"
-- [ ] Tests use real PostgreSQL
-- [ ] All tests pass
+- [x] Token count assertion: `abs(recorded_tokens - actual_tokens) <= 1` (off-by-one tolerance for tokenizer variance)
+- [x] Cost calculation assertion: within 1% of `(tokens_in/1000 * price_in) + (tokens_out/1000 * price_out)`
+- [x] `model_source` correctly set to "library" or "byollm"
+- [x] Tests use real PostgreSQL
+- [x] All tests pass
 
 ---
 
 ### P2LLM-019: Config cache TTL integration tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
+**Completed**: 2026-03-16
+**Evidence**: `tests/integration/test_tenant_config_cache.py` — 5/5 cache TTL tests pass. Real Redis. TTL ≤ 900s verified.
 **Effort**: 3h
 **Depends on**: P2LLM-008
 **Description**: Integration tests in `tests/integration/test_tenant_config_cache.py`. Tier 2 — real Redis. Tests: (1) cache populated on first read, (2) subsequent read serves from Redis (no DB hit), (3) PATCH config triggers DEL on Redis key, (4) next read after DEL re-fetches from PostgreSQL, (5) env fallback when key absent from both Redis and PostgreSQL.
 **Acceptance criteria**:
 
-- [ ] All 5 cache scenarios covered with real Redis
-- [ ] DB hit verified via query counter or mock assertion on DB session
-- [ ] TTL verified: `redis.ttl(key) <= 900` after cache population
-- [ ] All tests pass: `pytest tests/integration/test_tenant_config_cache.py`
+- [x] All 5 cache scenarios covered with real Redis
+- [x] DB hit verified via query counter or mock assertion on DB session
+- [x] TTL verified: `redis.ttl(key) <= 900` after cache population
+- [x] All tests pass: `pytest tests/integration/test_tenant_config_cache.py`
 
 ---
 

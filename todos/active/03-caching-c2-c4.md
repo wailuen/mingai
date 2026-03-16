@@ -1,6 +1,7 @@
 # 03 — Caching Phases C2-C4: Pipeline Caches, Semantic Cache, Analytics
 
 **Generated**: 2026-03-15
+**Last updated**: 2026-03-16 (Session 21 — CACHE-007 marked COMPLETED with evidence)
 **Phase**: C2 (Weeks 3-4), C3 (Weeks 5-8), C4 (Weeks 9-10) of caching implementation plan
 **Numbering**: CACHE-001 through CACHE-019
 **Stack**: Redis + PostgreSQL + pgvector + FastAPI + Kailash DataFlow
@@ -135,21 +136,23 @@ Phase C1 (basic caching infrastructure) is COMPLETE (INFRA-011–014 done). Phas
 
 ### CACHE-007: pgvector extension + semantic_cache table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
+**Completed**: 2026-03-16
+**Evidence**: `alembic/versions/v011_semantic_cache.py` — pgvector extension enabled, semantic_cache table with HNSW index (m=16, ef_construction=64), RLS policies. Migration applied cleanly.
 **Effort**: 5h
 **Depends on**: none (only requires Docker Compose pgvector image — already in docker-compose.yml)
 **Description**: Alembic migration to ensure `pgvector` extension is enabled and create `semantic_cache` table. Columns: `id` UUID PK, `tenant_id` UUID FK, `query_text` TEXT, `query_embedding` VECTOR(1536), `response_json` JSONB, `version_tag` INTEGER, `expires_at` TIMESTAMPTZ, `similarity_score` NUMERIC(5,4), `created_at` TIMESTAMPTZ. HNSW index on `query_embedding` with `m=16, ef_construction=64`. Partitioned by `tenant_id` (list partition). Unblocks DEF-013 (pgvector integration tests).
 **Acceptance criteria**:
 
-- [ ] `CREATE EXTENSION IF NOT EXISTS vector` in migration
-- [ ] Table created with all columns and correct types
-- [ ] `VECTOR(1536)` dimension matches `text-embedding-3-small` output dimension
-- [ ] HNSW index: `CREATE INDEX ON semantic_cache USING hnsw (query_embedding vector_cosine_ops) WITH (m=16, ef_construction=64)`
-- [ ] RLS policy: tenant sees own rows only
-- [ ] RLS policy (tenant_isolation + platform_admin_bypass) added in THIS migration file — do not rely on v002's frozen `_V001_TABLES` list
-- [ ] Migration applies cleanly: `alembic upgrade head`
-- [ ] Migration is reversible: `alembic downgrade -1`
-- [ ] Docker Compose pgvector image version pinned in `docker-compose.yml`
+- [x] `CREATE EXTENSION IF NOT EXISTS vector` in migration
+- [x] Table created with all columns and correct types
+- [x] `VECTOR(1536)` dimension matches `text-embedding-3-small` output dimension
+- [x] HNSW index: `CREATE INDEX ON semantic_cache USING hnsw (query_embedding vector_cosine_ops) WITH (m=16, ef_construction=64)`
+- [x] RLS policy: tenant sees own rows only
+- [x] RLS policy (tenant_isolation + platform_admin_bypass) added in THIS migration file — do not rely on v002's frozen `_V001_TABLES` list
+- [x] Migration applies cleanly: `alembic upgrade head`
+- [x] Migration is reversible: `alembic downgrade -1`
+- [x] Docker Compose pgvector image version pinned in `docker-compose.yml`
 
 ---
 
