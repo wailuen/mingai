@@ -3,8 +3,12 @@
 import { useState } from "react";
 import { Loader2, CheckCircle2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLLMLibrary, type LLMLibraryEntry } from "@/lib/hooks/useLLMLibrary";
-import { useUpdateLLMConfig, type LLMConfig } from "@/lib/hooks/useLLMConfig";
+import {
+  useLLMLibraryOptions,
+  useUpdateLLMConfig,
+  type LLMConfig,
+  type LibraryOption,
+} from "@/lib/hooks/useLLMConfig";
 
 interface LibraryModeTabProps {
   config: LLMConfig;
@@ -27,7 +31,7 @@ function SkeletonCards() {
 }
 
 export function LibraryModeTab({ config }: LibraryModeTabProps) {
-  const { data: entries, isPending, error } = useLLMLibrary("Published");
+  const { data: entries, isPending, error } = useLLMLibraryOptions();
   const updateConfig = useUpdateLLMConfig();
   const [selectedId, setSelectedId] = useState<string | null>(
     config.llm_library_id,
@@ -79,7 +83,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
       </p>
 
       <div className="space-y-3">
-        {entries?.map((entry: LLMLibraryEntry) => {
+        {entries?.map((entry: LibraryOption) => {
           const isSelected = selectedId === entry.id;
           return (
             <button
@@ -104,15 +108,23 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
                   {entry.provider}
                 </span>
               </div>
-              {entry.best_practices_md && (
-                <p className="mt-1.5 line-clamp-2 text-[12px] text-text-muted">
-                  {entry.best_practices_md.slice(0, 200)}
-                </p>
-              )}
+              <p className="mt-1.5 text-[12px] text-text-muted">
+                {entry.model_name}
+              </p>
               <div className="mt-2 flex items-center gap-3 font-mono text-[11px] text-text-faint">
-                <span>In: ${entry.pricing_per_1k_tokens_in.toFixed(6)}/1K</span>
                 <span>
-                  Out: ${entry.pricing_per_1k_tokens_out.toFixed(6)}/1K
+                  In: $
+                  {entry.pricing_per_1k_tokens_in != null
+                    ? entry.pricing_per_1k_tokens_in.toFixed(6)
+                    : "—"}
+                  /1K
+                </span>
+                <span>
+                  Out: $
+                  {entry.pricing_per_1k_tokens_out != null
+                    ? entry.pricing_per_1k_tokens_out.toFixed(6)
+                    : "—"}
+                  /1K
                 </span>
                 <span className="capitalize">{entry.plan_tier} tier</span>
               </div>

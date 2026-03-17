@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "title": "CAPABILITY_QUERY",
+  "description": "Query an agent's capabilities and supported transaction types",
+  "type": "object",
+  "required": ["requester_agent_id"],
+  "properties": {
+    "requester_agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the agent requesting capability information"
+    },
+    "requested_capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional list of specific capabilities to query"
+    },
+    "context": {
+      "type": "object",
+      "description": "Optional context metadata for the query"
+    }
+  },
+  "additionalProperties": true
+}

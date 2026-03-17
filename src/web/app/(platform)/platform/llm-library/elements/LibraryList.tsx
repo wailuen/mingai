@@ -33,7 +33,7 @@ function statusBadgeClass(status: LLMLibraryStatus): string {
     case "Draft":
       return "border border-border text-text-muted";
     case "Deprecated":
-      return "border border-alert text-alert";
+      return "border border-border text-text-faint";
   }
 }
 
@@ -172,21 +172,27 @@ export function LibraryList({ onEdit }: LibraryListProps) {
       {
         accessorKey: "pricing_per_1k_tokens_in",
         header: "Price In",
-        cell: (info) => (
-          <span className="font-mono text-data-value text-text-muted">
-            ${formatPrice(info.getValue<number>())}
-          </span>
-        ),
+        cell: (info) => {
+          const val = info.getValue<number | null>();
+          return (
+            <span className="font-mono text-data-value text-text-muted">
+              {val != null ? `$${formatPrice(val)}` : "—"}
+            </span>
+          );
+        },
         enableSorting: true,
       },
       {
         accessorKey: "pricing_per_1k_tokens_out",
         header: "Price Out",
-        cell: (info) => (
-          <span className="font-mono text-data-value text-text-muted">
-            ${formatPrice(info.getValue<number>())}
-          </span>
-        ),
+        cell: (info) => {
+          const val = info.getValue<number | null>();
+          return (
+            <span className="font-mono text-data-value text-text-muted">
+              {val != null ? `$${formatPrice(val)}` : "—"}
+            </span>
+          );
+        },
         enableSorting: true,
       },
       {

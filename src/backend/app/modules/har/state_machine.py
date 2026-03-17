@@ -146,7 +146,29 @@ async def transition_state(
             status_code=500,
             detail="Transaction disappeared after update - data integrity error",
         )
-    return _row_to_dict(updated_row)
+    result_dict = _row_to_dict(updated_row)
+
+    # HAR-011: Create fee record when transaction reaches COMPLETED state
+    if new_state == "COMPLETED":
+        try:
+            from app.modules.har.fee_records import create_fee_record
+
+            await create_fee_record(
+                transaction_id=transaction_id,
+                tenant_id=tenant_id,
+                amount=result_dict.get("amount"),
+                currency=result_dict.get("currency"),
+                db=db,
+            )
+        except Exception as exc:
+            logger.error(
+                "har_fee_record_creation_failed",
+                transaction_id=transaction_id,
+                tenant_id=tenant_id,
+                error_type=type(exc).__name__,
+            )
+
+    return result_dict
 
 
 # ---------------------------------------------------------------------------

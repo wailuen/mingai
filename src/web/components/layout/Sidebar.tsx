@@ -16,6 +16,7 @@ import {
   Shield,
   Wrench,
   DollarSign,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 import type { JWTClaims } from "@/lib/auth";
@@ -67,6 +68,11 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
         href: "/settings/engineering-issues",
         icon: AlertCircle,
       },
+      {
+        label: "LLM Settings",
+        href: "/admin/settings/llm",
+        icon: Cpu,
+      },
       { label: "Settings", href: "/settings/workspace", icon: Settings },
     ],
   },
@@ -93,12 +99,18 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "LLM Profiles", href: "/platform/llm-profiles", icon: Cpu },
       {
+        label: "LLM Library",
+        href: "/platform/llm-library",
+        icon: BookOpen,
+      },
+      {
         label: "Agent Templates",
         href: "/platform/agent-templates",
         icon: Bot,
       },
       { label: "Analytics", href: "/platform/analytics", icon: BarChart3 },
       { label: "Tool Catalog", href: "/platform/tool-catalog", icon: Wrench },
+      { label: "Registry", href: "/platform/registry", icon: Globe },
     ],
   },
   {

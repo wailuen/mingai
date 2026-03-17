@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "title": "RFQ",
+  "description": "Request for Quotation — ask an agent to quote on goods or services",
+  "type": "object",
+  "required": ["requester_agent_id", "items"],
+  "properties": {
+    "requester_agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the requesting agent"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["description", "quantity"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "number", "exclusiveMinimum": 0 },
+          "unit": { "type": "string" },
+          "sku": { "type": "string" }
+        }
+      },
+      "description": "Line items requested for quotation"
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 3,
+      "description": "ISO 4217 currency code (e.g. USD)"
+    },
+    "delivery_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Requested delivery date (ISO 8601)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes for the quotation request"
+    }
+  },
+  "additionalProperties": true
+}

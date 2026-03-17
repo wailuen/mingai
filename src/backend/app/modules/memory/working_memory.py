@@ -9,10 +9,15 @@ TTL: 7 days
 Max topics: 5
 Max queries: 3 (100-char truncation)
 Token budget: 100 tokens
+
+DEF-004: Checks user_privacy_settings.working_memory_enabled before storing.
+When disabled, update() returns early without writing to Redis.
 """
 import json
+from typing import Optional
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis_client import get_redis
 
@@ -45,6 +50,7 @@ class WorkingMemoryService:
         agent_id: str,
         query: str,
         response: str,
+        db: Optional[AsyncSession] = None,
     ) -> None:
         """
         Update working memory after a query-response exchange.
@@ -52,13 +58,33 @@ class WorkingMemoryService:
         Adds extracted topics and the query to the memory store.
         Prunes topics to MAX_TOPICS and queries to MAX_QUERIES.
 
+        DEF-004: If db is provided, checks working_memory_enabled privacy
+        setting before storing. Returns early if disabled.
+
         Args:
             user_id: User identifier.
             tenant_id: Tenant scope.
             agent_id: Agent that handled the query.
             query: The user's query text.
             response: The assistant's response text.
+            db: Optional async session for privacy setting check.
         """
+        if db is not None:
+            from app.modules.users.privacy_settings import (
+                _check_privacy_setting,
+            )  # noqa: PLC0415
+
+            enabled = await _check_privacy_setting(
+                db, tenant_id, user_id, "working_memory_enabled"
+            )
+            if not enabled:
+                logger.debug(
+                    "working_memory_skipped_privacy",
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                )
+                return
+
         key = _build_key(tenant_id, user_id, agent_id)
         redis = get_redis()
 
@@ -202,7 +228,7 @@ class WorkingMemoryService:
             "please ",
         ]:
             if query_clean.startswith(prefix):
-                query_clean = query_clean[len(prefix):]
+                query_clean = query_clean[len(prefix) :]
                 break
 
         # Take first 3-4 significant words as topic

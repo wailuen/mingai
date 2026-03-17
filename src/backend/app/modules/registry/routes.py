@@ -36,6 +36,7 @@ from app.core.redis_client import build_redis_key, get_redis
 from app.core.session import get_async_session
 from app.modules.har.signing import verify_event_signature
 from app.modules.har.state_machine import get_transaction, transition_state
+from app.modules.registry.a2a_routing import _validate_ssrf_safe_url
 
 logger = structlog.get_logger()
 
@@ -45,8 +46,24 @@ router = APIRouter(prefix="/registry", tags=["registry"])
 # Allowlists — SQL injection prevention
 # ---------------------------------------------------------------------------
 
-_VALID_MESSAGE_TYPES = {"RFQ", "CAPABILITY_QUERY"}
+_VALID_MESSAGE_TYPES = {
+    "RFQ",
+    "CAPABILITY_QUERY",
+    "QUOTE_RESPONSE",
+    "PO_PLACEMENT",
+    "PO_ACKNOWLEDGEMENT",
+    "DELIVERY_CONFIRMATION",
+}
 _VALID_PERIODS = {"7d", "30d", "90d"}
+
+# KYB level ordering for range queries (HAR-003: 'verified' also returns 'enterprise')
+_KYB_LEVEL_ORDER = {"none": 0, "basic": 1, "verified": 2, "enterprise": 3}
+_KYB_RANGE: dict[str, list[str]] = {
+    "none": ["none", "basic", "verified", "enterprise"],
+    "basic": ["basic", "verified", "enterprise"],
+    "verified": ["verified", "enterprise"],
+    "enterprise": ["enterprise"],
+}
 
 # Approval window for registry-initiated transactions: 48 hours
 _REGISTRY_APPROVAL_WINDOW_HOURS = 48
@@ -72,6 +89,30 @@ class RegisterAgentRequest(BaseModel):
     languages: List[str] = Field(default_factory=list)
     health_check_url: Optional[str] = Field(None)
 
+    @field_validator("a2a_endpoint")
+    @classmethod
+    def validate_a2a_endpoint(cls, v: str) -> str:
+        if not v.startswith("https://"):
+            raise ValueError("a2a_endpoint must start with https://")
+        try:
+            _validate_ssrf_safe_url(v)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return v
+
+    @field_validator("health_check_url")
+    @classmethod
+    def validate_health_check_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not v.startswith("https://"):
+            raise ValueError("health_check_url must start with https://")
+        try:
+            _validate_ssrf_safe_url(v)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return v
+
 
 class UpdateAgentRequest(BaseModel):
     description: Optional[str] = Field(None)
@@ -80,6 +121,32 @@ class UpdateAgentRequest(BaseModel):
     languages: Optional[List[str]] = Field(None)
     a2a_endpoint: Optional[str] = Field(None)
     health_check_url: Optional[str] = Field(None)
+
+    @field_validator("a2a_endpoint")
+    @classmethod
+    def validate_a2a_endpoint(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not v.startswith("https://"):
+            raise ValueError("a2a_endpoint must start with https://")
+        try:
+            _validate_ssrf_safe_url(v)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return v
+
+    @field_validator("health_check_url")
+    @classmethod
+    def validate_health_check_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not v.startswith("https://"):
+            raise ValueError("health_check_url must start with https://")
+        try:
+            _validate_ssrf_safe_url(v)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return v
 
 
 class InitiateTransactionRequest(BaseModel):
@@ -152,6 +219,7 @@ async def register_agent_db(
         text(
             "UPDATE agent_cards SET "
             "is_public = true, "
+            "status = 'active', "
             "a2a_endpoint = :a2a_endpoint, "
             "transaction_types = CAST(:transaction_types AS text[]), "
             "industries = CAST(:industries AS text[]), "
@@ -179,17 +247,16 @@ async def list_public_agents_db(
     industry: Optional[str],
     transaction_type: Optional[str],
     language: Optional[str],
+    kyb_level: Optional[str],
     min_trust_score: Optional[int],
-    page: int,
-    page_size: int,
+    limit: int,
+    offset: int,
     db: AsyncSession,
 ) -> dict:
-    """List agent_cards where is_public=true and status='published'."""
-    offset = (page - 1) * page_size
-
+    """List agent_cards where is_public=true and status='active'."""
     # Build WHERE clause fragments (hardcoded, no f-string user data)
-    where_parts = ["is_public = true", "status = 'published'"]
-    params: dict = {"limit": page_size, "offset": offset}
+    where_parts = ["is_public = true", "status = 'active'"]
+    params: dict = {"limit": limit, "offset": offset}
 
     if query:
         where_parts.append("(name ILIKE :query OR description ILIKE :query)")
@@ -211,6 +278,12 @@ async def list_public_agents_db(
         where_parts.append(":language = ANY(languages)")
         params["language"] = language
 
+    if kyb_level is not None:
+        # Range semantics: 'verified' returns 'verified' and 'enterprise' too
+        allowed_levels = _KYB_RANGE.get(kyb_level, [kyb_level])
+        where_parts.append("kyb_level = ANY(CAST(:kyb_levels AS text[]))")
+        params["kyb_levels"] = allowed_levels
+
     if min_trust_score is not None:
         where_parts.append("trust_score >= :min_trust_score")
         params["min_trust_score"] = min_trust_score
@@ -229,7 +302,7 @@ async def list_public_agents_db(
             "a2a_endpoint, transaction_types, industries, languages, "
             "health_check_url, public_key, trust_score, capabilities, "
             f"created_at, updated_at FROM agent_cards WHERE {where_sql} "
-            "ORDER BY trust_score DESC, created_at DESC "
+            "ORDER BY created_at DESC "
             "LIMIT :limit OFFSET :offset"
         ),
         params,
@@ -288,10 +361,11 @@ async def update_agent_registry_db(
 
 
 async def deregister_agent_db(agent_id: str, tenant_id: str, db: AsyncSession) -> bool:
-    """Soft-delete: set is_public=false. Returns True if found and updated."""
+    """Soft-delete: set status='deregistered', is_public=false. Returns True if found and updated."""
     result = await db.execute(
         text(
-            "UPDATE agent_cards SET is_public = false, updated_at = NOW() "
+            "UPDATE agent_cards SET is_public = false, status = 'deregistered', "
+            "updated_at = NOW() "
             "WHERE id = :agent_id AND tenant_id = :tenant_id"
         ),
         {"agent_id": agent_id, "tenant_id": tenant_id},
@@ -786,20 +860,29 @@ async def list_registry_agents(
     industry: Optional[str] = Query(None),
     transaction_type: Optional[str] = Query(None),
     language: Optional[str] = Query(None),
+    kyb_level: Optional[str] = Query(
+        None, description="Filter by KYB level. 'verified' also returns 'enterprise'."
+    ),
     min_trust_score: Optional[int] = Query(None, ge=0, le=100),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-090: Search/list public registry — no auth required."""
+    if kyb_level is not None and kyb_level not in _KYB_LEVEL_ORDER:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"kyb_level must be one of: {sorted(_KYB_LEVEL_ORDER.keys())}",
+        )
     result = await list_public_agents_db(
         query=query,
         industry=industry,
         transaction_type=transaction_type,
         language=language,
+        kyb_level=kyb_level,
         min_trust_score=min_trust_score,
-        page=page,
-        page_size=page_size,
+        limit=limit,
+        offset=offset,
         db=session,
     )
 
@@ -808,7 +891,12 @@ async def list_registry_agents(
         item["trust_score"] = await compute_trust_score_db(item["agent_id"], session)
         item["health_status"] = await _get_health_status(item["agent_id"])
 
-    return {"items": result["items"], "total": result["total"]}
+    return {
+        "items": result["items"],
+        "total": result["total"],
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/agents/{agent_id}")
@@ -1237,7 +1325,22 @@ _DISPUTE_COMPLETED_WINDOW_DAYS = 30
 class FileDisputeRequest(BaseModel):
     reason: str = Field(..., min_length=10, description="Dispute reason (min 10 chars)")
     category: str = Field(..., description="quality|delivery|billing|terms|other")
-    evidence_urls: List[str] = Field(default_factory=list)
+    evidence_urls: List[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Up to 20 evidence URLs (https only, max 2048 chars each)",
+    )
+
+    @field_validator("evidence_urls")
+    @classmethod
+    def validate_evidence_urls(cls, v: List[str]) -> List[str]:
+        for url in v:
+            if len(url) > 2048:
+                raise ValueError("Each evidence URL must be 2048 characters or fewer.")
+            if not url.startswith("https://"):
+                raise ValueError("Each evidence URL must start with https://")
+        return v
+
     desired_resolution: str = Field(
         ..., min_length=10, description="Desired outcome (min 10 chars)"
     )
@@ -1676,3 +1779,65 @@ async def resolve_dispute(
     )
 
     return resolved
+
+
+# ---------------------------------------------------------------------------
+# HAR-008: Inbound A2A message receive endpoint
+# ---------------------------------------------------------------------------
+
+
+class A2AReceiveRequest(BaseModel):
+    transaction_id: str = Field(
+        ..., min_length=1, description="Transaction UUID or HAR-format ID"
+    )
+    message_type: str = Field(..., description="One of the VALID_MESSAGE_TYPES")
+    sender_agent_id: str = Field(..., min_length=1)
+    payload: dict = Field(default_factory=dict)
+    signature: Optional[str] = Field(None, description="Ed25519 signature over payload")
+
+
+@router.post("/a2a/receive", status_code=status.HTTP_202_ACCEPTED)
+async def receive_a2a_message(
+    body: A2AReceiveRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    HAR-008: Receive an inbound A2A message from a remote agent.
+
+    Validates payload against the JSON schema for the given message_type.
+    Returns 422 on schema validation failure with field path + constraint violated.
+    """
+    # Validate message_type against allowlist
+    if body.message_type not in _VALID_MESSAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"message_type must be one of: {sorted(_VALID_MESSAGE_TYPES)}",
+        )
+
+    # Validate payload against JSON schema (HAR-008)
+    from app.modules.registry.schemas.validator import validate_message_payload
+
+    schema_errors = validate_message_payload(body.message_type, body.payload)
+    if schema_errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "Payload validation failed",
+                "errors": schema_errors,
+            },
+        )
+
+    logger.info(
+        "a2a_message_received",
+        transaction_id=body.transaction_id,
+        message_type=body.message_type,
+        sender_agent_id=body.sender_agent_id,
+        tenant_id=current_user.tenant_id,
+    )
+
+    return {
+        "status": "accepted",
+        "transaction_id": body.transaction_id,
+        "message_type": body.message_type,
+    }

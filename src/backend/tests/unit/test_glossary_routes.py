@@ -21,7 +21,7 @@ TEST_TENANT_ID = "12345678-1234-5678-1234-567812345678"
 def _make_admin_token() -> str:
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": "tenant-admin",
+        "sub": "12345678-1234-5678-1234-567812345679",
         "tenant_id": TEST_TENANT_ID,
         "roles": ["tenant_admin"],
         "scope": "tenant",
@@ -205,19 +205,45 @@ class TestUpdateGlossaryTerm:
         assert resp.status_code == 403
 
     def test_update_term_returns_updated(self, client, admin_headers):
-        with patch(
-            "app.modules.glossary.routes.update_glossary_term_db",
-            new_callable=AsyncMock,
-        ) as mock_update:
-            mock_update.return_value = {
-                "id": "term-1",
-                "full_form": "Updated Human Resources",
-            }
-            resp = client.patch(
-                "/api/v1/glossary/term-1",
-                json={"full_form": "Updated Human Resources"},
-                headers=admin_headers,
-            )
+        import uuid as _uuid
+        from unittest.mock import MagicMock
+        from app.core.session import get_async_session
+        from app.main import app
+
+        valid_id = str(_uuid.uuid4())
+        before_state = {"id": valid_id, "full_form": "Human Resources"}
+        updated_state = {"id": valid_id, "full_form": "Updated Human Resources"}
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        async def _override():
+            yield mock_session
+
+        app.dependency_overrides[get_async_session] = _override
+        try:
+            with patch(
+                "app.modules.glossary.routes.get_glossary_term_db",
+                new_callable=AsyncMock,
+                return_value=before_state,
+            ), patch(
+                "app.modules.glossary.routes.update_glossary_term_db",
+                new_callable=AsyncMock,
+                return_value=updated_state,
+            ), patch(
+                "app.modules.glossary.routes._invalidate_glossary_cache",
+                new_callable=AsyncMock,
+            ):
+                resp = client.patch(
+                    f"/api/v1/glossary/{valid_id}",
+                    json={"full_form": "Updated Human Resources"},
+                    headers=admin_headers,
+                )
+        finally:
+            app.dependency_overrides.pop(get_async_session, None)
         assert resp.status_code == 200
 
 

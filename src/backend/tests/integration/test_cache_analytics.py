@@ -52,15 +52,6 @@ def _reset_redis_pool():
 
 
 @pytest.fixture
-def client():
-    """Function-scoped TestClient to avoid cross-test DB session contamination."""
-    from app.main import app
-    from fastapi.testclient import TestClient
-
-    return TestClient(app, raise_server_exceptions=False)
-
-
-@pytest.fixture
 def platform_headers():
     return {"Authorization": f"Bearer {_make_platform_token()}"}
 

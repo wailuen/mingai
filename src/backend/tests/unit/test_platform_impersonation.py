@@ -611,16 +611,17 @@ class TestGdprDelete:
 
         asyncio.run(_run())
 
-    def test_gdpr_delete_initiates_job(self, env_vars):
+    def test_gdpr_delete_completes_synchronously(self, env_vars):
         """
-        Successful request returns job_id, status=in_progress, estimated_completion.
-        asyncio.create_task is called to launch background deletion.
+        Successful request executes pipeline synchronously and returns
+        status=completed with a confirmation report.
         """
         from app.modules.platform import routes as plat_routes
         import asyncio
 
         mock_session = AsyncMock()
         mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
         mock_session.execute = AsyncMock()
 
         tenant_result = MagicMock()
@@ -629,10 +630,15 @@ class TestGdprDelete:
             "Test Corp",
             "professional",
         )
-        mock_session.execute.side_effect = [
-            tenant_result,
-            AsyncMock(return_value=None)(),  # audit log INSERT
-        ]
+        mock_session.execute.return_value = tenant_result
+
+        fake_report = {
+            "dry_run": False,
+            "deleted_tables": ["tenants (soft-deleted)"],
+            "retained_for_legal_hold": ["usage_events"],
+            "counts": {"users_anonymized": 3},
+            "completed_at": "2026-03-16T00:00:00+00:00",
+        }
 
         async def _run():
             from app.core.dependencies import CurrentUser
@@ -648,25 +654,28 @@ class TestGdprDelete:
                 confirmed=True,
                 deletion_reference="GDPR-2026-001",
             )
-            with patch.object(plat_routes, "get_redis") as mock_get_redis:
-                mock_redis = AsyncMock()
-                mock_redis.set = AsyncMock()
-                mock_get_redis.return_value = mock_redis
+            with patch.object(
+                plat_routes,
+                "_execute_gdpr_pipeline",
+                new=AsyncMock(return_value=fake_report),
+            ):
+                with patch.object(plat_routes, "_insert_platform_audit_log"):
+                    with patch.object(plat_routes, "get_redis") as mock_get_redis:
+                        mock_redis = AsyncMock()
+                        mock_redis.scan = AsyncMock(return_value=(0, []))
+                        mock_redis.delete = AsyncMock()
+                        mock_get_redis.return_value = mock_redis
 
-                with patch("asyncio.create_task") as mock_create_task:
-                    mock_create_task.return_value = MagicMock()
-                    result = await plat_routes.gdpr_delete_tenant(
-                        tenant_id=TEST_TENANT_ID,
-                        body=req,
-                        current_user=caller,
-                        db=mock_session,
-                    )
+                        result = await plat_routes.gdpr_delete_tenant(
+                            tenant_id=TEST_TENANT_ID,
+                            body=req,
+                            current_user=caller,
+                            db=mock_session,
+                        )
 
-                assert "job_id" in result
-                assert result["status"] == "in_progress"
-                assert "estimated_completion" in result
-                # Verify background task was scheduled
-                mock_create_task.assert_called_once()
+            assert result["status"] == "completed"
+            assert "report" in result
+            assert result["report"]["deleted_tables"] == ["tenants (soft-deleted)"]
 
         asyncio.run(_run())
 

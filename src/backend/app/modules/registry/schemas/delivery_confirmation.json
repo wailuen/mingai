@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "title": "DELIVERY_CONFIRMATION",
+  "description": "Confirmation that goods or services have been delivered",
+  "type": "object",
+  "required": [
+    "confirming_agent_id",
+    "po_transaction_id",
+    "po_number",
+    "delivery_date",
+    "status"
+  ],
+  "properties": {
+    "confirming_agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the agent confirming delivery (buyer or logistics agent)"
+    },
+    "po_transaction_id": {
+      "type": "string",
+      "description": "Transaction ID of the original PO_PLACEMENT"
+    },
+    "po_number": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Purchase order reference number"
+    },
+    "delivery_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Actual delivery date (ISO 8601)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["delivered", "partial", "rejected"],
+      "description": "Delivery confirmation status"
+    },
+    "items_received": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "quantity_received"],
+        "properties": {
+          "description": { "type": "string" },
+          "quantity_received": { "type": "number", "minimum": 0 },
+          "sku": { "type": "string" },
+          "condition": {
+            "type": "string",
+            "enum": ["good", "damaged", "wrong_item"]
+          }
+        }
+      }
+    },
+    "tracking_reference": {
+      "type": "string",
+      "description": "Logistics/tracking reference number"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

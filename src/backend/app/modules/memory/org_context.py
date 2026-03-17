@@ -6,12 +6,18 @@ Caches in Redis with 24-hour TTL. Budget: 100 tokens.
 
 Redis key: mingai:{tenant_id}:org_context:{user_id}
 All sources are JWT-only, zero external API calls.
+
+DEF-004: OrgContextService.get() accepts an optional db session to check
+user_privacy_settings.org_context_enabled. Returns empty OrgContextData
+if the user has disabled org context.
 """
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Optional
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis_client import get_redis
 
@@ -148,18 +154,39 @@ class OrgContextService:
         user_id: str,
         tenant_id: str,
         jwt_claims: dict,
+        db: Optional[AsyncSession] = None,
     ) -> OrgContextData:
         """
         Get org context for a user, with Redis caching.
+
+        DEF-004: If db is provided, checks org_context_enabled privacy
+        setting before reading. Returns empty OrgContextData if disabled.
 
         Args:
             user_id: User identifier.
             tenant_id: Tenant scope.
             jwt_claims: JWT token claims containing SSO org data.
+            db: Optional async session for privacy setting check.
 
         Returns:
-            OrgContextData with extracted fields.
+            OrgContextData with extracted fields (empty if privacy disabled).
         """
+        if db is not None:
+            from app.modules.users.privacy_settings import (
+                _check_privacy_setting,
+            )  # noqa: PLC0415
+
+            enabled = await _check_privacy_setting(
+                db, tenant_id, user_id, "org_context_enabled"
+            )
+            if not enabled:
+                logger.debug(
+                    "org_context_skipped_privacy",
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                )
+                return OrgContextData()
+
         cache_key = f"mingai:{tenant_id}:org_context:{user_id}"
         redis = get_redis()
 

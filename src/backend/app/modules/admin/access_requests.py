@@ -279,7 +279,7 @@ async def list_access_requests(
         text(
             "SELECT ar.id, ar.tenant_id, ar.user_id, ar.resource_type, ar.resource_id, "
             "  ar.justification, ar.status, ar.admin_note, ar.created_at, "
-            "  u.email AS requester_email "
+            "  u.email AS requester_email, u.name AS requester_name "
             "FROM access_requests ar "
             "LEFT JOIN users u ON u.id = ar.user_id "
             f"WHERE {where} "
@@ -300,6 +300,7 @@ async def list_access_requests(
             "admin_note": r[7],
             "created_at": r[8].isoformat() if r[8] else None,
             "requester_email": r[9],
+            "requester_name": r[10],
         }
         for r in rows
     ]

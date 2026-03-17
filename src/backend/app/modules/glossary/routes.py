@@ -717,17 +717,52 @@ async def update_glossary_term(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No fields to update",
         )
+
+    # Fetch current state before update for audit log
+    before = await get_glossary_term_db(term_id, current_user.tenant_id, session)
+    if before is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Glossary term '{term_id}' not found",
+        )
+
     result = await update_glossary_term_db(
         term_id=term_id,
         tenant_id=current_user.tenant_id,
         updates=updates,
         db=session,
+        commit=False,
     )
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Glossary term '{term_id}' not found",
         )
+
+    changed_fields = list(updates.keys())
+    audit_details = json.dumps(
+        {
+            "changed_fields": changed_fields,
+            "before": {k: before.get(k) for k in changed_fields},
+            "after": {k: result.get(k) for k in changed_fields},
+        }
+    )
+    await session.execute(
+        text(
+            "INSERT INTO audit_log "
+            "(tenant_id, user_id, action, resource_type, resource_id, details) "
+            "VALUES (:tenant_id, :user_id, 'update', 'glossary_term', "
+            "CAST(:resource_id AS uuid), CAST(:details AS jsonb))"
+        ),
+        {
+            "tenant_id": current_user.tenant_id,
+            "user_id": current_user.id,
+            "resource_id": term_id,
+            "details": audit_details,
+        },
+    )
+    await session.commit()
+
     await _invalidate_glossary_cache(current_user.tenant_id)
     return result
 
@@ -781,7 +816,7 @@ async def get_glossary_history(
             "SELECT al.id, al.user_id, al.action, al.details, al.created_at, "
             "  u.email AS actor_email "
             "FROM audit_log al "
-            "LEFT JOIN users u ON u.id::text = al.user_id "
+            "LEFT JOIN users u ON u.id = al.user_id "
             "WHERE al.tenant_id = :tenant_id "
             "  AND al.resource_type = 'glossary_term' "
             "  AND al.resource_id = CAST(:term_id AS uuid) "

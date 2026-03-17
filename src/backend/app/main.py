@@ -250,6 +250,42 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # HAR-004: Start URL health monitor for public agent registry (runs every ~5 minutes).
+    _url_health_monitor_task = None
+    try:
+        from app.modules.registry.url_health_monitor import (
+            run_url_health_monitor_scheduler,
+        )
+
+        _url_health_monitor_task = asyncio.create_task(
+            run_url_health_monitor_scheduler()
+        )
+        logger.info(
+            "url_health_monitor_scheduler_started",
+            schedule="every ~5 minutes with ±60s jitter",
+        )
+    except Exception as exc:
+        logger.warning(
+            "url_health_monitor_scheduler_startup_failed",
+            error=str(exc),
+        )
+
+    # HAR-010: Start approval timeout job (runs every ~1 hour).
+    _approval_timeout_task = None
+    try:
+        from app.modules.har.approval_timeout_job import run_approval_timeout_scheduler
+
+        _approval_timeout_task = asyncio.create_task(run_approval_timeout_scheduler())
+        logger.info(
+            "har_approval_timeout_scheduler_started",
+            schedule="every ~1 hour with ±60s jitter",
+        )
+    except Exception as exc:
+        logger.warning(
+            "har_approval_timeout_scheduler_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -337,6 +373,22 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("credential_expiry_scheduler_stopped")
+
+    if _url_health_monitor_task is not None and not _url_health_monitor_task.done():
+        _url_health_monitor_task.cancel()
+        try:
+            await _url_health_monitor_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("url_health_monitor_scheduler_stopped")
+
+    if _approval_timeout_task is not None and not _approval_timeout_task.done():
+        _approval_timeout_task.cancel()
+        try:
+            await _approval_timeout_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("har_approval_timeout_scheduler_stopped")
 
     # Close Redis connections
     try:

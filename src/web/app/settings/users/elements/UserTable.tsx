@@ -16,7 +16,7 @@ export interface UserRow {
   id: string;
   email: string;
   name: string;
-  role: "tenant_admin" | "viewer" | "user";
+  role: "tenant_admin" | "viewer" | "user" | "platform_admin";
   status: "active" | "invited" | "suspended" | "closed";
   last_login: string | null;
   created_at: string;
@@ -89,16 +89,26 @@ export function UserTable({
       header: "Role",
       cell: (info) => {
         const role = info.getValue();
+        const roleLabel =
+          role === "tenant_admin"
+            ? "Admin"
+            : role === "platform_admin"
+              ? "Platform Admin"
+              : "User";
+        const roleCls =
+          role === "tenant_admin"
+            ? "border-accent/30 bg-accent/10 text-accent"
+            : role === "platform_admin"
+              ? "border-warn/30 bg-warn-dim text-warn"
+              : "border-border bg-bg-elevated text-text-muted";
         return (
           <span
             className={cn(
               "rounded-badge border px-2 py-0.5 text-xs font-medium",
-              role === "tenant_admin"
-                ? "border-accent/30 bg-accent/10 text-accent"
-                : "border-border bg-bg-elevated text-text-muted",
+              roleCls,
             )}
           >
-            {role === "tenant_admin" ? "Admin" : "User"}
+            {roleLabel}
           </span>
         );
       },

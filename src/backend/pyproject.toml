@@ -23,6 +23,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.0",
     "Pillow>=10.0.0",
     "slowapi>=0.1.9",
+    "jsonschema>=4.20.0",
+    "sendgrid>=6.10.0",
 ]
 
 [project.optional-dependencies]

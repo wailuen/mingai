@@ -108,16 +108,8 @@ export function TermList({
         </span>
       ),
     }),
-    columnHelper.accessor("full_form", {
-      header: "Full Form",
-      cell: (info) => (
-        <span className="text-sm text-text-muted">
-          {info.getValue() ?? "\u2014"}
-        </span>
-      ),
-    }),
     columnHelper.accessor("definition", {
-      header: "Definition",
+      header: "Full Form / Definition",
       cell: (info) => {
         const val = info.getValue() ?? "";
         const truncated = val.length > 60 ? `${val.slice(0, 60)}...` : val;
@@ -166,9 +158,7 @@ export function TermList({
         return (
           <div className="relative flex items-center gap-1">
             <button
-              onClick={() =>
-                setHistoryTerm({ id: term.id, name: term.term })
-              }
+              onClick={() => setHistoryTerm({ id: term.id, name: term.term })}
               className="flex h-7 w-7 items-center justify-center rounded-control text-text-faint transition-colors hover:bg-bg-elevated hover:text-text-primary"
               aria-label={`History ${term.term}`}
             >
@@ -213,8 +203,8 @@ export function TermList({
   });
 
   return (
-    <div className="overflow-hidden rounded-card border border-border">
-      <table className="w-full">
+    <div className="overflow-x-auto rounded-card border border-border">
+      <table className="w-full min-w-[520px]">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-border">

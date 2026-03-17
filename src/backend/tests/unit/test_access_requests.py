@@ -143,7 +143,7 @@ def _patch_db(
     # list_rows for GET endpoint
     if list_rows is None:
         row = _make_request_row()
-        list_rows = [row + ("viewer@test.com",)]
+        list_rows = [row + ("viewer@test.com", "Viewer User")]
 
     mock_session = MagicMock()
     call_count = 0

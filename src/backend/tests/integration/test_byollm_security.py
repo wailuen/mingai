@@ -20,7 +20,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi.testclient import TestClient
 from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -154,14 +153,6 @@ def _read_byollm_config(tenant_id: str) -> dict | None:
 
 
 PLAINTEXT_KEY = "sk-realkey-that-must-never-appear-in-db"
-
-
-@pytest.fixture(scope="module")
-def client():
-    from app.main import app
-
-    with TestClient(app, raise_server_exceptions=False) as c:
-        yield c
 
 
 @pytest.fixture(scope="module")

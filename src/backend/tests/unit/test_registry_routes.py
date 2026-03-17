@@ -51,6 +51,19 @@ def _make_token(
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm=TEST_JWT_ALGORITHM)
 
 
+@pytest.fixture(autouse=True)
+def bypass_ssrf_dns(monkeypatch):
+    """
+    Unit tests don't have real DNS — bypass SSRF DNS resolution for all
+    route tests that use agent.example.com (a public domain, not internal).
+    The SSRF validator itself has dedicated unit tests in test_a2a_routing.py.
+    """
+    monkeypatch.setattr(
+        "app.modules.registry.routes._validate_ssrf_safe_url",
+        lambda url: None,
+    )
+
+
 @pytest.fixture
 def env_vars():
     env = {

@@ -55,10 +55,12 @@ from app.modules.tenants.routes import router as tenants_router
 
 router.include_router(tenants_router)
 
-# Glossary endpoints (API-066 to API-075)
+# Glossary endpoints (API-066 to API-075) and TA-013 admin miss-signals
+from app.modules.glossary.routes import admin_router as glossary_admin_router
 from app.modules.glossary.routes import router as glossary_router
 
 router.include_router(glossary_router)
+router.include_router(glossary_admin_router)  # GET /api/v1/admin/glossary/miss-signals
 
 # Teams endpoints (API-051 to API-060)
 from app.modules.teams.routes import router as teams_router
@@ -155,6 +157,11 @@ from app.modules.registry.routes import router as registry_router
 
 router.include_router(registry_router)
 
+# KYB verification endpoints (HAR-012)
+from app.modules.registry.kyb_routes import router as kyb_router
+
+router.include_router(kyb_router)
+
 # Platform LLM Library endpoints (P2LLM-005)
 from app.modules.platform.llm_library.routes import router as llm_library_router
 
@@ -165,6 +172,11 @@ from app.modules.platform.cost_analytics import router as cost_analytics_router
 
 router.include_router(cost_analytics_router)
 
+# Platform Cost Alert Thresholds endpoints (PA-015)
+from app.modules.platform.cost_alerts import router as cost_alerts_router
+
+router.include_router(cost_alerts_router)
+
 # Admin LLM Config endpoints (P2LLM-006)
 from app.modules.admin.llm_config import router as llm_config_router
 
@@ -174,6 +186,62 @@ router.include_router(llm_config_router)
 from app.modules.admin.byollm import router as byollm_router
 
 router.include_router(byollm_router)
+
+# Admin KB access control endpoints (TA-007)
+from app.modules.admin.kb_access_control import router as kb_access_control_router
+
+router.include_router(kb_access_control_router)
+
+# Admin onboarding wizard endpoints (TA-031)
+from app.modules.admin.onboarding import router as onboarding_router
+
+router.include_router(onboarding_router)
+
+# Admin bulk user actions endpoints (TA-032)
+from app.modules.admin.bulk_user_actions import router as bulk_user_actions_router
+
+router.include_router(bulk_user_actions_router)
+
+# Admin KB source management endpoints (TA-034)
+from app.modules.admin.kb_sources import router as kb_sources_router
+
+router.include_router(kb_sources_router)
+
+# Admin Agent access control endpoints (TA-009)
+from app.modules.admin.agent_access_control import router as agent_access_control_router
+
+router.include_router(agent_access_control_router)
+
+# Access request workflow endpoints (TA-010)
+from app.modules.admin.access_requests import (
+    admin_router as access_requests_admin_router,
+    router as access_requests_router,
+)
+
+router.include_router(access_requests_router)
+router.include_router(access_requests_admin_router)
+
+# Notification preferences endpoints (DEF-003)
+from app.modules.users.notification_preferences import (
+    router as notification_prefs_router,
+)
+
+router.include_router(notification_prefs_router)
+
+# Privacy settings endpoints (DEF-004)
+from app.modules.users.privacy_settings import router as privacy_settings_router
+
+router.include_router(privacy_settings_router)
+
+# MCP servers admin endpoints (DEF-005)
+from app.modules.admin.mcp_servers import router as mcp_servers_router
+
+router.include_router(mcp_servers_router)
+
+# KB re-index estimate + reindex endpoints (TA-016)
+from app.modules.documents.reindex import router as reindex_router
+
+router.include_router(reindex_router)
 
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.

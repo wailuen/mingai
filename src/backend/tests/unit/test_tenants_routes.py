@@ -432,132 +432,154 @@ class TestGetTenantHealthScore:
         assert resp.status_code == 404
 
     def test_health_returns_all_required_fields(self, client, platform_headers):
-        """200 response includes overall_score, category, at_risk, and 4 components."""
-        with patch(
-            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
-        ) as mock_get, patch(
-            "app.modules.tenants.routes.get_tenant_health_components_db",
-            new_callable=AsyncMock,
-        ) as mock_components:
-            mock_get.return_value = _MOCK_TENANT
-            mock_components.return_value = _MOCK_HEALTH_COMPONENTS
-            resp = client.get(
-                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
-                headers=platform_headers,
-            )
+        """PA-009: 200 response includes current snapshot and 12-week trend."""
+        override_key = self._apply_session_override(client)
+        try:
+            with patch(
+                "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+            ) as mock_get:
+                mock_get.return_value = _MOCK_TENANT
+                resp = client.get(
+                    f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                    headers=platform_headers,
+                )
+        finally:
+            client.app.dependency_overrides.pop(override_key, None)
 
         assert resp.status_code == 200
         data = resp.json()
-        assert "overall_score" in data
-        assert "category" in data
-        assert "at_risk" in data
-        assert "tenant_id" in data
-        assert data["tenant_id"] == TEST_TENANT_ID
+        assert "current" in data
+        assert "trend" in data
 
-        components = data["components"]
-        assert "usage_trend" in components
-        assert "feature_breadth" in components
-        assert "satisfaction" in components
-        assert "error_rate" in components
+        current = data["current"]
+        assert "composite" in current
+        assert "usage_trend" in current
+        assert "feature_breadth" in current
+        assert "satisfaction" in current
+        assert "error_rate" in current
+        assert "at_risk_flag" in current
 
-    def test_health_component_weights_are_correct(self, client, platform_headers):
-        """Each component carries the correct weight (30/20/35/15)."""
-        with patch(
-            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
-        ) as mock_get, patch(
-            "app.modules.tenants.routes.get_tenant_health_components_db",
-            new_callable=AsyncMock,
-        ) as mock_components:
-            mock_get.return_value = _MOCK_TENANT
-            mock_components.return_value = _MOCK_HEALTH_COMPONENTS
-            resp = client.get(
-                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
-                headers=platform_headers,
-            )
+        # Trend is always 12 weeks
+        assert len(data["trend"]) == 12
 
-        data = resp.json()["components"]
-        assert data["usage_trend"]["weight"] == 0.30
-        assert data["feature_breadth"]["weight"] == 0.20
-        assert data["satisfaction"]["weight"] == 0.35
-        assert data["error_rate"]["weight"] == 0.15
+    def _apply_session_override(self, client):
+        """
+        Apply a FastAPI dependency override on the client's app that yields
+        a mock DB session returning empty rows — prevents real asyncpg pool access.
+        Returns the override key so the caller can clean up.
 
-    def test_health_at_risk_flag_set_for_low_score(self, client, platform_headers):
-        """at_risk is True when overall score falls below the 61-point threshold."""
-        low_components = {
-            **_MOCK_HEALTH_COMPONENTS,
-            "usage_trend_pct": -1.0,  # maximum decline
-            "feature_breadth": 0.0,
-            "satisfaction_pct": 0.0,
-            "error_rate_pct": 100.0,  # maximum errors
-        }
-        with patch(
-            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
-        ) as mock_get, patch(
-            "app.modules.tenants.routes.get_tenant_health_components_db",
-            new_callable=AsyncMock,
-        ) as mock_components:
-            mock_get.return_value = _MOCK_TENANT
-            mock_components.return_value = low_components
-            resp = client.get(
-                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
-                headers=platform_headers,
-            )
+        fetchone() and fetchall() are sync calls (MagicMock), execute() is async.
+        """
+        from unittest.mock import MagicMock
 
-        data = resp.json()
-        assert data["at_risk"] is True
-        assert data["overall_score"] < 61.0
+        from app.core.session import get_async_session
 
-    def test_health_at_risk_false_for_healthy_tenant(self, client, platform_headers):
-        """at_risk is False when all health components are at maximum."""
-        high_components = {
-            **_MOCK_HEALTH_COMPONENTS,
-            "usage_trend_pct": 0.0,  # flat growth (full score)
-            "feature_breadth": 1.0,
-            "satisfaction_pct": 100.0,
-            "error_rate_pct": 0.0,
-        }
-        with patch(
-            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
-        ) as mock_get, patch(
-            "app.modules.tenants.routes.get_tenant_health_components_db",
-            new_callable=AsyncMock,
-        ) as mock_components:
-            mock_get.return_value = _MOCK_TENANT
-            mock_components.return_value = high_components
-            resp = client.get(
-                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
-                headers=platform_headers,
-            )
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = None
+        mock_result.fetchall.return_value = []
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
-        data = resp.json()
-        assert data["at_risk"] is False
-        assert data["overall_score"] >= 61.0
+        async def _override():
+            yield mock_session
+
+        client.app.dependency_overrides[get_async_session] = _override
+        return get_async_session
+
+    def test_health_trend_has_iso_week_labels(self, client, platform_headers):
+        """PA-009: Trend entries have week labels in YYYY-Www format."""
+        import re
+
+        override_key = self._apply_session_override(client)
+        try:
+            with patch(
+                "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+            ) as mock_get:
+                mock_get.return_value = _MOCK_TENANT
+                resp = client.get(
+                    f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                    headers=platform_headers,
+                )
+        finally:
+            client.app.dependency_overrides.pop(override_key, None)
+
+        assert resp.status_code == 200
+        trend = resp.json()["trend"]
+        week_pattern = re.compile(r"^\d{4}-W\d{2}$")
+        for entry in trend:
+            assert week_pattern.match(
+                entry["week"]
+            ), f"Bad week format: {entry['week']}"
+
+    def test_health_missing_weeks_have_null_values(self, client, platform_headers):
+        """PA-009: Weeks with no stored data return null values, not omitted."""
+        override_key = self._apply_session_override(client)
+        try:
+            with patch(
+                "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+            ) as mock_get:
+                mock_get.return_value = _MOCK_TENANT
+                resp = client.get(
+                    f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                    headers=platform_headers,
+                )
+        finally:
+            client.app.dependency_overrides.pop(override_key, None)
+
+        assert resp.status_code == 200
+        trend = resp.json()["trend"]
+        for entry in trend:
+            assert "week" in entry
+            assert "composite" in entry
+            assert "usage_trend" in entry
+            assert "satisfaction" in entry
+
+    def test_health_current_snapshot_defaults_when_no_data(
+        self, client, platform_headers
+    ):
+        """PA-009: current snapshot fields are null when no stored rows exist."""
+        override_key = self._apply_session_override(client)
+        try:
+            with patch(
+                "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+            ) as mock_get:
+                mock_get.return_value = _MOCK_TENANT
+                resp = client.get(
+                    f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                    headers=platform_headers,
+                )
+        finally:
+            client.app.dependency_overrides.pop(override_key, None)
+
+        assert resp.status_code == 200
+        current = resp.json()["current"]
+        assert current["composite"] is None
+        assert current["at_risk_flag"] is False
 
     def test_health_component_details_include_raw_counts(
         self, client, platform_headers
     ):
-        """Each component includes a details dict with raw DB count data."""
-        with patch(
-            "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
-        ) as mock_get, patch(
-            "app.modules.tenants.routes.get_tenant_health_components_db",
-            new_callable=AsyncMock,
-        ) as mock_components:
-            mock_get.return_value = _MOCK_TENANT
-            mock_components.return_value = _MOCK_HEALTH_COMPONENTS
-            resp = client.get(
-                f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
-                headers=platform_headers,
-            )
+        """PA-009: current snapshot structure has no legacy fields."""
+        override_key = self._apply_session_override(client)
+        try:
+            with patch(
+                "app.modules.tenants.routes.get_tenant_db", new_callable=AsyncMock
+            ) as mock_get:
+                mock_get.return_value = _MOCK_TENANT
+                resp = client.get(
+                    f"/api/v1/platform/tenants/{TEST_TENANT_ID}/health",
+                    headers=platform_headers,
+                )
+        finally:
+            client.app.dependency_overrides.pop(override_key, None)
 
-        data = resp.json()["components"]
-        assert "recent_queries" in data["usage_trend"]["details"]
-        assert "prior_queries" in data["usage_trend"]["details"]
-        assert "features_active" in data["feature_breadth"]["details"]
-        assert data["feature_breadth"]["details"]["features_total"] == 5
-        assert "positive_feedback" in data["satisfaction"]["details"]
-        assert "total_feedback" in data["satisfaction"]["details"]
-        assert "open_issues" in data["error_rate"]["details"]
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "overall_score" not in data
+        assert "category" not in data
+        assert "at_risk" not in data
+        assert "current" in data
+        assert "trend" in data
 
 
 # ---------------------------------------------------------------------------

@@ -147,7 +147,16 @@ async def upsert_kb_access_db(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/knowledge-base/{index_id}/access", response_model=KBAccessResponse)
+# Canonical path: /access-control (with hyphen) — matches frontend hook convention.
+# /access (without hyphen) is retained as an alias for backward compatibility.
+@router.get(
+    "/knowledge-base/{index_id}/access-control", response_model=KBAccessResponse
+)
+@router.get(
+    "/knowledge-base/{index_id}/access",
+    response_model=KBAccessResponse,
+    include_in_schema=False,
+)
 async def get_kb_access(
     index_id: str,
     current_user: CurrentUser = Depends(require_tenant_admin),
@@ -177,7 +186,14 @@ async def get_kb_access(
     )
 
 
-@router.patch("/knowledge-base/{index_id}/access", response_model=KBAccessResponse)
+@router.patch(
+    "/knowledge-base/{index_id}/access-control", response_model=KBAccessResponse
+)
+@router.patch(
+    "/knowledge-base/{index_id}/access",
+    response_model=KBAccessResponse,
+    include_in_schema=False,
+)
 async def patch_kb_access(
     index_id: str,
     body: PatchKBAccessRequest,

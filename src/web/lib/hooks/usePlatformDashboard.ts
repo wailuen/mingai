@@ -51,6 +51,8 @@ export interface Tenant {
   status: string;
   primary_contact_email: string;
   created_at: string;
+  llm_profile_id?: string | null;
+  is_byollm?: boolean;
 }
 
 export interface TenantsResponse {

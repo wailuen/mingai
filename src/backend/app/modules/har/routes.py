@@ -244,7 +244,7 @@ async def create_transaction(
             hours=APPROVAL_WINDOW_HOURS
         )
 
-    return await create_transaction_db(
+    txn = await create_transaction_db(
         tenant_id=current_user.tenant_id,
         initiator_agent_id=body.initiator_agent_id,
         counterparty_agent_id=body.counterparty_agent_id,
@@ -255,6 +255,28 @@ async def create_transaction(
         approval_deadline=approval_deadline,
         db=session,
     )
+
+    # HAR-009: send approval email to all tenant_admin users (non-blocking)
+    if requires_approval and body.amount is not None:
+        from app.modules.har.email_notifications import notify_approval_required
+
+        try:
+            await notify_approval_required(
+                transaction_id=txn["id"],
+                tenant_id=current_user.tenant_id,
+                amount=body.amount,
+                currency=body.currency or "USD",
+                db=session,
+            )
+        except Exception as exc:
+            logger.error(
+                "har_approval_email_hook_failed",
+                transaction_id=txn["id"],
+                tenant_id=current_user.tenant_id,
+                error_type=type(exc).__name__,
+            )
+
+    return txn
 
 
 @router.get("/transactions")

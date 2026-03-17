@@ -45,6 +45,27 @@ export function useLLMConfig() {
   });
 }
 
+// LibraryOption is a subset of LLMLibraryEntry — only published fields TA can see
+export interface LibraryOption {
+  id: string;
+  provider: string;
+  model_name: string;
+  display_name: string;
+  plan_tier: string;
+  is_recommended: boolean;
+  pricing_per_1k_tokens_in: number | null;
+  pricing_per_1k_tokens_out: number | null;
+}
+
+/** GET /api/v1/admin/llm-config/library-options — tenant-admin accessible */
+export function useLLMLibraryOptions() {
+  return useQuery({
+    queryKey: ["admin-llm-library-options"] as const,
+    queryFn: () =>
+      apiGet<LibraryOption[]>("/api/v1/admin/llm-config/library-options"),
+  });
+}
+
 /** PATCH /api/v1/admin/llm-config */
 export function useUpdateLLMConfig() {
   const queryClient = useQueryClient();
