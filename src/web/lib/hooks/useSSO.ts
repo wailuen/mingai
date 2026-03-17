@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost } from "@/lib/api";
 
 export interface SAMLConfig {
   entity_id: string;
@@ -58,5 +58,38 @@ export function useTestSSOConnection() {
       saml?: SAMLConfig;
       oidc?: OIDCConfig;
     }) => apiPost<SSOTestResult>("/api/v1/admin/sso/test", config),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Group Sync Config (P3AUTH-015)
+// ---------------------------------------------------------------------------
+
+export type GroupRole = "admin" | "editor" | "viewer" | "user";
+
+export interface GroupSyncConfig {
+  allowed_groups: string[];
+  group_role_mapping: Record<string, GroupRole>;
+}
+
+const GROUP_SYNC_KEY = "group-sync-config";
+
+export function useGroupSyncConfig() {
+  return useQuery({
+    queryKey: [GROUP_SYNC_KEY],
+    queryFn: () =>
+      apiGet<GroupSyncConfig>("/api/v1/admin/sso/group-sync/config"),
+  });
+}
+
+export function useUpdateGroupSyncConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: GroupSyncConfig) =>
+      apiPatch<GroupSyncConfig>("/api/v1/admin/sso/group-sync/config", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [GROUP_SYNC_KEY] });
+    },
   });
 }

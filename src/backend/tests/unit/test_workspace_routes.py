@@ -270,10 +270,17 @@ class TestGroupSyncConfigGet:
         assert data["group_role_mapping"]["HR-Staff"] == "viewer"
         assert data["group_role_mapping"]["Finance-Team"] == "editor"
 
-    def test_requires_tenant_admin(self, client):
+    def test_requires_auth(self, client):
         """GET returns 401 without auth."""
         resp = client.get("/api/v1/admin/sso/group-sync/config")
         assert resp.status_code == 401
+
+    def test_end_user_cannot_get_config(self, client, user_headers):
+        """GET returns 403 for end_user role."""
+        resp = client.get(
+            "/api/v1/admin/sso/group-sync/config", headers=user_headers
+        )
+        assert resp.status_code == 403
 
 
 class TestGroupSyncConfigPatch:
@@ -343,10 +350,19 @@ class TestGroupSyncConfigPatch:
         assert data["allowed_groups"] == []
         assert data["group_role_mapping"] == {}
 
-    def test_requires_tenant_admin(self, client):
+    def test_requires_auth(self, client):
         """PATCH returns 401 without auth."""
         resp = client.patch(
             "/api/v1/admin/sso/group-sync/config",
             json={"allowed_groups": [], "group_role_mapping": {}},
         )
         assert resp.status_code == 401
+
+    def test_end_user_cannot_patch_config(self, client, user_headers):
+        """PATCH returns 403 for end_user role."""
+        resp = client.patch(
+            "/api/v1/admin/sso/group-sync/config",
+            json={"allowed_groups": [], "group_role_mapping": {}},
+            headers=user_headers,
+        )
+        assert resp.status_code == 403

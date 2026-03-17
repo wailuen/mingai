@@ -6,6 +6,7 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { useSSOConfig, useTestSSOConnection } from "@/lib/hooks/useSSO";
 import { SSOStatusCard } from "./elements/SSOStatusCard";
 import { SSOSetupWizard } from "./elements/SSOSetupWizard";
+import { GroupSyncConfigPanel } from "./elements/GroupSyncConfigPanel";
 import { Loader2 } from "lucide-react";
 
 /**
@@ -84,13 +85,20 @@ export default function SSOPage() {
           )}
         </ErrorBoundary>
 
+        {/* Group Sync Config — only shown when SSO is configured */}
+        {isConfigured && (
+          <ErrorBoundary>
+            <GroupSyncConfigPanel />
+          </ErrorBoundary>
+        )}
+
         {/* Test result inline */}
         {testMutation.isSuccess && (
           <div
             className={`rounded-control border p-3 ${
               testMutation.data.success
-                ? "border-accent/30 bg-accent-dim"
-                : "border-alert/30 bg-alert-dim"
+                ? "border-accent-ring bg-accent-dim"
+                : "border-alert-ring bg-alert-dim"
             }`}
           >
             <p

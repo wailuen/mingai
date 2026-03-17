@@ -381,15 +381,34 @@ async def test_sso_connection(
 _VALID_MAPPING_ROLES = {"admin", "editor", "viewer", "user"}
 
 
+_MAX_GROUPS = 200
+_MAX_GROUP_NAME_LEN = 256
+
+
 class GroupSyncConfigRequest(BaseModel):
     """PATCH /admin/sso/group-sync/config request body."""
 
-    allowed_groups: list[str] = Field(default_factory=list)
-    group_role_mapping: dict[str, str] = Field(default_factory=dict)
+    allowed_groups: list[str] = Field(default_factory=list, max_length=_MAX_GROUPS)
+    group_role_mapping: dict[str, str] = Field(default_factory=dict, max_length=_MAX_GROUPS)
+
+    @field_validator("allowed_groups")
+    @classmethod
+    def validate_group_name_lengths(cls, v: list[str]) -> list[str]:
+        for name in v:
+            if len(name) > _MAX_GROUP_NAME_LEN:
+                raise ValueError(
+                    f"Group name exceeds {_MAX_GROUP_NAME_LEN} characters"
+                )
+        return v
 
     @field_validator("group_role_mapping")
     @classmethod
     def validate_role_values(cls, v: dict[str, str]) -> dict[str, str]:
+        for key in v:
+            if len(key) > _MAX_GROUP_NAME_LEN:
+                raise ValueError(
+                    f"Group name key exceeds {_MAX_GROUP_NAME_LEN} characters"
+                )
         invalid = {role for role in v.values() if role not in _VALID_MAPPING_ROLES}
         if invalid:
             raise ValueError(
