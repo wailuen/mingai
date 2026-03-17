@@ -68,12 +68,14 @@ src/secrets/
 # Playwright MCP runtime data (console logs, captured screenshots)
 .playwright-mcp/
 
-# E2E test screenshots (generated artifacts)
+# E2E test screenshots and test run artifacts (generated, not source)
 *.png
 *.jpg
 *.jpeg
 e2e-*.png
 demo-*.png
+playwright-report/
+test-results/
 
 # Node.js (Playwright runner)
 node_modules/

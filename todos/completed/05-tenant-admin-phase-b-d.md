@@ -2,6 +2,7 @@
 
 **Generated**: 2026-03-15
 **Last updated**: 2026-03-17 (Session 36 — TA-001/002/003/004/005/033/035 all COMPLETED. 36/36 COMPLETE excluding TA-025 which remains BLOCKED on product gate. 2511 unit tests passing.)
+**Moved to completed**: 2026-03-17 (Todo cleanup — 35/36 actionable items COMPLETE. TA-025 product-gated on 5-10 persona interviews; no codegen work remains.)
 **Phase**: B (Weeks 7-14), C (Weeks 15-22), D (Weeks 23-28)
 **Numbering**: TA-001 through TA-036
 **Stack**: FastAPI + Auth0 + PostgreSQL + Kailash DataFlow
@@ -499,8 +500,8 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-025: Agent Studio
 
-**Status**: ⛔ BLOCKED — product-gated
-**Depends on**: 5-10 persona interviews (per FE-036 gate — product decision)
+**Status**: PRODUCT-GATED — do not implement
+**Gate condition**: 5-10 persona interviews required (per FE-036 gate — product decision)
 **Description**: Custom agent authoring (system prompt + tool selection + KB + guardrails). Do NOT implement until persona interviews complete and product decision made.
 **Notes**: FE-036 was marked NOT STARTED in Session 14 for this reason. This item will move to active when the product gate is cleared. No subtasks defined until then.
 
@@ -548,7 +549,7 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 **Status**: ✅ COMPLETE
 **Completed**: 2026-03-16
-**Evidence**: `compute_root_cause_correlation_db` detects satisfaction drop ≥10pp within 48h of sync event. Embedded in TA-027 response.
+**Evidence**: `compute_root_cause_correlation_db` detects satisfaction drop >=10pp within 48h of sync event. Embedded in TA-027 response.
 **Effort**: 4h
 **Depends on**: TA-027
 **Description**: When both satisfaction AND document freshness change within 48 hours, flag potential correlation. Logic: compare satisfaction_rate drop timestamp (from TA-026 trend data) vs last document sync timestamp (`sync_jobs.last_sync_at`). If within 48h: include `{ "potential_cause": "document_freshness", "sync_at": "...", "satisfaction_drop_at": "...", "confidence": "medium" }` in TA-027 analytics response.
@@ -735,7 +736,7 @@ Phase B:
 Phase C:
   PA-019 (agent_templates table) → TA-020 (seed templates) → TA-021 (deployment)
   TA-021 → TA-022 (list) / TA-023 (test chat) / TA-024 (upgrade)
-  TA-025: BLOCKED (product gate)
+  TA-025: PRODUCT-GATED (persona interviews required)
   TA-026 (satisfaction API) → TA-027 (performance detail) → TA-028 (correlation)
 
 Phase D:
