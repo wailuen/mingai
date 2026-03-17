@@ -159,7 +159,9 @@ async def get_workspace_settings_db(tenant_id: str, db) -> dict:
     return merged
 
 
-async def update_workspace_settings_db(tenant_id: str, updates: dict, db) -> dict:
+async def update_workspace_settings_db(
+    tenant_id: str, actor_id: str, updates: dict, db
+) -> dict:
     """
     Update workspace settings with partial update (upsert).
 
@@ -222,7 +224,7 @@ async def update_workspace_settings_db(tenant_id: str, updates: dict, db) -> dic
         {
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
-            "actor_id": tenant_id,
+            "actor_id": actor_id,
             "details": json.dumps({"updated_fields": list(updates.keys())}),
         },
     )
@@ -271,6 +273,7 @@ async def update_workspace_settings(
 
     result = await update_workspace_settings_db(
         tenant_id=current_user.tenant_id,
+        actor_id=current_user.id,
         updates=updates,
         db=session,
     )
@@ -339,7 +342,8 @@ async def get_setup_checklist(
 
 
 # ---------------------------------------------------------------------------
-# SSO Configuration (stub — Phase 2 full SAML/OIDC integration)
+# SSO Configuration (P3AUTH-003 partial — config storage; SAML/OIDC Auth0
+# wiring is P3AUTH-004/005 and requires P3AUTH-001 external setup)
 # ---------------------------------------------------------------------------
 
 
@@ -348,30 +352,102 @@ class SSOConfigResponse(BaseModel):
 
     provider: Optional[str] = None  # "saml" | "oidc" | null
     status: str = "not_configured"  # "configured" | "not_configured" | "error"
+    saml: Optional[dict] = None
+    oidc: Optional[dict] = None
+
+
+async def _get_sso_config_db(tenant_id: str, db) -> dict:
+    """Read SSO config from tenant_configs (config_type='sso_config')."""
+    result = await db.execute(
+        text(
+            "SELECT config_data FROM tenant_configs "
+            "WHERE tenant_id = :tid AND config_type = 'sso_config'"
+        ),
+        {"tid": tenant_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        return {}
+    import json as _json
+
+    data = row[0]
+    return _json.loads(data) if isinstance(data, str) else (data or {})
 
 
 @router.get("/sso", response_model=SSOConfigResponse)
 async def get_sso_config(
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
     """Get SSO configuration for this tenant."""
-    return SSOConfigResponse(provider=None, status="not_configured")
+    config = await _get_sso_config_db(current_user.tenant_id, session)
+    if not config:
+        return SSOConfigResponse(provider=None, status="not_configured")
+    return SSOConfigResponse(
+        provider=config.get("provider"),
+        status=config.get("status", "configured"),
+        saml=config.get("saml"),
+        oidc=config.get("oidc"),
+    )
+
+
+class SSOConfigRequest(BaseModel):
+    """Request body for saving SSO config."""
+
+    provider: str = Field(..., pattern="^(saml|oidc)$")
+    status: str = Field(default="configured", pattern="^(configured|error)$")
+    saml: Optional[dict] = None
+    oidc: Optional[dict] = None
 
 
 @router.post("/sso", response_model=SSOConfigResponse)
 async def save_sso_config(
+    request: SSOConfigRequest,
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
-    """Save SSO configuration (Phase 2 — full SAML/OIDC wiring)."""
-    return SSOConfigResponse(provider=None, status="not_configured")
+    """Save SSO configuration."""
+    import json as _json
+
+    data = request.model_dump(exclude_none=True)
+    await session.execute(
+        text(
+            "INSERT INTO tenant_configs (id, tenant_id, config_type, config_data) "
+            "VALUES (:id, :tid, 'sso_config', CAST(:data AS jsonb)) "
+            "ON CONFLICT (tenant_id, config_type) DO UPDATE SET config_data = CAST(:data AS jsonb)"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "tid": current_user.tenant_id,
+            "data": _json.dumps(data),
+        },
+    )
+    await session.commit()
+    logger.info(
+        "sso_config_saved", tenant_id=current_user.tenant_id, provider=request.provider
+    )
+    return SSOConfigResponse(
+        provider=request.provider,
+        status=request.status,
+        saml=request.saml,
+        oidc=request.oidc,
+    )
 
 
 @router.post("/sso/test")
 async def test_sso_connection(
     current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
 ):
-    """Test SSO connection (Phase 2)."""
-    return {"success": False, "message": "SSO integration is not yet configured."}
+    """Test SSO connection — verifies config is stored; full Auth0 test flow requires P3AUTH-001."""
+    config = await _get_sso_config_db(current_user.tenant_id, session)
+    if not config or not config.get("provider"):
+        return {"success": False, "message": "SSO is not configured for this tenant."}
+    return {
+        "success": True,
+        "message": f"SSO config found (provider={config['provider']}). "
+        "Live connection test requires Auth0 integration (P3AUTH-001).",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -389,16 +465,16 @@ class GroupSyncConfigRequest(BaseModel):
     """PATCH /admin/sso/group-sync/config request body."""
 
     allowed_groups: list[str] = Field(default_factory=list, max_length=_MAX_GROUPS)
-    group_role_mapping: dict[str, str] = Field(default_factory=dict, max_length=_MAX_GROUPS)
+    group_role_mapping: dict[str, str] = Field(
+        default_factory=dict, max_length=_MAX_GROUPS
+    )
 
     @field_validator("allowed_groups")
     @classmethod
     def validate_group_name_lengths(cls, v: list[str]) -> list[str]:
         for name in v:
             if len(name) > _MAX_GROUP_NAME_LEN:
-                raise ValueError(
-                    f"Group name exceeds {_MAX_GROUP_NAME_LEN} characters"
-                )
+                raise ValueError(f"Group name exceeds {_MAX_GROUP_NAME_LEN} characters")
         return v
 
     @field_validator("group_role_mapping")
