@@ -80,3 +80,6 @@ test-results/
 # Node.js (Playwright runner)
 node_modules/
 package-lock.json
+
+# Nested .claude/learning directories (backend, web, mobile sub-projects)
+**/.claude/learning/
