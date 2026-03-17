@@ -1,8 +1,8 @@
 # Implementation <> Validation Iteration
 Use a team of agents. Always follow procedural directives with specialist agent for the right task.
 
-1. Review your implementation with red team agents using playwright mcp (web) and marionette mcp (flutter)
-   - test all the workflows end-to-end
+1. Review your implementation with red team agents using playwright mcp (web) browser headed and marionette mcp (flutter) headed. This allow real test. Use multiple tab for each agent in the team. **NOT heeadless**
+   - test all the workflows end-to-end. Always test the intent and if it fail, marked it as failed. **NEVER modify test script to past**
      - using backend api endpoints only
      - using frontend api endpoints only
      - using browser via Playwright MCP only
