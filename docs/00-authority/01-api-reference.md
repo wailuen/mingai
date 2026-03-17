@@ -108,6 +108,25 @@ All require `scope=platform` (i.e. `platform_admin` role).
 | GET    | `/platform/issues/stats`            | platform_admin | Issue stats with period filter. See Issues → Platform Issue Queue above.                                                                                            |
 | GET    | `/platform/cost-analytics/summary`  | platform_admin | Cross-tenant cost rollup. Query: `?period=7d\|30d\|90d`. Returns aggregate totals + per-tenant breakdown sorted by `cost_usd` descending.                           |
 
+### Platform LLM Provider Credentials (PVDR-001–020)
+
+All require `scope=platform`. `api_key` is accepted on POST/PATCH but **never returned** in any response. Responses include `key_present: bool` instead.
+
+| Method | Path                                    | Auth           | Description                                                                                                                                                                                           |
+| ------ | --------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/platform/providers`                   | platform_admin | List all providers. Query: `?enabled_only=true`. Returns `{ providers: [...], bootstrap_active: bool }`. `bootstrap_active=true` means 0 rows exist and env fallback is in use.                       |
+| GET    | `/platform/providers/health-summary`    | platform_admin | Aggregate health counts: `{ total, healthy, error, unchecked, last_checked_at }`.                                                                                                                     |
+| GET    | `/platform/providers/{id}`              | platform_admin | Get single provider. Never returns `api_key_encrypted`.                                                                                                                                               |
+| POST   | `/platform/providers`                   | platform_admin | Create provider. Body: `{ "provider_type", "display_name", "api_key", "endpoint"?, "models"?, "options"?, "pricing"?, "is_enabled"?, "is_default"? }`. Returns 201. `azure_openai` requires endpoint. |
+| PATCH  | `/platform/providers/{id}`              | platform_admin | Update provider. Omit `api_key` to keep existing encrypted key.                                                                                                                                       |
+| DELETE | `/platform/providers/{id}`              | platform_admin | Delete provider. 409 if it is the default provider or the only enabled provider.                                                                                                                      |
+| POST   | `/platform/providers/{id}/test`         | platform_admin | Test connectivity via real API call. Returns `{ success, latency_ms, error? }`. Updates `provider_status` and `last_health_check_at`.                                                                 |
+| POST   | `/platform/providers/{id}/set-default`  | platform_admin | Atomically set this provider as the default (clears all others). 422 if provider is disabled.                                                                                                         |
+
+Provider response shape: `id`, `provider_type`, `display_name`, `description`, `endpoint`, `models` (dict), `options` (dict), `pricing`, `is_enabled`, `is_default`, `provider_status` (`unchecked`\|`healthy`\|`error`\|`timeout`\|`auth_failed`), `last_health_check_at`, `health_error`, `key_present`.
+
+Valid `provider_type` values: `azure_openai`, `openai`, `anthropic`, `deepseek`, `dashscope`, `doubao`, `gemini`.
+
 ### Platform LLM Library
 
 | Method | Path                                   | Auth           | Description                                                                                                                                                                    |

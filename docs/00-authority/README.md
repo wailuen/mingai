@@ -20,9 +20,9 @@ mingai is a multi-tenant enterprise AI assistant platform. Three roles share one
 
 | Document              | What it covers                                                                                                                                                                           | Read when                       |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `CLAUDE.md`           | Full codegen instructions: architecture, all key file paths, backend patterns (18 patterns + 15 gotchas), frontend structure, design system summary, env vars, security invariants       | Start of every coding session   |
+| `CLAUDE.md`           | Full codegen instructions: architecture, all key file paths, backend patterns (17 patterns + 18 gotchas), frontend structure, design system summary, env vars, security invariants (28)  | Start of every coding session   |
 | `01-api-reference.md` | All endpoints — method, path, auth requirement, request/response shape                                                                                                                   | Adding or changing any endpoint |
-| `02-architecture.md`  | Deep dives: multi-tenancy + RLS, JWT v2, cloud-agnostic storage, caching strategy, screenshot blur pipeline, issue triage stream, GitHub webhook, health score formula, HAR A2A protocol | Touching core infrastructure    |
+| `02-architecture.md`  | Deep dives: multi-tenancy + RLS, JWT v2, cloud-agnostic storage, caching strategy, screenshot blur pipeline, issue triage stream, GitHub webhook, health score formula, HAR A2A protocol, **LLM provider credentials** (Fernet-encrypted BYTEA, DB-first resolution, bootstrap seed, background health job) | Touching core infrastructure    |
 
 ---
 
@@ -55,7 +55,7 @@ API prefix: `/api/v1/` on all backend endpoints.
 | `tests/unit/`              | Tier 1 — mocked, 2087+ tests                                         |
 | `tests/integration/`       | Tier 2 — real PostgreSQL + Redis (Docker)                            |
 | `tests/e2e/`               | Tier 3 — Playwright, full stack                                      |
-| `alembic/versions/`        | Database migrations v001–v029 (31 total)                             |
+| `alembic/versions/`        | Database migrations v001–v039 (40 total)                             |
 | `docker-compose.yml`       | PostgreSQL + Redis for local dev                                     |
 
 ### Frontend (`src/web/`)
@@ -143,6 +143,7 @@ These must pass before any feature is merged:
 | Issue actions validated against module-level allowlist   | Admin/platform action endpoints  |
 | Redis key segments validated against `_SAFE_SEGMENT_RE`  | All Redis key construction       |
 | Ed25519 private keys Fernet-encrypted at rest            | HAR agent keypairs               |
+| LLM provider API keys Fernet-encrypted (BYTEA); `api_key_encrypted` never returned in any API response | `/platform/providers` all responses |
 | HAR nonce replay check (Redis SETNX TTL=600)             | All signed HAR events            |
 | HAR human approval gate for amounts >= $5,000            | HAR transaction commit path      |
 

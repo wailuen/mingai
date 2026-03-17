@@ -55,9 +55,14 @@ src/backend/
       health.py               # build_health_response()
       logging.py              # structlog JSON setup
       bootstrap.py            # First-run schema/seed logic
-      seeds.py                # Seed data helpers
+      seeds.py                # Seed data helpers — seed_llm_provider_from_env() bootstraps default provider row (PVDR-006)
       schema.py               # Shared Pydantic base schemas
       storage.py              # Cloud-agnostic presigned URL (aws/azure/gcp/local)
+      llm/
+        provider_service.py   # ProviderService — Fernet encrypt/decrypt, CRUD, connectivity test (PVDR-002)
+        instrumented_client.py# InstrumentedLLMClient — DB-first provider resolution, env fallback, usage events (PVDR-004/005)
+        azure_openai.py       # AzureOpenAIProvider / AzureOpenAIEmbeddingProvider (accept explicit credentials)
+        openai_direct.py      # OpenAIDirectProvider / OpenAIDirectEmbeddingProvider
     modules/
       auth/
         jwt.py                # decode_jwt_token(), decode_jwt_token_v1_compat()
@@ -112,6 +117,10 @@ src/backend/
       platform/routes.py      # Platform admin dashboard, audit log
       registry/routes.py      # HAR agent registry — public discovery + CRUD
       llm_profiles/routes.py  # LLM profile slot→deployment mapping (platform admin)
+      platform/llm_providers/
+        routes.py             # 8 endpoints at /platform/providers — platform provider CRUD (PVDR-003)
+      platform/provider_health_job.py # APScheduler job — health checks all enabled providers every 600s (PVDR-007)
+      admin/llm_config.py     # Tenant provider selection endpoints (extended for PVDR-009)
       profile/learning.py     # ProfileLearningService — async learning from queries
       feedback/routes.py      # User feedback collection
       glossary/routes.py      # CRUD + bulk import + export + miss analytics + version history (TA-012) + rollback (TA-013)
@@ -122,7 +131,7 @@ src/backend/
     fixtures/                 # Shared test data (llm_providers.json etc.)
     conftest.py               # Root conftest — session-scoped TestClient
   alembic/
-    versions/                 # v001–v029 migrations (schema, RLS, HAR, cache, agents, KB access control, etc.)
+    versions/                 # v001–v039 migrations (schema, RLS, HAR, cache, agents, KB access control, llm_providers, etc.)
   docker-compose.yml          # PostgreSQL + Redis for local dev/testing
   pyproject.toml
 ```
@@ -135,7 +144,7 @@ alembic upgrade head                              # apply all
 alembic revision --autogenerate -m "description" # generate new
 ```
 
-31 migrations applied (v001–v029 + **init**).
+40 migrations applied (v001–v039 + **init**).
 
 ---
 
@@ -318,6 +327,49 @@ await health_monitor.start()
 
 `TeamWorkingMemoryService` stores only anonymized strings: `"a team member asked: <truncated>"`. Writing `user_id` to team memory is a GDPR violation.
 
+### 15. LLM Provider Credentials — Fernet-Encrypted BYTEA
+
+API keys are stored in `llm_providers.api_key_encrypted` (BYTEA). Encryption uses the same Fernet key as HAR private keys (`get_fernet()` from `app.modules.har.crypto`). The plaintext key exists in memory only for the duration of one API call.
+
+```python
+from app.core.llm.provider_service import ProviderService
+
+svc = ProviderService()
+encrypted = svc.encrypt_api_key(plaintext_key)  # → bytes, store in BYTEA
+
+decrypted = svc.decrypt_api_key(encrypted_bytes)
+try:
+    # use decrypted key to instantiate adapter
+    pass
+finally:
+    decrypted = ""  # ALWAYS clear in finally block
+```
+
+`list_providers()` and `get_provider()` NEVER return `api_key_encrypted`. They return `key_present: bool` instead.
+
+### 16. InstrumentedLLMClient — DB-First, Env Fallback
+
+`InstrumentedLLMClient` resolves credentials from the `llm_providers` table on every call, not from env vars directly. Env vars are the fallback only.
+
+Resolution order for `complete()`:
+
+1. Check `tenant_configs["llm_provider_selection"]` — use the tenant-chosen provider if set
+2. Query `llm_providers WHERE is_default=true AND is_enabled=true`
+3. Decrypt key, instantiate adapter, clear key in `finally`
+4. If no DB row: warn `llm_providers_env_fallback_active`, fall back to `AZURE_PLATFORM_OPENAI_API_KEY` + `PRIMARY_MODEL` from env
+
+The same DB-first / env-fallback pattern applies to `embed()`. The env fallback logs a warning every time it is used — that warning in production logs means the platform needs a configured default provider.
+
+### 17. llm_providers Table — Platform Scope Only
+
+The `llm_providers` table has RLS enabled with a single policy: `current_setting('app.scope', true) = 'platform'`. Before any query on this table, execute:
+
+```python
+await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
+```
+
+Unlike tenant tables, this is NOT `set_config('app.tenant_id', ...)` — it checks `app.scope`. Missing this step causes RLS to block all reads/writes silently.
+
 ---
 
 ## Auth Architecture
@@ -427,6 +479,9 @@ Requires: Full running stack. Uses Playwright.
 13. asyncpg event loop binding in integration tests — multiple `asyncio.run()` calls require resetting `app.core.redis_client._redis_pool = None`.
 14. `generate_bootstrap_sql()` returns `list[tuple[text_obj, dict]]` — call `await session.execute(sql, params)`.
 15. HAR `verify_event_signature()` uses `.isoformat()` not `str()` for datetime — they produce different formats.
+16. `llm_providers` RLS checks `app.scope = 'platform'`, not `app.tenant_id` — querying without `set_config('app.scope', 'platform', true)` returns 0 rows silently (not an error).
+17. `ProviderService.decrypt_api_key()` raises `ValueError` if `JWT_SECRET_KEY` changed since the key was stored. This is intentional — a key rotation requires re-entering provider credentials.
+18. `run_provider_health_job()` jitters per-provider (0–30s random sleep) — one failing provider does not block others, but the total job runtime can be up to `N * 30s + test_latency` seconds.
 
 ---
 
@@ -488,6 +543,11 @@ Never violate these:
 21. KB assignment: verify `kb_id` belongs to calling tenant before upserting `kb_access_control`.
 22. `update_glossary_term_db` must operate on a copy of `updates` dict (never mutate caller's dict).
 23. `audit_log.actor_id` must always be set to `current_user.id` (the acting user's ID), never `tenant_id`.
+24. `api_key_encrypted` (BYTEA) is NEVER returned from any API response — use `key_present: bool` instead.
+25. Decrypted LLM provider keys must be cleared (`decrypted_key = ""`) in a `finally` block immediately after adapter instantiation.
+26. `llm_providers` table queries require `set_config('app.scope', 'platform', true)` — it uses scope-based RLS, not tenant-id RLS.
+27. `delete_provider` returns 409 if target is the default provider or the only enabled provider — never orphan the platform without a provider.
+28. Provider connectivity tests perform real API calls — never mock in integration/E2E tests.
 
 ---
 
@@ -518,6 +578,7 @@ src/web/
       elements/page.tsx           # Provisioning progress (FE-041)
       issues/page.tsx             # Engineering issue queue
       llm-profiles/page.tsx       # LLM profile management
+      providers/page.tsx          # Platform provider credentials management (PVDR-001–020)
       registry/page.tsx           # Agent registry
       tenants/page.tsx            # Tenant management
       tool-catalog/page.tsx       # Tool catalog
@@ -558,7 +619,7 @@ src/web/
     sse.ts                         # SSE hook utility
     types/
       issues.ts                    # Issue-related TypeScript types
-    hooks/                         # useAuth.ts, useChat.ts, useMyReports.ts
+    hooks/                         # useAuth.ts, useChat.ts, useMyReports.ts, useLLMProviders.ts (6 React Query hooks for /platform/providers)
     utils.ts                       # Shared utilities
   middleware.ts                    # Route protection by JWT scope/role
   tailwind.config.ts               # Obsidian Intelligence design tokens
@@ -671,7 +732,7 @@ Card padding: `20px`. Admin content: `28px 32px`. Section gap: `24-28px`.
 
 ### Backend Modules (all implemented)
 
-auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), users, teams, agents (+ templates), tenants, platform, registry, llm_profiles, profile/learning, feedback
+auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), admin/llm_config (+ tenant provider selection), users, teams, agents (+ templates), tenants, platform, registry, llm_profiles, **platform/llm_providers** (PVDR-001–020, Fernet-encrypted BYTEA credentials), **platform/provider_health_job** (APScheduler 600s health checks), profile/learning, feedback
 
 ### Frontend Screens by Role
 
@@ -679,6 +740,6 @@ auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary
 
 **Tenant Admin**: dashboard, agents (library + deploy from template), analytics, document stores (SharePoint + Google Drive + sync health), glossary, knowledge-base, teams (members + audit log + memory controls + Auth0 sync), users (directory + bulk invite), workspace settings, SSO wizard, memory policy, issue queue, analytics, agent templates, cost analytics
 
-**Platform Admin**: dashboard (tenant health table + alert summary + provisioning), tenants (CRUD + health + quota + LLM profiles + token budget), LLM profiles, agent templates, tool catalog, registry, engineering issue queue (platform queue + severity override + GitHub issue link), analytics (platform-wide + cost), audit log
+**Platform Admin**: dashboard (tenant health table + alert summary + provisioning), tenants (CRUD + health + quota + LLM profiles + token budget), LLM profiles, **provider credentials** (PVDR-001–020: list/create/edit/delete/test/set-default + bootstrap banner + health summary), agent templates, tool catalog, registry, engineering issue queue (platform queue + severity override + GitHub issue link), analytics (platform-wide + cost), audit log
 
 **Not started (product-gated)**: FE-036 Agent Studio (`/admin/agents/studio/`) — full authoring environment with prompt editor, AI suggestions, example conversation builder, test chat.

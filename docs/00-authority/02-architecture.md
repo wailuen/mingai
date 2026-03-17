@@ -435,3 +435,69 @@ kyb_pts: {0→0, 1→15, 2→30, 3→40}
 
 - `tenant_isolation` policy: `tenant_id = current_setting('app.current_tenant_id')::uuid`
 - `platform_admin_bypass` policy: `current_setting('app.scope', true) = 'platform'`
+
+---
+
+## LLM Provider Credentials Management (PVDR-001–020)
+
+Migration: `v039_llm_providers.py` (revision `039`, 2026-03-17).
+
+### Purpose
+
+Platform admins store LLM provider API keys in the database rather than hard-coding them in environment variables. The `llm_providers` table holds one row per provider (Azure OpenAI, OpenAI, Anthropic, DeepSeek, DashScope, Doubao, Gemini). `InstrumentedLLMClient` resolves credentials from the DB on every call, with env vars as a graceful fallback.
+
+### Key Invariants
+
+1. `api_key_encrypted` column is `BYTEA`. The plaintext key never exists in any DB row.
+2. `list_providers()` and `get_provider()` select all columns except `api_key_encrypted`. They return `key_present: bool` (derived from `octet_length(api_key_encrypted) > 0`) instead.
+3. Every decrypt operation must clear the plaintext key in a `finally` block: `decrypted_key = ""`.
+4. Only one row may have `is_default = true` — enforced by a partial unique index.
+5. Deleting the default provider or the only enabled provider returns 409.
+
+### Encryption
+
+API keys are Fernet-encrypted using the same `get_fernet()` call as HAR Ed25519 private keys. The Fernet key is derived from `JWT_SECRET_KEY` via PBKDF2HMAC (200k iterations, SHA256, salt `b"mingai-har-v1"`). Changing `JWT_SECRET_KEY` invalidates all stored provider keys — re-entry required.
+
+### RLS Policy
+
+`llm_providers` does not use tenant isolation. Its single RLS policy is:
+
+```sql
+CREATE POLICY llm_providers_platform ON llm_providers
+FOR ALL
+USING (current_setting('app.scope', true) = 'platform')
+WITH CHECK (current_setting('app.scope', true) = 'platform')
+```
+
+All callers must execute `SELECT set_config('app.scope', 'platform', true)` before any query. Missing this causes the policy to return empty results silently (not an error).
+
+### Resolution Chain in InstrumentedLLMClient
+
+For every `complete()` or `embed()` call:
+
+```
+1. tenant_configs["llm_provider_selection"] → use specific provider_id if present
+       ↓ not found / provider disabled
+2. llm_providers WHERE is_default=true AND is_enabled=true LIMIT 1
+       ↓ 0 rows
+3. Env fallback: AZURE_PLATFORM_OPENAI_API_KEY + AZURE_PLATFORM_OPENAI_ENDPOINT
+   (logs WARNING: llm_providers_env_fallback_active)
+```
+
+The env fallback is intentional for bootstrap — a fresh deploy before any provider is configured still works. The warning in structured logs is the signal that a provider needs to be set up.
+
+### Bootstrap
+
+`seed_llm_provider_from_env()` (in `seeds.py`) is idempotent. It checks `COUNT(*) FROM llm_providers` and inserts a row only if the table is empty. Called from the startup lifespan if `AZURE_PLATFORM_OPENAI_API_KEY` and `AZURE_PLATFORM_OPENAI_ENDPOINT` are set. This creates the initial default provider automatically so the platform is immediately operational after first deploy.
+
+### Background Health Job
+
+`start_provider_health_scheduler(app)` (in `provider_health_job.py`) registers an APScheduler `AsyncIOScheduler` that calls `run_provider_health_job()` every 600 seconds. Each run:
+
+1. Fetches all enabled provider IDs.
+2. Jitters each check by 0–30s (random) to avoid thundering herd.
+3. Decrypts the key, tests connectivity via a real API call, clears the key in `finally`.
+4. Writes `provider_status`, `last_health_check_at`, `health_error` back to the DB.
+5. One provider failure does not abort the others.
+
+Log key: `provider_health_check` with fields `provider_id`, `provider_type`, `success`, `new_status`.
