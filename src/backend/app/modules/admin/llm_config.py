@@ -31,6 +31,9 @@ router = APIRouter(prefix="/admin", tags=["admin-llm-config"])
 
 _VALID_MODEL_SOURCES = frozenset({"library", "byollm"})
 
+# Slot names available for provider selection display
+_AVAILABLE_SLOTS = ["primary", "chat", "doc_embedding", "kb_embedding", "intent"]
+
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -282,3 +285,194 @@ async def update_llm_config(
             else False,
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# PVDR-008: Tenant Provider Selection API
+# ---------------------------------------------------------------------------
+
+
+class ProviderOptionResponse(BaseModel):
+    """An enabled platform provider available for tenant selection."""
+
+    id: str
+    provider_type: str
+    display_name: str
+    description: Optional[str] = None
+    is_default: bool
+    provider_status: str
+    slots_available: list[str]
+
+    model_config = {"protected_namespaces": ()}
+
+
+class ProviderSelectionResponse(BaseModel):
+    """Tenant's current provider selection."""
+
+    provider_id: Optional[str] = None
+    using_default: bool
+
+    model_config = {"protected_namespaces": ()}
+
+
+class UpdateProviderSelectionRequest(BaseModel):
+    """PATCH /admin/llm-config/provider — set or clear provider selection."""
+
+    provider_id: Optional[str] = Field(
+        None,
+        description="UUID of an enabled platform provider, or null to use default",
+    )
+
+    model_config = {"protected_namespaces": ()}
+
+
+@router.get("/llm-config/providers", response_model=list[ProviderOptionResponse])
+async def list_available_providers(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    PVDR-008: List enabled platform providers available for tenant selection.
+
+    Returns enabled providers with slots_available derived from the models dict.
+    No credentials are returned.
+    """
+    await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
+
+    result = await db.execute(
+        text(
+            "SELECT id, provider_type, display_name, description, "
+            "is_default, provider_status, models "
+            "FROM llm_providers WHERE is_enabled = true "
+            "ORDER BY is_default DESC, display_name ASC"
+        )
+    )
+    rows = result.fetchall()
+
+    import json as _json
+
+    _AVAILABLE_SLOTS = ["primary", "chat", "doc_embedding", "kb_embedding", "intent"]
+
+    options = []
+    for row in rows:
+        models_raw = row[6]
+        if isinstance(models_raw, str):
+            models_dict = _json.loads(models_raw) if models_raw else {}
+        elif isinstance(models_raw, dict):
+            models_dict = models_raw
+        else:
+            models_dict = {}
+
+        slots_available = [s for s in _AVAILABLE_SLOTS if models_dict.get(s)]
+
+        options.append(
+            ProviderOptionResponse(
+                id=str(row[0]),
+                provider_type=row[1],
+                display_name=row[2],
+                description=row[3],
+                is_default=row[4],
+                provider_status=row[5],
+                slots_available=slots_available,
+            )
+        )
+
+    return options
+
+
+@router.patch("/llm-config/provider", response_model=ProviderSelectionResponse)
+async def update_provider_selection(
+    request: UpdateProviderSelectionRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    PVDR-008: Set or clear tenant LLM provider selection.
+
+    - provider_id: UUID of enabled provider → upsert selection
+    - provider_id: null → delete selection (use platform default)
+    - unknown provider_id → 404
+    - disabled provider_id → 422
+    """
+    tenant_id = current_user.tenant_id
+
+    if request.provider_id is not None:
+        # Validate provider exists and is enabled
+        await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
+        check_result = await db.execute(
+            text("SELECT is_enabled FROM llm_providers WHERE id = :id"),
+            {"id": request.provider_id},
+        )
+        provider_row_check = check_result.fetchone()
+        if provider_row_check is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Provider not found",
+            )
+        if not provider_row_check[0]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Provider is disabled and cannot be selected",
+            )
+
+        # Reset RLS to tenant scope for tenant_configs write.
+        # Both app.scope and app.tenant_id must be correct before the INSERT.
+        await db.execute(text("SELECT set_config('app.scope', 'tenant', true)"))
+        await db.execute(
+            text("SELECT set_config('app.tenant_id', :tid, true)"),
+            {"tid": tenant_id},
+        )
+
+        config_data = {"provider_id": request.provider_id}
+        await db.execute(
+            text(
+                "INSERT INTO tenant_configs (id, tenant_id, config_type, config_data) "
+                "VALUES (:id, :tid, 'llm_provider_selection', CAST(:data AS jsonb)) "
+                "ON CONFLICT (tenant_id, config_type) DO UPDATE "
+                "SET config_data = CAST(:data AS jsonb)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "tid": tenant_id,
+                "data": json.dumps(config_data),
+            },
+        )
+        await db.commit()
+        await _invalidate_config_cache(tenant_id)
+
+        logger.info(
+            "tenant_provider_selection_updated",
+            tenant_id=tenant_id,
+            provider_id=request.provider_id,
+        )
+
+        return ProviderSelectionResponse(
+            provider_id=request.provider_id,
+            using_default=False,
+        )
+
+    else:
+        # Remove selection — use platform default
+        await db.execute(
+            text("SELECT set_config('app.tenant_id', :tid, true)"),
+            {"tid": tenant_id},
+        )
+        await db.execute(
+            text(
+                "DELETE FROM tenant_configs "
+                "WHERE tenant_id = :tid AND config_type = 'llm_provider_selection'"
+            ),
+            {"tid": tenant_id},
+        )
+        await db.commit()
+        await _invalidate_config_cache(tenant_id)
+
+        logger.info(
+            "tenant_provider_selection_cleared",
+            tenant_id=tenant_id,
+        )
+
+        return ProviderSelectionResponse(
+            provider_id=None,
+            using_default=True,
+        )

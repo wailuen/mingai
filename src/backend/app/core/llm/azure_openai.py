@@ -1,7 +1,11 @@
 """
 Azure OpenAI LLM and Embedding Provider adapters (P2LLM-002).
 
-Reads credentials from environment variables:
+Supports two credential modes:
+  1. Explicit: pass api_key, endpoint, api_version at construction (PVDR-004)
+  2. Env fallback: reads from environment variables (legacy mode)
+
+Environment variables (used when explicit credentials not supplied):
     AZURE_PLATFORM_OPENAI_API_KEY
     AZURE_PLATFORM_OPENAI_ENDPOINT
     AZURE_PLATFORM_OPENAI_API_VERSION  (default: "2024-02-01")
@@ -10,6 +14,7 @@ API keys are NEVER exposed in __repr__, logs, or exception messages.
 """
 import os
 import time
+from typing import Optional
 
 import structlog
 
@@ -18,36 +23,47 @@ from app.core.llm.base import CompletionResponse, EmbeddingProvider, LLMProvider
 logger = structlog.get_logger()
 
 
-def _get_azure_client():
+def _get_azure_client(
+    api_key: Optional[str] = None,
+    endpoint: Optional[str] = None,
+    api_version: Optional[str] = None,
+):
     """
-    Build and return an AsyncAzureOpenAI client from environment variables.
+    Build and return an AsyncAzureOpenAI client.
+
+    If api_key/endpoint are provided, uses them directly.
+    Otherwise falls back to environment variables.
 
     Raises ValueError if required credentials are missing.
     API key is never logged or repr'd.
     """
     from openai import AsyncAzureOpenAI
 
-    api_key = os.environ.get("AZURE_PLATFORM_OPENAI_API_KEY", "").strip()
-    endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "").strip()
-    api_version = os.environ.get(
+    resolved_key = (api_key or "").strip() or os.environ.get(
+        "AZURE_PLATFORM_OPENAI_API_KEY", ""
+    ).strip()
+    resolved_endpoint = (endpoint or "").strip() or os.environ.get(
+        "AZURE_PLATFORM_OPENAI_ENDPOINT", ""
+    ).strip()
+    resolved_version = (api_version or "").strip() or os.environ.get(
         "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
     ).strip()
 
-    if not api_key:
+    if not resolved_key:
         raise ValueError(
             "AZURE_PLATFORM_OPENAI_API_KEY is required for AzureOpenAI provider. "
             "Set it in .env."
         )
-    if not endpoint:
+    if not resolved_endpoint:
         raise ValueError(
             "AZURE_PLATFORM_OPENAI_ENDPOINT is required for AzureOpenAI provider. "
             "Set it in .env."
         )
 
     return AsyncAzureOpenAI(
-        api_key=api_key,
-        azure_endpoint=endpoint,
-        api_version=api_version,
+        api_key=resolved_key,
+        azure_endpoint=resolved_endpoint,
+        api_version=resolved_version,
     )
 
 
@@ -55,16 +71,28 @@ class AzureOpenAIProvider(LLMProvider):
     """
     Azure OpenAI chat completion adapter.
 
-    Credentials are read from environment variables at construction time.
+    Supports two construction modes:
+      - AzureOpenAIProvider() — reads credentials from env vars (legacy)
+      - AzureOpenAIProvider(api_key=..., endpoint=...) — explicit credentials (PVDR-004)
+
     The API key is stored privately and never appears in repr or exceptions.
     """
 
-    def __init__(self) -> None:
-        self._client = _get_azure_client()
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        api_version: Optional[str] = None,
+    ) -> None:
+        self._endpoint = (endpoint or "").strip() or os.environ.get(
+            "AZURE_PLATFORM_OPENAI_ENDPOINT", "<not set>"
+        )
+        self._client = _get_azure_client(
+            api_key=api_key, endpoint=endpoint, api_version=api_version
+        )
 
     def __repr__(self) -> str:
-        endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "<not set>")
-        return f"AzureOpenAIProvider(endpoint={endpoint!r})"
+        return f"AzureOpenAIProvider(endpoint={self._endpoint!r})"
 
     async def complete(
         self,
@@ -117,15 +145,26 @@ class AzureOpenAIEmbeddingProvider(EmbeddingProvider):
     """
     Azure OpenAI embedding adapter.
 
-    Credentials are read from environment variables at construction time.
+    Supports two construction modes:
+      - AzureOpenAIEmbeddingProvider() — reads credentials from env vars (legacy)
+      - AzureOpenAIEmbeddingProvider(api_key=..., endpoint=...) — explicit credentials
     """
 
-    def __init__(self) -> None:
-        self._client = _get_azure_client()
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        api_version: Optional[str] = None,
+    ) -> None:
+        self._endpoint = (endpoint or "").strip() or os.environ.get(
+            "AZURE_PLATFORM_OPENAI_ENDPOINT", "<not set>"
+        )
+        self._client = _get_azure_client(
+            api_key=api_key, endpoint=endpoint, api_version=api_version
+        )
 
     def __repr__(self) -> str:
-        endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "<not set>")
-        return f"AzureOpenAIEmbeddingProvider(endpoint={endpoint!r})"
+        return f"AzureOpenAIEmbeddingProvider(endpoint={self._endpoint!r})"
 
     async def embed(
         self,

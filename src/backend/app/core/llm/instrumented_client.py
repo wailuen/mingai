@@ -94,23 +94,106 @@ class InstrumentedLLMClient:
         """
         Generate embeddings for a tenant, routing through the configured adapter.
 
-        Falls back to the platform Azure OpenAI embedding provider if BYOLLM
-        is configured but doesn't support embeddings.
+        DB provider resolution (PVDR-005):
+        1. Query default provider row from llm_providers
+        2. Use models["doc_embedding"] as embedding model
+        3. If provider_type == "anthropic": fall back to _resolve_embedding_fallback_adapter()
+        4. If no default DB row: env fallback EMBEDDING_MODEL (warn: llm_providers_embed_env_fallback_active)
         """
-        from app.core.llm.azure_openai import AzureOpenAIEmbeddingProvider
+        from app.core.session import async_session_factory
+        from sqlalchemy import text as sa_text
 
-        model_source_config = await self._config_svc.get(tenant_id, "llm_config")
-        model_source = "library"
-        if model_source_config and isinstance(model_source_config, dict):
-            model_source = model_source_config.get("model_source", "library")
+        try:
+            async with async_session_factory() as session:
+                await session.execute(
+                    sa_text("SELECT set_config('app.scope', 'platform', true)")
+                )
+                result = await session.execute(
+                    sa_text(
+                        "SELECT id, provider_type, endpoint, models, options, api_key_encrypted "
+                        "FROM llm_providers WHERE is_default = true AND is_enabled = true LIMIT 1"
+                    )
+                )
+                row = result.fetchone()
+
+            if row is not None:
+                provider_type = row[1]
+                endpoint = row[2]
+                models_dict = row[3] if isinstance(row[3], dict) else {}
+                options_dict = row[4] if isinstance(row[4], dict) else {}
+                encrypted_bytes = bytes(row[5]) if row[5] else b""
+
+                embedding_model = (
+                    models_dict.get("doc_embedding")
+                    or models_dict.get("kb_embedding")
+                    or os.environ.get("EMBEDDING_MODEL", "").strip()
+                )
+
+                if provider_type == "anthropic":
+                    # Anthropic doesn't support embeddings — fall back to azure/openai
+                    (
+                        embed_adapter,
+                        embedding_model,
+                    ) = await self._resolve_embedding_fallback_adapter()
+                    return await embed_adapter.embed(texts=texts, model=embedding_model)
+
+                if not embedding_model:
+                    raise ValueError(
+                        "No embedding model configured. Set models.doc_embedding on the default "
+                        "provider or EMBEDDING_MODEL in .env."
+                    )
+
+                from app.core.llm.provider_service import ProviderService
+
+                svc = ProviderService()
+                decrypted_key = svc.decrypt_api_key(encrypted_bytes)
+                try:
+                    if provider_type == "azure_openai":
+                        from app.core.llm.azure_openai import (
+                            AzureOpenAIEmbeddingProvider,
+                        )
+
+                        api_version = options_dict.get(
+                            "api_version",
+                            os.environ.get(
+                                "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
+                            ),
+                        )
+                        provider = AzureOpenAIEmbeddingProvider(
+                            api_key=decrypted_key,
+                            endpoint=endpoint,
+                            api_version=api_version,
+                        )
+                    elif provider_type == "openai":
+                        from app.core.llm.openai_direct import (
+                            OpenAIDirectEmbeddingProvider,
+                        )
+
+                        provider = OpenAIDirectEmbeddingProvider(api_key=decrypted_key)
+                    else:
+                        raise ValueError(
+                            f"Provider type {provider_type!r} does not support embeddings."
+                        )
+                finally:
+                    decrypted_key = ""  # clear immediately
+
+                return await provider.embed(texts=texts, model=embedding_model)
+
+        except Exception as exc:
+            logger.warning(
+                "instrumented_client_embed_db_failed",
+                error=str(exc),
+            )
+
+        # Env fallback
+        logger.warning("llm_providers_embed_env_fallback_active")
+        from app.core.llm.azure_openai import AzureOpenAIEmbeddingProvider
 
         embedding_model = os.environ.get("EMBEDDING_MODEL", "").strip()
         if not embedding_model:
             raise ValueError(
                 "EMBEDDING_MODEL environment variable is required. Set it in .env."
             )
-
-        # Embeddings always route through platform provider (BYOLLM embedding TBD)
         provider = AzureOpenAIEmbeddingProvider()
         return await provider.embed(texts=texts, model=embedding_model)
 
@@ -121,6 +204,11 @@ class InstrumentedLLMClient:
     async def _resolve_adapter(self, tenant_id: str) -> tuple[LLMProvider, str, str]:
         """
         Resolve the LLM adapter, model name, and model_source for a tenant.
+
+        Priority:
+          1. If tenant has a provider_selection in tenant_configs, use that provider (PVDR-009)
+          2. If BYOLLM mode, use BYOLLM adapter
+          3. Otherwise library mode — query llm_providers DB (PVDR-004), env fallback
 
         Returns:
             (adapter, model_name, model_source)
@@ -140,30 +228,173 @@ class InstrumentedLLMClient:
         if model_source == "byollm":
             return await self._resolve_byollm_adapter(tenant_id)
 
-        # Library mode — use platform Azure OpenAI
-        return await self._resolve_library_adapter(llm_library_id)
+        # PVDR-009: Check tenant provider selection
+        selected_provider_id: Optional[str] = None
+        try:
+            provider_selection = await self._config_svc.get(
+                tenant_id, "llm_provider_selection"
+            )
+            if provider_selection and isinstance(provider_selection, dict):
+                selected_provider_id = provider_selection.get("provider_id")
+        except Exception:
+            pass
+
+        # Library mode — query DB provider
+        return await self._resolve_library_adapter(
+            llm_library_id, provider_id=selected_provider_id
+        )
 
     async def _resolve_library_adapter(
-        self, llm_library_id: Optional[str]
+        self,
+        llm_library_id: Optional[str],
+        provider_id: Optional[str] = None,
     ) -> tuple[LLMProvider, str, str]:
-        """Resolve adapter for library mode."""
+        """
+        Resolve adapter for library mode.
+
+        Resolution order:
+        1. Query llm_providers DB — specific provider_id if supplied (PVDR-009),
+           else default provider (PVDR-004)
+        2. Decrypt key, build adapter, clear key immediately
+        3. If no DB provider: env fallback (warn: llm_providers_env_fallback_active)
+        """
         from app.core.llm.azure_openai import AzureOpenAIProvider
+        from app.core.session import async_session_factory
+        from sqlalchemy import text as sa_text
 
         primary_model = os.environ.get("PRIMARY_MODEL", "").strip()
-        if not primary_model:
-            raise ValueError(
-                "PRIMARY_MODEL environment variable is required. Set it in .env."
+
+        # Try DB provider lookup
+        try:
+            async with async_session_factory() as session:
+                await session.execute(
+                    sa_text("SELECT set_config('app.scope', 'platform', true)")
+                )
+
+                if provider_id:
+                    result = await session.execute(
+                        sa_text(
+                            "SELECT provider_type, endpoint, models, options, api_key_encrypted "
+                            "FROM llm_providers WHERE id = :id AND is_enabled = true LIMIT 1"
+                        ),
+                        {"id": provider_id},
+                    )
+                else:
+                    result = await session.execute(
+                        sa_text(
+                            "SELECT provider_type, endpoint, models, options, api_key_encrypted "
+                            "FROM llm_providers WHERE is_default = true AND is_enabled = true LIMIT 1"
+                        )
+                    )
+                row = result.fetchone()
+
+            if row is None and provider_id:
+                # Tenant-selected provider is invalid — log and fall through to default
+                logger.warning(
+                    "tenant_provider_selection_invalid_fallback",
+                    tenant_provider_id=provider_id,
+                    reason="provider_not_found_or_disabled",
+                )
+                # Recurse without provider_id to use default
+                return await self._resolve_library_adapter(llm_library_id)
+
+            if row is not None:
+                db_provider_type = row[0]
+                db_endpoint = row[1]
+                db_models = row[2] if isinstance(row[2], dict) else {}
+                db_options = row[3] if isinstance(row[3], dict) else {}
+                encrypted_bytes = bytes(row[4]) if row[4] else b""
+
+                # Resolve model name from llm_library if configured, else from provider models
+                model_name = (
+                    primary_model or db_models.get("primary") or db_models.get("chat")
+                )
+
+                if llm_library_id:
+                    try:
+                        async with async_session_factory() as session:
+                            lib_result = await session.execute(
+                                sa_text(
+                                    "SELECT model_name FROM llm_library "
+                                    "WHERE id = :id AND status = 'Published'"
+                                ),
+                                {"id": llm_library_id},
+                            )
+                            lib_row = lib_result.fetchone()
+                            if lib_row:
+                                model_name = lib_row[0]
+                    except Exception as exc:
+                        logger.warning(
+                            "instrumented_client_library_lookup_failed",
+                            llm_library_id=llm_library_id,
+                            error=str(exc),
+                        )
+
+                if not model_name:
+                    raise ValueError(
+                        "No model name configured. Set PRIMARY_MODEL in .env or configure "
+                        "models.primary on the default provider."
+                    )
+
+                from app.core.llm.provider_service import ProviderService
+
+                svc = ProviderService()
+                decrypted_key = svc.decrypt_api_key(encrypted_bytes)
+                try:
+                    if db_provider_type == "azure_openai":
+                        api_version = db_options.get(
+                            "api_version",
+                            os.environ.get(
+                                "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
+                            ),
+                        )
+                        adapter = AzureOpenAIProvider(
+                            api_key=decrypted_key,
+                            endpoint=db_endpoint,
+                            api_version=api_version,
+                        )
+                    elif db_provider_type == "openai":
+                        from app.core.llm.openai_direct import OpenAIDirectProvider
+
+                        adapter = OpenAIDirectProvider(api_key=decrypted_key)
+                    else:
+                        raise NotImplementedError(
+                            f"Provider type {db_provider_type!r} adapter not yet implemented"
+                        )
+                finally:
+                    decrypted_key = ""  # clear immediately
+
+                return adapter, model_name, "library"
+
+        except (ValueError, NotImplementedError):
+            raise
+        except Exception as exc:
+            logger.warning(
+                "instrumented_client_db_provider_lookup_failed",
+                error=str(exc),
             )
 
-        # If a library entry is specified, try to read its model_name
+        # Env fallback (PVDR-012: graceful, not hard fail)
+        if not primary_model:
+            raise ValueError(
+                "PRIMARY_MODEL environment variable is required. Set it in .env "
+                "or configure a default provider in the platform provider settings."
+            )
+
+        logger.warning(
+            "llm_providers_env_fallback_active",
+            reason="no_db_provider_resolved",
+        )
+
+        # If a library entry is specified, try to read its model_name from llm_library
         if llm_library_id:
             try:
                 from app.core.session import async_session_factory
-                from sqlalchemy import text
+                from sqlalchemy import text as sa_text
 
                 async with async_session_factory() as session:
                     result = await session.execute(
-                        text(
+                        sa_text(
                             "SELECT model_name FROM llm_library "
                             "WHERE id = :id AND status = 'Published'"
                         ),
@@ -208,7 +439,7 @@ class InstrumentedLLMClient:
             "utf-8"
         )
 
-        model = os.environ.get("PRIMARY_MODEL", "").strip() or "gpt-4o"
+        model = os.environ.get("PRIMARY_MODEL", "").strip()
 
         if provider == "azure_openai":
             from openai import AsyncAzureOpenAI
@@ -220,13 +451,15 @@ class InstrumentedLLMClient:
             api_version = os.environ.get(
                 "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
             )
-            client = AsyncAzureOpenAI(
-                api_key=plaintext_key,
-                azure_endpoint=endpoint,
-                api_version=api_version,
-            )
-            # plaintext_key will be GC'd after this scope
-            from app.core.llm.azure_openai import AzureOpenAIProvider
+            try:
+                client = AsyncAzureOpenAI(
+                    api_key=plaintext_key,
+                    azure_endpoint=endpoint,
+                    api_version=api_version,
+                )
+            finally:
+                plaintext_key = ""  # Clear from heap immediately after use
+
             import time
 
             class _ByoAzureAdapter(LLMProvider):
@@ -257,9 +490,102 @@ class InstrumentedLLMClient:
             # openai_direct
             from app.core.llm.openai_direct import OpenAIDirectProvider
 
-            adapter = OpenAIDirectProvider(api_key=plaintext_key)
-            # plaintext_key will be GC'd after this scope
+            try:
+                adapter = OpenAIDirectProvider(api_key=plaintext_key)
+            finally:
+                plaintext_key = ""  # Clear from heap immediately after use
             return adapter, model, "byollm"
+
+    async def _resolve_embedding_fallback_adapter(self):
+        """
+        PVDR-010: Find a non-Anthropic provider that supports embeddings.
+
+        Used when the default provider is Anthropic (which doesn't provide embeddings).
+
+        SQL:
+            SELECT * FROM llm_providers
+            WHERE is_enabled = true
+              AND provider_type IN ('azure_openai', 'openai')
+              AND models->>'doc_embedding' IS NOT NULL
+              AND models->>'doc_embedding' != ''
+            ORDER BY is_default DESC, created_at ASC
+            LIMIT 1
+
+        Returns (adapter, model_name) or raises ValueError with actionable message.
+        Key is cleared immediately after adapter instantiation.
+        """
+        from app.core.session import async_session_factory
+        from sqlalchemy import text as sa_text
+
+        async with async_session_factory() as session:
+            await session.execute(
+                sa_text("SELECT set_config('app.scope', 'platform', true)")
+            )
+            result = await session.execute(
+                sa_text(
+                    "SELECT provider_type, endpoint, models, options, api_key_encrypted "
+                    "FROM llm_providers "
+                    "WHERE is_enabled = true "
+                    "  AND provider_type IN ('azure_openai', 'openai') "
+                    "  AND models->>'doc_embedding' IS NOT NULL "
+                    "  AND models->>'doc_embedding' != '' "
+                    "ORDER BY is_default DESC, created_at ASC "
+                    "LIMIT 1"
+                )
+            )
+            row = result.fetchone()
+
+        if row is None:
+            raise ValueError(
+                "No embedding-capable provider configured. "
+                "Add an azure_openai or openai provider with models.doc_embedding set, "
+                "or configure a non-Anthropic default provider."
+            )
+
+        provider_type, endpoint, models_dict, options_dict, encrypted_bytes = row
+        if isinstance(models_dict, str):
+            import json
+
+            models_dict = json.loads(models_dict) if models_dict else {}
+        if isinstance(options_dict, str):
+            import json
+
+            options_dict = json.loads(options_dict) if options_dict else {}
+
+        embedding_model = models_dict.get("doc_embedding") or models_dict.get(
+            "kb_embedding"
+        )
+        encrypted_bytes = bytes(encrypted_bytes) if encrypted_bytes else b""
+
+        from app.core.llm.provider_service import ProviderService
+
+        svc = ProviderService()
+        decrypted_key = svc.decrypt_api_key(encrypted_bytes)
+        try:
+            if provider_type == "azure_openai":
+                from app.core.llm.azure_openai import AzureOpenAIEmbeddingProvider
+
+                api_version = options_dict.get(
+                    "api_version",
+                    os.environ.get("AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"),
+                )
+                adapter = AzureOpenAIEmbeddingProvider(
+                    api_key=decrypted_key,
+                    endpoint=endpoint,
+                    api_version=api_version,
+                )
+            elif provider_type == "openai":
+                from app.core.llm.openai_direct import OpenAIDirectEmbeddingProvider
+
+                adapter = OpenAIDirectEmbeddingProvider(api_key=decrypted_key)
+            else:
+                raise ValueError(
+                    f"Unexpected provider_type {provider_type!r} in embedding fallback"
+                )
+        finally:
+            decrypted_key = ""  # clear immediately
+
+        return adapter, embedding_model
 
     async def _write_usage_event(
         self,

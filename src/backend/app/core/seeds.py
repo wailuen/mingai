@@ -302,6 +302,101 @@ _DB_SEED_TEMPLATES: list[dict[str, Any]] = [
 ]
 
 
+async def seed_llm_provider_from_env(db_session=None) -> bool:
+    """
+    PVDR-006: Bootstrap a default LLM provider row from environment variables.
+
+    Idempotent: only creates a row if the llm_providers table is empty.
+    Reads:
+        AZURE_PLATFORM_OPENAI_API_KEY
+        AZURE_PLATFORM_OPENAI_ENDPOINT
+        PRIMARY_MODEL
+
+    Returns True if a row was inserted, False otherwise.
+    Accepts optional db_session; creates its own if not supplied.
+    """
+    import os
+
+    from sqlalchemy import text
+
+    from app.core.session import async_session_factory
+
+    api_key = os.environ.get("AZURE_PLATFORM_OPENAI_API_KEY", "").strip()
+    endpoint = os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "").strip()
+    primary_model = os.environ.get("PRIMARY_MODEL", "").strip()
+    embedding_model = os.environ.get("EMBEDDING_MODEL", "").strip()
+    intent_model = os.environ.get("INTENT_MODEL", "").strip()
+
+    if not api_key or not endpoint or not primary_model:
+        logger.warning(
+            "llm_provider_bootstrap_skip_missing_env",
+            has_api_key=bool(api_key),
+            has_endpoint=bool(endpoint),
+            has_primary_model=bool(primary_model),
+        )
+        return False
+
+    async def _do_seed(db):
+        await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
+
+        count_result = await db.execute(text("SELECT COUNT(*) FROM llm_providers"))
+        count_row = count_result.fetchone()
+        if count_row and int(count_row[0]) > 0:
+            logger.debug("llm_provider_bootstrap_skip_existing_rows")
+            return False
+
+        models_dict: dict = {}
+        if primary_model:
+            models_dict["primary"] = primary_model
+            models_dict["chat"] = primary_model
+        if embedding_model:
+            models_dict["doc_embedding"] = embedding_model
+            models_dict["kb_embedding"] = embedding_model
+        if intent_model:
+            models_dict["intent"] = intent_model
+
+        from app.core.llm.provider_service import ProviderService
+
+        svc = ProviderService()
+        encrypted_key = svc.encrypt_api_key(api_key)
+
+        await db.execute(
+            text(
+                "INSERT INTO llm_providers "
+                "(id, provider_type, display_name, description, endpoint, "
+                " api_key_encrypted, models, options, is_enabled, is_default, "
+                " provider_status, created_at, updated_at) "
+                "VALUES "
+                "(:id, 'azure_openai', 'Platform Azure OpenAI (auto-seeded)', "
+                " 'Auto-seeded from environment variables at startup', "
+                " :endpoint, :api_key_encrypted, CAST(:models AS jsonb), "
+                " CAST(:options AS jsonb), true, true, 'unchecked', NOW(), NOW())"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "endpoint": endpoint,
+                "api_key_encrypted": encrypted_key,
+                "models": json.dumps(models_dict),
+                "options": json.dumps({}),
+            },
+        )
+        await db.commit()
+
+        slot_count = len(models_dict)
+        logger.info(
+            "llm_provider_seeded_from_env",
+            slot_count=slot_count,
+            provider_type="azure_openai",
+        )
+        return True
+
+    if db_session is not None:
+        return await _do_seed(db_session)
+
+    async with async_session_factory() as db:
+        return await _do_seed(db)
+
+
 async def seed_agent_templates() -> int:
     """
     TA-020: Insert the 4 standard seed templates into agent_templates table.

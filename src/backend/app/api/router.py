@@ -175,6 +175,11 @@ from app.modules.platform.llm_library.routes import router as llm_library_router
 
 router.include_router(llm_library_router)
 
+# Platform LLM Provider Credentials endpoints (PVDR-003)
+from app.modules.platform.llm_providers.routes import router as llm_providers_router
+
+router.include_router(llm_providers_router)
+
 # Platform Cost Analytics endpoints (P2LLM-012)
 from app.modules.platform.cost_analytics import router as cost_analytics_router
 

@@ -212,6 +212,14 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # PVDR-006: Bootstrap LLM provider from env vars if table is empty.
+    try:
+        from app.core.seeds import seed_llm_provider_from_env
+
+        await seed_llm_provider_from_env()
+    except Exception as exc:
+        logger.warning("llm_provider_seed_failed", error=str(exc))
+
     # TA-020: Seed agent templates into agent_templates table on startup.
     try:
         from app.core.seeds import seed_agent_templates
@@ -283,6 +291,23 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning(
             "har_approval_timeout_scheduler_startup_failed",
+            error=str(exc),
+        )
+
+    # PVDR-007: Start provider health check job (runs every 600 seconds).
+    try:
+        from app.modules.platform.provider_health_job import (
+            start_provider_health_scheduler,
+        )
+
+        start_provider_health_scheduler(app)
+        logger.info(
+            "provider_health_scheduler_started",
+            interval_seconds=600,
+        )
+    except Exception as exc:
+        logger.warning(
+            "provider_health_scheduler_startup_failed",
             error=str(exc),
         )
 

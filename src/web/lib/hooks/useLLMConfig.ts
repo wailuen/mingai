@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPatch, apiDelete } from "@/lib/api";
+import type { ProviderType, ProviderStatus } from "./useLLMProviders";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,6 +101,54 @@ export function useDeleteBYOLLM() {
     mutationFn: () => apiDelete("/api/v1/admin/llm-config/byollm"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CONFIG_KEY });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// PVDR-016: Tenant provider selection
+// ---------------------------------------------------------------------------
+
+export interface AvailableProvider {
+  id: string;
+  provider_type: ProviderType;
+  display_name: string;
+  is_default: boolean;
+  provider_status: ProviderStatus;
+  slots_available?: string[];
+}
+
+export interface ProviderSelectionResponse {
+  provider_id: string | null;
+  using_default: boolean;
+}
+
+const AVAILABLE_PROVIDERS_KEY = ["admin-llm-available-providers"] as const;
+const PROVIDER_SELECTION_KEY = ["admin-llm-provider-selection"] as const;
+
+/** GET /api/v1/admin/llm-config/providers — list of enabled providers for tenant admin */
+export function useAvailableProviders() {
+  return useQuery({
+    queryKey: AVAILABLE_PROVIDERS_KEY,
+    queryFn: () =>
+      apiGet<AvailableProvider[]>("/api/v1/admin/llm-config/providers"),
+  });
+}
+
+/** PATCH /api/v1/admin/llm-config/provider — select or clear a provider */
+export function useSelectProvider() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: { provider_id: string | null }) =>
+      apiPatch<ProviderSelectionResponse>(
+        "/api/v1/admin/llm-config/provider",
+        payload,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONFIG_KEY });
+      queryClient.invalidateQueries({ queryKey: AVAILABLE_PROVIDERS_KEY });
+      queryClient.invalidateQueries({ queryKey: PROVIDER_SELECTION_KEY });
     },
   });
 }
