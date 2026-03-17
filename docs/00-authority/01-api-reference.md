@@ -224,7 +224,7 @@ All glossary writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
 
 ## SSO (Tenant Admin)
 
-All stored under `tenant_configs` table using JSONB `config_data`. No external Auth0 validation yet (P3AUTH-001 pending).
+All stored under `tenant_configs` table using JSONB `config_data`. Auth0 enterprise connections created dynamically via Management API.
 
 ### SSO Config
 
@@ -232,7 +232,27 @@ All stored under `tenant_configs` table using JSONB `config_data`. No external A
 | ------ | ----------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
 | GET    | `/admin/sso`      | tenant_admin | Get current SSO config (`config_type='sso_config'`). Returns `{ isConfigured, provider, domain, ... }`. |
 | POST   | `/admin/sso`      | tenant_admin | Save SSO config. Body: `{ provider, domain, client_id, ... }`. Upserts `tenant_configs` row.            |
-| POST   | `/admin/sso/test` | tenant_admin | Check config presence. Returns `{ success, message }`. Full Auth0 test pending P3AUTH-001.              |
+| POST   | `/admin/sso/test` | tenant_admin | Check config presence. Returns `{ success, message }`.                                                  |
+
+### Microsoft Entra ID (Azure AD) SSO Wizard (ENTRA-001/002/004)
+
+Each tenant gets its own Auth0 `waad` enterprise connection. Connection is created dynamically and scoped to the tenant's Auth0 Organization.
+
+| Method | Path                             | Auth         | Description                                                                                                                                                                    |
+| ------ | -------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/admin/sso/entra/configure`     | tenant_admin | Create a new Entra ID enterprise connection in Auth0. Body: `{ "domain": "contoso.com", "client_id": "<uuid>", "client_secret": "<secret>" }`. Returns `{ connection_id, test_url, domain }`. 409 if SSO already configured. |
+| PATCH  | `/admin/sso/entra/configure`     | tenant_admin | Update existing Entra connection (re-key or domain change). Body: `{ "domain"?: str, "client_secret"?: str }` — at least one field required. Returns same shape. 404 if not configured. |
+| POST   | `/admin/sso/entra/test`          | tenant_admin | Get Auth0 login test URL for the Entra connection. Returns `{ "test_url": str }`. 404 if not configured.                                                                       |
+
+**Security note**: `client_secret` is forwarded to Auth0 once and never stored in `tenant_configs` or returned in any response.
+
+**Connection naming**: Auth0 connection name is `entra-{tenant_id[:8]}`. Connection ID (`con_xxxxx`) stored in `tenant_configs` as `config_type='sso_config'`.
+
+**Validation**:
+- `client_id` must be UUID format (8-4-4-4-12)
+- `domain` must be a valid DNS name with at least one dot (e.g. `contoso.com`)
+
+**Error codes**: 409 (duplicate), 404 (not found for PATCH/test), 400 (at least one field required for PATCH), 502 (Auth0 Management API failure)
 
 ### Group Sync Config (P3AUTH-010/015)
 

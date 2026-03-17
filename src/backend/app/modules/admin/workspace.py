@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_tenant_admin
 from app.core.session import get_async_session
+from app.modules.auth.management_api import management_api_request
+from app.modules.admin.sso_import import get_tenant_auth0_org_id
 
 logger = structlog.get_logger()
 
@@ -802,6 +804,74 @@ async def update_sso_connection_config(
     """
     old_config = await _get_sso_connection_config_db(current_user.tenant_id, session)
     new_config = request.model_dump(exclude_none=True)
+
+    # ENTRA-003: Sync Auth0 Org enabled_connections for Entra (waad) connections
+    # when the enabled flag transitions True → False (disable) or False → True (re-enable).
+    if (
+        old_config is not None
+        and old_config.get("provider_type") == "entra"
+        and old_config.get("auth0_connection_id")
+    ):
+        connection_id: str = old_config["auth0_connection_id"]
+        was_enabled: bool = old_config.get("enabled", True)
+        now_enabled: bool = request.enabled
+
+        if was_enabled and not now_enabled:
+            # Disabling: remove connection from Auth0 Org
+            org_id = await get_tenant_auth0_org_id(current_user.tenant_id, session)
+            if org_id:
+                try:
+                    await management_api_request(
+                        "DELETE",
+                        f"organizations/{org_id}/enabled_connections/{connection_id}",
+                    )
+                except RuntimeError as exc:
+                    logger.error(
+                        "entra_org_disable_failed",
+                        tenant_id=current_user.tenant_id,
+                        connection_id=connection_id,
+                        error=str(exc),
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Failed to remove Entra ID connection from Auth0 organization",
+                    )
+            else:
+                logger.warning(
+                    "entra_org_disable_skipped",
+                    tenant_id=current_user.tenant_id,
+                    reason="auth0_org_id not configured for tenant",
+                )
+        elif not was_enabled and now_enabled:
+            # Re-enabling: add connection back to Auth0 Org
+            org_id = await get_tenant_auth0_org_id(current_user.tenant_id, session)
+            if org_id:
+                try:
+                    await management_api_request(
+                        "POST",
+                        f"organizations/{org_id}/enabled_connections",
+                        {
+                            "connection_id": connection_id,
+                            "assign_membership_on_login": True,
+                        },
+                    )
+                except RuntimeError as exc:
+                    logger.error(
+                        "entra_org_reenable_failed",
+                        tenant_id=current_user.tenant_id,
+                        connection_id=connection_id,
+                        error=str(exc),
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Failed to re-enable Entra ID connection in Auth0 organization",
+                    )
+            else:
+                logger.warning(
+                    "entra_org_reenable_skipped",
+                    tenant_id=current_user.tenant_id,
+                    reason="auth0_org_id not configured for tenant",
+                )
 
     await _upsert_sso_connection_config_db(
         tenant_id=current_user.tenant_id,

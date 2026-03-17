@@ -16,8 +16,10 @@ import {
   useConfigureOIDC,
   useConfigureGoogle,
   useConfigureOkta,
+  useConfigureEntra,
   useTestSAMLConnection,
   useTestOIDCConnection,
+  useTestEntraConnection,
   fetchSAMLSPMetadata,
   type ConfigureResult,
 } from "@/lib/hooks/useSSO";
@@ -27,7 +29,7 @@ interface SSOSetupWizardProps {
 }
 
 type WizardStep = 1 | 2 | 3;
-type Provider = "saml" | "oidc" | "google" | "okta";
+type Provider = "saml" | "oidc" | "google" | "okta" | "entra";
 
 const HTTPS_PATTERN = /^https:\/\/.+/;
 
@@ -76,6 +78,11 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   const [oktaClientId, setOktaClientId] = useState("");
   const [oktaClientSecret, setOktaClientSecret] = useState("");
 
+  // Entra fields
+  const [entraDomain, setEntraDomain] = useState("");
+  const [entraClientId, setEntraClientId] = useState("");
+  const [entraClientSecret, setEntraClientSecret] = useState("");
+
   // Post-save state
   const [savedResult, setSavedResult] = useState<ConfigureResult | null>(null);
   const [testUrl, setTestUrl] = useState<string | null>(null);
@@ -85,8 +92,10 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   const oidcMutation = useConfigureOIDC();
   const googleMutation = useConfigureGoogle();
   const oktaMutation = useConfigureOkta();
+  const entraMutation = useConfigureEntra();
   const testSAMLMutation = useTestSAMLConnection();
   const testOIDCMutation = useTestOIDCConnection();
+  const testEntraMutation = useTestEntraConnection();
 
   const activeMutation =
     provider === "saml"
@@ -97,7 +106,9 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
           ? googleMutation
           : provider === "okta"
             ? oktaMutation
-            : null;
+            : provider === "entra"
+              ? entraMutation
+              : null;
 
   const isSaving = activeMutation?.isPending ?? false;
   const saveError = activeMutation?.isError
@@ -128,6 +139,13 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
         HTTPS_PATTERN.test(oktaDomain.trim()) &&
         oktaClientId.trim().length > 0 &&
         oktaClientSecret.trim().length > 0
+      );
+    }
+    if (provider === "entra") {
+      return (
+        entraDomain.trim().length > 0 &&
+        entraClientId.trim().length > 0 &&
+        entraClientSecret.trim().length > 0
       );
     }
     return false;
@@ -161,6 +179,12 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
           client_id: oktaClientId.trim(),
           client_secret: oktaClientSecret.trim(),
         });
+      } else if (provider === "entra") {
+        result = await entraMutation.mutateAsync({
+          domain: entraDomain.trim(),
+          client_id: entraClientId.trim(),
+          client_secret: entraClientSecret.trim(),
+        });
       } else {
         return;
       }
@@ -182,6 +206,8 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
         provider === "okta"
       ) {
         result = await testOIDCMutation.mutateAsync();
+      } else if (provider === "entra") {
+        result = await testEntraMutation.mutateAsync();
       } else {
         return;
       }
@@ -218,12 +244,16 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   }
 
   const testMutationPending =
-    testSAMLMutation.isPending || testOIDCMutation.isPending;
+    testSAMLMutation.isPending ||
+    testOIDCMutation.isPending ||
+    testEntraMutation.isPending;
   const testMutationError = testSAMLMutation.isError
     ? extractErrorMessage(testSAMLMutation.error)
     : testOIDCMutation.isError
       ? extractErrorMessage(testOIDCMutation.error)
-      : null;
+      : testEntraMutation.isError
+        ? extractErrorMessage(testEntraMutation.error)
+        : null;
 
   const progressWidth = step === 1 ? "33.3%" : step === 2 ? "66.6%" : "100%";
 
@@ -292,6 +322,13 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
                   useCase="Okta customers"
                   selected={provider === "okta"}
                   onSelect={() => setProvider("okta")}
+                />
+                <ProviderCard
+                  title="Microsoft Entra ID"
+                  description="Azure Active Directory SSO for Microsoft 365 and Azure tenants."
+                  useCase="Microsoft / Azure AD tenants"
+                  selected={provider === "entra"}
+                  onSelect={() => setProvider("entra")}
                 />
               </div>
             </div>
@@ -424,6 +461,41 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
             </div>
           )}
 
+          {step === 2 && provider === "entra" && (
+            <div className="space-y-4">
+              <p className="text-sm text-text-muted">
+                Enter your Azure Active Directory application credentials.
+                Create an App Registration in the Azure portal and grant{" "}
+                <span className="font-mono text-xs text-text-primary">
+                  GroupMember.Read.All
+                </span>{" "}
+                permission.
+              </p>
+              <FormField
+                label="Azure AD Domain"
+                value={entraDomain}
+                onChange={setEntraDomain}
+                placeholder="contoso.com"
+                hint="Your organisation's Azure AD domain (e.g. contoso.com)"
+              />
+              <FormField
+                label="Application (Client) ID"
+                value={entraClientId}
+                onChange={setEntraClientId}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                hint="Found in Azure portal under App Registration > Overview"
+              />
+              <FormField
+                label="Client Secret"
+                value={entraClientSecret}
+                onChange={setEntraClientSecret}
+                placeholder="your-client-secret-value"
+                type="password"
+                hint="Secret value (not the Secret ID)"
+              />
+            </div>
+          )}
+
           {/* Step 3: Review + Save */}
           {step === 3 && (
             <div className="space-y-4">
@@ -443,7 +515,9 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
                           ? "OpenID Connect (OIDC)"
                           : provider === "google"
                             ? "Google Workspace"
-                            : "Okta"
+                            : provider === "entra"
+                              ? "Microsoft Entra ID"
+                              : "Okta"
                     }
                   />
                   {provider === "saml" && (
@@ -482,6 +556,17 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
                     <>
                       <ReviewRow label="Okta Domain" value={oktaDomain} mono />
                       <ReviewRow label="Client ID" value={oktaClientId} mono />
+                      <ReviewRow label="Client Secret" value="••••••••" mono />
+                    </>
+                  )}
+                  {provider === "entra" && (
+                    <>
+                      <ReviewRow
+                        label="Azure AD Domain"
+                        value={entraDomain}
+                        mono
+                      />
+                      <ReviewRow label="Client ID" value={entraClientId} mono />
                       <ReviewRow label="Client Secret" value="••••••••" mono />
                     </>
                   )}

@@ -244,3 +244,45 @@ export function useConfigureOkta() {
     },
   });
 }
+
+export interface EntraConfigurePayload {
+  domain: string;
+  client_id: string;
+  client_secret: string;
+}
+
+export interface EntraUpdatePayload {
+  domain?: string;
+  client_secret?: string;
+}
+
+export function useConfigureEntra() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EntraConfigurePayload) =>
+      apiPost<ConfigureResult>("/api/v1/admin/sso/entra/configure", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ADMIN_SSO_CONFIG_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SSO_WIZARD_KEY] });
+    },
+  });
+}
+
+export function useUpdateEntraConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EntraUpdatePayload) =>
+      apiPatch<ConfigureResult>("/api/v1/admin/sso/entra/configure", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ADMIN_SSO_CONFIG_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SSO_WIZARD_KEY] });
+    },
+  });
+}
+
+export function useTestEntraConnection() {
+  return useMutation({
+    mutationFn: () =>
+      apiPost<TestConnectionResult>("/api/v1/admin/sso/entra/test", {}),
+  });
+}

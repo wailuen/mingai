@@ -266,6 +266,11 @@ from app.modules.admin.sso_oidc import router as sso_oidc_router
 
 router.include_router(sso_oidc_router)
 
+# Azure Entra ID SSO wizard endpoints (ENTRA-001/002/004)
+from app.modules.admin.sso_entra import router as sso_entra_router
+
+router.include_router(sso_entra_router)
+
 # Role delegation endpoints (TA-035)
 from app.modules.admin.role_delegation import router as role_delegation_router
 
