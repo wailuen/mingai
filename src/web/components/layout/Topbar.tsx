@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Moon, Sun, Menu, ChevronDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Moon, Sun, Monitor, Menu, ChevronDown } from "lucide-react";
 import type { JWTClaims } from "@/lib/auth";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
@@ -33,8 +33,38 @@ export function Topbar({
           .replace(/_/g, " ")
           .replace(/\b\w/g, (c) => c.toUpperCase())
       : "mingai");
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  type ThemeMode = "dark" | "light" | "system";
+  const THEME_CYCLE: ThemeMode[] = ["dark", "light", "system"];
+  const THEME_KEY = "mingai-theme";
+
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "system";
+    return (localStorage.getItem(THEME_KEY) as ThemeMode) ?? "system";
+  });
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  function applyTheme(mode: ThemeMode) {
+    const resolved =
+      mode === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : mode;
+    document.documentElement.setAttribute("data-theme", resolved);
+  }
+
+  // Apply on mount and whenever theme changes
+  useEffect(() => {
+    applyTheme(theme);
+    localStorage.setItem(THEME_KEY, theme);
+
+    if (theme === "system") {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const handler = () => applyTheme("system");
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    }
+  }, [theme]);
 
   const currentRole: RoleView =
     claims?.scope === "platform"
@@ -44,9 +74,9 @@ export function Topbar({
         : "end_user";
 
   function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
+    const next =
+      THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
     setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
   }
 
   const userInitials = claims?.email
@@ -92,13 +122,20 @@ export function Topbar({
       {/* Notifications */}
       <NotificationBell />
 
-      {/* Theme toggle */}
+      {/* Theme toggle — cycles dark → light → system */}
       <button
         onClick={toggleTheme}
         className="flex h-8 w-8 items-center justify-center rounded-control text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
-        aria-label="Toggle theme"
+        aria-label={`Theme: ${theme} (click to cycle)`}
+        title={`Theme: ${theme}`}
       >
-        {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
+        {theme === "dark" ? (
+          <Moon size={16} />
+        ) : theme === "light" ? (
+          <Sun size={16} />
+        ) : (
+          <Monitor size={16} />
+        )}
       </button>
 
       {/* User avatar */}
