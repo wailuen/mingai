@@ -1,13 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { X, ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Loader2,
+  Download,
+  ExternalLink,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  useSaveSSOConfig,
-  useTestSSOConnection,
-  type SAMLConfig,
-  type OIDCConfig,
+  useConfigureSAML,
+  useConfigureOIDC,
+  useConfigureGoogle,
+  useConfigureOkta,
+  useTestSAMLConnection,
+  useTestOIDCConnection,
+  fetchSAMLSPMetadata,
+  type ConfigureResult,
 } from "@/lib/hooks/useSSO";
 
 interface SSOSetupWizardProps {
@@ -15,85 +27,186 @@ interface SSOSetupWizardProps {
 }
 
 type WizardStep = 1 | 2 | 3;
-type Provider = "saml" | "oidc";
+type Provider = "saml" | "oidc" | "google" | "okta";
 
 const HTTPS_PATTERN = /^https:\/\/.+/;
-// Vault reference prefix guard — prevents raw secrets from being submitted
-const VAULT_REF_PATTERN = /^vault:\/\/.+/;
+
+/** Extract a human-readable message from an API error response. */
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    // Try to parse backend 422 detail from message
+    try {
+      const parsed = JSON.parse(err.message);
+      if (parsed?.detail) {
+        if (typeof parsed.detail === "string") return parsed.detail;
+        if (Array.isArray(parsed.detail)) {
+          return parsed.detail
+            .map((d: { msg?: string }) => d.msg ?? String(d))
+            .join("; ");
+        }
+      }
+    } catch {
+      // not JSON — use raw message
+    }
+    return err.message;
+  }
+  return "An unexpected error occurred";
+}
 
 export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   const [step, setStep] = useState<WizardStep>(1);
   const [provider, setProvider] = useState<Provider | null>(null);
 
   // SAML fields
-  const [entityId, setEntityId] = useState("");
-  const [acsUrl, setAcsUrl] = useState("");
-  const [metadataUrl, setMetadataUrl] = useState("");
+  const [samlInputMode, setSamlInputMode] = useState<"url" | "xml">("url");
+  const [samlMetadataUrl, setSamlMetadataUrl] = useState("");
+  const [samlMetadataXml, setSamlMetadataXml] = useState("");
 
   // OIDC fields
-  const [clientId, setClientId] = useState("");
-  const [discoveryUrl, setDiscoveryUrl] = useState("");
-  const [clientSecretRef, setClientSecretRef] = useState("");
+  const [oidcIssuer, setOidcIssuer] = useState("");
+  const [oidcClientId, setOidcClientId] = useState("");
+  const [oidcClientSecret, setOidcClientSecret] = useState("");
 
-  // Test state
-  const [testPassed, setTestPassed] = useState<boolean | null>(null);
-  const [testMessage, setTestMessage] = useState("");
+  // Google fields
+  const [googleClientId, setGoogleClientId] = useState("");
+  const [googleClientSecret, setGoogleClientSecret] = useState("");
 
-  const saveMutation = useSaveSSOConfig();
-  const testMutation = useTestSSOConnection();
+  // Okta fields
+  const [oktaDomain, setOktaDomain] = useState("");
+  const [oktaClientId, setOktaClientId] = useState("");
+  const [oktaClientSecret, setOktaClientSecret] = useState("");
 
-  const canProceedStep1 = provider !== null;
+  // Post-save state
+  const [savedResult, setSavedResult] = useState<ConfigureResult | null>(null);
+  const [testUrl, setTestUrl] = useState<string | null>(null);
+  const [spMetadataError, setSpMetadataError] = useState<string | null>(null);
 
-  const canProceedStep2 =
+  const samlMutation = useConfigureSAML();
+  const oidcMutation = useConfigureOIDC();
+  const googleMutation = useConfigureGoogle();
+  const oktaMutation = useConfigureOkta();
+  const testSAMLMutation = useTestSAMLConnection();
+  const testOIDCMutation = useTestOIDCConnection();
+
+  const activeMutation =
     provider === "saml"
-      ? entityId.trim().length > 0 &&
-        HTTPS_PATTERN.test(acsUrl) &&
-        HTTPS_PATTERN.test(metadataUrl)
+      ? samlMutation
       : provider === "oidc"
-        ? clientId.trim().length > 0 &&
-          HTTPS_PATTERN.test(discoveryUrl) &&
-          VAULT_REF_PATTERN.test(clientSecretRef.trim())
-        : false;
+        ? oidcMutation
+        : provider === "google"
+          ? googleMutation
+          : provider === "okta"
+            ? oktaMutation
+            : null;
 
-  function buildConfig() {
+  const isSaving = activeMutation?.isPending ?? false;
+  const saveError = activeMutation?.isError
+    ? extractErrorMessage(activeMutation.error)
+    : null;
+
+  const canProceedStep2 = (() => {
+    if (!provider) return false;
     if (provider === "saml") {
-      return {
-        provider: "saml" as const,
-        saml: {
-          entity_id: entityId.trim(),
-          acs_url: acsUrl.trim(),
-          metadata_url: metadataUrl.trim(),
-        },
-      };
+      return samlInputMode === "url"
+        ? HTTPS_PATTERN.test(samlMetadataUrl.trim())
+        : samlMetadataXml.trim().length > 0;
     }
-    return {
-      provider: "oidc" as const,
-      oidc: {
-        client_id: clientId.trim(),
-        discovery_url: discoveryUrl.trim(),
-        client_secret_ref: clientSecretRef.trim(),
-      },
-    };
+    if (provider === "oidc") {
+      return (
+        HTTPS_PATTERN.test(oidcIssuer.trim()) &&
+        oidcClientId.trim().length > 0 &&
+        oidcClientSecret.trim().length > 0
+      );
+    }
+    if (provider === "google") {
+      return (
+        googleClientId.trim().length > 0 && googleClientSecret.trim().length > 0
+      );
+    }
+    if (provider === "okta") {
+      return (
+        HTTPS_PATTERN.test(oktaDomain.trim()) &&
+        oktaClientId.trim().length > 0 &&
+        oktaClientSecret.trim().length > 0
+      );
+    }
+    return false;
+  })();
+
+  async function handleSave() {
+    setSavedResult(null);
+    setTestUrl(null);
+    try {
+      let result: ConfigureResult;
+      if (provider === "saml") {
+        const payload =
+          samlInputMode === "url"
+            ? { metadata_url: samlMetadataUrl.trim() }
+            : { metadata_xml: samlMetadataXml.trim() };
+        result = await samlMutation.mutateAsync(payload);
+      } else if (provider === "oidc") {
+        result = await oidcMutation.mutateAsync({
+          issuer: oidcIssuer.trim(),
+          client_id: oidcClientId.trim(),
+          client_secret: oidcClientSecret.trim(),
+        });
+      } else if (provider === "google") {
+        result = await googleMutation.mutateAsync({
+          client_id: googleClientId.trim(),
+          client_secret: googleClientSecret.trim(),
+        });
+      } else if (provider === "okta") {
+        result = await oktaMutation.mutateAsync({
+          okta_domain: oktaDomain.trim(),
+          client_id: oktaClientId.trim(),
+          client_secret: oktaClientSecret.trim(),
+        });
+      } else {
+        return;
+      }
+      setSavedResult(result);
+    } catch {
+      // error surfaced via activeMutation.error
+    }
   }
 
   async function handleTest() {
-    setTestPassed(null);
-    setTestMessage("");
+    setTestUrl(null);
     try {
-      const result = await testMutation.mutateAsync(buildConfig());
-      setTestPassed(result.success);
-      setTestMessage(result.message);
-    } catch (err) {
-      setTestPassed(false);
-      setTestMessage(
-        err instanceof Error ? err.message : "Connection test failed",
-      );
+      let result: { test_url: string };
+      if (provider === "saml") {
+        result = await testSAMLMutation.mutateAsync();
+      } else if (
+        provider === "oidc" ||
+        provider === "google" ||
+        provider === "okta"
+      ) {
+        result = await testOIDCMutation.mutateAsync();
+      } else {
+        return;
+      }
+      window.open(result.test_url, "_blank", "noopener,noreferrer");
+      setTestUrl(result.test_url);
+    } catch {
+      // error surfaced via test mutation errors
     }
   }
 
-  async function handleSave() {
-    await saveMutation.mutateAsync(buildConfig());
-    onClose();
+  async function handleDownloadSPMetadata() {
+    setSpMetadataError(null);
+    try {
+      const blob = await fetchSAMLSPMetadata();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "sp-metadata.xml";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSpMetadataError(
+        err instanceof Error ? err.message : "Failed to download SP metadata",
+      );
+    }
   }
 
   function handleNext() {
@@ -103,6 +216,14 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   function handleBack() {
     if (step > 1) setStep((step - 1) as WizardStep);
   }
+
+  const testMutationPending =
+    testSAMLMutation.isPending || testOIDCMutation.isPending;
+  const testMutationError = testSAMLMutation.isError
+    ? extractErrorMessage(testSAMLMutation.error)
+    : testOIDCMutation.isError
+      ? extractErrorMessage(testOIDCMutation.error)
+      : null;
 
   const progressWidth = step === 1 ? "33.3%" : step === 2 ? "66.6%" : "100%";
 
@@ -136,14 +257,14 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
         </div>
 
         {/* Content */}
-        <div className="p-5">
+        <div className="max-h-[70vh] overflow-y-auto p-5">
           {/* Step 1: Choose Provider */}
           {step === 1 && (
             <div className="space-y-4">
               <p className="text-sm text-text-muted">
-                Choose your identity provider protocol.
+                Choose your identity provider.
               </p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <ProviderCard
                   title="SAML 2.0"
                   description="Enterprise SSO via SAML assertions. Works with Okta, Azure AD, OneLogin."
@@ -152,11 +273,25 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
                   onSelect={() => setProvider("saml")}
                 />
                 <ProviderCard
-                  title="OpenID Connect (OIDC)"
-                  description="Modern OAuth 2.0 based protocol. Works with Google, Auth0, Keycloak."
+                  title="OpenID Connect"
+                  description="Modern OAuth 2.0 based protocol. Works with Auth0, Keycloak, generic OIDC."
                   useCase="Best for cloud-native IdPs"
                   selected={provider === "oidc"}
                   onSelect={() => setProvider("oidc")}
+                />
+                <ProviderCard
+                  title="Google Workspace"
+                  description="Sign in with Google accounts from your organisation's Workspace."
+                  useCase="Google Workspace tenants"
+                  selected={provider === "google"}
+                  onSelect={() => setProvider("google")}
+                />
+                <ProviderCard
+                  title="Okta"
+                  description="Connect your Okta tenant for workforce identity."
+                  useCase="Okta customers"
+                  selected={provider === "okta"}
+                  onSelect={() => setProvider("okta")}
                 />
               </div>
             </div>
@@ -166,28 +301,49 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
           {step === 2 && provider === "saml" && (
             <div className="space-y-4">
               <p className="text-sm text-text-muted">
-                Enter your SAML 2.0 identity provider details.
+                Provide your IdP SAML metadata — either a URL or paste the XML
+                directly.
               </p>
-              <FormField
-                label="Entity ID"
-                value={entityId}
-                onChange={setEntityId}
-                placeholder="https://idp.example.com/entity"
-              />
-              <FormField
-                label="ACS URL"
-                value={acsUrl}
-                onChange={setAcsUrl}
-                placeholder="https://your-app.com/sso/saml/acs"
-                hint="Must start with https://"
-              />
-              <FormField
-                label="IdP Metadata URL"
-                value={metadataUrl}
-                onChange={setMetadataUrl}
-                placeholder="https://idp.example.com/metadata.xml"
-                hint="Must start with https://"
-              />
+              {/* Input mode toggle */}
+              <div className="flex gap-1 rounded-control border border-border bg-bg-elevated p-0.5 w-fit">
+                {(["url", "xml"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSamlInputMode(mode)}
+                    className={cn(
+                      "rounded-[5px] px-3 py-1 text-xs font-medium transition-colors",
+                      samlInputMode === mode
+                        ? "bg-bg-surface text-text-primary"
+                        : "text-text-faint hover:text-text-muted",
+                    )}
+                  >
+                    {mode === "url" ? "Metadata URL" : "Paste XML"}
+                  </button>
+                ))}
+              </div>
+              {samlInputMode === "url" ? (
+                <FormField
+                  label="IdP Metadata URL"
+                  value={samlMetadataUrl}
+                  onChange={setSamlMetadataUrl}
+                  placeholder="https://idp.example.com/metadata.xml"
+                  hint="Must start with https://"
+                />
+              ) : (
+                <div>
+                  <label className="mb-1 block text-[11px] uppercase tracking-wider text-text-faint">
+                    IdP Metadata XML
+                  </label>
+                  <textarea
+                    value={samlMetadataXml}
+                    onChange={(e) => setSamlMetadataXml(e.target.value)}
+                    placeholder='<?xml version="1.0"?><EntityDescriptor ...'
+                    rows={6}
+                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none resize-none"
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -197,102 +353,213 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
                 Enter your OpenID Connect provider details.
               </p>
               <FormField
-                label="Client ID"
-                value={clientId}
-                onChange={setClientId}
-                placeholder="your-client-id"
-              />
-              <FormField
-                label="Discovery URL"
-                value={discoveryUrl}
-                onChange={setDiscoveryUrl}
-                placeholder="https://accounts.google.com/.well-known/openid-configuration"
+                label="Issuer URL"
+                value={oidcIssuer}
+                onChange={setOidcIssuer}
+                placeholder="https://accounts.google.com"
                 hint="Must start with https://"
               />
               <FormField
-                label="Client Secret Reference"
-                value={clientSecretRef}
-                onChange={setClientSecretRef}
-                placeholder="vault://secrets/sso/client-secret"
-                hint="Must start with vault:// — store the raw secret in your vault and enter the reference path."
+                label="Client ID"
+                value={oidcClientId}
+                onChange={setOidcClientId}
+                placeholder="your-client-id"
+              />
+              <FormField
+                label="Client Secret"
+                value={oidcClientSecret}
+                onChange={setOidcClientSecret}
+                placeholder="your-client-secret"
+                type="password"
               />
             </div>
           )}
 
-          {/* Step 3: Review + Test */}
+          {step === 2 && provider === "google" && (
+            <div className="space-y-4">
+              <p className="text-sm text-text-muted">
+                Enter your Google OAuth 2.0 application credentials.
+              </p>
+              <FormField
+                label="Client ID"
+                value={googleClientId}
+                onChange={setGoogleClientId}
+                placeholder="123456789-abc.apps.googleusercontent.com"
+              />
+              <FormField
+                label="Client Secret"
+                value={googleClientSecret}
+                onChange={setGoogleClientSecret}
+                placeholder="GOCSPX-..."
+                type="password"
+              />
+            </div>
+          )}
+
+          {step === 2 && provider === "okta" && (
+            <div className="space-y-4">
+              <p className="text-sm text-text-muted">
+                Enter your Okta tenant details.
+              </p>
+              <FormField
+                label="Okta Domain"
+                value={oktaDomain}
+                onChange={setOktaDomain}
+                placeholder="https://your-org.okta.com"
+                hint="Must start with https://"
+              />
+              <FormField
+                label="Client ID"
+                value={oktaClientId}
+                onChange={setOktaClientId}
+                placeholder="0oabcdefghijklmnop"
+              />
+              <FormField
+                label="Client Secret"
+                value={oktaClientSecret}
+                onChange={setOktaClientSecret}
+                placeholder="your-client-secret"
+                type="password"
+              />
+            </div>
+          )}
+
+          {/* Step 3: Review + Save */}
           {step === 3 && (
             <div className="space-y-4">
               <p className="text-sm text-text-muted">
-                Review your configuration and test the connection.
+                Review your configuration and save to activate SSO.
               </p>
 
+              {/* Review table */}
               <div className="rounded-card border border-border bg-bg-elevated p-4">
                 <dl className="space-y-3">
                   <ReviewRow
                     label="Provider"
                     value={
-                      provider === "saml" ? "SAML 2.0" : "OpenID Connect (OIDC)"
+                      provider === "saml"
+                        ? "SAML 2.0"
+                        : provider === "oidc"
+                          ? "OpenID Connect (OIDC)"
+                          : provider === "google"
+                            ? "Google Workspace"
+                            : "Okta"
                     }
                   />
                   {provider === "saml" && (
-                    <>
-                      <ReviewRow label="Entity ID" value={entityId} mono />
-                      <ReviewRow label="ACS URL" value={acsUrl} mono />
-                      <ReviewRow
-                        label="Metadata URL"
-                        value={metadataUrl}
-                        mono
-                      />
-                    </>
+                    <ReviewRow
+                      label={
+                        samlInputMode === "url"
+                          ? "Metadata URL"
+                          : "Metadata XML"
+                      }
+                      value={
+                        samlInputMode === "url"
+                          ? samlMetadataUrl
+                          : `${samlMetadataXml.slice(0, 60)}…`
+                      }
+                      mono
+                    />
                   )}
                   {provider === "oidc" && (
                     <>
-                      <ReviewRow label="Client ID" value={clientId} mono />
+                      <ReviewRow label="Issuer" value={oidcIssuer} mono />
+                      <ReviewRow label="Client ID" value={oidcClientId} mono />
+                      <ReviewRow label="Client Secret" value="••••••••" mono />
+                    </>
+                  )}
+                  {provider === "google" && (
+                    <>
                       <ReviewRow
-                        label="Discovery URL"
-                        value={discoveryUrl}
+                        label="Client ID"
+                        value={googleClientId}
                         mono
                       />
-                      <ReviewRow
-                        label="Secret Ref"
-                        value={clientSecretRef}
-                        mono
-                      />
+                      <ReviewRow label="Client Secret" value="••••••••" mono />
+                    </>
+                  )}
+                  {provider === "okta" && (
+                    <>
+                      <ReviewRow label="Okta Domain" value={oktaDomain} mono />
+                      <ReviewRow label="Client ID" value={oktaClientId} mono />
+                      <ReviewRow label="Client Secret" value="••••••••" mono />
                     </>
                   )}
                 </dl>
               </div>
 
-              {/* Test connection */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleTest}
-                  disabled={testMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary disabled:opacity-30"
-                >
-                  {testMutation.isPending && (
-                    <Loader2 size={12} className="animate-spin" />
-                  )}
-                  Test Connection
-                </button>
-                {testPassed !== null && (
-                  <span
-                    className={`text-xs font-medium ${
-                      testPassed ? "text-accent" : "text-alert"
-                    }`}
-                  >
-                    {testMessage}
-                  </span>
-                )}
-              </div>
+              {/* Success state */}
+              {savedResult && (
+                <div className="rounded-card border border-accent/30 bg-accent-dim p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Check size={14} className="text-accent shrink-0" />
+                    <p className="text-sm font-medium text-accent">
+                      SSO configured successfully
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] uppercase tracking-wider text-text-faint">
+                      Connection ID
+                    </span>
+                    <span className="font-mono text-xs text-text-muted">
+                      {savedResult.connection_id}
+                    </span>
+                  </div>
 
-              {saveMutation.isError && (
+                  {/* SAML SP metadata download */}
+                  {provider === "saml" && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-text-muted">
+                        Download the Service Provider metadata and upload it to
+                        your IdP to complete the setup.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleDownloadSPMetadata}
+                        className="inline-flex items-center gap-1.5 rounded-control border border-accent/40 bg-accent-dim px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+                      >
+                        <Download size={12} />
+                        Download SP Metadata XML
+                      </button>
+                      {spMetadataError && (
+                        <p className="text-xs text-alert">{spMetadataError}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Test connection */}
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleTest}
+                      disabled={testMutationPending}
+                      className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary disabled:opacity-30"
+                    >
+                      {testMutationPending ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <ExternalLink size={12} />
+                      )}
+                      Test Connection
+                    </button>
+                    {testUrl && (
+                      <span className="text-xs text-accent">
+                        Test URL opened in new tab
+                      </span>
+                    )}
+                    {testMutationError && (
+                      <span className="text-xs text-alert">
+                        {testMutationError}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* API error */}
+              {saveError && (
                 <div className="rounded-control border border-alert/30 bg-alert-dim p-3">
-                  <p className="text-xs text-alert">
-                    {saveMutation.error instanceof Error
-                      ? saveMutation.error.message
-                      : "Failed to save SSO configuration"}
-                  </p>
+                  <p className="text-xs text-alert">{saveError}</p>
                 </div>
               )}
             </div>
@@ -302,11 +569,11 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
         {/* Footer */}
         <div className="flex justify-between border-t border-border px-5 py-3">
           <div>
-            {step > 1 && (
+            {step > 1 && !savedResult && (
               <button
                 type="button"
                 onClick={handleBack}
-                disabled={saveMutation.isPending}
+                disabled={isSaving}
                 className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
               >
                 <ChevronLeft size={14} />
@@ -331,7 +598,7 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
                 type="button"
                 onClick={handleNext}
                 disabled={
-                  (step === 1 && !canProceedStep1) ||
+                  (step === 1 && provider === null) ||
                   (step === 2 && !canProceedStep2)
                 }
                 className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
@@ -341,21 +608,34 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
               </button>
             )}
 
-            {step === 3 && (
+            {step === 3 && !savedResult && (
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saveMutation.isPending}
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                disabled={isSaving}
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
-                {saveMutation.isPending ? (
-                  "Saving..."
+                {isSaving ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Saving...
+                  </>
                 ) : (
                   <>
                     <Check size={14} />
                     Save Configuration
                   </>
                 )}
+              </button>
+            )}
+
+            {step === 3 && savedResult && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+              >
+                Done
               </button>
             )}
           </div>
@@ -411,12 +691,14 @@ function FormField({
   onChange,
   placeholder,
   hint,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   hint?: string;
+  type?: "text" | "password";
 }) {
   return (
     <div>
@@ -424,7 +706,7 @@ function FormField({
         {label}
       </label>
       <input
-        type="text"
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

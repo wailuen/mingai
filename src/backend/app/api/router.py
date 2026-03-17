@@ -7,10 +7,12 @@ from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/v1")
 
-# Auth endpoints (API-001 to API-010)
+# Auth endpoints (API-001 to API-010) + admin session management (P3AUTH-011)
+from app.modules.auth.routes import _admin_session_router as auth_admin_session_router
 from app.modules.auth.routes import router as auth_router
 
 router.include_router(auth_router)
+router.include_router(auth_admin_session_router)  # POST /admin/users/{id}/force-logout
 
 # Issue reports endpoints (API-013 to API-023) — must be before chat to avoid route collision
 from app.modules.issues.routes import (
@@ -243,6 +245,26 @@ router.include_router(privacy_settings_router)
 from app.modules.admin.mcp_servers import router as mcp_servers_router
 
 router.include_router(mcp_servers_router)
+
+# SSO user import endpoints (TA-033)
+from app.modules.admin.sso_import import router as sso_import_router
+
+router.include_router(sso_import_router)
+
+# SAML 2.0 SSO wizard endpoints (P3AUTH-004)
+from app.modules.admin.sso_saml import router as sso_saml_router
+
+router.include_router(sso_saml_router)
+
+# OIDC/Google/Okta SSO wizard endpoints (P3AUTH-005/006/007)
+from app.modules.admin.sso_oidc import router as sso_oidc_router
+
+router.include_router(sso_oidc_router)
+
+# Role delegation endpoints (TA-035)
+from app.modules.admin.role_delegation import router as role_delegation_router
+
+router.include_router(role_delegation_router)
 
 # KB re-index estimate + reindex endpoints (TA-016)
 from app.modules.documents.reindex import router as reindex_router

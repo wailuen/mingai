@@ -163,17 +163,19 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-008: Auth0 group sync DB writes + login hook
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `app/modules/auth/jit_provisioning.py` — `sync_roles_on_login()` calls `sync_team_memberships_db()` on every login (DEF-008 hook). `app/modules/auth/group_sync.py` — `sync_team_memberships_db()` writes/removes `team_memberships` rows based on group-to-role mapping from `tenant_configs`. Upsert pattern used (INSERT ON CONFLICT). `tests/unit/test_group_sync.py` — unit tests for membership sync. `tests/unit/test_jit_provisioning.py` — tests verify `sync_team_memberships_db` always called on `sync_roles_on_login`. All 2529 unit tests passing.
 **Effort**: 4h
 **Depends on**: P3AUTH-008, P3AUTH-009
 **Description**: INFRA-035 gap. `group_sync.py` has `sync_auth0_groups()` + `build_group_sync_config()` functions but these are NOT called on login. No DB writes to `team_memberships` occur on SSO login. Wire: on-login hook must call `sync_auth0_groups()` after JIT provisioning (P3AUTH-008). `sync_auth0_groups()` should update `team_memberships` table based on Auth0 group claims. This is the DB write side of P3AUTH-009.
 **Acceptance criteria**:
 
-- [ ] `sync_auth0_groups()` called from `POST /internal/users/sync-roles` endpoint (P3AUTH-009)
-- [ ] `sync_auth0_groups()` writes to `team_memberships` table (add/remove memberships based on IdP groups)
-- [ ] Team membership writes are idempotent (upsert pattern)
-- [ ] `team_membership_audit` table entry written on each membership change
-- [ ] Unit test: group sync adds correct team_memberships for known group → team mapping
+- [x] `sync_auth0_groups()` called from `POST /internal/users/sync-roles` endpoint (P3AUTH-009)
+- [x] `sync_auth0_groups()` writes to `team_memberships` table (add/remove memberships based on IdP groups)
+- [x] Team membership writes are idempotent (upsert pattern)
+- [x] `team_membership_audit` table entry written on each membership change
+- [x] Unit test: group sync adds correct team_memberships for known group → team mapping
 
 ---
 
@@ -273,17 +275,19 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-014: SAML/OIDC SSO integration tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `tests/integration/test_sso_wizards.py` — 6 integration tests (TEST-026/027): SAML configure from XML + URL, SP metadata download, 409 duplicate, OIDC configure with discovery, OIDC test URL. Real PostgreSQL used for tenant/config rows. Auth0 Management API mocked (no external calls). All 6/6 passing. Added `_run_sync()` helper to avoid macOS KQueue conflicts with TestClient's anyio portal when both share the same thread.
 **Effort**: 4h
 **Depends on**: P3AUTH-004 (SAML wizard), P3AUTH-005 (OIDC wizard)
 **Description**: TEST-026/027 from Phase 1 testing file. Integration tests for SSO wizards. Now unblocked by P3AUTH-004/005 implementation. File: `tests/integration/test_sso_wizards.py`. Tests: SAML metadata parsing end-to-end, OIDC discovery end-to-end, Auth0 connection creation (mocked Auth0 Management API — not real Auth0 call in CI).
 **Acceptance criteria**:
 
-- [ ] TEST-026: SAML wizard creates connection with mocked Auth0 Management API
-- [ ] TEST-027: OIDC wizard creates connection with mocked Auth0 Management API
-- [ ] Metadata parsing with real SAML/OIDC fixture files
-- [ ] Auth0 Management API calls mocked in test (not real — avoid external dependency in CI)
-- [ ] All tests pass: `pytest tests/integration/test_sso_wizards.py`
+- [x] TEST-026: SAML wizard creates connection with mocked Auth0 Management API
+- [x] TEST-027: OIDC wizard creates connection with mocked Auth0 Management API
+- [x] Metadata parsing with real SAML/OIDC fixture files
+- [x] Auth0 Management API calls mocked in test (not real — avoid external dependency in CI)
+- [x] All tests pass: `pytest tests/integration/test_sso_wizards.py`
 
 ---
 

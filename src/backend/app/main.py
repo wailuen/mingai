@@ -668,3 +668,10 @@ async def ready_check():
 from app.api.router import router as api_router
 
 app.include_router(api_router)
+
+# Internal router — NOT under /api/v1/ — for Auth0 Action callbacks (P3AUTH-008).
+# Authentication: X-Internal-Secret header (not JWT).
+# Never expose this prefix through the public API gateway.
+from app.modules.auth.jit_provisioning import internal_router as _jit_router
+
+app.include_router(_jit_router, prefix="/internal")

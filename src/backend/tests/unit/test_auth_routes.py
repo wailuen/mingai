@@ -52,7 +52,12 @@ def _make_test_token(
 
 @pytest.fixture
 def env_vars():
-    """Set required environment variables for auth routes."""
+    """Set required environment variables for auth routes.
+
+    AUTH0_DOMAIN is explicitly cleared so that the local HS256 JWT path is
+    exercised throughout these tests.  Auth0-specific behaviour is tested in
+    test_auth0_jwks.py.
+    """
     env = {
         "JWT_SECRET_KEY": TEST_JWT_SECRET,
         "JWT_ALGORITHM": TEST_JWT_ALGORITHM,
@@ -61,6 +66,8 @@ def env_vars():
         "PLATFORM_ADMIN_PASS": TEST_PLATFORM_PASS,
         "SEED_TENANT_NAME": "default",
         "FRONTEND_URL": "http://localhost:3022",
+        # Force local auth path — disable Auth0 integration for these tests
+        "AUTH0_DOMAIN": "",
     }
     with patch.dict(os.environ, env):
         yield

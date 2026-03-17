@@ -7,6 +7,8 @@ import { useSSOConfig, useTestSSOConnection } from "@/lib/hooks/useSSO";
 import { SSOStatusCard } from "./elements/SSOStatusCard";
 import { SSOSetupWizard } from "./elements/SSOSetupWizard";
 import { GroupSyncConfigPanel } from "./elements/GroupSyncConfigPanel";
+import { GroupRoleMappingTable } from "./elements/GroupRoleMappingTable";
+import { SSOToggle } from "./elements/SSOToggle";
 import { Loader2 } from "lucide-react";
 
 /**
@@ -85,10 +87,22 @@ export default function SSOPage() {
           )}
         </ErrorBoundary>
 
+        {/* SSO Enable/Disable Toggle (TA-005) — always shown, handles null state */}
+        <ErrorBoundary>
+          <SSOToggle />
+        </ErrorBoundary>
+
         {/* Group Sync Config — only shown when SSO is configured */}
         {isConfigured && (
           <ErrorBoundary>
             <GroupSyncConfigPanel />
+          </ErrorBoundary>
+        )}
+
+        {/* TA-004: Group-to-Role Mapping Table — only shown when SSO is configured */}
+        {isConfigured && (
+          <ErrorBoundary>
+            <GroupRoleMappingTable />
           </ErrorBoundary>
         )}
 

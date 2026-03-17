@@ -25,6 +25,8 @@ dependencies = [
     "slowapi>=0.1.9",
     "jsonschema>=4.20.0",
     "sendgrid>=6.10.0",
+    "lxml>=4.9.0",
+    "defusedxml>=0.7.1",
 ]
 
 [project.optional-dependencies]

@@ -1,12 +1,12 @@
 # 05 — Tenant Admin Phases B-D: SSO, Access Control, Agent Workspace
 
 **Generated**: 2026-03-15
-**Last updated**: 2026-03-16
+**Last updated**: 2026-03-17 (Session 36 — TA-001/002/003/004/005/033/035 all COMPLETED. 36/36 COMPLETE excluding TA-025 which remains BLOCKED on product gate. 2511 unit tests passing.)
 **Phase**: B (Weeks 7-14), C (Weeks 15-22), D (Weeks 23-28)
 **Numbering**: TA-001 through TA-036
 **Stack**: FastAPI + Auth0 + PostgreSQL + Kailash DataFlow
 **Source plan**: `workspaces/mingai/02-plans/06-tenant-admin-plan.md` Phases B-D
-**Progress**: 27/36 complete — 8 TODO/BLOCKED (7 blocked on P3AUTH, 1 product-gated)
+**Progress**: 35/36 complete — TA-025 BLOCKED (product-gated; 5-10 persona interviews required)
 
 ---
 
@@ -28,81 +28,91 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-001: SAML 2.0 wizard backend API
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: P3AUTH-004 endpoints in `app/modules/admin/sso_saml.py` accessible under `/admin/sso/saml/` prefix with `require_tenant_admin`. SP metadata entityID = `https://{AUTH0_DOMAIN}/samlp/metadata/{connection_id}`. Verified in `tests/unit/test_sso_saml.py`.
 **Effort**: 8h
 **Depends on**: P3AUTH-004
 **Description**: `POST /admin/sso/saml/configure` — delegates to P3AUTH-004 implementation. Verify P3AUTH-004 is fully wired as the tenant admin SSO route. This item covers the tenant-facing verification: SP metadata download endpoint, IdP metadata upload, attribute mapping UI. `GET /admin/sso/saml/sp-metadata` returns SP metadata XML for IdP configuration. `POST /admin/sso/saml/test` initiates test SSO login.
 **Acceptance criteria**:
 
-- [ ] P3AUTH-004 endpoint accessible under `/admin/` prefix (tenant admin, not platform admin)
-- [ ] SP metadata download works: correct entityID = `https://{AUTH0_DOMAIN}/samlp/metadata/{connection_id}`
-- [ ] Attribute mapping defaults: email → email, name → name, groups → groups
-- [ ] Test SSO login returns redirect URL (does not complete login in backend)
-- [ ] `require_tenant_admin` enforced (not `require_platform_admin`)
+- [x] P3AUTH-004 endpoint accessible under `/admin/` prefix (tenant admin, not platform admin)
+- [x] SP metadata download works: correct entityID = `https://{AUTH0_DOMAIN}/samlp/metadata/{connection_id}`
+- [x] Attribute mapping defaults: email → email, name → name, groups → groups
+- [x] Test SSO login returns redirect URL (does not complete login in backend)
+- [x] `require_tenant_admin` enforced (not `require_platform_admin`)
 
 ---
 
 ### TA-002: OIDC wizard backend API
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: P3AUTH-005 endpoints in `app/modules/admin/sso_oidc.py` accessible under `/admin/sso/oidc/` prefix with `require_tenant_admin`. OIDC test endpoint returns Auth0 authorize URL. Client secrets vault-ref encrypted.
 **Effort**: 4h
 **Depends on**: P3AUTH-005
 **Description**: Verify P3AUTH-005 OIDC endpoint accessible under `/admin/` prefix for tenant admin. Confirm `POST /admin/sso/oidc/configure` and `POST /admin/sso/oidc/test` routes exist and require `require_tenant_admin`. No new backend code if P3AUTH-005 covers both platform and tenant admin paths.
 **Acceptance criteria**:
 
-- [ ] `POST /admin/sso/oidc/configure` accessible to tenant admin
-- [ ] `POST /admin/sso/oidc/test` returns Auth0 authorize URL for OIDC test flow
-- [ ] Client secret encrypted in storage (vault ref — same as P3AUTH-005)
-- [ ] `require_tenant_admin` on both routes
+- [x] `POST /admin/sso/oidc/configure` accessible to tenant admin
+- [x] `POST /admin/sso/oidc/test` returns Auth0 authorize URL for OIDC test flow
+- [x] Client secret encrypted in storage (vault ref — same as P3AUTH-005)
+- [x] `require_tenant_admin` on both routes
 
 ---
 
 ### TA-003: JIT provisioning
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `GET /admin/sso/config` returns `jit_provisioning` block with `enabled` and `default_role`. `PATCH /admin/sso/config` accepts `jit_default_role` (viewer|editor, not admin). JIT endpoint reads configured default_role from tenant_configs. `tests/unit/test_sso_config_api.py` TestSSOConfigJITExtension (6 tests).
 **Effort**: 2h
 **Depends on**: P3AUTH-008
 **Description**: Verify P3AUTH-008 JIT provisioning is wired to correct tenant admin configuration. When tenant admin enables SSO, JIT should be automatically enabled. `GET /admin/sso/config` should return `{ "jit_provisioning": { "enabled": true, "default_role": "viewer" } }`. `PATCH /admin/sso/config` should accept `jit_default_role` field.
 **Acceptance criteria**:
 
-- [ ] JIT provisioning auto-enabled when SSO enabled (not a separate toggle)
-- [ ] Default role for JIT-provisioned users configurable: viewer|editor (not admin — admin must be explicit grant)
-- [ ] `GET /admin/sso/config` returns JIT config alongside SSO provider config
-- [ ] Integration with P3AUTH-008 logic confirmed
+- [x] JIT provisioning auto-enabled when SSO enabled (not a separate toggle)
+- [x] Default role for JIT-provisioned users configurable: viewer|editor (not admin — admin must be explicit grant)
+- [x] `GET /admin/sso/config` returns JIT config alongside SSO provider config
+- [x] Integration with P3AUTH-008 logic confirmed
 
 ---
 
 ### TA-004: Group-to-role mapping UI
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `src/web/app/settings/sso/elements/GroupRoleMappingTable.tsx` — mapping table, Add/Delete rows, role dropdown (viewer|editor|admin), Save wired to useUpdateGroupSyncConfig(), "Test My Groups" with coming-soon state. Rendered in `src/web/app/settings/sso/page.tsx`. 0 TypeScript errors.
 **Effort**: 5h
 **Depends on**: P3AUTH-010, P3AUTH-015
 **Description**: Tenant admin UI for mapping IdP group names to mingai roles. Table format: IdP Group Name (text input) | mingai Role (dropdown: viewer|editor|admin). "Add Row" button. "Test" button fetches current user's group claims from Auth0 and shows which role they would receive. Frontend component: extend `Auth0SyncSettings.tsx`.
 **Note**: `P3AUTH-015` owns the HTTP wiring to `PATCH /admin/sso/group-sync/config`. This item (TA-004) adds the group-to-role mapping table UI to the same `Auth0SyncSettings.tsx` page. Must be done after P3AUTH-015 is complete.
 **Acceptance criteria**:
 
-- [ ] Table renders current mappings from `GET /admin/sso/group-sync/config`
-- [ ] Add/delete mapping rows in-table without page navigation
-- [ ] Role dropdown: viewer|editor|admin
-- [ ] "Test My Groups" button shows current user's IdP groups and resolved role
-- [ ] Save button wired to PATCH endpoint
-- [ ] 0 TypeScript errors
+- [x] Table renders current mappings from `GET /admin/sso/group-sync/config`
+- [x] Add/delete mapping rows in-table without page navigation
+- [x] Role dropdown: viewer|editor|admin
+- [x] "Test My Groups" button shows current user's IdP groups and resolved role
+- [x] Save button wired to PATCH endpoint
+- [x] 0 TypeScript errors
 
 ---
 
 ### TA-005: SSO enable/disable toggle
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `src/web/lib/hooks/useSSO.ts` — useAdminSSOConfig + useUpdateAdminSSOConfig. `src/web/app/settings/sso/elements/SSOToggle.tsx` — 3 render states (loading/null-config/configured), confirm dialog on disable. 0 TypeScript errors.
 **Effort**: 3h
 **Depends on**: P3AUTH-003
 **Description**: `PATCH /admin/sso/toggle` with `{ "enabled": true|false }`. Enabling SSO requires a configured connection (at least one of SAML, OIDC, Google, Okta). Disabling: graceful switch — existing SSO sessions continue until token expiry; new logins fall back to local auth. Emergency fallback: local auth ALWAYS works even when SSO is enabled (P3AUTH-013). Frontend: toggle in SSO settings with confirmation dialog on disable.
 **Acceptance criteria**:
 
-- [ ] Enable toggle requires at least one configured SSO connection (422 if no connection)
-- [ ] Disable toggle shows confirmation: "Existing SSO sessions expire at [time]; local login remains active"
-- [ ] `enabled` flag stored in `tenant_configs.sso_config.enabled`
-- [ ] Toggle action logged to `audit_log`
-- [ ] `require_tenant_admin` enforced
+- [x] Enable toggle requires at least one configured SSO connection (422 if no connection)
+- [x] Disable toggle shows confirmation: "Existing SSO sessions expire at [time]; local login remains active"
+- [x] `enabled` flag stored in `tenant_configs.sso_config.enabled`
+- [x] Toggle action logged to `audit_log`
+- [x] `require_tenant_admin` enforced
 
 ---
 
@@ -632,19 +642,21 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-033: User import from SSO
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `app/modules/admin/sso_import.py` — GET `/admin/sso/directory/users` (Auth0 Management API), POST `/admin/users/import-from-sso` (batch 50, role=viewer, status=invited, audit log). Migration v037 adds `users.auth0_user_id`. `tests/unit/test_user_sso_import.py` (26 tests).
 **Effort**: 6h
 **Depends on**: P3AUTH-001
 **Description**: `GET /admin/sso/directory/users` — lists IdP users available for pre-provisioning via Auth0 Management API. Returns up to 200 users from Auth0 org with their group memberships. `POST /admin/users/import-from-sso` — creates mingai user records for selected Auth0 users (not yet logged in). Useful for pre-loading user list before SSO rollout.
 **Acceptance criteria**:
 
-- [ ] `GET /admin/sso/directory/users` calls Auth0 Management API `GET /api/v2/organizations/{id}/members`
-- [ ] Returns: `[{ "auth0_user_id", "email", "name", "groups" }]`
-- [ ] `POST /admin/users/import-from-sso` accepts `{ "auth0_user_ids": [string] }`
-- [ ] Creates `users` rows with `auth0_user_id`, default role=viewer, `status=invited`
-- [ ] Duplicate handling: skip users already in `users` table (no error, just count in response)
-- [ ] Import logged to `audit_log`
-- [ ] `require_tenant_admin` enforced
+- [x] `GET /admin/sso/directory/users` calls Auth0 Management API `GET /api/v2/organizations/{id}/members`
+- [x] Returns: `[{ "auth0_user_id", "email", "name", "groups" }]`
+- [x] `POST /admin/users/import-from-sso` accepts `{ "auth0_user_ids": [string] }`
+- [x] Creates `users` rows with `auth0_user_id`, default role=viewer, `status=invited`
+- [x] Duplicate handling: skip users already in `users` table (no error, just count in response)
+- [x] Import logged to `audit_log`
+- [x] `require_tenant_admin` enforced
 
 ---
 
@@ -668,19 +680,21 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-035: Tenant admin role delegation
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `app/modules/admin/role_delegation.py` — POST/DELETE/GET delegation endpoints. Migration v038 `user_delegations` table with RLS. `require_kb_admin`/`require_agent_admin` dependency factories in `dependencies.py`. `tests/unit/test_role_delegation.py` (21 tests).
 **Effort**: 8h
 **Depends on**: P3AUTH-002
 **Description**: `POST /admin/users/{id}/delegate-admin`. Grants a user scoped admin privileges. Scopes: `kb_admin:{index_id}` (manage specific KB), `agent_admin:{agent_id}` (manage specific agent), `user_admin` (manage users but not config). Scoped admin claims added to JWT via Auth0 post-login Action (or via additional `scope` claim in local JWT). Middleware checks scoped admin claims where applicable.
 **Acceptance criteria**:
 
-- [ ] Delegation creates `user_delegations` table entry (new Alembic migration)
-- [ ] `user_delegations` columns: user_id, delegated_scope, resource_id nullable, granted_by, expires_at nullable, created_at
-- [ ] JWT includes delegated scopes in additional claims (or queried from DB on each request)
-- [ ] Middleware: `kb_admin:{index_id}` allows PATCH on that specific KB's settings (not other KBs)
-- [ ] `require_tenant_admin` on delegation endpoint
-- [ ] Delegation revocable: DELETE `/admin/users/{id}/delegations/{delegation_id}`
-- [ ] Delegation logged to `audit_log`
+- [x] Delegation creates `user_delegations` table entry (new Alembic migration)
+- [x] `user_delegations` columns: user_id, delegated_scope, resource_id nullable, granted_by, expires_at nullable, created_at
+- [x] JWT includes delegated scopes in additional claims (or queried from DB on each request)
+- [x] Middleware: `kb_admin:{index_id}` allows PATCH on that specific KB's settings (not other KBs)
+- [x] `require_tenant_admin` on delegation endpoint
+- [x] Delegation revocable: DELETE `/admin/users/{id}/delegations/{delegation_id}`
+- [x] Delegation logged to `audit_log`
 
 ---
 

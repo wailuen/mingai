@@ -602,6 +602,228 @@ async def update_group_sync_config(
 
 
 # ---------------------------------------------------------------------------
+# SSO Connection Config (P3AUTH-003)
+# ---------------------------------------------------------------------------
+
+_VALID_SSO_PROVIDER_TYPES = {"entra", "google", "okta", "saml", "oidc"}
+
+_SSO_CONN_CONFIG_TYPE = "sso_connection_config"
+
+
+_VALID_JIT_ROLES = {"viewer", "editor"}
+
+
+class JITProvisioningBlock(BaseModel):
+    """Nested JIT provisioning config in SSO connection config response."""
+
+    enabled: bool
+    default_role: str
+
+
+class SSOConnectionConfigRequest(BaseModel):
+    """PATCH /admin/sso/config request body (P3AUTH-003 + TA-003)."""
+
+    provider_type: str
+    auth0_connection_id: str
+    enabled: bool
+    jit_default_role: Optional[
+        str
+    ] = None  # "viewer" or "editor" only; "admin" is not allowed
+
+    @field_validator("provider_type")
+    @classmethod
+    def validate_provider_type(cls, v: str) -> str:
+        if v not in _VALID_SSO_PROVIDER_TYPES:
+            raise ValueError(
+                f"provider_type must be one of {sorted(_VALID_SSO_PROVIDER_TYPES)}, "
+                f"got {v!r}"
+            )
+        return v
+
+    @field_validator("auth0_connection_id")
+    @classmethod
+    def validate_connection_id_format(cls, v: str) -> str:
+        if not v.startswith("con_"):
+            raise ValueError(
+                "auth0_connection_id must start with 'con_' "
+                "(e.g. con_AbCdEfGhIjKl1234)"
+            )
+        return v
+
+    @field_validator("jit_default_role")
+    @classmethod
+    def validate_jit_default_role(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in _VALID_JIT_ROLES:
+            raise ValueError(
+                f"jit_default_role must be one of {sorted(_VALID_JIT_ROLES)}, got {v!r}"
+            )
+        return v
+
+
+class SSOConnectionConfigResponse(BaseModel):
+    """GET/PATCH /admin/sso/config response body (P3AUTH-003 + TA-003)."""
+
+    provider_type: Optional[str] = None
+    auth0_connection_id: Optional[str] = None
+    enabled: bool = False
+    jit_provisioning: Optional[JITProvisioningBlock] = None
+
+
+async def _get_sso_connection_config_db(tenant_id: str, db) -> Optional[dict]:
+    """
+    Read SSO connection config from tenant_configs
+    (config_type='sso_connection_config').
+
+    Returns the stored dict or None if not yet configured.
+    """
+    import json as _json
+
+    result = await db.execute(
+        text(
+            "SELECT config_data FROM tenant_configs "
+            "WHERE tenant_id = :tid AND config_type = :ctype LIMIT 1"
+        ),
+        {"tid": tenant_id, "ctype": _SSO_CONN_CONFIG_TYPE},
+    )
+    row = result.fetchone()
+    if row is None or row[0] is None:
+        return None
+    data = row[0]
+    return _json.loads(data) if isinstance(data, str) else data
+
+
+async def _upsert_sso_connection_config_db(
+    tenant_id: str,
+    actor_id: str,
+    new_config: dict,
+    old_config: Optional[dict],
+    db,
+) -> None:
+    """
+    Upsert SSO connection config into tenant_configs and write an audit log entry.
+
+    Both writes happen within the same transaction (commit done by caller).
+    """
+    import json as _json
+
+    serialized = _json.dumps(new_config)
+
+    await db.execute(
+        text(
+            "INSERT INTO tenant_configs (id, tenant_id, config_type, config_data) "
+            "VALUES (:id, :tid, :ctype, CAST(:data AS jsonb)) "
+            "ON CONFLICT (tenant_id, config_type) DO UPDATE "
+            "SET config_data = CAST(:data AS jsonb)"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "tid": tenant_id,
+            "ctype": _SSO_CONN_CONFIG_TYPE,
+            "data": serialized,
+        },
+    )
+
+    await db.execute(
+        text(
+            "INSERT INTO audit_log "
+            "(id, tenant_id, actor_id, action, resource_type, details) "
+            "VALUES (:id, :tenant_id, :actor_id, :action, :resource_type, :details)"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "actor_id": actor_id,
+            "action": "sso_config.update",
+            "resource_type": "sso_connection_config",
+            "details": _json.dumps(
+                {
+                    "before": old_config,
+                    "after": new_config,
+                }
+            ),
+        },
+    )
+
+
+def _build_sso_connection_config_response(config: dict) -> SSOConnectionConfigResponse:
+    """
+    Build SSOConnectionConfigResponse from a stored config dict.
+
+    Populates jit_provisioning block when SSO is enabled; jit is
+    automatically enabled when SSO enabled=True.
+    """
+    enabled = config.get("enabled", False)
+    jit_block: Optional[JITProvisioningBlock] = None
+    if enabled:
+        jit_default_role = config.get("jit_default_role", "viewer")
+        jit_block = JITProvisioningBlock(enabled=True, default_role=jit_default_role)
+    return SSOConnectionConfigResponse(
+        provider_type=config.get("provider_type"),
+        auth0_connection_id=config.get("auth0_connection_id"),
+        enabled=enabled,
+        jit_provisioning=jit_block,
+    )
+
+
+@router.get("/sso/config", response_model=Optional[SSOConnectionConfigResponse])
+async def get_sso_connection_config(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """P3AUTH-003: Get the tenant's SSO connection config (tenant admin only).
+
+    Returns null when no SSO connection has been configured yet.
+    Includes jit_provisioning block when SSO is enabled (TA-003).
+    """
+    config = await _get_sso_connection_config_db(current_user.tenant_id, session)
+    if config is None:
+        return None
+    return _build_sso_connection_config_response(config)
+
+
+@router.patch("/sso/config", response_model=SSOConnectionConfigResponse)
+async def update_sso_connection_config(
+    request: SSOConnectionConfigRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """P3AUTH-003 + TA-003: Create or update the tenant's SSO connection config.
+
+    Validates provider_type against the allowed set and ensures
+    auth0_connection_id starts with 'con_'.
+
+    Optional jit_default_role ("viewer" or "editor") is stored in the same
+    JSONB blob. JIT is automatically enabled when enabled=True.
+
+    Writes an audit log entry (action=sso_config.update) with before/after
+    values in the same transaction.
+    """
+    old_config = await _get_sso_connection_config_db(current_user.tenant_id, session)
+    new_config = request.model_dump(exclude_none=True)
+
+    await _upsert_sso_connection_config_db(
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.id,
+        new_config=new_config,
+        old_config=old_config,
+        db=session,
+    )
+    await session.commit()
+
+    logger.info(
+        "sso_connection_config_updated",
+        tenant_id=current_user.tenant_id,
+        provider_type=request.provider_type,
+        connection_id=request.auth0_connection_id,
+        enabled=request.enabled,
+    )
+
+    return _build_sso_connection_config_response(new_config)
+
+
+# ---------------------------------------------------------------------------
 # Issue Reporting Settings
 # ---------------------------------------------------------------------------
 
