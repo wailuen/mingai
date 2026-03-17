@@ -89,6 +89,32 @@ class PatchKBAccessRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+async def verify_kb_belongs_to_tenant(
+    index_id: str, tenant_id: str, db: AsyncSession
+) -> bool:
+    """
+    Return True if the KB index is accessible by the tenant.
+
+    Gold Standard #13: verify via UNION ALL on integrations.config->>'kb_id'
+    AND kb_access_control.index_id — no knowledge_bases table exists.
+    """
+    result = await db.execute(
+        text(
+            "SELECT 1 FROM ("
+            "  SELECT config->>'kb_id' AS idx "
+            "  FROM integrations "
+            "  WHERE tenant_id = :tenant_id AND config->>'kb_id' = :index_id "
+            "  UNION ALL "
+            "  SELECT index_id "
+            "  FROM kb_access_control "
+            "  WHERE tenant_id = :tenant_id AND index_id = :index_id "
+            ") sub LIMIT 1"
+        ),
+        {"tenant_id": tenant_id, "index_id": index_id},
+    )
+    return result.fetchone() is not None
+
+
 async def get_kb_access_db(
     index_id: str, tenant_id: str, db: AsyncSession
 ) -> Optional[dict]:
@@ -162,12 +188,25 @@ async def get_kb_access(
     current_user: CurrentUser = Depends(require_tenant_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> KBAccessResponse:
-    """Get access control config for a KB index. Returns workspace_wide default if no row exists."""
+    """
+    Get access control config for a KB index.
+
+    Canonical path: /admin/knowledge-base/{index_id}/access-control
+    Alias (backward-compat): /admin/knowledge-base/{index_id}/access
+
+    Returns 404 if the KB does not belong to the calling tenant.
+    Returns workspace_wide default if no access-control row exists yet.
+    """
     # Validate UUID format
     try:
         uuid.UUID(index_id)
     except ValueError:
         raise HTTPException(status_code=422, detail="index_id must be a valid UUID")
+
+    # Return 404 (not 403) for KB indices that don't belong to this tenant.
+    owned = await verify_kb_belongs_to_tenant(index_id, current_user.tenant_id, db)
+    if not owned:
+        raise HTTPException(status_code=404, detail="Knowledge base not found")
 
     row = await get_kb_access_db(index_id, current_user.tenant_id, db)
     if row is None:
@@ -200,11 +239,23 @@ async def patch_kb_access(
     current_user: CurrentUser = Depends(require_tenant_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> KBAccessResponse:
-    """Upsert access control config for a KB index."""
+    """
+    Upsert access control config for a KB index.
+
+    Canonical path: /admin/knowledge-base/{index_id}/access-control
+    Alias (backward-compat): /admin/knowledge-base/{index_id}/access
+
+    Returns 404 if the KB does not belong to the calling tenant.
+    """
     try:
         uuid.UUID(index_id)
     except ValueError:
         raise HTTPException(status_code=422, detail="index_id must be a valid UUID")
+
+    # Return 404 (not 403) for KB indices that don't belong to this tenant.
+    owned = await verify_kb_belongs_to_tenant(index_id, current_user.tenant_id, db)
+    if not owned:
+        raise HTTPException(status_code=404, detail="Knowledge base not found")
 
     # For role_restricted: at least one role required
     if body.visibility_mode == "role_restricted" and not body.allowed_roles:

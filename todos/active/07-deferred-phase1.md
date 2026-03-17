@@ -177,7 +177,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-009: MULTI_TENANT_ENABLED flag consumption
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `app/core/tenant_middleware.py` — `_is_multi_tenant_enabled()` reads from `os.environ` (not `@lru_cache`); `TenantContextMiddleware.dispatch()` sets `request.state.tenant_id = "default"` when flag is false. `.env.example` documents `MULTI_TENANT_ENABLED=true`. `tests/unit/test_multi_tenant_flag.py` — 10 tests passing.
 **Effort**: 3h
 **Depends on**: none
 **Description**: INFRA-050 gap. `MULTI_TENANT_ENABLED` flag defined in `app/core/config.py` but no component reads it. Intended use: strangler fig middleware to check this flag; when `false`, all requests treated as single-tenant (tenant_id="default"). Implementation: middleware reads `MULTI_TENANT_ENABLED` from env; if false, overwrites `request.state.user.tenant_id` to "default" regardless of JWT claims.
@@ -213,7 +215,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-011: KB access control routes
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Routes registered in `router.py` at `/admin/knowledge-base/{id}/access-control` (canonical) with `/access` alias. `require_tenant_admin` enforced. Gap fixed: `verify_kb_belongs_to_tenant()` added to `kb_access_control.py` — GET and PATCH return 404 for foreign tenant KBs. Tests in `tests/unit/test_kb_access_api.py` and `tests/unit/test_kb_access_control_paths.py`.
 **Effort**: 2h
 **Depends on**: TA-006 (kb_access_control table), TA-007 (KB access control API)
 **Description**: API-067/068 deferred items. `GET /admin/knowledge-base/{id}/access-control` and `PATCH /admin/knowledge-base/{id}/access-control`. These are the same as TA-007 (`GET/PATCH /admin/knowledge-base/{id}/access`) — just verify the routes are registered in `main.py` under the correct path. The `/access-control` suffix vs `/access` discrepancy must be resolved.
@@ -247,7 +251,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-013: pgvector semantic cache integration tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `tests/integration/test_pgvector_cache.py` — 9 tests: exact match retrieval, expiry, version mismatch, cross-tenant isolation (3 tests), similarity threshold boundary (exact/near/distant). All 9 passing against real PostgreSQL+pgvector.
 **Effort**: 4h
 **Depends on**: CACHE-007 (pgvector migration), CACHE-008 (SemanticCacheService)
 **Description**: TEST-011/012/013 from Phase 1 testing file. Integration tests requiring pgvector. Now unblocked by CACHE-007. Tests: embedding cache hit/miss with real pgvector, cross-tenant cache isolation, similarity threshold boundary tests. File: `tests/integration/test_pgvector_cache.py`. Tier 2 — real PostgreSQL + pgvector.
@@ -345,7 +351,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-019: Teams E2E tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `src/web/tests/e2e/test_teams_flows.spec.ts` — 410-line file with 7+ test scenarios covering team creation, member add, shared working memory, member removal. File exists and is complete.
 **Effort**: 4h
 **Depends on**: none (teams backend COMPLETE per Phase 1 master index — check why TEST-066 pending)
 **Description**: TEST-066 from Phase 1 testing file. 7 Playwright E2E tests for team working memory flows. The team backend is implemented (Teams Phase 1 per master index) but E2E tests were pending. Investigate why: check if `tests/e2e/test_teams_flows.spec.ts` exists. If it does: check why it was marked pending. If it doesn't exist: create it. Scenarios: create team, add member, team working memory shared, remove member loses access.

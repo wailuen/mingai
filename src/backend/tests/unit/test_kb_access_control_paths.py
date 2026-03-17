@@ -49,12 +49,28 @@ def _mock_db(row=None):
 
 @pytest.mark.asyncio
 async def test_get_access_control_returns_default_when_no_row():
-    """GET /access-control returns workspace_wide default when no row."""
+    """GET /access-control returns workspace_wide default when KB is owned but no row."""
     from app.modules.admin.kb_access_control import get_kb_access
 
     kb_id = str(uuid.uuid4())
     db = _mock_db(row=None)
     user = _make_admin()
+
+    # Ownership check must return truthy; second SELECT returns None (no row).
+    call_count = [0]
+    original_execute = db.execute
+
+    async def _side_effect(sql, params=None):
+        call_count[0] += 1
+        result = MagicMock()
+        sql_str = str(sql)
+        if "UNION ALL" in sql_str.upper():
+            result.fetchone.return_value = ("1",)
+        else:
+            result.fetchone.return_value = None
+        return result
+
+    db.execute = AsyncMock(side_effect=_side_effect)
 
     resp = await get_kb_access(index_id=kb_id, current_user=user, db=db)
 
@@ -70,15 +86,45 @@ async def test_get_access_control_returns_stored_row():
     from app.modules.admin.kb_access_control import get_kb_access
 
     kb_id = str(uuid.uuid4())
-    db = _mock_db()
-    mock_result = MagicMock()
-    mock_result.fetchone.return_value = ("role_restricted", ["admin"], [])
-    db.execute.return_value = mock_result
     user = _make_admin()
+    db = _mock_db()
+
+    async def _side_effect(sql, params=None):
+        result = MagicMock()
+        sql_str = str(sql)
+        if "UNION ALL" in sql_str.upper():
+            result.fetchone.return_value = ("1",)
+        else:
+            result.fetchone.return_value = ("role_restricted", ["admin"], [])
+        return result
+
+    db.execute = AsyncMock(side_effect=_side_effect)
 
     resp = await get_kb_access(index_id=kb_id, current_user=user, db=db)
     assert resp.visibility_mode == "role_restricted"
     assert resp.allowed_roles == ["admin"]
+
+
+@pytest.mark.asyncio
+async def test_get_access_control_foreign_tenant_returns_404():
+    """GET for KB not owned by tenant returns 404."""
+    from fastapi import HTTPException
+    from app.modules.admin.kb_access_control import get_kb_access
+
+    kb_id = str(uuid.uuid4())
+    user = _make_admin()
+    db = _mock_db(row=None)
+
+    async def _side_effect(sql, params=None):
+        result = MagicMock()
+        result.fetchone.return_value = None
+        return result
+
+    db.execute = AsyncMock(side_effect=_side_effect)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_kb_access(index_id=kb_id, current_user=user, db=db)
+    assert exc_info.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -104,9 +150,20 @@ async def test_patch_access_control_upserts():
     )
 
     kb_id = str(uuid.uuid4())
-    db = _mock_db()
-    db.execute.return_value = MagicMock()
     user = _make_admin()
+    db = _mock_db()
+
+    async def _side_effect(sql, params=None):
+        result = MagicMock()
+        sql_str = str(sql)
+        if "UNION ALL" in sql_str.upper():
+            result.fetchone.return_value = ("1",)
+        else:
+            result.fetchone.return_value = None
+            result.scalar.return_value = None
+        return result
+
+    db.execute = AsyncMock(side_effect=_side_effect)
 
     body = PatchKBAccessRequest(visibility_mode="workspace_wide")
     resp = await patch_kb_access(index_id=kb_id, body=body, current_user=user, db=db)

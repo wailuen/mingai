@@ -244,6 +244,7 @@ async def route_message(
                         "status": "sent",
                         "response_code": response.status_code,
                         "attempt_count": attempt + 1,
+                        "signed": "signature" in signed_payload,
                     }
                 else:
                     logger.warning(
@@ -295,6 +296,7 @@ async def route_message(
         "status": "failed",
         "response_code": last_status_code,
         "attempt_count": _MAX_RETRIES,
+        "signed": "signature" in signed_payload,
     }
 
 

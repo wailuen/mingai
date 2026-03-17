@@ -259,6 +259,7 @@ async def _run_reindex_job(
                 job_id=job_id,
                 kb_id=kb_id,
                 tenant_id=tenant_id,
+                error_type=type(exc).__name__,
                 error=str(exc),
             )
         break  # single iteration from the async generator

@@ -5,7 +5,12 @@ Handles collection of user behaviour signals for profile learning.
 Before collecting any signals, checks user_privacy_settings.profile_learning_enabled.
 If disabled, on_query_completed() returns early without collecting data.
 """
+import json
+import uuid
+from datetime import datetime, timezone
+
 import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger()
@@ -38,9 +43,9 @@ class ProfileLearningService:
             agent_id: Agent that handled the query.
             db: Async session for privacy setting check.
         """
-        from app.modules.users.privacy_settings import (
+        from app.modules.users.privacy_settings import (  # noqa: PLC0415 — deferred to avoid circular import
             _check_privacy_setting,
-        )  # noqa: PLC0415
+        )
 
         enabled = await _check_privacy_setting(
             db, tenant_id, user_id, "profile_learning_enabled"
@@ -56,10 +61,6 @@ class ProfileLearningService:
         # Record query signal to analytics_events for profile learning.
         # Downstream analytics jobs aggregate these events to build
         # interest vectors (topic affinity, agent preference, query patterns).
-        from sqlalchemy import text  # noqa: PLC0415
-        import uuid  # noqa: PLC0415
-        import json  # noqa: PLC0415
-        from datetime import datetime, timezone  # noqa: PLC0415
 
         await db.execute(
             text(

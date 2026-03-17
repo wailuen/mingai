@@ -288,25 +288,23 @@ async def list_public_agents_db(
         where_parts.append("trust_score >= :min_trust_score")
         params["min_trust_score"] = min_trust_score
 
+    # Build static SQL strings via concatenation — never f-string with user input.
+    # All where_parts are hardcoded literal fragments with :placeholder bindings.
     where_sql = " AND ".join(where_parts)
-
-    count_result = await db.execute(
-        text(f"SELECT COUNT(*) FROM agent_cards WHERE {where_sql}"),
-        params,
+    count_sql = "SELECT COUNT(*) FROM agent_cards WHERE " + where_sql
+    rows_sql = (
+        "SELECT id, tenant_id, name, description, status, is_public, "
+        "a2a_endpoint, transaction_types, industries, languages, "
+        "health_check_url, public_key, trust_score, capabilities, "
+        "created_at, updated_at FROM agent_cards WHERE "
+        + where_sql
+        + " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
     )
+
+    count_result = await db.execute(text(count_sql), params)
     total = count_result.scalar() or 0
 
-    rows_result = await db.execute(
-        text(
-            "SELECT id, tenant_id, name, description, status, is_public, "
-            "a2a_endpoint, transaction_types, industries, languages, "
-            "health_check_url, public_key, trust_score, capabilities, "
-            f"created_at, updated_at FROM agent_cards WHERE {where_sql} "
-            "ORDER BY created_at DESC "
-            "LIMIT :limit OFFSET :offset"
-        ),
-        params,
-    )
+    rows_result = await db.execute(text(rows_sql), params)
     items = [_agent_row_to_dict(row) for row in rows_result.mappings()]
     return {"items": items, "total": total}
 
@@ -623,14 +621,14 @@ async def get_analytics_db(
         agent_filter_sql = " AND id = :agent_id_filter"
         params["agent_id_filter"] = agent_id_filter
 
-    result = await db.execute(
-        text(
-            "SELECT id, name FROM agent_cards "
-            f"WHERE tenant_id = :tenant_id AND is_public = true{agent_filter_sql} "
-            "ORDER BY name ASC"
-        ),
-        params,
+    # agent_filter_sql is either "" or " AND id = :agent_id_filter" — both hardcoded.
+    agents_sql = (
+        "SELECT id, name FROM agent_cards "
+        "WHERE tenant_id = :tenant_id AND is_public = true"
+        + agent_filter_sql
+        + " ORDER BY name ASC"
     )
+    result = await db.execute(text(agents_sql), params)
     agents = result.mappings().all()
 
     period_start = datetime.now(timezone.utc) - timedelta(days=period_days)
@@ -789,7 +787,12 @@ async def _get_discovery_count(tenant_id: str, agent_id: str) -> int:
         key = build_redis_key(tenant_id, "registry", "discovery", agent_id)
         val = await redis.get(key)
         return int(val) if val else 0
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "registry_discovery_count_redis_error",
+            agent_id=agent_id,
+            error_type=type(exc).__name__,
+        )
         return 0
 
 
@@ -802,7 +805,12 @@ async def _get_health_status(agent_id: str) -> str:
         key = f"mingai:registry:health:{agent_id}"
         val = await redis.get(key)
         return val if val else "healthy"
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "registry_health_status_redis_error",
+            agent_id=agent_id,
+            error_type=type(exc).__name__,
+        )
         return "healthy"
 
 
