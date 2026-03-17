@@ -2,7 +2,7 @@
 
 Read these before touching any code. They contain the architecture decisions, patterns, and constraints that keep the system consistent.
 
-Last updated: 2026-03-16.
+Last updated: 2026-03-17.
 
 ---
 

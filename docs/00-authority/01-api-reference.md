@@ -203,6 +203,29 @@ All glossary writes invalidate `mingai:{tenant_id}:glossary_terms` in Redis.
 
 ---
 
+## SSO (Tenant Admin)
+
+All stored under `tenant_configs` table using JSONB `config_data`. No external Auth0 validation yet (P3AUTH-001 pending).
+
+### SSO Config
+
+| Method | Path              | Auth         | Description                                                                                             |
+| ------ | ----------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+| GET    | `/admin/sso`      | tenant_admin | Get current SSO config (`config_type='sso_config'`). Returns `{ isConfigured, provider, domain, ... }`. |
+| POST   | `/admin/sso`      | tenant_admin | Save SSO config. Body: `{ provider, domain, client_id, ... }`. Upserts `tenant_configs` row.            |
+| POST   | `/admin/sso/test` | tenant_admin | Check config presence. Returns `{ success, message }`. Full Auth0 test pending P3AUTH-001.              |
+
+### Group Sync Config (P3AUTH-010/015)
+
+| Method | Path                           | Auth         | Description                                                                                                                    |
+| ------ | ------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/admin/sso/group-sync/config` | tenant_admin | Get Auth0 group sync allowlist and role mapping. Returns `{ allowlist: [str], mapping: {group→role} }`.                        |
+| PATCH  | `/admin/sso/group-sync/config` | tenant_admin | Update group sync config. Body: `{ "allowlist"?: [str], "mapping"?: {group→role} }`. Stored as `config_type='sso_group_sync'`. |
+
+`GroupSyncConfigRequest` constraints: max 200 groups in `allowlist`, 256-char group name limit, valid roles: `admin`, `editor`, `viewer`, `user`.
+
+---
+
 ## Onboarding Wizard (TA-031)
 
 | Method | Path                         | Auth         | Description                                                                                   |

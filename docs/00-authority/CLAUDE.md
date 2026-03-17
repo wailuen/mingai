@@ -3,7 +3,7 @@
 Preloaded instructions for AI codegen agents working on the mingai platform.
 Read this before writing any backend or frontend code.
 
-Last validated: 2026-03-16.
+Last validated: 2026-03-17.
 
 ---
 
@@ -99,7 +99,7 @@ src/backend/
         trust.py              # compute_trust_score(agent_id, tenant_id, db)
         health_monitor.py     # AgentHealthMonitor — asyncio background hourly task
       admin/
-        workspace.py          # GET/PATCH /admin/workspace
+        workspace.py          # GET/PATCH /admin/workspace; GET/POST /admin/sso; POST /admin/sso/test; GET/PATCH /admin/sso/group-sync/config
         analytics.py          # Satisfaction dashboard (TA-026), per-agent analytics (TA-027/028), glossary impact (TA-029), engagement v2 (TA-030)
         onboarding.py         # Onboarding wizard persistence (TA-031) — tenant_configs JSONB storage
         bulk_user_actions.py  # Bulk suspend/role_change/kb_assignment (TA-032) — self-lockout protection
@@ -487,6 +487,7 @@ Never violate these:
 20. Glossary rollback: term update + audit_log INSERT must commit in the same transaction (`commit=False` pattern).
 21. KB assignment: verify `kb_id` belongs to calling tenant before upserting `kb_access_control`.
 22. `update_glossary_term_db` must operate on a copy of `updates` dict (never mutate caller's dict).
+23. `audit_log.actor_id` must always be set to `current_user.id` (the acting user's ID), never `tenant_id`.
 
 ---
 
@@ -670,7 +671,7 @@ Card padding: `20px`. Admin content: `28px 32px`. Section gap: `24-28px`.
 
 ### Backend Modules (all implemented)
 
-auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace, users, teams, agents (+ templates), tenants, platform, registry, llm_profiles, profile/learning, feedback
+auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), users, teams, agents (+ templates), tenants, platform, registry, llm_profiles, profile/learning, feedback
 
 ### Frontend Screens by Role
 

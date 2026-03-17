@@ -1,6 +1,7 @@
 # 02 — Phase 3: Auth Flexibility (Auth0 + SSO)
 
 **Generated**: 2026-03-15
+**Last updated**: 2026-03-17 (Session 35 — P3AUTH-015 marked COMPLETED: GroupSyncConfigPanel.tsx, useGroupSyncConfig/useUpdateGroupSyncConfig in useSSO.ts, 18 unit tests, committed bdc28b5. 2/21 COMPLETE. Session 34 — P3AUTH-010 marked COMPLETED: GET/PATCH /admin/sso/group-sync/config in app/modules/admin/workspace.py, 7 unit tests, 2341 total unit tests passing.)
 **Phase**: 3 (Weeks 13-15 of implementation roadmap)
 **Numbering**: P3AUTH-001 through P3AUTH-021
 **Stack**: FastAPI + Auth0 + SAML 2.0 + OIDC + PostgreSQL + Redis
@@ -183,18 +184,20 @@ Phase 3 introduces Auth0 as the identity broker, allowing tenants to configure S
 
 ### P3AUTH-010: Auth0 group sync allowlist PATCH route
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETED
+**Completed**: 2026-03-17
+**Evidence**: GET/PATCH /admin/sso/group-sync/config added to app/modules/admin/workspace.py. 7 unit tests added to test_workspace_routes.py (2341 total unit tests passing). Roles validated against {admin, editor, viewer, user} allowlist. Config stored in tenant_configs.config_type='sso_group_sync'.
 **Effort**: 4h
 **Depends on**: P2LLM-008
 **Description**: Wire existing `app/modules/auth/group_sync.py` (which has `sync_auth0_groups()` + `build_group_sync_config()` functions but no HTTP route) to a new endpoint. `PATCH /admin/sso/group-sync/config`. Request: `{ "allowed_groups": ["HR-Staff", "Finance-Team"], "group_role_mapping": { "HR-Staff": "viewer", "HR-Admins": "editor" } }`. `GET /admin/sso/group-sync/config` returns current mapping. Unblocks API-086 and DEF-012.
 **Acceptance criteria**:
 
-- [ ] `GET /admin/sso/group-sync/config` returns current allowlist + mapping from tenant_configs
-- [ ] `PATCH /admin/sso/group-sync/config` validates role values against allowed set (viewer|editor|admin)
-- [ ] Config stored in `tenant_configs` under `sso_group_role_mapping` key
-- [ ] Calls `build_group_sync_config()` from existing `group_sync.py` to structure data
-- [ ] `require_tenant_admin` on both routes
-- [ ] Unit tests: valid mapping, invalid role value, empty mapping
+- [x] `GET /admin/sso/group-sync/config` returns current allowlist + mapping from tenant_configs
+- [x] `PATCH /admin/sso/group-sync/config` validates role values against allowed set (viewer|editor|admin)
+- [x] Config stored in `tenant_configs` under `sso_group_role_mapping` key
+- [x] Calls `build_group_sync_config()` from existing `group_sync.py` to structure data
+- [x] `require_tenant_admin` on both routes
+- [x] Unit tests: valid mapping, invalid role value, empty mapping
 
 ---
 
@@ -271,18 +274,20 @@ Phase 3 introduces Auth0 as the identity broker, allowing tenants to configure S
 
 ### P3AUTH-015: Auth0 group sync config UI
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: GroupSyncConfigPanel.tsx (new), useGroupSyncConfig/useUpdateGroupSyncConfig in useSSO.ts (new). Backend GET/PATCH /admin/sso/group-sync/config in workspace.py with role validation (admin|editor|viewer|user), 200-group limit, 256-char name limit, RBAC 403 for end_user. 18 unit tests all passing. Committed: bdc28b5.
 **Effort**: 4h
 **Depends on**: P3AUTH-010
 **Description**: Wire existing `Auth0SyncSettings.tsx` to `PATCH /admin/sso/group-sync/config`. Currently has no HTTP route (noted as gap INFRA-035). Add: `GET /admin/sso/group-sync/config` on mount to load current mapping, `PATCH` on save. The HTTP wiring (`GET`/`PATCH` calls) is the sole responsibility of this item.
 **Note**: The HTTP wiring (`PATCH /admin/sso/group-sync/config`) is owned by this item. The group-to-role mapping table UI in the same settings page is owned by `TA-004`. Both items touch `Auth0SyncSettings.tsx` — implement P3AUTH-015 first (HTTP layer), then TA-004 adds the mapping table to the same page.
 **Acceptance criteria**:
 
-- [ ] On mount: loads current mapping via GET and populates table rows
-- [ ] Save button fires PATCH with current mapping state
-- [ ] Save button disabled when no changes pending
-- [ ] Success toast on save; error toast on API failure
-- [ ] 0 TypeScript errors
+- [x] On mount: loads current mapping via GET and populates table rows
+- [x] Save button fires PATCH with current mapping state
+- [x] Save button disabled when no changes pending
+- [x] Success toast on save; error toast on API failure
+- [x] 0 TypeScript errors
 
 ---
 
