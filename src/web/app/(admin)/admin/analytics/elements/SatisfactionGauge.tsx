@@ -27,6 +27,20 @@ export function SatisfactionGauge({ data, isPending }: SatisfactionGaugeProps) {
     );
   }
 
+  // Backend signals explicitly that data volume is too low to be meaningful.
+  if (data?.not_enough_data === true) {
+    const count = data.total_ratings ?? 0;
+    return (
+      <div className="rounded-card border border-border-faint bg-bg-surface p-6">
+        <p className="text-sm font-medium text-text-muted">Collecting data…</p>
+        <p className="mt-1 text-xs text-text-faint">
+          {count} rating{count !== 1 ? "s" : ""} so far — 50+ needed for a
+          reliable score.
+        </p>
+      </div>
+    );
+  }
+
   const satisfaction7d = data?.satisfaction_7d ?? 0;
   const hasData =
     data !== undefined &&

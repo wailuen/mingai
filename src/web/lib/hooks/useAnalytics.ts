@@ -12,6 +12,8 @@ export interface SatisfactionTrendPoint {
 export interface AnalyticsSatisfactionResponse {
   trend: SatisfactionTrendPoint[];
   satisfaction_7d: number;
+  not_enough_data?: boolean;
+  total_ratings?: number;
 }
 
 export interface LowConfidenceItem {
@@ -138,7 +140,7 @@ export function useUpdateIssue() {
     }: {
       id: string;
       payload: Record<string, unknown>;
-    }) => apiPatch<Issue>(`/api/v1/admin/issues/${id}`, payload),
+    }) => apiPatch<Issue>(`/api/v1/admin/issues/${encodeURIComponent(id)}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [ISSUES_KEY] });
     },

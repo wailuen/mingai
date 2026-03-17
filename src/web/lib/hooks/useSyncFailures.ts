@@ -26,15 +26,14 @@ export interface RetrySyncResponse {
 
 const SYNC_FAILURES_KEY = "sync-failures";
 
-export function useSyncFailures(integrationId?: string) {
-  const params = integrationId
-    ? `?integration_id=${encodeURIComponent(integrationId)}`
-    : "";
+export function useSyncFailures(sourceId?: string) {
+  const params = sourceId ? `?source_id=${encodeURIComponent(sourceId)}` : "";
 
   return useQuery({
-    queryKey: [SYNC_FAILURES_KEY, integrationId ?? "all"],
+    queryKey: [SYNC_FAILURES_KEY, sourceId ?? "all"],
     queryFn: () =>
-      apiGet<SyncFailuresResponse>(`/api/v1/documents/sync-failures${params}`),
+      apiGet<SyncFailuresResponse>(`/api/v1/admin/sync/failures${params}`),
+    enabled: sourceId !== undefined ? !!sourceId : true,
   });
 }
 
@@ -44,7 +43,7 @@ export function useRetrySyncJob() {
   return useMutation({
     mutationFn: (jobId: string) =>
       apiPost<RetrySyncResponse>(
-        `/api/v1/documents/sync-jobs/${encodeURIComponent(jobId)}/retry`,
+        `/api/v1/admin/sync/jobs/${encodeURIComponent(jobId)}/retry`,
         {},
       ),
     onSuccess: () => {

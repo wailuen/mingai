@@ -743,6 +743,45 @@ async def get_sync_status(
     return {"items": items}
 
 
+@admin_sync_router.post("/sync/jobs/{job_id}/retry")
+async def retry_sync_job(
+    job_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    API-058: Retry a failed sync job.
+
+    Looks up the failed job to get its integration, then creates a new
+    queued sync job for the same integration. Only jobs belonging to the
+    current tenant can be retried.
+    """
+    try:
+        uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Sync job not found.")
+
+    result = await db.execute(
+        text(
+            "SELECT sj.integration_id, i.tenant_id "
+            "FROM sync_jobs sj "
+            "JOIN integrations i ON i.id = sj.integration_id "
+            "WHERE sj.id = :job_id AND i.tenant_id = :tenant_id"
+        ),
+        {"job_id": job_id, "tenant_id": current_user.tenant_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Sync job not found.")
+
+    new_job = await create_sync_job_db(
+        integration_id=str(row["integration_id"]),
+        tenant_id=current_user.tenant_id,
+        db=db,
+    )
+    return {"job_id": new_job["job_id"], "status": new_job["status"]}
+
+
 # ---------------------------------------------------------------------------
 # TA-015: Sync schedule DB helper
 # ---------------------------------------------------------------------------
