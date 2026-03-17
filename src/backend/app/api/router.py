@@ -123,10 +123,16 @@ from app.modules.documents.sharepoint import (
 router.include_router(sharepoint_router)
 router.include_router(admin_sync_router)
 
-# Google Drive document integration endpoints
+# Google Drive document integration endpoints (TA-019) and sync worker (DEF-010)
 from app.modules.documents.google_drive import router as google_drive_router
+from app.modules.documents.google_drive.sync_worker import (
+    router as google_drive_sync_router,
+    webhook_router as google_drive_webhook_router,
+)
 
 router.include_router(google_drive_router)
+router.include_router(google_drive_sync_router)
+router.include_router(google_drive_webhook_router)
 
 # Notification SSE stream + list/mark-read/preferences (API-012, API-117 to API-120)
 from app.modules.notifications.routes import (

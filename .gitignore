@@ -50,7 +50,8 @@ htmlcov/
 # Secrets
 *.pem
 *.key
-secrets/
+/secrets/
+src/secrets/
 
 # Per-project learning data (generated at runtime)
 .claude/learning/
