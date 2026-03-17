@@ -16,6 +16,7 @@ import structlog
 logger = structlog.get_logger()
 
 _redis_pool: Optional[object] = None
+_redis_binary_pool: Optional[object] = None
 
 # Allowlist for structural key segments (tenant_id and key_type).
 # These must match a safe character set to prevent namespace injection.
@@ -101,10 +102,47 @@ def get_redis():
     return _redis_pool
 
 
+def get_redis_binary():
+    """
+    Get a Redis connection pool with decode_responses=False.
+
+    Use this for storing and reading raw binary data (e.g. float16 embedding
+    vectors). The standard get_redis() pool uses decode_responses=True which
+    will raise UnicodeDecodeError on non-UTF-8 bytes.
+
+    Connection URL from REDIS_URL env var - never hardcode.
+    """
+    global _redis_binary_pool
+
+    if _redis_binary_pool is None:
+        import redis.asyncio as aioredis
+
+        redis_url = os.environ.get("REDIS_URL")
+        if not redis_url:
+            raise ValueError(
+                "REDIS_URL environment variable is not set. "
+                "Set it in .env (e.g., redis://localhost:6379/0)"
+            )
+
+        _redis_binary_pool = aioredis.from_url(
+            redis_url,
+            max_connections=20,
+            socket_timeout=5,
+            retry_on_timeout=True,
+            decode_responses=False,
+        )
+
+    return _redis_binary_pool
+
+
 async def close_redis():
-    """Close Redis connection pool on shutdown."""
-    global _redis_pool
+    """Close Redis connection pools on shutdown."""
+    global _redis_pool, _redis_binary_pool
     if _redis_pool is not None:
         await _redis_pool.close()
         _redis_pool = None
         logger.info("redis_pool_closed")
+    if _redis_binary_pool is not None:
+        await _redis_binary_pool.close()
+        _redis_binary_pool = None
+        logger.info("redis_binary_pool_closed")

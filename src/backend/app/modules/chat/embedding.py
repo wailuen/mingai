@@ -15,7 +15,7 @@ import struct
 
 import structlog
 
-from app.core.redis_client import get_redis
+from app.core.redis_client import get_redis_binary
 
 logger = structlog.get_logger()
 
@@ -113,8 +113,8 @@ class EmbeddingService:
         # Check Redis cache if tenant_id is provided
         if tenant_id:
             cache_key = self._build_cache_key(tenant_id, text, self._model)
-            redis = get_redis()
-            # CACHE-002: value is binary float16 bytes (not JSON string)
+            redis = get_redis_binary()
+            # CACHE-002: value is binary float16 bytes — must use binary pool
             cached_raw = await redis.get(cache_key)
             if cached_raw:
                 logger.debug(
@@ -156,12 +156,8 @@ class EmbeddingService:
         if tenant_id:
             # CACHE-002: serialize as float16 binary bytes for compact storage
             binary_payload = _serialize_float16(vector)
-            redis = get_redis()
-            # Redis client has decode_responses=True; we need to bypass it for binary.
-            # Use a dedicated binary client for this key.
-            await _set_binary(
-                redis, cache_key, binary_payload, EMBEDDING_CACHE_TTL_SECONDS
-            )
+            redis = get_redis_binary()
+            await redis.setex(cache_key, EMBEDDING_CACHE_TTL_SECONDS, binary_payload)
             logger.debug(
                 "embedding_cached",
                 tenant_id=tenant_id,
@@ -222,14 +218,12 @@ def _deserialize_float16(raw: bytes) -> list[float]:
     The returned values are float32 precision (Python float).
 
     Args:
-        raw: Bytes from Redis (length must be even).
+        raw: Bytes from Redis binary pool (decode_responses=False).
+             Length must be even.
 
     Returns:
         List of float values.
     """
-    if isinstance(raw, str):
-        # decode_responses=True mode returns strings; encode back to bytes
-        raw = raw.encode("latin-1")
     n = len(raw) // 2
     return list(struct.unpack(f"{n}e", raw))
 
@@ -244,34 +238,3 @@ def _sanitize_model_id(model_id: str) -> str:
     import re
 
     return re.sub(r"[^A-Za-z0-9._-]", "_", model_id)
-
-
-async def _set_binary(redis, key: str, value: bytes, ttl: int) -> None:
-    """
-    Store binary bytes in Redis, bypassing decode_responses mode.
-
-    The global Redis pool uses decode_responses=True which means it cannot
-    store raw bytes. We use a separate binary client for float16 payloads.
-    Redis stores bytes transparently when decode_responses=False.
-    """
-    import os
-    import urllib.parse
-
-    import redis.asyncio as aioredis
-
-    redis_url = os.environ.get("REDIS_URL")
-    if not redis_url:
-        raise ValueError("REDIS_URL environment variable is not set.")
-
-    # Create a short-lived binary connection for this write only.
-    # This avoids holding a connection open permanently for the rare binary writes.
-    binary_client = aioredis.from_url(
-        redis_url,
-        max_connections=5,
-        socket_timeout=5,
-        decode_responses=False,
-    )
-    try:
-        await binary_client.setex(key, ttl, value)
-    finally:
-        await binary_client.aclose()
