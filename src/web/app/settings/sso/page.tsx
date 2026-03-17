@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { useSSOConfig, useAdminSSOConfig, useTestSSOConnection } from "@/lib/hooks/useSSO";
+import {
+  useSSOConfig,
+  useAdminSSOConfig,
+  useTestSSOConnection,
+} from "@/lib/hooks/useSSO";
 import { SSOStatusCard } from "./elements/SSOStatusCard";
 import { SSOSetupWizard } from "./elements/SSOSetupWizard";
 import { GroupSyncConfigPanel } from "./elements/GroupSyncConfigPanel";
@@ -131,7 +135,21 @@ export default function SSOPage() {
       </div>
 
       {/* Wizard modal */}
-      {showWizard && <SSOSetupWizard onClose={() => setShowWizard(false)} />}
+      {showWizard && (
+        <SSOSetupWizard
+          onClose={() => setShowWizard(false)}
+          existingEntraConfig={
+            adminSSOConfig?.provider_type === "entra" &&
+            adminSSOConfig.auth0_connection_id
+              ? {
+                  domain: adminSSOConfig.domain ?? "",
+                  client_id: adminSSOConfig.client_id ?? "",
+                  auth0_connection_id: adminSSOConfig.auth0_connection_id,
+                }
+              : undefined
+          }
+        />
+      )}
     </AppShell>
   );
 }

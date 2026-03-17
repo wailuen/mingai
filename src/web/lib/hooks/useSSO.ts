@@ -73,6 +73,9 @@ export interface AdminSSOConfig {
   provider_type: SSOProviderType;
   auth0_connection_id: string;
   enabled: boolean;
+  /** Present for Entra connections — stored in tenant_configs alongside connection_id */
+  domain?: string;
+  client_id?: string;
 }
 
 const ADMIN_SSO_CONFIG_KEY = "admin-sso-config";

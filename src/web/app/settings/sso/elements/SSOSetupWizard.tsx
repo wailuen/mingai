@@ -17,6 +17,7 @@ import {
   useConfigureGoogle,
   useConfigureOkta,
   useConfigureEntra,
+  useUpdateEntraConfig,
   useTestSAMLConnection,
   useTestOIDCConnection,
   useTestEntraConnection,
@@ -24,8 +25,16 @@ import {
   type ConfigureResult,
 } from "@/lib/hooks/useSSO";
 
+interface ExistingEntraConfig {
+  domain: string;
+  client_id: string;
+  auth0_connection_id: string;
+}
+
 interface SSOSetupWizardProps {
   onClose: () => void;
+  /** Pre-populate wizard with existing Entra config for update (re-key / domain change) */
+  existingEntraConfig?: ExistingEntraConfig;
 }
 
 type WizardStep = 1 | 2 | 3;
@@ -55,9 +64,11 @@ function extractErrorMessage(err: unknown): string {
   return "An unexpected error occurred";
 }
 
-export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
-  const [step, setStep] = useState<WizardStep>(1);
-  const [provider, setProvider] = useState<Provider | null>(null);
+export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardProps) {
+  // If an existing Entra config is passed, start in update mode at step 2
+  const isUpdateMode = !!existingEntraConfig;
+  const [step, setStep] = useState<WizardStep>(isUpdateMode ? 2 : 1);
+  const [provider, setProvider] = useState<Provider | null>(isUpdateMode ? "entra" : null);
 
   // SAML fields
   const [samlInputMode, setSamlInputMode] = useState<"url" | "xml">("url");
@@ -78,9 +89,9 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   const [oktaClientId, setOktaClientId] = useState("");
   const [oktaClientSecret, setOktaClientSecret] = useState("");
 
-  // Entra fields
-  const [entraDomain, setEntraDomain] = useState("");
-  const [entraClientId, setEntraClientId] = useState("");
+  // Entra fields — pre-fill from existing config when updating
+  const [entraDomain, setEntraDomain] = useState(existingEntraConfig?.domain ?? "");
+  const [entraClientId, setEntraClientId] = useState(existingEntraConfig?.client_id ?? "");
   const [entraClientSecret, setEntraClientSecret] = useState("");
 
   // Post-save state
@@ -93,9 +104,13 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
   const googleMutation = useConfigureGoogle();
   const oktaMutation = useConfigureOkta();
   const entraMutation = useConfigureEntra();
+  const entraUpdateMutation = useUpdateEntraConfig();
   const testSAMLMutation = useTestSAMLConnection();
   const testOIDCMutation = useTestOIDCConnection();
   const testEntraMutation = useTestEntraConnection();
+
+  // In update mode, the active mutation for Entra is the PATCH hook
+  const activeEntraMutation = isUpdateMode ? entraUpdateMutation : entraMutation;
 
   const activeMutation =
     provider === "saml"
@@ -107,7 +122,7 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
           : provider === "okta"
             ? oktaMutation
             : provider === "entra"
-              ? entraMutation
+              ? activeEntraMutation
               : null;
 
   const isSaving = activeMutation?.isPending ?? false;
@@ -142,6 +157,10 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
       );
     }
     if (provider === "entra") {
+      // Update mode: domain and client_id required; secret optional (blank = keep current)
+      if (isUpdateMode) {
+        return entraDomain.trim().length > 0 && entraClientId.trim().length > 0;
+      }
       return (
         entraDomain.trim().length > 0 &&
         entraClientId.trim().length > 0 &&
@@ -180,11 +199,23 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
           client_secret: oktaClientSecret.trim(),
         });
       } else if (provider === "entra") {
-        result = await entraMutation.mutateAsync({
-          domain: entraDomain.trim(),
-          client_id: entraClientId.trim(),
-          client_secret: entraClientSecret.trim(),
-        });
+        if (isUpdateMode) {
+          // PATCH — only send fields that differ from existing config
+          const patch: { domain?: string; client_secret?: string } = {};
+          if (entraDomain.trim() !== existingEntraConfig?.domain) {
+            patch.domain = entraDomain.trim();
+          }
+          if (entraClientSecret.trim().length > 0) {
+            patch.client_secret = entraClientSecret.trim();
+          }
+          result = await entraUpdateMutation.mutateAsync(patch);
+        } else {
+          result = await entraMutation.mutateAsync({
+            domain: entraDomain.trim(),
+            client_id: entraClientId.trim(),
+            client_secret: entraClientSecret.trim(),
+          });
+        }
       } else {
         return;
       }
@@ -264,10 +295,10 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div>
             <h2 className="text-section-heading text-text-primary">
-              Configure Single Sign-On
+              {isUpdateMode ? "Update Entra ID Connection" : "Configure Single Sign-On"}
             </h2>
             <p className="mt-0.5 text-[11px] text-text-faint">
-              Step {step} of 3
+              {isUpdateMode ? "Update credentials" : `Step ${step} of 3`}
             </p>
           </div>
           <button
@@ -463,35 +494,46 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
 
           {step === 2 && provider === "entra" && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
-                Enter your Azure Active Directory application credentials.
-                Create an App Registration in the Azure portal and grant{" "}
-                <span className="font-mono text-xs text-text-primary">
-                  GroupMember.Read.All
-                </span>{" "}
-                permission.
-              </p>
+              {isUpdateMode ? (
+                <p className="text-sm text-text-muted">
+                  Update your Azure AD domain or rotate the client secret.
+                  Leave the secret blank to keep the current value.
+                </p>
+              ) : (
+                <div className="rounded-card border border-border bg-bg-elevated p-3 space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-wider text-text-faint font-medium">
+                    Azure Portal Setup
+                  </p>
+                  <ol className="space-y-1 text-xs text-text-muted list-decimal list-inside">
+                    <li>Go to <span className="font-medium text-text-primary">App Registrations</span> → New registration</li>
+                    <li>Set redirect URI (Web): <span className="font-mono text-xs text-text-primary">{process.env.NEXT_PUBLIC_AUTH0_DOMAIN ? `https://${process.env.NEXT_PUBLIC_AUTH0_DOMAIN}/login/callback` : "https://{your-auth0-domain}/login/callback"}</span></li>
+                    <li>Under API Permissions, add <span className="font-mono text-xs text-text-primary">GroupMember.Read.All</span> (Microsoft Graph) and grant admin consent</li>
+                    <li>Under Certificates &amp; Secrets, create a Client Secret and copy the value</li>
+                  </ol>
+                </div>
+              )}
               <FormField
                 label="Azure AD Domain"
                 value={entraDomain}
                 onChange={setEntraDomain}
                 placeholder="contoso.com"
-                hint="Your organisation's Azure AD domain (e.g. contoso.com)"
+                hint="Your organisation's primary Azure AD domain (e.g. contoso.com)"
               />
               <FormField
                 label="Application (Client) ID"
                 value={entraClientId}
                 onChange={setEntraClientId}
                 placeholder="00000000-0000-0000-0000-000000000000"
-                hint="Found in Azure portal under App Registration > Overview"
+                hint={isUpdateMode ? "Client ID cannot be changed — create a new connection to use a different App Registration" : "Found in Azure portal under App Registration > Overview"}
+                readOnly={isUpdateMode}
               />
               <FormField
                 label="Client Secret"
                 value={entraClientSecret}
                 onChange={setEntraClientSecret}
-                placeholder="your-client-secret-value"
+                placeholder={isUpdateMode ? "Leave blank to keep current secret" : "your-client-secret-value"}
                 type="password"
-                hint="Secret value (not the Secret ID)"
+                hint={isUpdateMode ? "Enter new secret to rotate (leave blank to keep current)" : "Secret value (not the Secret ID) — sent to Auth0 once, never stored by mingai"}
               />
             </div>
           )}
@@ -654,7 +696,7 @@ export function SSOSetupWizard({ onClose }: SSOSetupWizardProps) {
         {/* Footer */}
         <div className="flex justify-between border-t border-border px-5 py-3">
           <div>
-            {step > 1 && !savedResult && (
+            {step > 1 && !savedResult && !(isUpdateMode && step === 2) && (
               <button
                 type="button"
                 onClick={handleBack}
@@ -777,6 +819,7 @@ function FormField({
   placeholder,
   hint,
   type = "text",
+  readOnly = false,
 }: {
   label: string;
   value: string;
@@ -784,6 +827,7 @@ function FormField({
   placeholder: string;
   hint?: string;
   type?: "text" | "password";
+  readOnly?: boolean;
 }) {
   return (
     <div>
@@ -793,9 +837,10 @@ function FormField({
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
+        readOnly={readOnly}
         placeholder={placeholder}
-        className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+        className={`w-full rounded-control border px-3 py-2 text-sm placeholder:text-text-faint focus:outline-none ${readOnly ? "border-border-faint bg-bg-base text-text-faint cursor-not-allowed" : "border-border bg-bg-elevated text-text-primary focus:border-accent"}`}
       />
       {hint && <p className="mt-1 text-[11px] text-text-faint">{hint}</p>}
     </div>
