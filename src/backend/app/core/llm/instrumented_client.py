@@ -236,8 +236,12 @@ class InstrumentedLLMClient:
             )
             if provider_selection and isinstance(provider_selection, dict):
                 selected_provider_id = provider_selection.get("provider_id")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(
+                "tenant_provider_selection_config_lookup_error",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
 
         # Library mode — query DB provider
         return await self._resolve_library_adapter(
@@ -358,8 +362,10 @@ class InstrumentedLLMClient:
 
                         adapter = OpenAIDirectProvider(api_key=decrypted_key)
                     else:
-                        raise NotImplementedError(
-                            f"Provider type {db_provider_type!r} adapter not yet implemented"
+                        raise ValueError(
+                            f"Provider type {db_provider_type!r} does not have a"
+                            " supported adapter. Supported types: azure_openai, openai."
+                            " Configure a supported provider as default to enable chat."
                         )
                 finally:
                     decrypted_key = ""  # clear immediately

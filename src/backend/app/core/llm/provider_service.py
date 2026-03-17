@@ -368,6 +368,9 @@ class ProviderService:
             return await self.get_provider(db, provider_id)
 
         set_parts.append("updated_at = NOW()")
+        # set_parts is built exclusively from _UPDATE_ALLOWLIST (frozenset of known
+        # column names) — no user-controlled values appear as column identifiers.
+        # User values flow through named placeholders in `params` only.
         set_clause = ", ".join(set_parts)
 
         result = await db.execute(
@@ -566,7 +569,12 @@ async def _do_connectivity_test(
             import anthropic  # type: ignore[import]
 
             client = anthropic.AsyncAnthropic(api_key=api_key)
-            model_name = models.get("primary") or "claude-3-haiku-20240307"
+            model_name = models.get("primary")
+            if not model_name:
+                raise ValueError(
+                    "Anthropic provider connectivity test requires 'primary' slot to be"
+                    " configured in the provider's models map."
+                )
             resp = await client.messages.create(
                 model=model_name,
                 max_tokens=1,

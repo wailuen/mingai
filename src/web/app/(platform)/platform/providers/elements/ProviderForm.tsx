@@ -115,7 +115,7 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
   return (
     <div className="h-0.5 w-full overflow-hidden rounded-full bg-bg-elevated">
       <div
-        className="h-full rounded-full bg-accent transition-all duration-300"
+        className="h-full rounded-full bg-accent transition-[width] duration-[220ms] ease-[ease]"
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -163,7 +163,10 @@ export function ProviderForm({
     };
   }, []);
 
-  function updateStep1<K extends keyof Step1State>(key: K, value: Step1State[K]) {
+  function updateStep1<K extends keyof Step1State>(
+    key: K,
+    value: Step1State[K],
+  ) {
     setStep1((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -269,12 +272,14 @@ export function ProviderForm({
     step1.display_name.trim().length > 0 &&
     step1.display_name.length <= 200 &&
     step1.api_key.trim().length > 0 &&
-    (step1.provider_type !== "azure_openai" || step1.endpoint.trim().length > 0);
+    (step1.provider_type !== "azure_openai" ||
+      step1.endpoint.trim().length > 0);
 
   const canSubmitEdit =
     step1.display_name.trim().length > 0 &&
     step1.display_name.length <= 200 &&
-    (step1.provider_type !== "azure_openai" || step1.endpoint.trim().length > 0);
+    (step1.provider_type !== "azure_openai" ||
+      step1.endpoint.trim().length > 0);
 
   return (
     <div
@@ -295,9 +300,7 @@ export function ProviderForm({
         <div className="flex items-start justify-between px-6 pb-4 pt-5">
           <div>
             <h2 className="text-section-heading text-text-primary">
-              {isEditing
-                ? `Edit: ${provider.display_name}`
-                : "New Provider"}
+              {isEditing ? `Edit: ${provider.display_name}` : "New Provider"}
             </h2>
             {!isEditing && (
               <p className="mt-0.5 text-[11px] text-text-faint">
@@ -437,7 +440,9 @@ export function ProviderForm({
                   <input
                     type="checkbox"
                     checked={step1.is_default}
-                    onChange={(e) => updateStep1("is_default", e.target.checked)}
+                    onChange={(e) =>
+                      updateStep1("is_default", e.target.checked)
+                    }
                     className="accent-accent"
                   />
                   Set as platform default provider
@@ -484,7 +489,9 @@ export function ProviderForm({
                   )}
                   Test Connectivity
                 </button>
-                {testResult && <TestChip {...testResult} errorMsg={testResult.errorMsg} />}
+                {testResult && (
+                  <TestChip {...testResult} errorMsg={testResult.errorMsg} />
+                )}
               </>
             )}
           </div>
@@ -523,8 +530,7 @@ export function ProviderForm({
                 type="button"
                 onClick={handleSubmit}
                 disabled={
-                  isPending ||
-                  (isEditing ? !canSubmitEdit : !canAdvanceStep1)
+                  isPending || (isEditing ? !canSubmitEdit : !canAdvanceStep1)
                 }
                 className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
               >

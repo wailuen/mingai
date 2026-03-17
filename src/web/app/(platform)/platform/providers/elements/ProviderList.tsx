@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Pencil, Trash2, Zap, Star, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Zap,
+  Star,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useLLMProviders,
@@ -17,7 +25,13 @@ import { ProviderForm } from "./ProviderForm";
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status, error }: { status: ProviderStatus; error?: string }) {
+function StatusBadge({
+  status,
+  error,
+}: {
+  status: ProviderStatus;
+  error?: string;
+}) {
   if (status === "healthy") {
     return (
       <span className="inline-flex items-center gap-1 rounded-badge bg-accent-dim px-2 py-0.5 font-mono text-[10px] text-accent">
@@ -73,7 +87,7 @@ function InlineToast({
         <div
           key={t.id}
           className={cn(
-            "flex items-center gap-2.5 rounded-card border px-4 py-3 text-[13px] shadow-lg",
+            "flex items-center gap-2.5 rounded-card border px-4 py-3 text-[13px]",
             t.variant === "success"
               ? "border-accent-ring bg-bg-surface text-text-primary"
               : "border-alert-ring bg-bg-surface text-text-primary",
