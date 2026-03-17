@@ -110,6 +110,7 @@ export function TermList({
     }),
     columnHelper.accessor("definition", {
       header: "Full Form / Definition",
+      meta: { hideOnMobile: true },
       cell: (info) => {
         const val = info.getValue() ?? "";
         const truncated = val.length > 60 ? `${val.slice(0, 60)}...` : val;
@@ -122,6 +123,7 @@ export function TermList({
     }),
     columnHelper.accessor("aliases", {
       header: "Aliases",
+      meta: { hideOnMobile: true },
       cell: (info) => {
         const aliases = info.getValue();
         const count = aliases?.length ?? 0;
@@ -204,21 +206,31 @@ export function TermList({
 
   return (
     <div className="overflow-x-auto rounded-card border border-border">
-      <table className="w-full min-w-[520px]">
+      <table className="w-full">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-border">
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="px-3.5 py-3 text-left text-label-nav uppercase tracking-wider text-text-faint"
-                >
-                  {flexRender(
-                    header.column.columnDef.header,
-                    header.getContext(),
-                  )}
-                </th>
-              ))}
+              {headerGroup.headers.map((header) => {
+                const hideOnMobile = (
+                  header.column.columnDef.meta as
+                    | { hideOnMobile?: boolean }
+                    | undefined
+                )?.hideOnMobile;
+                return (
+                  <th
+                    key={header.id}
+                    className={cn(
+                      "px-3.5 py-3 text-left text-label-nav uppercase tracking-wider text-text-faint",
+                      hideOnMobile && "hidden sm:table-cell",
+                    )}
+                  >
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext(),
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
@@ -242,11 +254,27 @@ export function TermList({
                 key={row.id}
                 className="border-b border-border-faint transition-colors hover:bg-accent-dim"
               >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3.5 py-3">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
+                {row.getVisibleCells().map((cell) => {
+                  const hideOnMobile = (
+                    cell.column.columnDef.meta as
+                      | { hideOnMobile?: boolean }
+                      | undefined
+                  )?.hideOnMobile;
+                  return (
+                    <td
+                      key={cell.id}
+                      className={cn(
+                        "px-3.5 py-3",
+                        hideOnMobile && "hidden sm:table-cell",
+                      )}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))
           )}

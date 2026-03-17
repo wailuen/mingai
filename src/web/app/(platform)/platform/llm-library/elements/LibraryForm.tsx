@@ -1,11 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2, Eye, EyeOff, Plus, CheckCircle2 } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Eye,
+  EyeOff,
+  Plus,
+  CheckCircle2,
+  Archive,
+} from "lucide-react";
 import {
   useCreateLLMLibraryEntry,
   useUpdateLLMLibraryEntry,
   usePublishLLMLibraryEntry,
+  useDeprecateLLMLibraryEntry,
+  useTenantAssignments,
   type LLMLibraryEntry,
   type LLMLibraryProvider,
   type PlanTier,
@@ -123,7 +133,9 @@ function formFromEntry(entry: LLMLibraryEntry): FormState {
   };
 }
 
-function allSlotsHaveDeployment(slots: Record<ModelSlotKey, SlotFormState>): boolean {
+function allSlotsHaveDeployment(
+  slots: Record<ModelSlotKey, SlotFormState>,
+): boolean {
   return SLOT_KEYS.every((s) => slots[s.key].deployment_name.trim().length > 0);
 }
 
@@ -150,15 +162,30 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   const createMutation = useCreateLLMLibraryEntry();
   const updateMutation = useUpdateLLMLibraryEntry();
   const publishMutation = usePublishLLMLibraryEntry();
+  const deprecateMutation = useDeprecateLLMLibraryEntry();
   const isPending =
-    createMutation.isPending || updateMutation.isPending || publishMutation.isPending;
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    publishMutation.isPending ||
+    deprecateMutation.isPending;
   const mutationError =
-    createMutation.error ?? updateMutation.error ?? publishMutation.error;
+    createMutation.error ??
+    updateMutation.error ??
+    publishMutation.error ??
+    deprecateMutation.error;
 
   const [form, setForm] = useState<FormState>(
     entry ? formFromEntry(entry) : EMPTY_FORM,
   );
   const [showPreview, setShowPreview] = useState(false);
+  const [showDeprecateConfirm, setShowDeprecateConfirm] = useState(false);
+  const [publishAttempted, setPublishAttempted] = useState(false);
+
+  // Fetch tenant assignments only when deprecate dialog is open
+  const { data: tenantAssignments } = useTenantAssignments(
+    showDeprecateConfirm && isEditing ? entry.id : null,
+  );
+  const tenantCount = tenantAssignments?.length ?? 0;
 
   useEffect(() => {
     setForm(entry ? formFromEntry(entry) : EMPTY_FORM);
@@ -168,7 +195,11 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function updateSlot(slotKey: ModelSlotKey, field: keyof SlotFormState, value: string | boolean) {
+  function updateSlot(
+    slotKey: ModelSlotKey,
+    field: keyof SlotFormState,
+    value: string | boolean,
+  ) {
     setForm((prev) => ({
       ...prev,
       slots: {
@@ -254,6 +285,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   }
 
   function handlePublish() {
+    setPublishAttempted(true);
     if (!isEditing || !canPublish) return;
     // Save + Publish in sequence: update first, then publish
     const modelSlots = buildModelSlots(form.slots);
@@ -267,12 +299,33 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
       {
         onSuccess: () => {
           publishMutation.mutate(entry.id, {
-            onSuccess: () => onSaved(),
+            onSuccess: () => {
+              setPublishAttempted(false);
+              onSaved();
+            },
           });
         },
       },
     );
   }
+
+  function handleDeprecate() {
+    if (!isEditing) return;
+    deprecateMutation.mutate(entry.id, {
+      onSuccess: () => {
+        setShowDeprecateConfirm(false);
+        onSaved();
+      },
+    });
+  }
+
+  const isDeprecated = isEditing && entry.status === "Deprecated";
+  const isPublished = isEditing && entry.status === "Published";
+  const showSlotValidationHint =
+    publishAttempted &&
+    isEditing &&
+    entry.status === "Draft" &&
+    !allSlotsHaveDeployment(form.slots);
 
   return (
     <div
@@ -283,13 +336,21 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
     >
       <form
         onSubmit={handleSaveDraft}
-        className="mx-4 w-full max-w-[640px] rounded-card border border-border bg-bg-surface p-6"
+        className="relative mx-4 w-full max-w-[640px] rounded-card border border-border bg-bg-surface p-6"
       >
         {/* Header */}
         <div className="mb-5 flex items-start justify-between">
-          <h2 className="text-section-heading text-text-primary">
-            {isEditing ? `Edit: ${entry.display_name}` : "New Library Entry"}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-section-heading text-text-primary">
+              {isEditing ? `Edit: ${entry.display_name}` : "New Library Entry"}
+            </h2>
+            {isDeprecated && (
+              <span className="inline-flex items-center gap-1 rounded-badge border border-border px-2 py-0.5 font-mono text-[10px] uppercase text-text-faint">
+                <Archive size={10} />
+                Deprecated
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -298,6 +359,16 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             <X size={18} />
           </button>
         </div>
+
+        {/* Deprecated notice — read-only banner */}
+        {isDeprecated && (
+          <div className="mb-4 rounded-control border border-border bg-bg-elevated px-3 py-2.5">
+            <p className="text-[12px] text-text-faint">
+              This profile is deprecated. Fields are shown in read-only mode. No
+              status changes are possible.
+            </p>
+          </div>
+        )}
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
           {/* Display Name */}
@@ -437,7 +508,8 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               </h3>
             </div>
             <p className="mb-4 text-[11px] text-text-faint">
-              Configure deployment names for each model slot. All 4 slots must have a deployment name to publish.
+              Configure deployment names for each model slot. All 4 slots must
+              have a deployment name to publish.
             </p>
 
             <div className="space-y-4">
@@ -489,7 +561,14 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
           </div>
         </div>
 
-        {/* Error */}
+        {/* Slot validation hint */}
+        {showSlotValidationHint && (
+          <p className="mt-3 text-[12px] text-warn">
+            All 4 model slots must have a deployment name before publishing.
+          </p>
+        )}
+
+        {/* Mutation error */}
         {mutationError && (
           <p className="mt-4 text-sm text-alert">
             {mutationError.message ?? "Operation failed."}
@@ -497,40 +576,135 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         )}
 
         {/* Footer */}
-        <div className="mt-5 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
-          >
-            Cancel
-          </button>
+        <div className="mt-5 flex items-center justify-between gap-3">
+          {/* Left side: Deprecate (Published only) */}
+          <div>
+            {isPublished && (
+              <button
+                type="button"
+                onClick={() => setShowDeprecateConfirm(true)}
+                disabled={isPending}
+                className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-alert/40 hover:bg-alert-dim hover:text-alert disabled:opacity-40"
+              >
+                <Archive size={14} />
+                Deprecate
+              </button>
+            )}
+          </div>
 
-          {/* Draft -> Publish (only for Draft entries with all slots filled) */}
-          {canPublish && (
+          {/* Right side: Cancel / Save Draft / Save & Publish */}
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handlePublish}
-              disabled={isPending}
-              className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+              onClick={onClose}
+              className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
             >
-              {isPending && <Loader2 size={14} className="animate-spin" />}
-              <CheckCircle2 size={14} />
-              Save &amp; Publish
+              {isDeprecated ? "Close" : "Cancel"}
             </button>
-          )}
 
-          <button
-            type="submit"
-            disabled={!canSave || isPending}
-            className="flex items-center gap-1.5 rounded-control border border-accent px-4 py-1.5 text-sm font-semibold text-accent transition-opacity hover:bg-accent-dim disabled:opacity-40"
-          >
-            {isPending && !publishMutation.isPending && (
-              <Loader2 size={14} className="animate-spin" />
+            {!isDeprecated && (
+              <>
+                {/* Draft -> Publish (only for Draft entries — shown even when
+                    slots are incomplete so user gets validation hint) */}
+                {isEditing && entry.status === "Draft" && (
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={isPending || !canSave}
+                    className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+                  >
+                    {publishMutation.isPending || updateMutation.isPending ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={14} />
+                    )}
+                    Save &amp; Publish
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!canSave || isPending}
+                  className="flex items-center gap-1.5 rounded-control border border-accent px-4 py-1.5 text-sm font-semibold text-accent transition-opacity hover:bg-accent-dim disabled:opacity-40"
+                >
+                  {updateMutation.isPending && !publishMutation.isPending && (
+                    <Loader2 size={14} className="animate-spin" />
+                  )}
+                  {createMutation.isPending && (
+                    <Loader2 size={14} className="animate-spin" />
+                  )}
+                  {isEditing ? "Save Draft" : "Save Draft"}
+                </button>
+              </>
             )}
-            {isEditing ? "Save Draft" : "Save Draft"}
-          </button>
+          </div>
         </div>
+
+        {/* Deprecate confirmation overlay */}
+        {showDeprecateConfirm && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-card bg-bg-surface/95">
+            <div className="mx-6 w-full max-w-sm rounded-card border border-border bg-bg-elevated p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Archive size={16} className="text-text-muted" />
+                <h3 className="text-[14px] font-semibold text-text-primary">
+                  Deprecate profile?
+                </h3>
+              </div>
+              <p className="mb-1 text-[13px] text-text-muted">
+                {tenantCount > 0 ? (
+                  <>
+                    <span className="font-mono text-text-primary">
+                      {tenantCount}
+                    </span>{" "}
+                    tenant{tenantCount !== 1 ? "s are" : " is"} currently using
+                    this profile.
+                  </>
+                ) : (
+                  "No tenants are currently using this profile."
+                )}
+              </p>
+              {tenantCount > 0 && tenantAssignments && (
+                <ul className="mb-3 mt-2 max-h-[120px] overflow-y-auto space-y-1">
+                  {tenantAssignments.map((t) => (
+                    <li
+                      key={t.tenant_id}
+                      className="font-mono text-[11px] text-text-faint"
+                    >
+                      {t.tenant_name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mb-4 text-[12px] text-text-faint">
+                Existing assignments are preserved. No new tenants can be
+                assigned to a deprecated profile.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeprecateConfirm(false)}
+                  disabled={deprecateMutation.isPending}
+                  className="rounded-control border border-border px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeprecate}
+                  disabled={deprecateMutation.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-alert/40 hover:bg-alert-dim hover:text-alert disabled:opacity-40"
+                >
+                  {deprecateMutation.isPending ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Archive size={12} />
+                  )}
+                  Confirm Deprecation
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );
@@ -601,7 +775,10 @@ function MarkdownPreview({ content }: { content: string }) {
         const trimmed = line.trim();
         if (trimmed.startsWith("### ")) {
           return (
-            <p key={i} className="mt-2 text-[13px] font-semibold text-text-primary">
+            <p
+              key={i}
+              className="mt-2 text-[13px] font-semibold text-text-primary"
+            >
               {trimmed.slice(4)}
             </p>
           );

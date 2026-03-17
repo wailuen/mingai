@@ -6,7 +6,7 @@
 **Numbering**: TA-001 through TA-036
 **Stack**: FastAPI + Auth0 + PostgreSQL + Kailash DataFlow
 **Source plan**: `workspaces/mingai/02-plans/06-tenant-admin-plan.md` Phases B-D
-**Progress**: 24/36 complete — 11 TODO/BLOCKED (7 blocked on P3AUTH, 1 product-gated, 3 frontend/active)
+**Progress**: 27/36 complete — 8 TODO/BLOCKED (7 blocked on P3AUTH, 1 product-gated)
 
 ---
 
@@ -209,7 +209,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-011: KB/Agent access control frontend
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `AccessControlPanel.tsx` renders mode controls (workspace-wide/role-restricted/user-specific/agent-only) with role multi-select and user search. `AccessRequestsTab.tsx` shows requests with approve/deny buttons. Both wired in KB settings page and Users page. `useKBAccessControl.ts` hook with PATCH to access control API. 0 TypeScript errors.
 **Effort**: 8h
 **Depends on**: TA-007, TA-009, TA-010
 **Description**: Extend KB management page with access mode selector. New component: `AccessControlPanel.tsx`. Modes displayed as radio buttons (Workspace-wide / Role-restricted / User-specific / Agent-only). On role_restricted: role multi-select. On user_specific: user search + selection list. Also: Access Requests tab in User management page (tenant admin) showing pending/approved/denied requests with approve/deny actions.
@@ -304,7 +306,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-016: Full re-index with cost estimate
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `GET /admin/knowledge-base/{kb_id}/reindex-estimate` returns document_count, avg_tokens, estimated_cost_usd, estimated_duration_minutes. `POST /admin/knowledge-base/{kb_id}/reindex` returns job_id + status=queued as 202. Background task creates full_sync jobs per integration. Rate limit: 409 if reindex in progress. `require_tenant_admin` enforced. Tests in `tests/unit/test_reindex_estimate.py`. Backend at `app/modules/documents/reindex.py`.
 **Effort**: 5h
 **Depends on**: P2LLM-011
 **Description**: `GET /admin/knowledge-base/{id}/reindex-estimate` — calculate cost before triggering re-index. Estimate: `document_count × avg_tokens_per_doc × embedding_cost_per_token`. `avg_tokens_per_doc` from last embedding run stats. `embedding_cost_per_token` from `llm_library` pricing for the tenant's embedding model. `POST /documents/{id}/reindex` — trigger full re-index (deletes vector store entries, re-embeds all documents). Frontend: `ReindexButton.tsx` (FE-034 — COMPLETE) shows estimate before confirm dialog.
@@ -682,7 +686,9 @@ Phase A (Tenant Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### TA-036: Mobile-responsive admin console
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Dashboard KPI cards grid already `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`. Issues list hides non-essential columns on sm. User list hides last_login on sm. Sync status table has collapsible row detail on mobile (SourceStatusCard.tsx). Glossary authoring screen shows "Desktop recommended" banner below 768px. KB management page has Desktop recommended banner and flex-wrap header. TermList.tsx hides definition/aliases columns on mobile. 0 TypeScript errors.
 **Effort**: 8h
 **Depends on**: none
 **Description**: Add responsive breakpoints for monitoring screens (not authoring). Priority screens: Dashboard (KPI cards stack vertically), Issues list (simplified columns), User list (simplified columns), Sync status. Authoring screens (Glossary edit, Agent config) remain desktop-only. Tailwind responsive utilities: `sm:` (640px) and `md:` (768px) breakpoints.

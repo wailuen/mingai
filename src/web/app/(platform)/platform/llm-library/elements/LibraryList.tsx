@@ -324,7 +324,12 @@ export function LibraryList({ onEdit }: LibraryListProps) {
               {table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-border-faint transition-colors hover:bg-accent-dim"
+                  className={cn(
+                    "border-b border-border-faint transition-colors",
+                    row.original.status === "Deprecated"
+                      ? "opacity-50"
+                      : "hover:bg-accent-dim",
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-3.5 py-3">

@@ -48,8 +48,16 @@ export default function KnowledgeBasePage() {
 
   return (
     <AppShell>
-      <div className="p-7">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="p-4 sm:p-7">
+        {/* Desktop recommended banner — authoring screen */}
+        <div className="mb-4 flex items-center gap-2 rounded-control border border-warn bg-warn-dim px-3 py-2 text-xs text-warn md:hidden">
+          <span>
+            Desktop recommended for configuring document sources. Some features
+            may be limited on mobile.
+          </span>
+        </div>
+
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <FileText size={20} className="text-text-faint" />
             <h1 className="text-page-title text-text-primary">

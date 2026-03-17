@@ -599,3 +599,402 @@ class TestGlossaryCacheInvalidationOnPatch:
             f"After cache invalidation, _get_terms() must return the updated DB value. "
             f"Got full_form={fresh_full_form!r} — stale cache or DB update failed."
         )
+
+
+# ---------------------------------------------------------------------------
+# DEF-016: Glossary CRUD, Version History, Rollback, Miss Signals, Isolation
+# ---------------------------------------------------------------------------
+
+# JWT helper for API-level tests
+def _make_token(user_id: str, tenant_id: str, roles: list[str]) -> str:
+    from datetime import datetime, timedelta, timezone
+
+    from jose import jwt as jose_jwt
+
+    secret = os.environ.get("JWT_SECRET_KEY", "")
+    if not secret:
+        pytest.skip("JWT_SECRET_KEY not configured — skipping integration tests")
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "roles": roles,
+        "scope": "tenant",
+        "plan": "professional",
+        "email": f"test-{user_id[:8]}@glp-int.test",
+        "exp": now + timedelta(hours=1),
+        "iat": now,
+        "token_version": 2,
+    }
+    return jose_jwt.encode(payload, secret, algorithm="HS256")
+
+
+async def _create_user(tenant_id: str, role: str = "admin") -> str:
+    """Create a real user row in the users table (needed for audit_log FK)."""
+    uid = str(uuid.uuid4())
+    await _run_sql(
+        "INSERT INTO users (id, tenant_id, email, name, role, status) "
+        "VALUES (:id, :tid, :email, :name, :role, 'active')",
+        {
+            "id": uid,
+            "tid": tenant_id,
+            "email": f"{role}-{uid[:8]}@glp-int.test",
+            "name": f"GL Test {role.title()} {uid[:8]}",
+            "role": role,
+        },
+    )
+    return uid
+
+
+class TestGlossaryCRUDViaAPI:
+    """
+    DEF-016: Glossary terms can be created, fetched, updated, and soft-deleted
+    via the HTTP API with real PostgreSQL. No mocking.
+    """
+
+    @pytest.fixture(scope="class")
+    def api_tenant_id(self):
+        tid = asyncio.run(_create_tenant("GL CRUD API Test"))
+        yield tid
+        asyncio.run(
+            _run_sql("DELETE FROM audit_log WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(
+            _run_sql("DELETE FROM users WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(_cleanup_tenant(tid))
+
+    @pytest.fixture(scope="class")
+    def admin_headers(self, api_tenant_id):
+        uid = asyncio.run(_create_user(api_tenant_id, "admin"))
+        token = _make_token(uid, api_tenant_id, roles=["tenant_admin"])
+        return {"Authorization": f"Bearer {token}"}
+
+    @pytest.fixture(scope="class")
+    def viewer_headers(self, api_tenant_id):
+        uid = asyncio.run(_create_user(api_tenant_id, "viewer"))
+        token = _make_token(uid, api_tenant_id, roles=["viewer"])
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_create_fetch_update_delete_term(self, client, api_tenant_id, admin_headers, viewer_headers):
+        """Full CRUD lifecycle through the REST API."""
+        unique_term = f"CRUD{uuid.uuid4().hex[:6].upper()}"
+
+        # CREATE
+        create_resp = client.post(
+            "/api/v1/glossary",
+            json={"term": unique_term, "full_form": "CRUD Integration Test", "aliases": ["CRUDAL"]},
+            headers=admin_headers,
+        )
+        assert create_resp.status_code == 201, f"Create failed: {create_resp.text}"
+        created = create_resp.json()
+        term_id = created["id"]
+        assert created["term"] == unique_term
+        assert created["full_form"] == "CRUD Integration Test"
+        assert "CRUDAL" in created["aliases"]
+
+        # FETCH (as viewer — read access)
+        get_resp = client.get(f"/api/v1/glossary/{term_id}", headers=viewer_headers)
+        assert get_resp.status_code == 200
+        assert get_resp.json()["term"] == unique_term
+
+        # LIST
+        list_resp = client.get("/api/v1/glossary?page_size=100", headers=viewer_headers)
+        assert list_resp.status_code == 200
+        terms = {item["term"] for item in list_resp.json()["items"]}
+        assert unique_term in terms
+
+        # UPDATE
+        patch_resp = client.patch(
+            f"/api/v1/glossary/{term_id}",
+            json={"full_form": "Updated CRUD Test"},
+            headers=admin_headers,
+        )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["full_form"] == "Updated CRUD Test"
+
+        # VERIFY update persisted
+        get_after = client.get(f"/api/v1/glossary/{term_id}", headers=viewer_headers)
+        assert get_after.json()["full_form"] == "Updated CRUD Test"
+
+        # DELETE
+        del_resp = client.delete(f"/api/v1/glossary/{term_id}", headers=admin_headers)
+        assert del_resp.status_code == 204
+
+        # VERIFY deleted
+        get_gone = client.get(f"/api/v1/glossary/{term_id}", headers=viewer_headers)
+        assert get_gone.status_code == 404
+
+
+class TestGlossaryVersionHistory:
+    """
+    DEF-016: Term version history is tracked in audit_log, and rollback
+    restores previous state. Real PostgreSQL, no mocking.
+    """
+
+    @pytest.fixture(scope="class")
+    def history_tenant_id(self):
+        tid = asyncio.run(_create_tenant("GL History Test"))
+        yield tid
+        # Clean up audit_log entries too
+        asyncio.run(
+            _run_sql("DELETE FROM audit_log WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(
+            _run_sql("DELETE FROM users WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(_cleanup_tenant(tid))
+
+    @pytest.fixture(scope="class")
+    def history_admin_headers(self, history_tenant_id):
+        uid = asyncio.run(_create_user(history_tenant_id, "admin"))
+        token = _make_token(uid, history_tenant_id, roles=["tenant_admin"])
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_update_creates_audit_entry_and_rollback_restores(
+        self, client, history_tenant_id, history_admin_headers
+    ):
+        """
+        1. Create a term
+        2. Update it (should write audit_log entry)
+        3. GET history — verify audit entry exists with before/after
+        4. Rollback to the audit entry — verify term restored
+        """
+        unique_term = f"HIST{uuid.uuid4().hex[:6].upper()}"
+
+        # Step 1: Create
+        create_resp = client.post(
+            "/api/v1/glossary",
+            json={"term": unique_term, "full_form": "Original Definition"},
+            headers=history_admin_headers,
+        )
+        assert create_resp.status_code == 201, f"Create failed: {create_resp.text}"
+        term_id = create_resp.json()["id"]
+
+        # Step 2: Update
+        patch_resp = client.patch(
+            f"/api/v1/glossary/{term_id}",
+            json={"full_form": "Changed Definition"},
+            headers=history_admin_headers,
+        )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["full_form"] == "Changed Definition"
+
+        # Step 3: GET history
+        history_resp = client.get(
+            f"/api/v1/glossary/{term_id}/history",
+            headers=history_admin_headers,
+        )
+        assert history_resp.status_code == 200, f"History failed: {history_resp.text}"
+        history_data = history_resp.json()
+        assert history_data["total"] >= 1, "Expected at least one audit entry"
+
+        # Find the 'update' entry
+        update_entries = [
+            e for e in history_data["items"] if e["action"] == "update"
+        ]
+        assert len(update_entries) >= 1, "Expected an 'update' audit entry"
+        audit_entry = update_entries[0]
+        assert "full_form" in audit_entry["changed_fields"]
+        assert audit_entry["before"]["full_form"] == "Original Definition"
+        assert audit_entry["after"]["full_form"] == "Changed Definition"
+        version_id = audit_entry["id"]
+
+        # Step 4: Rollback
+        rollback_resp = client.patch(
+            f"/api/v1/glossary/{term_id}/rollback/{version_id}",
+            headers=history_admin_headers,
+        )
+        assert rollback_resp.status_code == 200, f"Rollback failed: {rollback_resp.text}"
+        assert rollback_resp.json()["full_form"] == "Original Definition"
+
+        # Verify rollback persisted
+        get_resp = client.get(
+            f"/api/v1/glossary/{term_id}",
+            headers=history_admin_headers,
+        )
+        assert get_resp.json()["full_form"] == "Original Definition"
+
+        # Verify rollback created its own audit entry
+        history_after = client.get(
+            f"/api/v1/glossary/{term_id}/history",
+            headers=history_admin_headers,
+        )
+        rollback_entries = [
+            e for e in history_after.json()["items"] if e["action"] == "rollback"
+        ]
+        assert len(rollback_entries) >= 1, "Expected a 'rollback' audit entry"
+
+        # Cleanup
+        client.delete(f"/api/v1/glossary/{term_id}", headers=history_admin_headers)
+
+
+class TestGlossaryMissSignalsEndpoint:
+    """
+    DEF-016: Miss signals endpoint returns data from glossary_miss_signals table.
+    Real PostgreSQL, no mocking.
+    """
+
+    @pytest.fixture(scope="class")
+    def miss_tenant_id(self):
+        tid = asyncio.run(_create_tenant("GL Miss Signals Test"))
+        yield tid
+        asyncio.run(
+            _run_sql(
+                "DELETE FROM glossary_miss_signals WHERE tenant_id = :tid",
+                {"tid": tid},
+            )
+        )
+        asyncio.run(
+            _run_sql("DELETE FROM users WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(_cleanup_tenant(tid))
+
+    @pytest.fixture(scope="class")
+    def miss_admin_headers(self, miss_tenant_id):
+        uid = asyncio.run(_create_user(miss_tenant_id, "admin"))
+        token = _make_token(uid, miss_tenant_id, roles=["tenant_admin"])
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_miss_signals_endpoint_returns_inserted_data(
+        self, client, miss_tenant_id, miss_admin_headers
+    ):
+        """
+        Insert miss signals directly into the DB, then verify the API endpoint
+        returns them aggregated correctly.
+        """
+        # Insert miss signals for two terms
+        async def _insert_signals():
+            for i in range(3):
+                await _run_sql(
+                    "INSERT INTO glossary_miss_signals "
+                    "(tenant_id, query_text, unresolved_term, occurrence_count) "
+                    "VALUES (:tid, :query, :term, :count)",
+                    {
+                        "tid": miss_tenant_id,
+                        "query": f"What is XTERM sample {i}?",
+                        "term": "XTERM",
+                        "count": 2,
+                    },
+                )
+            await _run_sql(
+                "INSERT INTO glossary_miss_signals "
+                "(tenant_id, query_text, unresolved_term, occurrence_count) "
+                "VALUES (:tid, :query, :term, :count)",
+                {
+                    "tid": miss_tenant_id,
+                    "query": "Show me YTERM data",
+                    "term": "YTERM",
+                    "count": 5,
+                },
+            )
+
+        asyncio.run(_insert_signals())
+
+        # Call the miss-signals endpoint
+        resp = client.get(
+            "/api/v1/glossary/miss-signals?limit=50",
+            headers=miss_admin_headers,
+        )
+        assert resp.status_code == 200, f"Miss signals failed: {resp.text}"
+        data = resp.json()
+        assert "items" in data
+
+        term_names = {item["term"] for item in data["items"]}
+        assert "XTERM" in term_names, f"XTERM not found in miss signals. Got: {term_names}"
+        assert "YTERM" in term_names, f"YTERM not found in miss signals. Got: {term_names}"
+
+        # Verify occurrence counts are aggregated
+        xterm_item = next(i for i in data["items"] if i["term"] == "XTERM")
+        assert xterm_item["occurrence_count"] >= 6, (
+            f"Expected XTERM occurrence_count >= 6 (3 rows * 2 each), "
+            f"got {xterm_item['occurrence_count']}"
+        )
+
+
+class TestGlossaryMultiTenantIsolation:
+    """
+    DEF-016: Tenant A cannot read or modify tenant B's glossary terms.
+    Real PostgreSQL, no mocking.
+    """
+
+    @pytest.fixture(scope="class")
+    def tenant_a_id(self):
+        tid = asyncio.run(_create_tenant("GL Isolation Tenant A"))
+        yield tid
+        asyncio.run(
+            _run_sql("DELETE FROM users WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(_cleanup_tenant(tid))
+
+    @pytest.fixture(scope="class")
+    def tenant_b_id(self):
+        tid = asyncio.run(_create_tenant("GL Isolation Tenant B"))
+        yield tid
+        asyncio.run(
+            _run_sql("DELETE FROM users WHERE tenant_id = :tid", {"tid": tid})
+        )
+        asyncio.run(_cleanup_tenant(tid))
+
+    @pytest.fixture(scope="class")
+    def tenant_a_admin_headers(self, tenant_a_id):
+        uid = asyncio.run(_create_user(tenant_a_id, "admin"))
+        token = _make_token(uid, tenant_a_id, roles=["tenant_admin"])
+        return {"Authorization": f"Bearer {token}"}
+
+    @pytest.fixture(scope="class")
+    def tenant_b_admin_headers(self, tenant_b_id):
+        uid = asyncio.run(_create_user(tenant_b_id, "admin"))
+        token = _make_token(uid, tenant_b_id, roles=["tenant_admin"])
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_tenant_b_cannot_see_tenant_a_terms(
+        self, client, tenant_a_id, tenant_b_id, tenant_a_admin_headers, tenant_b_admin_headers
+    ):
+        """Tenant A creates a term; tenant B's glossary list must not contain it."""
+        unique_term = f"ISOL{uuid.uuid4().hex[:6].upper()}"
+
+        # Tenant A creates a term
+        create_resp = client.post(
+            "/api/v1/glossary",
+            json={"term": unique_term, "full_form": "Isolation Test Term"},
+            headers=tenant_a_admin_headers,
+        )
+        assert create_resp.status_code == 201
+        term_id = create_resp.json()["id"]
+
+        # Tenant B lists glossary — must NOT see tenant A's term
+        list_resp = client.get(
+            "/api/v1/glossary?page_size=100",
+            headers=tenant_b_admin_headers,
+        )
+        assert list_resp.status_code == 200
+        b_terms = {item["term"] for item in list_resp.json()["items"]}
+        assert unique_term not in b_terms, (
+            f"Tenant B must not see tenant A's term '{unique_term}'. "
+            f"Tenant B terms: {b_terms}"
+        )
+
+        # Tenant B cannot GET tenant A's term by ID
+        get_resp = client.get(f"/api/v1/glossary/{term_id}", headers=tenant_b_admin_headers)
+        assert get_resp.status_code == 404
+
+        # Tenant B cannot PATCH tenant A's term
+        patch_resp = client.patch(
+            f"/api/v1/glossary/{term_id}",
+            json={"full_form": "Hijacked"},
+            headers=tenant_b_admin_headers,
+        )
+        assert patch_resp.status_code == 404
+
+        # Tenant B cannot DELETE tenant A's term
+        del_resp = client.delete(f"/api/v1/glossary/{term_id}", headers=tenant_b_admin_headers)
+        assert del_resp.status_code == 404
+
+        # Verify tenant A's term is still intact
+        get_a = client.get(f"/api/v1/glossary/{term_id}", headers=tenant_a_admin_headers)
+        assert get_a.status_code == 200
+        assert get_a.json()["full_form"] == "Isolation Test Term"
+
+        # Cleanup
+        client.delete(f"/api/v1/glossary/{term_id}", headers=tenant_a_admin_headers)

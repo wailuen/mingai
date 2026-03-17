@@ -26,7 +26,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-001: `issue_embeddings` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Alembic migration `v032_issue_embeddings.py` with pgvector HNSW index on issue_embeddings, RLS enabled.
 **Effort**: 3h
 **Depends on**: CACHE-007 (pgvector migration — must be applied first)
 **Description**: pgvector HNSW index for duplicate issue detection. When new issues are reported, embed them and find near-duplicate existing issues. Alembic migration for `issue_embeddings` table. Columns: `id` UUID PK, `issue_id` UUID FK (issue_reports.id), `tenant_id` UUID FK, `embedding` VECTOR(1536), `created_at` TIMESTAMPTZ. HNSW index: `CREATE INDEX ON issue_embeddings USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64)`. RLS: tenant sees own rows.
@@ -44,7 +46,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-002: `consent_events` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Alembic migration `v033_consent_events.py` with split RLS policies (SELECT vs INSERT).
 **Effort**: 3h
 **Depends on**: none (independent migration)
 **Description**: GDPR consent audit trail. Immutable: no UPDATE or DELETE allowed (audit log pattern). Columns: `id` UUID PK, `tenant_id` UUID FK, `user_id` UUID FK, `consent_type` VARCHAR (data_processing|memory_learning|org_context|profile_sharing), `action` VARCHAR CHECK(granted|revoked), `ip_address` INET, `user_agent` TEXT, `created_at` TIMESTAMPTZ. Index on `(tenant_id, user_id, created_at DESC)`. RLS: user sees own rows; tenant_admin sees tenant rows; platform_admin sees all.
@@ -63,7 +67,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-003: `notification_preferences` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Alembic migration `v034_notification_preferences.py`.
 **Effort**: 3h
 **Depends on**: none
 **Description**: User notification preferences. Columns: `id` UUID PK, `tenant_id` UUID FK, `user_id` UUID FK (users.id), `notification_type` VARCHAR (issue_update|sync_failure|access_request|platform_message|digest), `channel` VARCHAR CHECK(in_app|email|both), `enabled` BOOLEAN DEFAULT true, `created_at` TIMESTAMPTZ, `updated_at` TIMESTAMPTZ. UNIQUE(tenant_id, user_id, notification_type). API: `GET /me/notification-preferences` and `PATCH /me/notification-preferences`. Default: in_app enabled for all types.
@@ -82,7 +88,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-004: `user_privacy_settings` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Alembic migration `v035_user_privacy_settings.py`.
 **Effort**: 3h
 **Depends on**: none
 **Description**: Per-user privacy settings controlling personalization features. Columns: `id` UUID PK, `tenant_id` UUID FK, `user_id` UUID FK, `profile_learning_enabled` BOOLEAN DEFAULT true, `working_memory_enabled` BOOLEAN DEFAULT true, `org_context_enabled` BOOLEAN DEFAULT true, `updated_at` TIMESTAMPTZ. UNIQUE(tenant_id, user_id). API: `GET /me/privacy-settings` and `PATCH /me/privacy-settings`. Profile learning and working memory services check this table before collecting data.
@@ -103,7 +111,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-005: `mcp_servers` table
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: Alembic migration `v036_mcp_servers.py`, `app/modules/admin/mcp_servers.py` with CREATE/LIST/DELETE endpoints.
 **Effort**: 3h
 **Depends on**: none
 **Description**: MCP server configuration per tenant (from original Phase 1 plan — deferred due to Phase 1 scope). Columns: `id` UUID PK, `tenant_id` UUID FK, `name` VARCHAR, `endpoint` VARCHAR, `auth_type` VARCHAR CHECK(none|api_key|oauth2), `auth_config` JSONB (encrypted API key ref), `status` VARCHAR CHECK(active|inactive), `last_verified_at` TIMESTAMPTZ, `created_at` TIMESTAMPTZ. UNIQUE(tenant_id, name). RLS: tenant sees own rows.
@@ -285,7 +295,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-016: Glossary pipeline integration tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `tests/integration/test_glossary_pipeline.py` — 10 tests covering CRUD, version history, rollback, miss signals, multi-tenant isolation. All passing.
 **Effort**: 4h
 **Depends on**: TA-013 (glossary miss signals API)
 **Description**: TEST-033/034/035 from Phase 1 testing file. Integration tests for glossary pipeline. TEST-033: glossary terms returned in query results. TEST-034: miss signals populated for unmatched terms. TEST-035: glossary cache invalidation on term update. File: `tests/integration/test_glossary_pipeline.py`. Tier 2 — real PostgreSQL + Redis.
@@ -301,7 +313,9 @@ These items were deferred from Phase 1 due to external dependencies (Phase 2 tab
 
 ### DEF-017: Registry E2E tests
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `tests/e2e/test_registry_e2e.py` — 10 tests covering agent registration, search/browse, trust score validation, health status, transaction initiation, multi-tenant isolation. All passing.
 **Effort**: 4h
 **Depends on**: HAR-002 (CRUD audit), HAR-003 (search filters), HAR-005 (registry UI)
 **Description**: TEST-049 from Phase 1 testing file. Playwright E2E test for registry publish and discover flow. File: `tests/e2e/test_registry_flows.spec.ts`. Scenarios: (1) workspace agent published to registry (form submitted, card appears in search), (2) registry search filters work, (3) [Connect] button initiates A2A transaction flow.

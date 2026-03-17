@@ -26,7 +26,9 @@ Phase A (Platform Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### PA-001: LLM profile authoring UI extension
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `LibraryForm.tsx` extended with: 4 model slot validation (publish blocked if any slot empty, yellow hint shown), Publish→Deprecate lifecycle with confirmation dialog listing affected tenants (via `useTenantAssignments`), deprecated state read-only display. `LibraryList.tsx` shows deprecated entries with `opacity-50`. 0 TypeScript errors.
 **Effort**: 8h
 **Depends on**: P2LLM-004, P2LLM-005, P2LLM-013
 **Description**: Extend existing `ProfileForm` (FE-043 — basic form) to support the full slot-by-slot configuration per `workspaces/mingai/01-analysis/21-llm-model-slot-analysis.md`. Slots: intent_model, primary_model, vision_model, embedding_model. Each slot: provider selector + deployment name field + optional override flag. Best-practices notes as markdown editor with preview toggle. Draft/Published/Deprecated lifecycle actions in form footer.
@@ -65,7 +67,9 @@ Phase A (Platform Admin Phase 1 foundations) is COMPLETE. Phases B-D deliver:
 
 ### PA-003: Profile assignment enforcement
 
-**Status**: ⬜ TODO
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
+**Evidence**: `PATCH /admin/llm-config` in `app/modules/admin/llm_config.py` already calls `_invalidate_config_cache()` which DELetes `mingai:{tenant_id}:config` Redis key. Doc string confirms 60s SLA. Integration test coverage in `tests/integration/test_profile_assignment.py`.
 **Effort**: 5h
 **Depends on**: P2LLM-008, P2LLM-009
 **Description**: When a tenant's LLM profile changes (via `PATCH /admin/llm-config`), the RAG pipeline must pick up the new config within 60 seconds. Implementation: `PATCH /admin/llm-config` writes to PostgreSQL, then DELetes Redis cache key `mingai:{tenant_id}:config`. `InstrumentedLLMClient` (P2LLM-009) reads tenant config on every call — cache TTL 15min, but DEL forces immediate miss → re-read from PostgreSQL. 60-second SLA met as long as DEL + cache TTL work correctly.
