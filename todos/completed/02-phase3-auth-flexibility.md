@@ -1,7 +1,7 @@
 # 02 — Phase 3: Auth Flexibility (Auth0 + SSO)
 
 **Generated**: 2026-03-15
-**Last updated**: 2026-03-17 (Session 36 — P3AUTH-002 through P3AUTH-021 all COMPLETED except P3AUTH-001 (in progress - 4/6 criteria). 20/21 COMPLETE. Session 35 — P3AUTH-015 marked COMPLETED: GroupSyncConfigPanel.tsx, useGroupSyncConfig/useUpdateGroupSyncConfig in useSSO.ts, 18 unit tests, committed bdc28b5. Session 34 — P3AUTH-010 marked COMPLETED.)
+**Last updated**: 2026-03-17 (Session 37 — P3AUTH-001 marked COMPLETED: Azure Entra connection `mingai-entra` created in Auth0, connection ID `con_gZzXoNvQ58MWRJMa`. All 21/21 items COMPLETE. Session 36 — P3AUTH-002 through P3AUTH-021 all COMPLETED except P3AUTH-001. Session 35 — P3AUTH-015 COMPLETED. Session 34 — P3AUTH-010 COMPLETED.)
 **Phase**: 3 (Weeks 13-15 of implementation roadmap)
 **Numbering**: P3AUTH-001 through P3AUTH-021
 **Stack**: FastAPI + Auth0 + SAML 2.0 + OIDC + PostgreSQL + Redis
@@ -23,17 +23,18 @@ Phase 3 introduces Auth0 as the identity broker, allowing tenants to configure S
 
 ### P3AUTH-001: Auth0 tenant setup
 
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE
+**Completed**: 2026-03-17
 **Effort**: 4h
 **Depends on**: none (external setup task)
 **Description**: Configure Auth0 organization. Existing Azure Entra becomes one upstream connection in Auth0 (not replaced — promoted to be one of several connections). Update `.env.example` with new vars: `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_AUDIENCE`, `AUTH0_MANAGEMENT_API_TOKEN`. Create Auth0 application (Regular Web App) + API resource in Auth0 Dashboard. Document connection IDs for downstream tasks.
 **Acceptance criteria**:
 
-- [ ] Auth0 org created with Azure Entra as one upstream connection (tenant mingai-dev created ✓; Azure Entra connection pending)
+- [x] Auth0 org created with Azure Entra as one upstream connection — `mingai-entra` connection created, ID `con_gZzXoNvQ58MWRJMa`, domain `imcindustrialgroup.com`, get-user-groups enabled, admin consent granted
 - [x] `.env.example` updated with all 5 new AUTH0\_\* vars (no real values, documented descriptions) — `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_AUDIENCE`, `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`, `AUTH0_MANAGEMENT_API_TOKEN` added
 - [x] Auth0 Application (Regular Web App) created with correct callback URLs (localhost:3022 + production domain) — `mingai` app, Client ID `HTtRVszeXCwBMzgsByb4veL1dLIxZOHJ`, callbacks set
 - [x] Auth0 API resource created with correct identifier (matches AUTH0_AUDIENCE) — `mingai API`, audience `https://api.mingai.app`, RS256
-- [ ] Connection IDs documented in implementation notes (not in code) — pending SSO connection creation
+- [x] Connection IDs documented — Auth0 Enterprise connection `mingai-entra` (ID: `con_gZzXoNvQ58MWRJMa`); Azure AD App Registration `agenticOS2` (Client ID: `236472df-2b30-426d-a19d-f587f4285cae`, Tenant: `2311a55c-d508-4e3a-aeb8-47a08b156aa5`)
 - [x] Local `.env` updated with real test values (never committed) — all AUTH0\_\* vars populated in `src/backend/.env`
 
 ---
