@@ -375,6 +375,138 @@ async def test_sso_connection(
 
 
 # ---------------------------------------------------------------------------
+# Group Sync Config (P3AUTH-010)
+# ---------------------------------------------------------------------------
+
+_VALID_MAPPING_ROLES = {"admin", "editor", "viewer", "user"}
+
+
+class GroupSyncConfigRequest(BaseModel):
+    """PATCH /admin/sso/group-sync/config request body."""
+
+    allowed_groups: list[str] = Field(default_factory=list)
+    group_role_mapping: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("group_role_mapping")
+    @classmethod
+    def validate_role_values(cls, v: dict[str, str]) -> dict[str, str]:
+        invalid = {role for role in v.values() if role not in _VALID_MAPPING_ROLES}
+        if invalid:
+            raise ValueError(
+                f"Invalid role values: {sorted(invalid)}. "
+                f"Allowed: {sorted(_VALID_MAPPING_ROLES)}"
+            )
+        return v
+
+
+class GroupSyncConfigResponse(BaseModel):
+    """GET/PATCH /admin/sso/group-sync/config response body."""
+
+    allowed_groups: list[str]
+    group_role_mapping: dict[str, str]
+
+
+async def _get_group_sync_config_db(
+    tenant_id: str, db: AsyncSession
+) -> tuple[list[str], dict[str, str]]:
+    """Fetch current group sync config from tenant_configs."""
+    result = await db.execute(
+        text(
+            "SELECT config_data FROM tenant_configs "
+            "WHERE tenant_id = :tid AND config_type = 'sso_group_sync' LIMIT 1"
+        ),
+        {"tid": tenant_id},
+    )
+    row = result.fetchone()
+    if row and row[0]:
+        config = row[0] if isinstance(row[0], dict) else {}
+        return (
+            config.get("auth0_group_allowlist") or [],
+            config.get("auth0_group_role_mapping") or {},
+        )
+    return [], {}
+
+
+async def _upsert_group_sync_config_db(
+    tenant_id: str,
+    allowed_groups: list[str],
+    group_role_mapping: dict[str, str],
+    db: AsyncSession,
+) -> None:
+    """Upsert group sync config into tenant_configs."""
+    import json as _json
+
+    config_data = _json.dumps(
+        {
+            "auth0_group_allowlist": allowed_groups,
+            "auth0_group_role_mapping": group_role_mapping,
+        }
+    )
+    config_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO tenant_configs (id, tenant_id, config_type, config_data) "
+            "VALUES (:id, :tid, 'sso_group_sync', CAST(:data AS jsonb)) "
+            "ON CONFLICT (tenant_id, config_type) DO UPDATE SET "
+            "config_data = CAST(:data AS jsonb)"
+        ),
+        {"id": config_id, "tid": tenant_id, "data": config_data},
+    )
+    await db.commit()
+
+
+@router.get("/sso/group-sync/config", response_model=GroupSyncConfigResponse)
+async def get_group_sync_config(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-086: Get the tenant's Auth0 group sync allowlist and role mapping."""
+    allowlist, mapping = await _get_group_sync_config_db(
+        current_user.tenant_id, session
+    )
+    return GroupSyncConfigResponse(
+        allowed_groups=allowlist,
+        group_role_mapping=mapping,
+    )
+
+
+@router.patch("/sso/group-sync/config", response_model=GroupSyncConfigResponse)
+async def update_group_sync_config(
+    request: GroupSyncConfigRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """API-086: Update the tenant's Auth0 group sync allowlist and role mapping.
+
+    Stores config under tenant_configs.config_type='sso_group_sync'.
+    Role values must be one of: admin, editor, viewer, user.
+    """
+    await _upsert_group_sync_config_db(
+        tenant_id=current_user.tenant_id,
+        allowed_groups=request.allowed_groups,
+        group_role_mapping=request.group_role_mapping,
+        db=session,
+    )
+
+    # Read back to confirm persistence
+    allowlist, mapping = await _get_group_sync_config_db(
+        current_user.tenant_id, session
+    )
+
+    logger.info(
+        "sso_group_sync_config_updated",
+        tenant_id=current_user.tenant_id,
+        group_count=len(allowlist),
+        mapping_count=len(mapping),
+    )
+
+    return GroupSyncConfigResponse(
+        allowed_groups=allowlist,
+        group_role_mapping=mapping,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Issue Reporting Settings
 # ---------------------------------------------------------------------------
 

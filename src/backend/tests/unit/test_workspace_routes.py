@@ -226,3 +226,127 @@ class TestPatchWorkspaceSettings:
         updates_arg = call_args.kwargs.get("updates") or call_args[1].get("updates")
         assert "locale" in updates_arg
         assert "timezone" not in updates_arg
+
+
+# ---------------------------------------------------------------------------
+# P3AUTH-010: Group Sync Config routes
+# ---------------------------------------------------------------------------
+
+
+class TestGroupSyncConfigGet:
+    """GET /api/v1/admin/sso/group-sync/config"""
+
+    def test_returns_empty_config_when_not_set(self, client, admin_headers):
+        """GET returns empty allowed_groups and group_role_mapping when no config stored."""
+        with patch(
+            "app.modules.admin.workspace._get_group_sync_config_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = ([], {})
+            resp = client.get(
+                "/api/v1/admin/sso/group-sync/config", headers=admin_headers
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["allowed_groups"] == []
+        assert data["group_role_mapping"] == {}
+
+    def test_returns_stored_config(self, client, admin_headers):
+        """GET returns the stored allowlist and mapping."""
+        with patch(
+            "app.modules.admin.workspace._get_group_sync_config_db",
+            new_callable=AsyncMock,
+        ) as mock_get:
+            mock_get.return_value = (
+                ["HR-Staff", "Finance-Team"],
+                {"HR-Staff": "viewer", "Finance-Team": "editor"},
+            )
+            resp = client.get(
+                "/api/v1/admin/sso/group-sync/config", headers=admin_headers
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["allowed_groups"] == ["HR-Staff", "Finance-Team"]
+        assert data["group_role_mapping"]["HR-Staff"] == "viewer"
+        assert data["group_role_mapping"]["Finance-Team"] == "editor"
+
+    def test_requires_tenant_admin(self, client):
+        """GET returns 401 without auth."""
+        resp = client.get("/api/v1/admin/sso/group-sync/config")
+        assert resp.status_code == 401
+
+
+class TestGroupSyncConfigPatch:
+    """PATCH /api/v1/admin/sso/group-sync/config"""
+
+    def test_valid_mapping_stored_and_returned(self, client, admin_headers):
+        """PATCH stores valid mapping and returns the new config."""
+        with (
+            patch(
+                "app.modules.admin.workspace._upsert_group_sync_config_db",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.modules.admin.workspace._get_group_sync_config_db",
+                new_callable=AsyncMock,
+            ) as mock_get,
+        ):
+            mock_get.return_value = (
+                ["HR-Staff"],
+                {"HR-Staff": "viewer"},
+            )
+            resp = client.patch(
+                "/api/v1/admin/sso/group-sync/config",
+                json={
+                    "allowed_groups": ["HR-Staff"],
+                    "group_role_mapping": {"HR-Staff": "viewer"},
+                },
+                headers=admin_headers,
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["allowed_groups"] == ["HR-Staff"]
+        assert data["group_role_mapping"]["HR-Staff"] == "viewer"
+
+    def test_invalid_role_value_returns_422(self, client, admin_headers):
+        """PATCH with invalid role value (not in admin|editor|viewer|user) returns 422."""
+        resp = client.patch(
+            "/api/v1/admin/sso/group-sync/config",
+            json={
+                "allowed_groups": ["HR-Staff"],
+                "group_role_mapping": {"HR-Staff": "superadmin"},
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, f"Expected 422, got: {resp.status_code}"
+
+    def test_empty_mapping_allowed(self, client, admin_headers):
+        """PATCH with empty allowed_groups and empty mapping is valid."""
+        with (
+            patch(
+                "app.modules.admin.workspace._upsert_group_sync_config_db",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.modules.admin.workspace._get_group_sync_config_db",
+                new_callable=AsyncMock,
+            ) as mock_get,
+        ):
+            mock_get.return_value = ([], {})
+            resp = client.patch(
+                "/api/v1/admin/sso/group-sync/config",
+                json={"allowed_groups": [], "group_role_mapping": {}},
+                headers=admin_headers,
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["allowed_groups"] == []
+        assert data["group_role_mapping"] == {}
+
+    def test_requires_tenant_admin(self, client):
+        """PATCH returns 401 without auth."""
+        resp = client.patch(
+            "/api/v1/admin/sso/group-sync/config",
+            json={"allowed_groups": [], "group_role_mapping": {}},
+        )
+        assert resp.status_code == 401
