@@ -154,7 +154,10 @@ async def test_get_reindex_estimate_full():
             new=AsyncMock(return_value=0.00000002),  # $0.00002 / 1000
         ),
     ):
-        db = _mock_db_no_row()
+        # Existence check (first db.execute call) must return a row so the
+        # 404 guard passes. Helper functions are patched so subsequent
+        # db.execute calls are not made by the handler.
+        db = _mock_db_with_scalar(1)
         user = _make_admin()
         resp = await get_reindex_estimate(kb_id=KB_ID, current_user=user, db=db)
 
@@ -185,7 +188,8 @@ async def test_get_reindex_estimate_zero_docs():
             new=AsyncMock(return_value=0.00000002),
         ),
     ):
-        db = _mock_db_no_row()
+        # Existence check must return a row so the 404 guard passes.
+        db = _mock_db_with_scalar(1)
         user = _make_admin()
         resp = await get_reindex_estimate(kb_id=KB_ID, current_user=user, db=db)
 

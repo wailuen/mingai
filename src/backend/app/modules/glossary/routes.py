@@ -690,6 +690,13 @@ async def get_glossary_term(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-068: Get a glossary term by ID."""
+    try:
+        uuid.UUID(term_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Glossary term not found",
+        )
     result = await get_glossary_term_db(
         term_id=term_id,
         tenant_id=current_user.tenant_id,
@@ -711,6 +718,13 @@ async def update_glossary_term(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-069: Update a glossary term (tenant admin only)."""
+    try:
+        uuid.UUID(term_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Glossary term '{term_id}' not found",
+        )
     updates = request.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(
@@ -774,6 +788,13 @@ async def delete_glossary_term(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-070: Delete a glossary term (tenant admin only)."""
+    try:
+        uuid.UUID(term_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Glossary term '{term_id}' not found",
+        )
     deleted = await delete_glossary_term_db(
         term_id=term_id,
         tenant_id=current_user.tenant_id,

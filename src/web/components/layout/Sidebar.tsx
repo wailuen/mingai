@@ -28,6 +28,8 @@ interface SidebarProps {
   activeConversationId?: string | null;
   onSelectConversation?: (id: string) => void;
   onNewConversation?: () => void;
+  /** Increment to force ConversationList to re-fetch after a new conversation is created. */
+  conversationListRefreshTrigger?: number;
 }
 
 interface NavItem {
@@ -172,6 +174,7 @@ export function Sidebar({
   activeConversationId,
   onSelectConversation,
   onNewConversation,
+  conversationListRefreshTrigger,
 }: SidebarProps) {
   const isPlatform = claims?.scope === "platform";
   const isTenantAdmin =
@@ -188,6 +191,7 @@ export function Sidebar({
           activeConversationId={activeConversationId ?? null}
           onSelectConversation={onSelectConversation ?? (() => {})}
           onNewConversation={onNewConversation ?? (() => {})}
+          refreshTrigger={conversationListRefreshTrigger}
         />
       )}
 

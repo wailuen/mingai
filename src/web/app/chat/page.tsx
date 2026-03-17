@@ -44,6 +44,9 @@ export default function ChatPage() {
   // Incremented each time "New conversation" is clicked so ChatInterface
   // can detect the reset request even when selectedConversationId was already null.
   const [resetKey, setResetKey] = useState(0);
+  // Incremented when a new conversation is created so ConversationList re-fetches.
+  const [conversationListRefreshTrigger, setConversationListRefreshTrigger] =
+    useState(0);
 
   const handleSelectConversation = useCallback((id: string) => {
     setSelectedConversationId(id);
@@ -58,6 +61,11 @@ export default function ChatPage() {
 
   const handleConversationChange = useCallback((id: string | null) => {
     setActiveConversationId(id);
+    // When a conversation is newly created (id goes null → UUID), bump the
+    // refresh trigger so ConversationList immediately re-fetches the sidebar.
+    if (id !== null) {
+      setConversationListRefreshTrigger((n) => n + 1);
+    }
   }, []);
 
   return (
@@ -65,6 +73,7 @@ export default function ChatPage() {
       activeConversationId={activeConversationId}
       onSelectConversation={handleSelectConversation}
       onNewConversation={handleNewConversation}
+      conversationListRefreshTrigger={conversationListRefreshTrigger}
     >
       <ErrorBoundary
         fallback={

@@ -26,13 +26,7 @@ export function Topbar({
   onToggleSidebar,
   onLogout,
 }: TopbarProps) {
-  const displayTenant =
-    tenantName ??
-    (claims?.tenant_id
-      ? claims.tenant_id
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase())
-      : "mingai");
+  const displayTenant = tenantName ?? "mingai";
   type ThemeMode = "dark" | "light" | "system";
   const THEME_CYCLE: ThemeMode[] = ["dark", "light", "system"];
   const THEME_KEY = "mingai-theme";

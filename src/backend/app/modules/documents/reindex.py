@@ -291,6 +291,26 @@ async def get_reindex_estimate(
     except ValueError:
         raise HTTPException(status_code=422, detail="kb_id must be a valid UUID")
 
+    # Guard: ensure at least one integration exists for this KB before computing
+    # estimates. Without this check a nonexistent kb_id silently returns a
+    # zero-cost estimate (200) instead of 404.
+    kb_exists_result = await db.execute(
+        text(
+            "SELECT 1 FROM integrations "
+            "WHERE tenant_id = :tid AND config->>'kb_id' = :kb_id "
+            "UNION ALL "
+            "SELECT 1 FROM kb_access_control "
+            "WHERE tenant_id = :tid AND index_id = :kb_id "
+            "LIMIT 1"
+        ),
+        {"tid": current_user.tenant_id, "kb_id": kb_id},
+    )
+    if kb_exists_result.fetchone() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge base not found",
+        )
+
     doc_count = await _get_kb_document_count(kb_id, current_user.tenant_id, db)
     avg_tokens = await _get_avg_tokens(kb_id, current_user.tenant_id, db)
     cost_per_token = await _get_embedding_cost_per_token(current_user.tenant_id, db)

@@ -190,8 +190,15 @@ export async function* streamChat(
         if (streamCompleted) break;
       }
     } catch (readErr) {
+      // If the "done" event was already received and processed, the stream
+      // completed successfully. The read error is a consequence of the server
+      // closing the HTTP chunked connection without a final zero-length
+      // terminator (ERR_INCOMPLETE_CHUNKED_ENCODING). Treat this as a clean
+      // completion — do not surface it as an error to the caller.
+      if (streamCompleted) break;
+
       // Stream interrupted mid-read (network drop, server crash)
-      if (!streamCompleted && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
         yield {
           type: "__reconnecting" as const,
@@ -204,12 +211,10 @@ export async function* streamChat(
         shouldReconnect = true;
         continue;
       }
-      if (!streamCompleted) {
-        yield {
-          type: "__reconnect_failed" as const,
-          data: { message: "Connection lost after multiple attempts" },
-        };
-      }
+      yield {
+        type: "__reconnect_failed" as const,
+        data: { message: "Connection lost after multiple attempts" },
+      };
       throw readErr instanceof Error
         ? readErr
         : new Error("Stream read failed");

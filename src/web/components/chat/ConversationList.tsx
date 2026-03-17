@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, MessageSquare, Search } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,8 @@ interface ConversationListProps {
   activeConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
+  /** Increment this value to force a re-fetch of the conversation list. */
+  refreshTrigger?: number;
 }
 
 interface DateGroup {
@@ -40,6 +42,7 @@ export function ConversationList({
   activeConversationId,
   onSelectConversation,
   onNewConversation,
+  refreshTrigger,
 }: ConversationListProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,12 +70,16 @@ export function ConversationList({
     fetchConversations();
   }, [fetchConversations]);
 
-  // Re-fetch when a new conversation is started (conversation ID changes)
+  // Re-fetch when a new conversation is created (refreshTrigger increments).
+  // Skip the initial render (refreshTrigger === 0 or undefined).
+  const prevRefreshTrigger = useRef(refreshTrigger ?? 0);
   useEffect(() => {
-    if (activeConversationId) {
+    const current = refreshTrigger ?? 0;
+    if (current !== prevRefreshTrigger.current) {
+      prevRefreshTrigger.current = current;
       fetchConversations();
     }
-  }, [activeConversationId, fetchConversations]);
+  }, [refreshTrigger, fetchConversations]);
 
   const filteredConversations = conversations.filter((c) =>
     (c.title || "New conversation")

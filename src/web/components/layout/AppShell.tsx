@@ -14,6 +14,8 @@ interface AppShellProps {
   activeConversationId?: string | null;
   onSelectConversation?: (id: string) => void;
   onNewConversation?: () => void;
+  /** Increment to force the conversation list sidebar to re-fetch. */
+  conversationListRefreshTrigger?: number;
 }
 
 /**
@@ -26,6 +28,7 @@ export function AppShell({
   activeConversationId,
   onSelectConversation,
   onNewConversation,
+  conversationListRefreshTrigger,
 }: AppShellProps) {
   const { claims, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -62,6 +65,7 @@ export function AppShell({
             activeConversationId={activeConversationId}
             onSelectConversation={onSelectConversation}
             onNewConversation={onNewConversation}
+            conversationListRefreshTrigger={conversationListRefreshTrigger}
           />
         </div>
         <main className="flex-1 overflow-auto">{children}</main>

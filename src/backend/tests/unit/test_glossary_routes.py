@@ -172,17 +172,20 @@ class TestGetGlossaryTerm:
         assert resp.status_code == 401
 
     def test_get_term_returns_data(self, client, user_headers):
+        import uuid as _uuid
+
+        valid_id = str(_uuid.uuid4())
         with patch(
             "app.modules.glossary.routes.get_glossary_term_db", new_callable=AsyncMock
         ) as mock_get:
             mock_get.return_value = {
-                "id": "term-1",
+                "id": valid_id,
                 "term": "HR",
                 "definition": "Human Resources",
             }
-            resp = client.get("/api/v1/glossary/term-1", headers=user_headers)
+            resp = client.get(f"/api/v1/glossary/{valid_id}", headers=user_headers)
         assert resp.status_code == 200
-        assert resp.json()["id"] == "term-1"
+        assert resp.json()["id"] == valid_id
 
     def test_get_term_returns_404(self, client, user_headers):
         with patch(

@@ -149,6 +149,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
             </label>
             <input
               type="text"
+              name="term"
               value={termValue}
               onChange={(e) => setTermValue(e.target.value.slice(0, 100))}
               maxLength={100}
@@ -163,6 +164,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
               Definition <span className="text-alert">*</span>
             </label>
             <textarea
+              name="definition"
               value={definition}
               onChange={handleDefinitionChange}
               placeholder="Provide a clear definition for the AI to use..."
