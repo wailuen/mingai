@@ -42,29 +42,26 @@ function getHitRateColor(pct: number): string {
 }
 
 export function CacheKPICards({ stats }: CacheKPICardsProps) {
+  const hitRate = stats.hit_rate_pct ?? 0;
+  const missRate = stats.miss_rate_pct ?? 0;
+  const hitLatency = stats.avg_hit_latency_ms ?? 0;
+  const cacheSize = stats.cache_size_mb ?? 0;
+
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <KPICard
         label="Hit Rate"
-        value={stats.hit_rate_pct.toFixed(1)}
+        value={hitRate.toFixed(1)}
         suffix="%"
-        colorClass={getHitRateColor(stats.hit_rate_pct)}
+        colorClass={getHitRateColor(hitRate)}
       />
-      <KPICard
-        label="Miss Rate"
-        value={stats.miss_rate_pct.toFixed(1)}
-        suffix="%"
-      />
+      <KPICard label="Miss Rate" value={missRate.toFixed(1)} suffix="%" />
       <KPICard
         label="Avg Hit Latency"
-        value={stats.avg_hit_latency_ms.toFixed(1)}
+        value={hitLatency.toFixed(1)}
         suffix="ms"
       />
-      <KPICard
-        label="Cache Size"
-        value={stats.cache_size_mb.toFixed(1)}
-        suffix="MB"
-      />
+      <KPICard label="Cache Size" value={cacheSize.toFixed(1)} suffix="MB" />
     </div>
   );
 }

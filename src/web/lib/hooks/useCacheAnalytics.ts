@@ -13,12 +13,12 @@ export interface TopHitPattern {
 }
 
 export interface CacheStats {
-  hit_rate_pct: number;
-  miss_rate_pct: number;
-  avg_hit_latency_ms: number;
-  avg_miss_latency_ms: number;
-  total_cached_queries: number;
-  cache_size_mb: number;
+  hit_rate_pct: number | null;
+  miss_rate_pct: number | null;
+  avg_hit_latency_ms: number | null;
+  avg_miss_latency_ms: number | null;
+  total_cached_queries: number | null;
+  cache_size_mb: number | null;
   top_hit_patterns: TopHitPattern[];
 }
 
@@ -74,7 +74,7 @@ export function useCacheSummary(period: CachePeriod) {
     queryKey: ["cache-summary", period],
     queryFn: () =>
       apiGet<CacheSummary>(
-        `/api/v1/admin/analytics/cache/summary?period=${period}`
+        `/api/v1/admin/analytics/cache/summary?period=${period}`,
       ),
     staleTime: 30 * 1000,
   });
@@ -85,7 +85,7 @@ export function useCacheByIndex(period: CachePeriod) {
     queryKey: ["cache-by-index", period],
     queryFn: () =>
       apiGet<CacheByIndex[]>(
-        `/api/v1/admin/analytics/cache/by-index?period=${period}`
+        `/api/v1/admin/analytics/cache/by-index?period=${period}`,
       ),
     staleTime: 30 * 1000,
   });
@@ -96,7 +96,7 @@ export function useTopCachedQueries(period: CachePeriod) {
     queryKey: ["cache-top-queries", period],
     queryFn: () =>
       apiGet<TopCachedQuery[]>(
-        `/api/v1/admin/analytics/cache/top-cached-queries?period=${period}`
+        `/api/v1/admin/analytics/cache/top-cached-queries?period=${period}`,
       ),
     staleTime: 30 * 1000,
   });
@@ -107,7 +107,7 @@ export function useDailyCostSavings(period: CachePeriod) {
     queryKey: ["cache-daily-savings", period],
     queryFn: () =>
       apiGet<DailyCostSaving[]>(
-        `/api/v1/admin/analytics/cache/cost-savings?period=${period}`
+        `/api/v1/admin/analytics/cache/cost-savings?period=${period}`,
       ),
     staleTime: 30 * 1000,
   });

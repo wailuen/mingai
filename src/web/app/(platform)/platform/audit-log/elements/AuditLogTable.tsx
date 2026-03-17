@@ -118,7 +118,7 @@ export function AuditLogTable({
                     {event.actor_email}
                   </div>
                   <div className="text-[11px] text-text-faint">
-                    {event.actor_type.replace("_", " ")}
+                    {(event.actor_type ?? "").replace("_", " ")}
                   </div>
                 </td>
                 <td className="px-3.5 py-3 text-[13px] text-text-primary">

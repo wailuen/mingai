@@ -21,6 +21,7 @@ import { AssignDialog } from "./elements/AssignDialog";
 import { SeverityOverrideDialog } from "./elements/SeverityOverrideDialog";
 import { RequestInfoDialog } from "./elements/RequestInfoDialog";
 import { CloseDuplicateDialog } from "./elements/CloseDuplicateDialog";
+import { IssueDetailPanel } from "../elements/IssueDetailPanel";
 
 // ---------------------------------------------------------------------------
 // Severity badge styling
@@ -465,6 +466,18 @@ export default function PlatformIssueQueuePage() {
             onClose={() => setShowCloseDuplicateDialog(false)}
           />
         )}
+
+        {/* Issue detail slide-in panel */}
+        {selectedIssue &&
+          !showSeverityDialog &&
+          !showRequestInfoDialog &&
+          !showAssignDialog &&
+          !showCloseDuplicateDialog && (
+            <IssueDetailPanel
+              issueId={selectedIssue.id}
+              onClose={() => setSelectedIssue(null)}
+            />
+          )}
       </div>
     </AppShell>
   );

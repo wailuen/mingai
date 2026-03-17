@@ -10,7 +10,7 @@ import { apiGet, type PaginatedResponse } from "@/lib/api";
 export interface AuditEvent {
   id: string;
   timestamp: string;
-  actor_type: "platform_admin" | "tenant_admin" | "system";
+  actor_type: "platform_admin" | "tenant_admin" | "system" | null;
   actor_email: string;
   action: string;
   resource_type: string;
