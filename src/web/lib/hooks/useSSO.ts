@@ -264,6 +264,7 @@ export function useConfigureEntra() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [ADMIN_SSO_CONFIG_KEY] });
       queryClient.invalidateQueries({ queryKey: [SSO_WIZARD_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SSO_KEY] });
     },
   });
 }

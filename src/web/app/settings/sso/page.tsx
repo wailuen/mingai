@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { useSSOConfig, useTestSSOConnection } from "@/lib/hooks/useSSO";
+import { useSSOConfig, useAdminSSOConfig, useTestSSOConnection } from "@/lib/hooks/useSSO";
 import { SSOStatusCard } from "./elements/SSOStatusCard";
 import { SSOSetupWizard } from "./elements/SSOSetupWizard";
 import { GroupSyncConfigPanel } from "./elements/GroupSyncConfigPanel";
@@ -17,11 +17,15 @@ import { Loader2 } from "lucide-react";
  */
 export default function SSOPage() {
   const { data, isPending, error } = useSSOConfig();
+  const { data: adminSSOConfig } = useAdminSSOConfig();
   const [showWizard, setShowWizard] = useState(false);
   const testMutation = useTestSSOConnection();
 
+  // isConfigured: legacy saml/oidc flow OR modern provider (entra/google/okta) via admin config
   const isConfigured =
-    data?.status === "configured" || data?.status === "error";
+    data?.status === "configured" ||
+    data?.status === "error" ||
+    !!adminSSOConfig?.auth0_connection_id;
 
   async function handleTestFromCard() {
     if (!data || !data.provider) return;
