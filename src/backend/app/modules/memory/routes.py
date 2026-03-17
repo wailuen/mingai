@@ -125,7 +125,7 @@ async def get_working_memory_data(
     from app.modules.memory.working_memory import WorkingMemoryService
 
     service = WorkingMemoryService()
-    context = await service.get_context(user_id, tenant_id, agent_id)
+    context = await service.get_for_prompt(user_id, tenant_id, agent_id)
     return {
         "user_id": user_id,
         "agent_id": agent_id,
@@ -140,17 +140,10 @@ async def clear_working_memory_data(
     db,
 ) -> None:
     """Clear all working memory keys for the user across all agents."""
-    from app.core.redis_client import get_redis
+    from app.modules.memory.working_memory import WorkingMemoryService
 
-    redis = get_redis()
-    pattern = f"mingai:{tenant_id}:working_memory:{user_id}:*"
-    cursor = 0
-    while True:
-        cursor, keys = await redis.scan(cursor, match=pattern, count=100)
-        if keys:
-            await redis.delete(*keys)
-        if cursor == 0:
-            break
+    service = WorkingMemoryService()
+    await service.clear_memory(user_id, tenant_id)
     logger.info("working_memory_cleared", user_id=user_id, tenant_id=tenant_id)
 
 
@@ -348,13 +341,13 @@ async def clear_all_notes(
 
 @router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_memory_note(
-    note_id: str,
+    note_id: uuid.UUID,
     current_user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-101: Delete a memory note by ID."""
     deleted = await delete_note_db(
-        note_id=note_id,
+        note_id=str(note_id),
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         db=session,
@@ -362,7 +355,7 @@ async def delete_memory_note(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Memory note '{note_id}' not found",
+            detail="Memory note not found",
         )
     return None
 

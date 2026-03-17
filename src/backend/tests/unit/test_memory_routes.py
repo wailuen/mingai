@@ -161,24 +161,29 @@ class TestDeleteMemoryNote:
     """DELETE /api/v1/memory/notes/{id}"""
 
     def test_delete_note_requires_auth(self, client):
-        resp = client.delete("/api/v1/memory/notes/note-1")
+        valid_id = "00000000-0000-0000-0000-000000000001"
+        resp = client.delete(f"/api/v1/memory/notes/{valid_id}")
         assert resp.status_code == 401
 
     def test_delete_note_returns_204(self, client, auth_headers):
+        valid_id = "00000000-0000-0000-0000-000000000001"
         with patch(
             "app.modules.memory.routes.delete_note_db", new_callable=AsyncMock
         ) as mock_del:
             mock_del.return_value = True
-            resp = client.delete("/api/v1/memory/notes/note-1", headers=auth_headers)
+            resp = client.delete(
+                f"/api/v1/memory/notes/{valid_id}", headers=auth_headers
+            )
         assert resp.status_code == 204
 
     def test_delete_note_returns_404_if_not_found(self, client, auth_headers):
+        valid_id = "00000000-0000-0000-0000-000000000002"
         with patch(
             "app.modules.memory.routes.delete_note_db", new_callable=AsyncMock
         ) as mock_del:
             mock_del.return_value = False
             resp = client.delete(
-                "/api/v1/memory/notes/nonexistent", headers=auth_headers
+                f"/api/v1/memory/notes/{valid_id}", headers=auth_headers
             )
         assert resp.status_code == 404
 
