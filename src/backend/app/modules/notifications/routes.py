@@ -11,6 +11,7 @@ Endpoints:
 import asyncio
 import inspect
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -176,30 +177,67 @@ async def _event_generator(user_id: str, tenant_id: str) -> bytes:
         channel=channel,
     )
 
+    # Circuit-breaker: exit after ~30 consecutive redis errors (≈ 30 s of
+    # sustained failure) so the client reconnects rather than spinning forever.
+    _MAX_CONSECUTIVE_ERRORS = 30
     try:
+        import redis as _redis_lib  # noqa: PLC0415
+
+        _REDIS_TRANSIENT_ERRORS = (
+            _redis_lib.ConnectionError,
+            _redis_lib.TimeoutError,
+            OSError,
+        )
+    except ImportError:
+        _REDIS_TRANSIENT_ERRORS = (OSError,)  # type: ignore[assignment]
+
+    try:
+        last_keepalive = time.monotonic()
+        consecutive_errors = 0
         while True:
             try:
+                # Poll with a short timeout (1 s) so we never exceed the
+                # underlying socket_timeout=5 s set on the shared Redis pool.
+                # The longer KEEPALIVE_INTERVAL_SECONDS (30 s) is tracked
+                # manually via last_keepalive.
                 message = await asyncio.wait_for(
                     pubsub.get_message(
                         ignore_subscribe_messages=True,
-                        timeout=KEEPALIVE_INTERVAL_SECONDS,
+                        timeout=1,
                     ),
-                    timeout=KEEPALIVE_INTERVAL_SECONDS + 1,
+                    timeout=2,
                 )
+                consecutive_errors = 0
             except asyncio.TimeoutError:
-                # No message within keepalive window - send keepalive comment
-                yield ": keepalive\n\n"
-                continue
+                message = None
+                consecutive_errors = 0
+            except _REDIS_TRANSIENT_ERRORS as exc:
+                # Transient redis error — treat as no message but count failures.
+                message = None
+                consecutive_errors += 1
+                if consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
+                    logger.warning(
+                        "sse_stream_redis_unavailable",
+                        user_id=user_id,
+                        tenant_id=tenant_id,
+                        error=str(exc),
+                    )
+                    break  # Exit; client EventSource will reconnect
 
+            now = time.monotonic()
             if message and message["type"] == "message":
                 data = message["data"]
                 # redis-py with decode_responses=True returns str, otherwise bytes
                 if isinstance(data, bytes):
                     data = data.decode("utf-8")
                 yield f"data: {data}\n\n"
-            else:
-                # No message received (None or subscribe/unsubscribe confirmation)
+                last_keepalive = now
+            elif now - last_keepalive >= KEEPALIVE_INTERVAL_SECONDS:
                 yield ": keepalive\n\n"
+                last_keepalive = now
+            else:
+                # No message yet — yield control without sending anything
+                await asyncio.sleep(0)
 
     except (asyncio.CancelledError, GeneratorExit):
         logger.info(

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { ApiException } from "@/lib/api";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -9,13 +10,22 @@ function makeQueryClient() {
       queries: {
         staleTime: 60_000,
         gcTime: 5 * 60_000,
-        retry: 3,
+        // Do not retry auth errors (401/403) — they won't resolve on retry.
+        retry: (failureCount, error) => {
+          if (
+            error instanceof ApiException &&
+            (error.status === 401 || error.status === 403)
+          ) {
+            return false;
+          }
+          return failureCount < 3;
+        },
         retryDelay: (attemptIndex) =>
           Math.min(1000 * 2 ** attemptIndex, 30_000),
         refetchOnWindowFocus: false,
       },
       mutations: {
-        retry: 1,
+        retry: 0,
       },
     },
   });
