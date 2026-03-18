@@ -149,6 +149,7 @@ class DocumentIndexingPipeline:
         conversation_id: str,
         user_id: str,
         tenant_id: str,
+        original_filename: str | None = None,
     ) -> dict:
         """
         Index a user-uploaded conversation document.
@@ -195,14 +196,15 @@ class DocumentIndexingPipeline:
         if not chunks:
             return {
                 "chunks_indexed": 0,
-                "file_name": os.path.basename(file_path),
+                "file_name": original_filename or os.path.basename(file_path),
                 "conversation_id": conversation_id,
                 "index_id": f"conv-{tenant_id}-{conversation_id}",
             }
 
         embedding_service = EmbeddingService()
         vector_service = VectorSearchService()
-        file_name = os.path.basename(file_path)
+        # Use caller-supplied original filename if provided (avoids exposing temp path)
+        file_name = original_filename or os.path.basename(file_path)
 
         # Build all embeddings and chunk dicts, then upsert in one batch
         chunk_dicts = []

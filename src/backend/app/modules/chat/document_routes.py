@@ -16,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_current_user
-from app.core.database import validate_tenant_id
+from app.core.database import validate_tenant_id, get_set_tenant_sql
 from app.core.session import get_async_session
 
 logger = structlog.get_logger()
@@ -105,6 +105,10 @@ async def upload_conversation_document(
             detail="File is empty.",
         )
 
+    # Set RLS context so conversations table is visible to this tenant
+    rls_sql, rls_params = get_set_tenant_sql(current_user.tenant_id)
+    await session.execute(text(rls_sql), rls_params)
+
     # Verify conversation ownership (prevents cross-user and cross-tenant uploads)
     conv_result = await session.execute(
         text(
@@ -140,6 +144,7 @@ async def upload_conversation_document(
             conversation_id=conversation_id,
             user_id=current_user.id,
             tenant_id=current_user.tenant_id,
+            original_filename=safe_filename,
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
