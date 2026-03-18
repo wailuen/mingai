@@ -28,8 +28,10 @@ for consumption by the SSE endpoint (API-025).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -234,21 +236,12 @@ async def run_tenant_provisioning(
     async def _step_create_search_index():
         _record("create_search_index", "started")
         cloud = os.environ.get("CLOUD_PROVIDER", "local").strip().lower()
-        if cloud == "local":
-            # No external search index for local development
-            _record("create_search_index", "completed", "local provider — skipped")
-        elif cloud == "azure":
-            await _create_azure_search_index(tenant_id)
-            _record(
-                "create_search_index", "completed", f"Azure AI Search index created"
-            )
-        elif cloud in ("aws", "gcp"):
-            # AWS OpenSearch / GCP Vertex AI Search placeholder — both configured
-            # externally via infra automation; worker records the intent only.
+        if cloud in ("local", "aws", "gcp"):
+            await _create_pgvector_index(tenant_id)
             _record(
                 "create_search_index",
                 "completed",
-                f"{cloud.upper()} search index provisioning deferred to infra pipeline",
+                "pgvector partial HNSW index created",
             )
         else:
             logger.warning(
@@ -258,16 +251,22 @@ async def run_tenant_provisioning(
             )
             _record(
                 "create_search_index",
-                "completed",
-                f"unknown provider '{cloud}' — skipped",
+                "skipped",
+                f"unknown provider '{cloud}' — search index not created",
             )
         await _flush_events()
 
     async def _rollback_create_search_index():
         cloud = os.environ.get("CLOUD_PROVIDER", "local").strip().lower()
-        if cloud == "azure":
-            await _delete_azure_search_index(tenant_id)
-        # Other providers: no-op rollback (external infra handles cleanup)
+        try:
+            await _delete_pgvector_index(tenant_id)
+        except Exception as exc:
+            logger.warning(
+                "provisioning_rollback_search_index_failed",
+                tenant_id=tenant_id,
+                cloud_provider=cloud,
+                error=str(exc),
+            )
         logger.info(
             "provisioning_rollback_search_index",
             tenant_id=tenant_id,
@@ -384,8 +383,8 @@ async def run_tenant_provisioning(
             )
             _record(
                 "create_stripe_customer",
-                "completed",
-                f"Stripe customer creation failed — continuing: {exc}",
+                "warning",
+                "Stripe customer creation failed — billing setup incomplete",
             )
         await _flush_events()
 
@@ -458,8 +457,8 @@ async def run_tenant_provisioning(
             )
             _record(
                 "send_invite_email",
-                "completed",
-                f"email delivery failed — continuing: {exc}",
+                "warning",
+                "email delivery failed — invite not sent",
             )
         await _flush_events()
 
@@ -551,93 +550,125 @@ async def run_tenant_provisioning(
 
 
 # ---------------------------------------------------------------------------
-# Cloud-specific helpers (Azure AI Search)
+# pgvector helpers (per-tenant partial HNSW index on search_chunks)
 # ---------------------------------------------------------------------------
 
 
-async def _create_azure_search_index(tenant_id: str) -> None:
+async def _create_pgvector_index(tenant_id: str) -> None:
     """
-    Create an Azure AI Search index for the tenant.
+    Create a per-tenant partial HNSW index on search_chunks for this tenant.
 
-    Index name: mingai-{tenant_id} (hyphens only, alphanumeric).
-    Requires AZURE_SEARCH_ENDPOINT and AZURE_SEARCH_ADMIN_KEY env vars.
+    Uses a raw asyncpg autocommit connection because CREATE INDEX CONCURRENTLY
+    cannot run inside a transaction block (which SQLAlchemy sessions use).
+
+    Index name is SHA256-derived to avoid UUID truncation collisions:
+      idx_sc_embedding_t_{sha256(tenant_id)[:20]}
     """
-    import re
+    import asyncpg
 
-    endpoint = os.environ.get("AZURE_SEARCH_ENDPOINT", "").strip()
-    admin_key = os.environ.get("AZURE_SEARCH_ADMIN_KEY", "").strip()
-    if not endpoint or not admin_key:
-        raise ValueError(
-            "AZURE_SEARCH_ENDPOINT and AZURE_SEARCH_ADMIN_KEY are required "
-            "for CLOUD_PROVIDER=azure search index creation."
-        )
+    short = hashlib.sha256(tenant_id.encode()).hexdigest()[:20]
+    # index_name uses f-string DDL because PostgreSQL DDL identifiers cannot be
+    # parameterized ($1). SHA256 output is always [0-9a-f]{20} — the assertion
+    # below makes this safety property explicit and catches any future regressions.
+    assert re.fullmatch(r"[0-9a-f]{20}", short), f"Unexpected index suffix: {short!r}"
+    index_name = f"idx_sc_embedding_t_{short}"
 
-    safe_id = re.sub(r"[^a-z0-9]", "-", tenant_id.lower())[:50]
-    index_name = f"mingai-{safe_id}"
-
-    # Minimal vector-capable index schema
-    index_def = {
-        "name": index_name,
-        "fields": [
-            {"name": "id", "type": "Edm.String", "key": True, "filterable": True},
-            {"name": "tenant_id", "type": "Edm.String", "filterable": True},
-            {"name": "content", "type": "Edm.String", "searchable": True},
-            {
-                "name": "embedding",
-                "type": "Collection(Edm.Single)",
-                "dimensions": 1536,
-                "vectorSearchProfile": "mingai-profile",
-            },
-        ],
-        "vectorSearch": {
-            "algorithms": [{"name": "mingai-algo", "kind": "hnsw"}],
-            "profiles": [{"name": "mingai-profile", "algorithm": "mingai-algo"}],
-        },
-    }
-
-    import urllib.request
-
-    req = urllib.request.Request(
-        f"{endpoint}/indexes?api-version=2023-11-01",
-        data=json.dumps(index_def).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "api-key": admin_key,
-        },
-        method="POST",
+    # Use raw asyncpg (autocommit) for DDL — SQLAlchemy sessions use transactions
+    # which would prevent CREATE INDEX CONCURRENTLY
+    dsn = os.environ["DATABASE_URL"]
+    # SQLAlchemy uses postgresql+asyncpg:// — strip the dialect prefix for asyncpg
+    raw_dsn = dsn.replace("postgresql+asyncpg://", "postgresql://").replace(
+        "postgresql+psycopg2://", "postgresql://"
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if resp.status not in (200, 201):
-            raise RuntimeError(
-                f"Azure Search index creation returned HTTP {resp.status}"
-            )
 
-
-async def _delete_azure_search_index(tenant_id: str) -> None:
-    """Delete the Azure AI Search index on rollback."""
-    import re
-
-    endpoint = os.environ.get("AZURE_SEARCH_ENDPOINT", "").strip()
-    admin_key = os.environ.get("AZURE_SEARCH_ADMIN_KEY", "").strip()
-    if not endpoint or not admin_key:
-        return  # Can't delete without credentials; log warning already emitted upstream
-
-    safe_id = re.sub(r"[^a-z0-9]", "-", tenant_id.lower())[:50]
-    index_name = f"mingai-{safe_id}"
-
-    import urllib.request
-
-    req = urllib.request.Request(
-        f"{endpoint}/indexes/{index_name}?api-version=2023-11-01",
-        headers={"api-key": admin_key},
-        method="DELETE",
-    )
+    conn = await asyncpg.connect(raw_dsn)
     try:
-        with urllib.request.urlopen(req, timeout=30):
-            pass
+        await conn.execute(
+            f"""
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS {index_name}
+            ON search_chunks USING hnsw(embedding halfvec_cosine_ops)
+            WITH (m = 16, ef_construction = 128)
+            WHERE tenant_id = $1::uuid
+            """,
+            tenant_id,
+        )
+    finally:
+        await conn.close()
+
+    # Register in search_index_registry (uses RLS-aware session)
+    async with async_session_factory() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO search_index_registry
+                    (tenant_id, index_id, source_type, display_name)
+                VALUES
+                    (:tenant_id, :index_id, 'tenant', 'Tenant Search Index')
+                ON CONFLICT (tenant_id, index_id) DO NOTHING
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "index_id": f"tenant_{tenant_id}",
+            },
+        )
+        await session.commit()
+
+    logger.info(
+        "pgvector_index_created",
+        tenant_id=tenant_id,
+        index_name=index_name,
+    )
+
+
+async def _delete_pgvector_index(tenant_id: str) -> None:
+    """
+    Drop the per-tenant partial HNSW index and clean all search data for this tenant.
+
+    Errors during DROP INDEX are logged as warnings — the index may already be
+    gone on rollback scenarios.
+    """
+    import asyncpg
+
+    short = hashlib.sha256(tenant_id.encode()).hexdigest()[:20]
+    # index_name uses f-string DDL because PostgreSQL DDL identifiers cannot be
+    # parameterized ($1). SHA256 output is always [0-9a-f]{20} — the assertion
+    # makes this safety property explicit and enforced.
+    assert re.fullmatch(r"[0-9a-f]{20}", short), f"Unexpected index suffix: {short!r}"
+    index_name = f"idx_sc_embedding_t_{short}"
+
+    dsn = os.environ["DATABASE_URL"]
+    raw_dsn = dsn.replace("postgresql+asyncpg://", "postgresql://").replace(
+        "postgresql+psycopg2://", "postgresql://"
+    )
+
+    conn = await asyncpg.connect(raw_dsn)
+    try:
+        await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {index_name}")
     except Exception as exc:
         logger.warning(
-            "provisioning_azure_search_delete_failed",
+            "pgvector_index_drop_failed",
             tenant_id=tenant_id,
+            index_name=index_name,
             error=str(exc),
         )
+    finally:
+        await conn.close()
+
+    # Clean all search data for this tenant
+    async with async_session_factory() as session:
+        await session.execute(
+            text("DELETE FROM search_chunks WHERE tenant_id = :tid"),
+            {"tid": tenant_id},
+        )
+        await session.execute(
+            text("DELETE FROM search_index_registry WHERE tenant_id = :tid"),
+            {"tid": tenant_id},
+        )
+        await session.commit()
+
+    logger.info(
+        "pgvector_index_deleted",
+        tenant_id=tenant_id,
+        index_name=index_name,
+    )

@@ -274,6 +274,7 @@ class ChatOrchestrationService:
             query_vector=query_vector,
             tenant_id=tenant_id,
             agent_id=agent_id,
+            query_text=query,
         )
 
         # Calculate retrieval confidence
@@ -429,7 +430,6 @@ class ChatOrchestrationService:
 
         # CACHE-012: Store response in semantic cache non-blocking (cache miss path)
         try:
-            import os as _os
             from app.core.cache.semantic_cache_service import (
                 SemanticCacheService as _SemCache,
             )
@@ -452,7 +452,7 @@ class ChatOrchestrationService:
                 sources=_sources_for_cache,
                 raw_answer=response_text,
                 confidence=retrieval_confidence,
-                model=_os.environ.get("PRIMARY_MODEL", ""),
+                model=os.environ.get("PRIMARY_MODEL", ""),
                 latency_ms=0,
             )
             _sem_cache_store = _SemCache()

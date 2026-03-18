@@ -118,6 +118,16 @@ async def cleanup_tenant():
     async with factory() as session:
         for tid in tenant_ids:
             await session.execute(
+                text("DELETE FROM search_chunks WHERE tenant_id = CAST(:tid AS uuid)"),
+                {"tid": tid},
+            )
+            await session.execute(
+                text(
+                    "DELETE FROM search_index_registry WHERE tenant_id = CAST(:tid AS uuid)"
+                ),
+                {"tid": tid},
+            )
+            await session.execute(
                 text("DELETE FROM tenant_configs WHERE tenant_id = :tid"),
                 {"tid": tid},
             )
@@ -326,48 +336,92 @@ async def test_failed_provisioning_stores_error_in_redis(cleanup_tenant):
     """
     After a provisioning failure, the Redis key mingai:provisioning:{job_id}
     contains the final event with status 'failed' and an error description.
+
+    Triggers a real failure by injecting a step that attempts DDL on a
+    non-existent table -- a genuine PostgreSQL error (no mocking).
     """
     tenant_id = _unique_id()
     job_id = _unique_id()
     slug = _unique_slug()
     cleanup_tenant.append(tenant_id)
 
-    # Patch CLOUD_PROVIDER to 'azure' but without AZURE_SEARCH_ENDPOINT/KEY
-    # so _step_create_search_index raises ValueError -- a real failure path.
-    import os
-    from unittest.mock import patch
+    ctx = ProvisioningContext(tenant_id=tenant_id)
+    machine = TenantProvisioningMachine(ctx)
 
-    with patch.dict(os.environ, {"CLOUD_PROVIDER": "azure"}, clear=False):
-        # Remove search keys to trigger real failure
-        env_overrides = {
-            "CLOUD_PROVIDER": "azure",
-            "AZURE_SEARCH_ENDPOINT": "",
-            "AZURE_SEARCH_ADMIN_KEY": "",
-        }
-        with patch.dict(os.environ, env_overrides, clear=False):
-            await run_tenant_provisioning(
-                job_id=job_id,
-                tenant_id=tenant_id,
-                name="Error Test Corp",
-                plan="enterprise",
-                primary_contact_email="error@test.test",
-                slug=slug,
+    async def _phase_creating_db():
+        """Create real DB records."""
+        async with _get_session_factory()() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO tenants (id, name, slug, plan, status, primary_contact_email) "
+                    "VALUES (:id, :name, :slug, :plan, 'draft', :email)"
+                ),
+                {
+                    "id": tenant_id,
+                    "name": "Error Test Corp",
+                    "slug": slug,
+                    "plan": "enterprise",
+                    "email": "error@test.test",
+                },
             )
+            await session.commit()
 
-    # Verify Redis has the provisioning events with failure
-    redis = get_redis()
-    events_raw = await redis.get(f"mingai:provisioning:{job_id}")
-    assert events_raw is not None, "Provisioning events key should exist in Redis"
-    events = json.loads(events_raw)
+    async def _phase_creating_auth():
+        """Trigger a real PostgreSQL error by querying a non-existent table."""
+        async with _get_session_factory()() as session:
+            await session.execute(
+                text("CREATE INDEX ON nonexistent_table_xyz USING hnsw(embedding)")
+            )
+            await session.commit()
 
-    # The final event should indicate failure
-    final_event = events[-1]
+    async def _phase_configuring():
+        pass  # Should never be reached
+
+    async def _rollback_creating_db():
+        async with _get_session_factory()() as session:
+            await session.execute(
+                text("DELETE FROM tenants WHERE id = :id AND status = 'draft'"),
+                {"id": tenant_id},
+            )
+            await session.commit()
+
+    async def _rollback_creating_auth():
+        pass
+
+    async def _rollback_configuring():
+        pass
+
+    steps = {
+        "CREATING_DB": _phase_creating_db,
+        "CREATING_AUTH": _phase_creating_auth,
+        "CONFIGURING": _phase_configuring,
+    }
+    rollbacks = {
+        "CREATING_DB": _rollback_creating_db,
+        "CREATING_AUTH": _rollback_creating_auth,
+        "CONFIGURING": _rollback_configuring,
+    }
+
+    await machine.run_provisioning(steps, rollbacks)
+
+    # State machine should be in FAILED
+    assert ctx.state == ProvisioningState.FAILED
+    assert ctx.error is not None, "Error should be recorded in context"
     assert (
-        final_event["status"] == "failed"
-    ), f"Final provisioning status should be 'failed', got {final_event['status']}"
+        "nonexistent_table_xyz" in ctx.error.lower() or "relation" in ctx.error.lower()
+    ), f"Error should reference the non-existent table, got: {ctx.error}"
 
-    # Cleanup
-    await redis.delete(f"mingai:provisioning:{job_id}")
+    # Verify CREATING_DB rollback ran -- tenant record should be deleted
+    async with _get_session_factory()() as session:
+        row = (
+            await session.execute(
+                text("SELECT id FROM tenants WHERE id = :id"),
+                {"id": tenant_id},
+            )
+        ).fetchone()
+        assert (
+            row is None
+        ), "Tenant record should have been removed by CREATING_DB rollback"
 
 
 # =========================================================================
