@@ -22,7 +22,7 @@ Critical constraints:
 - `validate_tenant_id()` rejects non-UUID strings before the SET executes.
 - Tables with special RLS (e.g. `tenants` self-references `id`; `team_memberships` joins through `tenant_teams`) are listed in `SPECIAL_RLS_TABLES` in `core/database.py`.
 
-RLS-scoped tables (as of Phase 1): users, conversations, messages, user_feedback, user_profiles, memory_notes, profile_learning_events, working_memory_snapshots, tenant_configs, llm_profiles, tenant_teams, team_memberships, glossary_terms, integrations, sync_jobs, issue_reports, issue_events, agent_cards, audit_log, har_transactions, har_transaction_events.
+RLS-scoped tables (as of v041): users, conversations, messages, user_feedback, user_profiles, memory_notes, profile_learning_events, working_memory_snapshots, tenant_configs, llm_profiles, tenant_teams, team_memberships, glossary_terms, integrations, sync_jobs, issue_reports, issue_events, agent_cards, audit_log, har_transactions, har_transaction_events, **search_index_registry**, **search_chunks**.
 
 ---
 
@@ -347,7 +347,7 @@ alembic upgrade head   # apply all migrations
 alembic revision --autogenerate -m "description"  # generate new migration
 ```
 
-9 migrations applied (v001–v011, with v006–v008 covering HAR, caching, and agent cards). Migration files: `alembic/versions/`.
+42 migrations applied (v001–v041 + init). Migration files: `alembic/versions/`. Notable groups: v001–v008 core schema + HAR + cache; v009–v011 LLM library + semantic cache; v039 llm_providers; v040–v041 pgvector search (search_index_registry, search_chunks).
 
 ---
 
@@ -501,3 +501,85 @@ The env fallback is intentional for bootstrap — a fresh deploy before any prov
 5. One provider failure does not abort the others.
 
 Log key: `provider_health_check` with fields `provider_id`, `provider_type`, `success`, `new_status`.
+
+---
+
+## pgvector Search Backend (AI-055)
+
+Migrations v040 (`search_index_registry`) and v041 (`search_chunks`). Replaces Azure AI Search. All CLOUD_PROVIDER values route to pgvector — there is no external search dependency.
+
+### Tables
+
+**search_index_registry** (v040): One row per logical index (tenant + source). Tracks `embedding_model` (DEFAULT `text-embedding-3-small`), `dimensions` (DEFAULT `1536`), `doc_count`, `chunk_count`, `version`, `last_indexed_at`. Uses standard tenant RLS helpers.
+
+**search_chunks** (v041): Unified content store for all source types (SharePoint KB, Google Drive KB, conversation documents). Key columns:
+
+| Column         | Type                        | Notes                                                              |
+| -------------- | --------------------------- | ------------------------------------------------------------------ |
+| `chunk_key`    | TEXT                        | Business key — unique per `(tenant_id, index_id, chunk_key)`       |
+| `index_id`     | TEXT                        | `{tenant_id}-{agent_id}` or `{tenant_id}-{integration_id}`         |
+| `source_type`  | TEXT                        | `sharepoint`, `google_drive`, `conversation`, `tenant`             |
+| `embedding`    | `halfvec(1536)`             | text-embedding-3-small output                                      |
+| `fts_doc`      | `tsvector GENERATED STORED` | `title` (weight A) + `content` (weight D), `'simple'` dictionary   |
+| `content_hash` | TEXT                        | SHA-256 of content — upsert guard (unchanged chunks skip re-write) |
+
+RLS: same policy as all other tenant tables (`app.current_tenant_id`). Platform bypass via `app.scope = 'platform'`.
+
+### Hybrid Search (RRF)
+
+`PgVectorSearchClient.knn_search()` runs Reciprocal Rank Fusion of two ranked lists:
+
+1. **FTS leg**: `websearch_to_tsquery('simple', :query_text)` against `fts_doc`, ranked by `ts_rank_cd` with normalization flag `32` (divides by document length).
+2. **Vector leg**: HNSW cosine distance `embedding <=> CAST(:vec AS halfvec)`, ordered ascending.
+
+Each leg scans top-200. RRF score: `1/(k + fts_rank) + 1/(k + vec_rank)` where `k = 60`. Missing from one leg contributes 0. Result scores are normalized against the theoretical maximum (`2.0 / (60 + 1) ≈ 0.0328`) so `RetrievalConfidenceCalculator` receives values in `[0, 1]`.
+
+Hybrid mode activates when `len(query_text.strip()) >= 2`. Shorter or absent `query_text` falls back to vector-only (cosine similarity score `1 − distance`).
+
+Before the search query, `SET LOCAL hnsw.ef_search = 100` is executed in the same transaction to improve recall. This is a separate `session.execute()` call — it cannot be inlined into the SQL.
+
+### HNSW Indexes
+
+**Global index** (`idx_sc_embedding_global`): Created in v041 over the full `search_chunks` table. Serves queries for all tenants before per-tenant indexes exist. Created at migration time (table is empty, so `CREATE INDEX` without `CONCURRENTLY` is safe and avoids asyncpg + Alembic transaction-stamping edge cases).
+
+**Per-tenant partial indexes**: Created at tenant provisioning time (`tenants/worker.py:_create_pgvector_index`). Each covers `WHERE tenant_id = $1::uuid`, allowing PostgreSQL to use the smaller index for single-tenant queries.
+
+Index parameters: `m = 16, ef_construction = 128` for both global and per-tenant indexes.
+
+**Why asyncpg autocommit for DDL**: `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block. SQLAlchemy `AsyncSession` always operates in a transaction. The provisioning worker opens a raw asyncpg connection (not through the session factory) with autocommit behavior to issue the DDL.
+
+```python
+# Strip SQLAlchemy dialect prefix before passing to asyncpg
+raw_dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
+conn = await asyncpg.connect(raw_dsn)
+try:
+    await conn.execute(f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {index_name} ...")
+finally:
+    await conn.close()
+```
+
+**Index name derivation**: `idx_sc_embedding_t_{sha256(tenant_id)[:20]}`. PostgreSQL identifier limit is 63 characters; a full UUID-based name would exceed it. SHA-256 hex output is `[0-9a-f]` — an assertion guards the f-string DDL before execution.
+
+### Upsert Idempotency
+
+The `search_chunks` upsert uses:
+
+```sql
+ON CONFLICT (tenant_id, index_id, chunk_key) DO UPDATE SET ...
+WHERE search_chunks.content_hash IS DISTINCT FROM EXCLUDED.content_hash
+RETURNING id
+```
+
+Chunks whose content has not changed produce no write and return no `id`. The count of returned IDs equals the count of rows actually written (not the total passed). After upsert, `search_index_registry` counts are refreshed via a single `UPDATE` that re-counts from `search_chunks`.
+
+### Service Layer
+
+```
+get_search_client(cloud_provider)  →  PgVectorSearchClient   (all providers)
+VectorSearchService                →  wraps PgVectorSearchClient; adds index naming and SearchResult conversion
+RetrievalConfidenceCalculator      →  pure score calculation; expects scores in [0, 1]
+```
+
+`VectorSearchService.search()` is called from `ChatOrchestrationService` Stage 4 with `query_text=query` to activate hybrid mode. `VectorSearchService.upsert_chunks()` is called per-chunk by `DocumentIndexingPipeline`.
+
+`get_search_client()` accepts `CLOUD_PROVIDER=azure` for backward compatibility but logs `search_provider_azure_deprecated`. Remove `AZURE_SEARCH_ENDPOINT` and `AZURE_SEARCH_ADMIN_KEY` from `.env` — they are no longer read.

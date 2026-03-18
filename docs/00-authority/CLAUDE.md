@@ -3,7 +3,7 @@
 Preloaded instructions for AI codegen agents working on the mingai platform.
 Read this before writing any backend or frontend code.
 
-Last validated: 2026-03-17.
+Last validated: 2026-03-18.
 
 ---
 
@@ -71,7 +71,7 @@ src/backend/
         orchestrator.py       # ChatOrchestrationService — 8-stage RAG pipeline
         routes.py             # POST /chat/stream, /chat/feedback; GET/DELETE /conversations/...
         embedding.py          # EmbeddingService — reads EMBEDDING_MODEL from env
-        vector_search.py      # VectorSearchService — tenant-scoped pgvector search
+        vector_search.py      # PgVectorSearchClient, VectorSearchService, get_search_client() — pgvector hybrid search
         persistence.py        # ConversationPersistenceService
         prompt_builder.py     # SystemPromptBuilder — 6-layer prompt assembly
       issues/
@@ -131,7 +131,7 @@ src/backend/
     fixtures/                 # Shared test data (llm_providers.json etc.)
     conftest.py               # Root conftest — session-scoped TestClient
   alembic/
-    versions/                 # v001–v039 migrations (schema, RLS, HAR, cache, agents, KB access control, llm_providers, etc.)
+    versions/                 # v001–v041 migrations (schema, RLS, HAR, cache, agents, KB access control, llm_providers, search_index_registry, search_chunks)
   docker-compose.yml          # PostgreSQL + Redis for local dev/testing
   pyproject.toml
 ```
@@ -144,7 +144,7 @@ alembic upgrade head                              # apply all
 alembic revision --autogenerate -m "description" # generate new
 ```
 
-40 migrations applied (v001–v039 + **init**).
+42 migrations applied (v001–v041 + **init**).
 
 ---
 
@@ -360,7 +360,48 @@ Resolution order for `complete()`:
 
 The same DB-first / env-fallback pattern applies to `embed()`. The env fallback logs a warning every time it is used — that warning in production logs means the platform needs a configured default provider.
 
-### 17. llm_providers Table — Platform Scope Only
+### 17. pgvector Hybrid Search — Key Facts
+
+Search is backed by pgvector (tables `search_chunks` and `search_index_registry`, migrations v040/v041). There is no Azure AI Search dependency.
+
+**Vector type**: `halfvec(1536)` — matches `text-embedding-3-small` output. Always cast with `CAST(:param AS halfvec)` — never pass a Python list directly.
+
+**Hybrid search threshold**: hybrid RRF (FTS + vector) activates when `len(query_text.strip()) >= 2`. Shorter or absent text falls back to vector-only.
+
+**RRF constants**: `k = 60`. RRF scores are normalized against the theoretical max (`2.0 / (60 + 1)`) before being returned to `RetrievalConfidenceCalculator`.
+
+**HNSW recall boost**: `SET LOCAL hnsw.ef_search = 100` must be issued as a separate call before the search query within the same transaction. It is transaction-scoped (`SET LOCAL`) and does not persist.
+
+**Index naming**: `{tenant_id}-{agent_id}` for chat/agent indexes; `{tenant_id}-{integration_id}` for document sync indexes.
+
+**asyncpg DDL — autocommit required**: `CREATE INDEX CONCURRENTLY` cannot run inside a transaction. Use a raw asyncpg connection with autocommit for per-tenant HNSW index creation/deletion. The SQLAlchemy `async_session_factory` must not be used for DDL.
+
+```python
+# CORRECT — asyncpg autocommit for DDL
+conn = await asyncpg.connect(raw_dsn)   # raw postgresql:// not postgresql+asyncpg://
+try:
+    await conn.execute(
+        f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {index_name} "
+        "ON search_chunks USING hnsw(embedding halfvec_cosine_ops) "
+        "WITH (m = 16, ef_construction = 128) "
+        "WHERE tenant_id = $1::uuid",
+        tenant_id,
+    )
+finally:
+    await conn.close()
+```
+
+**Index name derivation**: Per-tenant HNSW index names use `SHA256(tenant_id)[:20]` hex to avoid PostgreSQL's 63-character identifier limit. The full name pattern is `idx_sc_embedding_t_{sha256_hex[:20]}`. An assertion validates the suffix is `[0-9a-f]{20}` before the f-string DDL is executed.
+
+**CLOUD_PROVIDER routing**: `get_search_client()` returns `PgVectorSearchClient` for all providers (`local`, `aws`, `gcp`, `azure`). Passing `azure` logs a deprecation warning — `AZURE_SEARCH_ENDPOINT` and `AZURE_SEARCH_ADMIN_KEY` should be removed from `.env`.
+
+**RLS**: `search_chunks` and `search_index_registry` use the standard tenant RLS helpers (`get_rls_policy_sql` + `get_platform_bypass_policy_sql`). Set tenant context before any query, same as all other tenant-scoped tables.
+
+**Upsert idempotency**: The `search_chunks` upsert uses `ON CONFLICT (tenant_id, index_id, chunk_key) DO UPDATE ... WHERE search_chunks.content_hash IS DISTINCT FROM EXCLUDED.content_hash`. Unchanged chunks (same `content_hash`) are not re-written. `RETURNING id` gives the count of rows actually written.
+
+**fts_doc column**: `tsvector GENERATED ALWAYS AS STORED` — automatically maintained by PostgreSQL. Uses `'simple'` dictionary (non-Latin safe). Title is weighted `A`; content is weighted `D`. Never write to this column manually.
+
+### 18. llm_providers Table — Platform Scope Only
 
 The `llm_providers` table has RLS enabled with a single policy: `current_setting('app.scope', true) = 'platform'`. Before any query on this table, execute:
 
@@ -482,6 +523,10 @@ Requires: Full running stack. Uses Playwright.
 16. `llm_providers` RLS checks `app.scope = 'platform'`, not `app.tenant_id` — querying without `set_config('app.scope', 'platform', true)` returns 0 rows silently (not an error).
 17. `ProviderService.decrypt_api_key()` raises `ValueError` if `JWT_SECRET_KEY` changed since the key was stored. This is intentional — a key rotation requires re-entering provider credentials.
 18. `run_provider_health_job()` jitters per-provider (0–30s random sleep) — one failing provider does not block others, but the total job runtime can be up to `N * 30s + test_latency` seconds.
+19. `SET LOCAL hnsw.ef_search = 100` is transaction-scoped — it must be issued as a separate `session.execute()` call immediately before the HNSW query. It does not persist beyond the current transaction.
+20. Per-tenant HNSW indexes (`CREATE INDEX CONCURRENTLY`) require an asyncpg autocommit connection — they cannot run inside a SQLAlchemy session transaction. Strip `postgresql+asyncpg://` to `postgresql://` before passing to `asyncpg.connect()`.
+21. pgvector `halfvec` columns require `CAST(:param AS halfvec)` syntax, not `:param::halfvec` — asyncpg's positional rewriter leaves the `::halfvec` suffix after translating named params (same issue as `::jsonb`).
+22. `search_chunks.fts_doc` is a `GENERATED ALWAYS AS STORED` tsvector — PostgreSQL maintains it automatically. Attempting to write to it in an INSERT or UPDATE raises a column immutability error.
 
 ---
 
@@ -548,6 +593,8 @@ Never violate these:
 26. `llm_providers` table queries require `set_config('app.scope', 'platform', true)` — it uses scope-based RLS, not tenant-id RLS.
 27. `delete_provider` returns 409 if target is the default provider or the only enabled provider — never orphan the platform without a provider.
 28. Provider connectivity tests perform real API calls — never mock in integration/E2E tests.
+29. Per-tenant HNSW index names are derived from `SHA256(tenant_id)[:20]` — an assertion `re.fullmatch(r"[0-9a-f]{20}", short)` must guard the f-string DDL before execution. If the assertion fails, the DDL must not run.
+30. `search_chunks` RLS uses the standard tenant isolation policy (`app.current_tenant_id`) — cross-tenant chunk reads are impossible at the DB level, same as all other tenant tables.
 
 ---
 
@@ -732,7 +779,7 @@ Card padding: `20px`. Admin content: `28px 32px`. Section gap: `24-28px`.
 
 ### Backend Modules (all implemented)
 
-auth, chat, issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), admin/llm_config (+ tenant provider selection), users, teams, agents (+ templates), tenants, platform, registry, llm_profiles, **platform/llm_providers** (PVDR-001–020, Fernet-encrypted BYTEA credentials), **platform/provider_health_job** (APScheduler 600s health checks), profile/learning, feedback
+auth, chat (+ **pgvector hybrid search** via PgVectorSearchClient/VectorSearchService), issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), admin/llm_config (+ tenant provider selection), users, teams, agents (+ templates), tenants (+ **pgvector index provisioning** in worker.py), platform, registry, llm_profiles, **platform/llm_providers** (PVDR-001–020, Fernet-encrypted BYTEA credentials), **platform/provider_health_job** (APScheduler 600s health checks), profile/learning, feedback
 
 ### Frontend Screens by Role
 

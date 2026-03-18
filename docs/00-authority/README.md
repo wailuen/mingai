@@ -2,7 +2,7 @@
 
 Read these before touching any code. They contain the architecture decisions, patterns, and constraints that keep the system consistent.
 
-Last updated: 2026-03-17.
+Last updated: 2026-03-18.
 
 ---
 
@@ -18,11 +18,11 @@ mingai is a multi-tenant enterprise AI assistant platform. Three roles share one
 
 ## Document Map
 
-| Document              | What it covers                                                                                                                                                                           | Read when                       |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `CLAUDE.md`           | Full codegen instructions: architecture, all key file paths, backend patterns (17 patterns + 18 gotchas), frontend structure, design system summary, env vars, security invariants (28)  | Start of every coding session   |
-| `01-api-reference.md` | All endpoints — method, path, auth requirement, request/response shape                                                                                                                   | Adding or changing any endpoint |
-| `02-architecture.md`  | Deep dives: multi-tenancy + RLS, JWT v2, cloud-agnostic storage, caching strategy, screenshot blur pipeline, issue triage stream, GitHub webhook, health score formula, HAR A2A protocol, **LLM provider credentials** (Fernet-encrypted BYTEA, DB-first resolution, bootstrap seed, background health job) | Touching core infrastructure    |
+| Document              | What it covers                                                                                                                                                                                                                                                                                                                                                                        | Read when                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `CLAUDE.md`           | Full codegen instructions: architecture, all key file paths, backend patterns (18 patterns + 22 gotchas), frontend structure, design system summary, env vars, security invariants (30)                                                                                                                                                                                               | Start of every coding session   |
+| `01-api-reference.md` | All endpoints — method, path, auth requirement, request/response shape                                                                                                                                                                                                                                                                                                                | Adding or changing any endpoint |
+| `02-architecture.md`  | Deep dives: multi-tenancy + RLS, JWT v2, cloud-agnostic storage, caching strategy, screenshot blur pipeline, issue triage stream, GitHub webhook, health score formula, HAR A2A protocol, **LLM provider credentials** (Fernet-encrypted BYTEA, DB-first resolution, bootstrap seed, background health job), **pgvector search** (hybrid RRF, HNSW provisioning, asyncpg DDL pattern) | Touching core infrastructure    |
 
 ---
 
@@ -130,22 +130,22 @@ Agent-to-agent transactions with Ed25519 cryptographic signing, nonce replay pro
 
 These must pass before any feature is merged:
 
-| Gate                                                     | Protects                         |
-| -------------------------------------------------------- | -------------------------------- |
-| RLS cross-tenant isolation                               | All per-tenant DB reads/writes   |
-| JWT v2 auth on all protected routes                      | Non-auth endpoints               |
-| Screenshot blur gate (`blur_acknowledged=True`)          | Issue create endpoint            |
-| `user_id` never in team working memory                   | GDPR isolation                   |
-| Dynamic PATCH columns through allowlist                  | SQL injection                    |
-| `FRONTEND_URL != "*"`                                    | CORS                             |
-| Secrets from env only                                    | No hardcoded keys or model names |
-| GitHub webhook HMAC-SHA256 verified; 503 if secret unset | Webhook endpoint                 |
-| Issue actions validated against module-level allowlist   | Admin/platform action endpoints  |
-| Redis key segments validated against `_SAFE_SEGMENT_RE`  | All Redis key construction       |
-| Ed25519 private keys Fernet-encrypted at rest            | HAR agent keypairs               |
+| Gate                                                                                                   | Protects                            |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| RLS cross-tenant isolation                                                                             | All per-tenant DB reads/writes      |
+| JWT v2 auth on all protected routes                                                                    | Non-auth endpoints                  |
+| Screenshot blur gate (`blur_acknowledged=True`)                                                        | Issue create endpoint               |
+| `user_id` never in team working memory                                                                 | GDPR isolation                      |
+| Dynamic PATCH columns through allowlist                                                                | SQL injection                       |
+| `FRONTEND_URL != "*"`                                                                                  | CORS                                |
+| Secrets from env only                                                                                  | No hardcoded keys or model names    |
+| GitHub webhook HMAC-SHA256 verified; 503 if secret unset                                               | Webhook endpoint                    |
+| Issue actions validated against module-level allowlist                                                 | Admin/platform action endpoints     |
+| Redis key segments validated against `_SAFE_SEGMENT_RE`                                                | All Redis key construction          |
+| Ed25519 private keys Fernet-encrypted at rest                                                          | HAR agent keypairs                  |
 | LLM provider API keys Fernet-encrypted (BYTEA); `api_key_encrypted` never returned in any API response | `/platform/providers` all responses |
-| HAR nonce replay check (Redis SETNX TTL=600)             | All signed HAR events            |
-| HAR human approval gate for amounts >= $5,000            | HAR transaction commit path      |
+| HAR nonce replay check (Redis SETNX TTL=600)                                                           | All signed HAR events               |
+| HAR human approval gate for amounts >= $5,000                                                          | HAR transaction commit path         |
 
 ---
 
