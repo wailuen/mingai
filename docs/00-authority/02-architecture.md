@@ -517,7 +517,7 @@ Migrations v040 (`search_index_registry`) and v041 (`search_chunks`). Replaces A
 | Column         | Type                        | Notes                                                              |
 | -------------- | --------------------------- | ------------------------------------------------------------------ |
 | `chunk_key`    | TEXT                        | Business key — unique per `(tenant_id, index_id, chunk_key)`       |
-| `index_id`     | TEXT                        | `{tenant_id}-{agent_id}` or `{tenant_id}-{integration_id}`         |
+| `index_id`     | TEXT                        | KB: `{tenant_id}-{integration_id}` · Conversation: `conv-{tenant_id}-{conversation_id}` |
 | `source_type`  | TEXT                        | `sharepoint`, `google_drive`, `conversation`, `tenant`             |
 | `embedding`    | `halfvec(1536)`             | text-embedding-3-small output                                      |
 | `fts_doc`      | `tsvector GENERATED STORED` | `title` (weight A) + `content` (weight D), `'simple'` dictionary   |

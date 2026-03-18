@@ -399,7 +399,9 @@ def get_search_client(cloud_provider: str | None = None) -> PgVectorSearchClient
 
     # Warn only if old Azure AI Search env vars are still set — CLOUD_PROVIDER=azure is
     # valid (used for Azure OpenAI etc.) and now routes to pgvector like all providers.
-    if os.environ.get("AZURE_SEARCH_ENDPOINT") or os.environ.get("AZURE_SEARCH_ADMIN_KEY"):
+    if os.environ.get("AZURE_SEARCH_ENDPOINT") or os.environ.get(
+        "AZURE_SEARCH_ADMIN_KEY"
+    ):
         logger.warning(
             "search_provider_azure_search_vars_stale",
             message=(
@@ -557,6 +559,113 @@ class VectorSearchService:
             tenant_id=tenant_id,
             index_id=index_id,
         )
+
+    async def upsert_conversation_chunks(
+        self,
+        *,
+        tenant_id: str,
+        conversation_id: str,
+        user_id: str,
+        file_name: str,
+        chunks: list[dict],  # list of {"text": str, "embedding": list[float]}
+    ) -> int:
+        """
+        Upsert conversation-scoped document chunks.
+
+        Uses index_id = f"conv-{tenant_id}-{conversation_id}" (distinct from
+        integration indexes which use f"{tenant_id}-{integration_id}").
+        Calls upsert_chunks() once with all chunks (not per-chunk).
+        """
+        safe_filename = os.path.basename(file_name)[:255]
+        ext = os.path.splitext(safe_filename)[1].lower().lstrip(".") or "txt"
+        index_id = f"conv-{tenant_id}-{conversation_id}"
+        source_file_id = f"conv_{conversation_id}_{safe_filename}"
+
+        chunk_list = []
+        for i, c in enumerate(chunks):
+            chunk_text = c["text"]
+            # hash filename component to avoid special chars in chunk_key
+            name_hash = hashlib.sha256(safe_filename.encode()).hexdigest()[:12]
+            chunk_key = f"conv_{conversation_id}_{name_hash}_{i}"
+            chunk_list.append(
+                {
+                    "chunk_key": chunk_key,
+                    "tenant_id": tenant_id,
+                    "index_id": index_id,
+                    "source_type": "conversation",
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "integration_id": None,
+                    "content": chunk_text,
+                    "title": safe_filename,
+                    "source_url": None,
+                    "file_name": safe_filename,
+                    "file_type": ext,
+                    "chunk_type": "text",
+                    "chunk_index": i,
+                    "source_file_id": source_file_id,
+                    "content_hash": hashlib.sha256(chunk_text.encode()).hexdigest(),
+                    "etag": None,
+                    "source_modified_at": None,
+                    "file_size_bytes": None,
+                    "embedding": c["embedding"],
+                }
+            )
+
+        return await self._client.upsert_chunks(chunks=chunk_list)
+
+    async def search_conversation_index(
+        self,
+        *,
+        query_vector: list[float],
+        tenant_id: str,
+        conversation_id: str,
+        top_k: int = 5,
+        query_text: str | None = None,
+        user_id: str | None = None,
+    ) -> list[SearchResult]:
+        """
+        Search the conversation-scoped document index.
+
+        Uses index_id = f"conv-{tenant_id}-{conversation_id}".
+        Returns SearchResult objects (same type as search()).
+        """
+        if not tenant_id:
+            raise ValueError("tenant_id is required for conversation search.")
+        if not conversation_id:
+            raise ValueError("conversation_id is required for conversation search.")
+
+        index_id = f"conv-{tenant_id}-{conversation_id}"
+
+        raw_results = await self._client.knn_search(
+            index_id=index_id,
+            vector=query_vector,
+            top_k=top_k,
+            query_text=query_text,
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+
+        results = [
+            SearchResult(
+                title=r.get("title") or "",
+                content=r.get("content") or "",
+                score=float(r.get("score") or 0.0),
+                source_url=r.get("source_url"),
+                document_id=r.get("chunk_key") or r.get("id") or "",
+            )
+            for r in raw_results
+        ]
+
+        logger.info(
+            "conversation_search_completed",
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            index_id=index_id,
+            result_count=len(results),
+        )
+        return results
 
 
 # ---------------------------------------------------------------------------

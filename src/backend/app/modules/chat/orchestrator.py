@@ -277,6 +277,34 @@ class ChatOrchestrationService:
             query_text=query,
         )
 
+        # Search conversation-uploaded document index (if conversation exists)
+        if conversation_id:
+            try:
+                _conv_results = await self._vector_search.search_conversation_index(
+                    query_vector=query_vector,
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    query_text=query,
+                    top_k=5,
+                    user_id=user_id,
+                )
+                if _conv_results:
+                    # Merge and re-sort by score (both use same RRF normalization)
+                    # Trim to top_k to avoid oversized LLM context
+                    _top_k = 10
+                    search_results = sorted(
+                        search_results + _conv_results,
+                        key=lambda r: r.score,
+                        reverse=True,
+                    )[:_top_k]
+            except Exception as _conv_search_err:
+                logger.warning(
+                    "conversation_search_failed",
+                    conversation_id=conversation_id,
+                    tenant_id=tenant_id,
+                    error=str(_conv_search_err),
+                )
+
         # Calculate retrieval confidence
         retrieval_confidence = self._confidence.calculate(search_results)
 

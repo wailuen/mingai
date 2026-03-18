@@ -231,10 +231,38 @@ async def delete_conversation(
     tenant_id: str,
     db,
 ) -> bool:
-    """Delete a conversation. Returns True if deleted, False if not found."""
+    """Delete a conversation and its uploaded document chunks.
+
+    Returns True if deleted, False if not found.
+    Cleans up search_chunks rows for the conversation index before deleting
+    the conversation row (search_chunks.conversation_id has no FK cascade).
+    """
+    # Verify ownership first (avoid deleting chunks for non-existent/unowned conv)
+    check_result = await db.execute(
+        text(
+            "SELECT id FROM conversations "
+            "WHERE id = CAST(:id AS uuid) AND user_id = CAST(:user_id AS uuid) AND tenant_id = CAST(:tenant_id AS uuid)"
+        ),
+        {"id": conversation_id, "user_id": user_id, "tenant_id": tenant_id},
+    )
+    if check_result.fetchone() is None:
+        return False
+
+    # Delete conversation-scoped search chunks (no FK cascade exists)
+    await db.execute(
+        text(
+            "DELETE FROM search_chunks "
+            "WHERE conversation_id = CAST(:conv_id AS uuid) "
+            "AND tenant_id = CAST(:tenant_id AS uuid)"
+        ),
+        {"conv_id": conversation_id, "tenant_id": tenant_id},
+    )
+
+    # Delete the conversation (messages cascade via FK)
     result = await db.execute(
         text(
-            "DELETE FROM conversations WHERE id = :id AND user_id = :user_id AND tenant_id = :tenant_id"
+            "DELETE FROM conversations "
+            "WHERE id = CAST(:id AS uuid) AND user_id = CAST(:user_id AS uuid) AND tenant_id = CAST(:tenant_id AS uuid)"
         ),
         {"id": conversation_id, "user_id": user_id, "tenant_id": tenant_id},
     )

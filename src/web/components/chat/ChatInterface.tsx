@@ -97,12 +97,14 @@ export function ChatInterface({
             cacheHit={chat.cacheHit ?? undefined}
             cacheAgeSeconds={chat.cacheAgeSeconds}
             onBypassCache={() => chat.bypassCacheAndResend()}
+            conversationId={chat.conversationId}
           />
         ) : (
           <ChatEmptyState
             onSend={(message, mode) => chat.sendMessage(message, mode)}
             agentId={agentId}
             userName={userName}
+            conversationId={chat.conversationId}
           />
         )}
       </div>

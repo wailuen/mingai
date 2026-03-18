@@ -12,6 +12,8 @@ interface ChatEmptyStateProps {
   selectedTeamId?: string | null;
   /** FE-011: Callback when team selection changes */
   onTeamChange?: (teamId: string | null) => void;
+  /** FE-2: Conversation ID for document upload (null in empty state — shows hint) */
+  conversationId?: string | null;
 }
 
 const SUGGESTIONS = [
@@ -41,6 +43,7 @@ export function ChatEmptyState({
   userName,
   selectedTeamId,
   onTeamChange,
+  conversationId,
 }: ChatEmptyStateProps) {
   const displayName = userName ?? "there";
 
@@ -63,7 +66,12 @@ export function ChatEmptyState({
         </p>
 
         {/* Input bar - embedded, not bottom-fixed */}
-        <ChatInput onSend={onSend} showModeSelector />
+        <ChatInput
+          onSend={onSend}
+          showModeSelector
+          conversationId={conversationId}
+          isStreaming={false}
+        />
 
         {/* FE-011: Team context selector */}
         {onTeamChange && (

@@ -372,7 +372,7 @@ Search is backed by pgvector (tables `search_chunks` and `search_index_registry`
 
 **HNSW recall boost**: `SET LOCAL hnsw.ef_search = 100` must be issued as a separate call before the search query within the same transaction. It is transaction-scoped (`SET LOCAL`) and does not persist.
 
-**Index naming**: `{tenant_id}-{agent_id}` for chat/agent indexes; `{tenant_id}-{integration_id}` for document sync indexes.
+**Index naming**: KB indexes use `{tenant_id}-{integration_id}`; conversation document indexes use `conv-{tenant_id}-{conversation_id}` (the `conv-` prefix distinguishes them from KB indexes unambiguously).
 
 **asyncpg DDL — autocommit required**: `CREATE INDEX CONCURRENTLY` cannot run inside a transaction. Use a raw asyncpg connection with autocommit for per-tenant HNSW index creation/deletion. The SQLAlchemy `async_session_factory` must not be used for DDL.
 
@@ -401,7 +401,29 @@ finally:
 
 **fts_doc column**: `tsvector GENERATED ALWAYS AS STORED` — automatically maintained by PostgreSQL. Uses `'simple'` dictionary (non-Latin safe). Title is weighted `A`; content is weighted `D`. Never write to this column manually.
 
-### 18. llm_providers Table — Platform Scope Only
+### 18. Conversation Document Upload
+
+`POST /api/v1/conversations/{conversation_id}/documents` accepts multipart file uploads from end users (PDF, DOCX, PPTX, TXT ≤ 20 MB).
+
+```
+document_routes.py → DocumentIndexingPipeline.process_conversation_file()
+  → asyncio.to_thread(extract_text)   # non-blocking for pypdf/python-docx/python-pptx
+  → _chunk_text()                      # 512-token chunks, 50-token overlap
+  → EmbeddingService.embed()           # per chunk
+  → VectorSearchService.upsert_conversation_chunks()  # batch upsert
+```
+
+**Index ID**: `conv-{tenant_id}-{conversation_id}` — always includes the `conv-` prefix.
+
+**Dual search in orchestrator**: Stage 4 issues two parallel searches — KB index (`{tenant_id}-{integration_id}` via `search()`) and conversation index (`conv-{tenant_id}-{conversation_id}` via `search_conversation_index()`). Results merged, re-sorted by RRF score, trimmed to `top_k=10`.
+
+**Chunk cascade**: `delete_conversation()` explicitly `DELETE FROM search_chunks WHERE conversation_id = :conv_id` before deleting the conversation row. No FK cascade exists.
+
+**Guards**: 20 MB upload limit (64 KB chunked reads), 1M char text cap post-extraction (zip bomb guard), MIME type validation against allowlist, ownership check (`user_id + tenant_id` both required), platform-scope users blocked (403).
+
+**If `chunks_indexed == 0`**: route returns HTTP 500 — the client must surface an error. A 200 with zero chunks indicates a corrupt or unextractable file.
+
+### 19. llm_providers Table — Platform Scope Only
 
 The `llm_providers` table has RLS enabled with a single policy: `current_setting('app.scope', true) = 'platform'`. Before any query on this table, execute:
 
@@ -527,6 +549,9 @@ Requires: Full running stack. Uses Playwright.
 20. Per-tenant HNSW indexes (`CREATE INDEX CONCURRENTLY`) require an asyncpg autocommit connection — they cannot run inside a SQLAlchemy session transaction. Strip `postgresql+asyncpg://` to `postgresql://` before passing to `asyncpg.connect()`.
 21. pgvector `halfvec` columns require `CAST(:param AS halfvec)` syntax, not `:param::halfvec` — asyncpg's positional rewriter leaves the `::halfvec` suffix after translating named params (same issue as `::jsonb`).
 22. `search_chunks.fts_doc` is a `GENERATED ALWAYS AS STORED` tsvector — PostgreSQL maintains it automatically. Attempting to write to it in an INSERT or UPDATE raises a column immutability error.
+23. `process_conversation_file()` uses `asyncio.to_thread()` for text extraction — `import asyncio` must be at module level in `indexing.py`, not inside the function body. An inside-function import works once but breaks re-import in test sessions.
+24. Conversation document upload returns HTTP 500 when `chunks_indexed == 0` (non-empty file, unextractable content). Never return 200 with zero chunks — the frontend cannot distinguish success from a silent failure.
+25. `delete_conversation()` must explicitly `DELETE FROM search_chunks WHERE conversation_id = :conv_id AND tenant_id = :tid` before deleting the conversation row — there is no FK cascade from `conversations` to `search_chunks`.
 
 ---
 
@@ -595,6 +620,7 @@ Never violate these:
 28. Provider connectivity tests perform real API calls — never mock in integration/E2E tests.
 29. Per-tenant HNSW index names are derived from `SHA256(tenant_id)[:20]` — an assertion `re.fullmatch(r"[0-9a-f]{20}", short)` must guard the f-string DDL before execution. If the assertion fails, the DDL must not run.
 30. `search_chunks` RLS uses the standard tenant isolation policy (`app.current_tenant_id`) — cross-tenant chunk reads are impossible at the DB level, same as all other tenant tables.
+31. Conversation document search (`search_conversation_index`) must pass `user_id` to enforce per-user data scoping at the vector layer — not just at the route ownership check.
 
 ---
 
@@ -667,6 +693,7 @@ src/web/
     types/
       issues.ts                    # Issue-related TypeScript types
     hooks/                         # useAuth.ts, useChat.ts, useMyReports.ts, useLLMProviders.ts (6 React Query hooks for /platform/providers)
+                                   # useUploadDocument.ts — multipart upload hook (raw fetch, NOT apiClient — browser must set multipart boundary)
     utils.ts                       # Shared utilities
   middleware.ts                    # Route protection by JWT scope/role
   tailwind.config.ts               # Obsidian Intelligence design tokens
@@ -779,7 +806,7 @@ Card padding: `20px`. Admin content: `28px 32px`. Section gap: `24-28px`.
 
 ### Backend Modules (all implemented)
 
-auth, chat (+ **pgvector hybrid search** via PgVectorSearchClient/VectorSearchService), issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), admin/llm_config (+ tenant provider selection), users, teams, agents (+ templates), tenants (+ **pgvector index provisioning** in worker.py), platform, registry, llm_profiles, **platform/llm_providers** (PVDR-001–020, Fernet-encrypted BYTEA credentials), **platform/provider_health_job** (APScheduler 600s health checks), profile/learning, feedback
+auth, chat (+ **pgvector hybrid search** via PgVectorSearchClient/VectorSearchService + **conversation document upload** via document_routes.py), issues (+ stream + worker + triage), memory, notifications, glossary, documents (sharepoint + gdrive + indexing), har (crypto + signing + state_machine + trust + health_monitor), admin/workspace (+ SSO config + group-sync config), admin/llm_config (+ tenant provider selection), users, teams, agents (+ templates), tenants (+ **pgvector index provisioning** in worker.py), platform, registry, llm_profiles, **platform/llm_providers** (PVDR-001–020, Fernet-encrypted BYTEA credentials), **platform/provider_health_job** (APScheduler 600s health checks), profile/learning, feedback
 
 ### Frontend Screens by Role
 

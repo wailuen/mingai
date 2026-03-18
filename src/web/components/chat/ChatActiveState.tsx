@@ -44,6 +44,8 @@ interface ChatActiveStateProps {
   cacheAgeSeconds?: number | null;
   /** CACHE-018: Callback to re-send last message with X-Cache-Bypass */
   onBypassCache?: () => void;
+  /** FE-2: Conversation ID for document upload */
+  conversationId?: string | null;
 }
 
 /**
@@ -70,6 +72,7 @@ export function ChatActiveState({
   cacheHit,
   cacheAgeSeconds,
   onBypassCache,
+  conversationId,
 }: ChatActiveStateProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -177,6 +180,8 @@ export function ChatActiveState({
             disabled={streaming}
             placeholder="Ask follow-up..."
             showModeSelector={false}
+            conversationId={conversationId}
+            isStreaming={streaming}
           />
         </div>
       </div>

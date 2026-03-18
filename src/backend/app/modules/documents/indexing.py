@@ -6,6 +6,7 @@ with 50-token overlap, embeds each chunk, and upserts to the vector store.
 
 Supported extensions: .pdf, .docx, .pptx, .txt
 """
+import asyncio
 import os
 
 import structlog
@@ -33,6 +34,9 @@ class DocumentIndexingPipeline:
     # Character approximations (4 chars ≈ 1 token)
     _CHUNK_SIZE_CHARS = CHUNK_SIZE * 4  # 2048
     _CHUNK_OVERLAP_CHARS = CHUNK_OVERLAP * 4  # 200
+
+    # Zip bomb guard: cap extracted text at 1M chars
+    _MAX_TEXT_CHARS = 1_000_000
 
     async def process_file(
         self,
@@ -137,6 +141,115 @@ class DocumentIndexingPipeline:
             "file_path": file_path,
             "chunks_indexed": chunks_indexed,
             "integration_id": integration_id,
+        }
+
+    async def process_conversation_file(
+        self,
+        file_path: str,
+        conversation_id: str,
+        user_id: str,
+        tenant_id: str,
+    ) -> dict:
+        """
+        Index a user-uploaded conversation document.
+
+        Unlike process_file(), this method:
+        - Uses conversation-scoped index_id (conv-{tenant_id}-{conv_id})
+        - Does NOT write to sync_jobs (no integration involved)
+        - Caps extracted text at 1M chars (zip bomb guard)
+        - Offloads synchronous text extraction to asyncio.to_thread()
+
+        Returns:
+            {"chunks_indexed": N, "file_name": basename, "conversation_id": ..., "index_id": ...}
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext not in self.SUPPORTED_EXTENSIONS:
+            raise ValueError(
+                f"Unsupported file extension '{ext}'. "
+                f"Supported: {sorted(self.SUPPORTED_EXTENSIONS)}"
+            )
+
+        # Extract text in thread pool to avoid blocking event loop
+        if ext == ".pdf":
+            text_content = await asyncio.to_thread(self._extract_text_pdf, file_path)
+        elif ext == ".docx":
+            text_content = await asyncio.to_thread(self._extract_text_docx, file_path)
+        elif ext == ".pptx":
+            text_content = await asyncio.to_thread(self._extract_text_pptx, file_path)
+        else:  # .txt
+            text_content = await asyncio.to_thread(self._extract_text_txt, file_path)
+
+        # Cap extracted text (zip bomb guard)
+        if len(text_content) > self._MAX_TEXT_CHARS:
+            logger.warning(
+                "conversation_file_text_capped",
+                file_path=file_path,
+                original_length=len(text_content),
+                capped_length=self._MAX_TEXT_CHARS,
+            )
+            text_content = text_content[: self._MAX_TEXT_CHARS]
+
+        # Chunk text
+        chunks = self._chunk_text(text_content)
+
+        if not chunks:
+            return {
+                "chunks_indexed": 0,
+                "file_name": os.path.basename(file_path),
+                "conversation_id": conversation_id,
+                "index_id": f"conv-{tenant_id}-{conversation_id}",
+            }
+
+        embedding_service = EmbeddingService()
+        vector_service = VectorSearchService()
+        file_name = os.path.basename(file_path)
+
+        # Build all embeddings and chunk dicts, then upsert in one batch
+        chunk_dicts = []
+        chunks_indexed = 0
+        for i, chunk in enumerate(chunks):
+            try:
+                embedding = await embedding_service.embed(chunk, tenant_id=tenant_id)
+                chunk_dicts.append({"text": chunk, "embedding": embedding})
+            except Exception as exc:
+                logger.error(
+                    "conversation_doc_chunk_embed_error",
+                    file_path=file_path,
+                    chunk_index=i,
+                    error=str(exc),
+                )
+
+        if chunk_dicts:
+            try:
+                await vector_service.upsert_conversation_chunks(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    file_name=file_name,
+                    chunks=chunk_dicts,
+                )
+                chunks_indexed = len(chunk_dicts)
+            except Exception as exc:
+                logger.error(
+                    "conversation_doc_upsert_error",
+                    file_path=file_path,
+                    error=str(exc),
+                )
+
+        logger.info(
+            "conversation_document_indexed",
+            file_path=file_path,
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            chunks_indexed=chunks_indexed,
+            total_chunks=len(chunks),
+        )
+
+        return {
+            "chunks_indexed": chunks_indexed,
+            "file_name": file_name,
+            "conversation_id": conversation_id,
+            "index_id": f"conv-{tenant_id}-{conversation_id}",
         }
 
     def _extract_text_pdf(self, file_path: str) -> str:

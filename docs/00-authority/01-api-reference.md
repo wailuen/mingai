@@ -27,9 +27,10 @@ Login body: `{ "email": str, "password": str }`. Returns `{ "access_token", "tok
 | ------ | --------------------- | ---- | ------------------------------------------------------------------------------------------- |
 | POST   | `/chat/stream`        | Any  | SSE streaming chat. Body: `{ "query", "agent_id", "conversation_id"?, "active_team_id"? }`. |
 | POST   | `/chat/feedback`      | Any  | Thumbs up/down on a message. Body: `{ "message_id", "rating": "up"\|"down", "comment"? }`.  |
-| GET    | `/conversations`      | Any  | List conversations (paginated: `page`, `page_size`).                                        |
-| GET    | `/conversations/{id}` | Any  | Get conversation with messages.                                                             |
-| DELETE | `/conversations/{id}` | Any  | Delete conversation.                                                                        |
+| GET    | `/conversations`                          | Any  | List conversations (paginated: `page`, `page_size`).                                                                                                                              |
+| GET    | `/conversations/{id}`                     | Any  | Get conversation with messages.                                                                                                                                                   |
+| DELETE | `/conversations/{id}`                     | Any  | Delete conversation (also purges conversation-scoped search_chunks).                                                                                                              |
+| POST   | `/conversations/{id}/documents`           | Any  | Upload a document (PDF/DOCX/PPTX/TXT ≤ 20 MB) for context-aware chat. Multipart form-data. Returns `{ conversation_id, file_name, chunks_indexed, index_id }`. 500 if no chunks extracted. |
 
 ---
 

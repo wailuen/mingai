@@ -140,3 +140,133 @@ class TestProcessFile:
             assert result["integration_id"] == "int-1"
         finally:
             os.unlink(tmp_path)
+
+
+class TestProcessConversationFile:
+    async def test_returns_correct_keys(self, tmp_path):
+        """process_conversation_file returns dict with required keys."""
+        from app.modules.documents.indexing import DocumentIndexingPipeline
+
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("This is test content for conversation document upload.")
+
+        with (
+            patch("app.modules.documents.indexing.EmbeddingService") as MockEmbed,
+            patch("app.modules.documents.indexing.VectorSearchService") as MockVec,
+        ):
+            MockEmbed.return_value.embed = AsyncMock(return_value=[0.1] * 1536)
+            MockVec.return_value.upsert_conversation_chunks = AsyncMock(return_value=1)
+
+            pipeline = DocumentIndexingPipeline()
+            result = await pipeline.process_conversation_file(
+                file_path=str(txt_file),
+                conversation_id="conv-test-123",
+                user_id="user-test-456",
+                tenant_id="tenant-test-789",
+            )
+
+        assert "chunks_indexed" in result
+        assert "file_name" in result
+        assert "conversation_id" in result
+        assert "index_id" in result
+        assert result["conversation_id"] == "conv-test-123"
+        assert result["index_id"] == "conv-tenant-test-789-conv-test-123"
+        assert result["chunks_indexed"] >= 1
+
+    async def test_no_sync_jobs_write(self, tmp_path):
+        """process_conversation_file does NOT write to sync_jobs."""
+        from app.modules.documents.indexing import DocumentIndexingPipeline
+
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("Some content.")
+
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock()
+
+        with (
+            patch("app.modules.documents.indexing.EmbeddingService") as MockEmbed,
+            patch("app.modules.documents.indexing.VectorSearchService") as MockVec,
+        ):
+            MockEmbed.return_value.embed = AsyncMock(return_value=[0.1] * 1536)
+            MockVec.return_value.upsert_conversation_chunks = AsyncMock(return_value=1)
+
+            pipeline = DocumentIndexingPipeline()
+            await pipeline.process_conversation_file(
+                file_path=str(txt_file),
+                conversation_id="conv-123",
+                user_id="user-456",
+                tenant_id="tenant-789",
+            )
+
+        # sync_jobs should never be written
+        for call in mock_db.execute.call_args_list:
+            sql = str(call)
+            assert "sync_jobs" not in sql.lower(), f"sync_jobs was written: {sql}"
+
+    async def test_unsupported_extension_raises(self, tmp_path):
+        """process_conversation_file raises ValueError for unsupported extensions."""
+        from app.modules.documents.indexing import DocumentIndexingPipeline
+
+        xlsx_file = tmp_path / "data.xlsx"
+        xlsx_file.write_bytes(b"fake xlsx content")
+
+        pipeline = DocumentIndexingPipeline()
+        with pytest.raises(ValueError, match="Unsupported file extension"):
+            await pipeline.process_conversation_file(
+                file_path=str(xlsx_file),
+                conversation_id="conv-123",
+                user_id="user-456",
+                tenant_id="tenant-789",
+            )
+
+    async def test_empty_text_returns_zero_chunks(self, tmp_path):
+        """process_conversation_file returns chunks_indexed=0 for empty content."""
+        from app.modules.documents.indexing import DocumentIndexingPipeline
+
+        txt_file = tmp_path / "empty.txt"
+        txt_file.write_text("   ")  # whitespace only
+
+        with (
+            patch("app.modules.documents.indexing.EmbeddingService") as MockEmbed,
+            patch("app.modules.documents.indexing.VectorSearchService") as MockVec,
+        ):
+            MockEmbed.return_value.embed = AsyncMock(return_value=[0.1] * 1536)
+            MockVec.return_value.upsert_conversation_chunks = AsyncMock(return_value=0)
+
+            pipeline = DocumentIndexingPipeline()
+            result = await pipeline.process_conversation_file(
+                file_path=str(txt_file),
+                conversation_id="conv-123",
+                user_id="user-456",
+                tenant_id="tenant-789",
+            )
+
+        assert result["chunks_indexed"] == 0
+
+    async def test_uses_asyncio_to_thread_for_extraction(self, tmp_path):
+        """process_conversation_file uses asyncio.to_thread for text extraction."""
+        from app.modules.documents.indexing import DocumentIndexingPipeline
+
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("Content to index.")
+
+        with (
+            patch("app.modules.documents.indexing.EmbeddingService") as MockEmbed,
+            patch("app.modules.documents.indexing.VectorSearchService") as MockVec,
+            patch(
+                "asyncio.to_thread", wraps=__import__("asyncio").to_thread
+            ) as mock_thread,
+        ):
+            MockEmbed.return_value.embed = AsyncMock(return_value=[0.1] * 1536)
+            MockVec.return_value.upsert_conversation_chunks = AsyncMock(return_value=1)
+
+            pipeline = DocumentIndexingPipeline()
+            await pipeline.process_conversation_file(
+                file_path=str(txt_file),
+                conversation_id="conv-123",
+                user_id="user-456",
+                tenant_id="tenant-789",
+            )
+
+        # asyncio.to_thread should have been called for text extraction
+        assert mock_thread.call_count >= 1

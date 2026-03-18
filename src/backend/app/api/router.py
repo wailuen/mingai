@@ -32,6 +32,11 @@ from app.modules.chat.routes import router as chat_router
 
 router.include_router(chat_router)
 
+# Conversation document upload endpoint (TODO-11)
+from app.modules.chat.document_routes import router as doc_upload_router
+
+router.include_router(doc_upload_router)
+
 # Users endpoints (API-041 to API-050)
 from app.modules.users.routes import router as users_router
 
