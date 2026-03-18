@@ -222,7 +222,7 @@ class PgVectorSearchClient:
 
     Hybrid search uses Reciprocal Rank Fusion (RRF) of:
       1. tsvector FTS  — websearch_to_tsquery('simple', ...) for non-Latin safety
-      2. HNSW cosine   — halfvec(3072) embeddings via <=> operator
+      2. HNSW cosine   — halfvec(1536) embeddings via <=> operator
     """
 
     @staticmethod
@@ -397,12 +397,15 @@ def get_search_client(cloud_provider: str | None = None) -> PgVectorSearchClient
     """
     provider = cloud_provider or os.environ.get("CLOUD_PROVIDER", "local")
 
-    if provider == "azure":
+    # Warn only if old Azure AI Search env vars are still set — CLOUD_PROVIDER=azure is
+    # valid (used for Azure OpenAI etc.) and now routes to pgvector like all providers.
+    if os.environ.get("AZURE_SEARCH_ENDPOINT") or os.environ.get("AZURE_SEARCH_ADMIN_KEY"):
         logger.warning(
-            "search_provider_azure_deprecated",
+            "search_provider_azure_search_vars_stale",
             message=(
-                "CLOUD_PROVIDER=azure now routes to pgvector. "
-                "Remove AZURE_SEARCH_ENDPOINT and AZURE_SEARCH_ADMIN_KEY from .env."
+                "AZURE_SEARCH_ENDPOINT / AZURE_SEARCH_ADMIN_KEY are set but no longer used. "
+                "pgvector is the search backend for all CLOUD_PROVIDER values. "
+                "Remove these vars from .env."
             ),
         )
 
