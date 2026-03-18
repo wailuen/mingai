@@ -10,11 +10,23 @@
 
 **Phase 3 — pgvector migration**: 33 items (PGV-001–033) — `todos/completed/10-pgvector-migration.md` — ALL 33 COMPLETE (2026-03-18): v040/v041 migrations applied (alembic head = 041), PgVectorSearchClient with hybrid RRF search, halfvec(1536), per-tenant partial HNSW, VectorSearchService adapters, orchestrator wiring, Azure Search fully removed, 33 new tests passing in 1.02s.
 
+**Phase 4 — Conversation Document Upload**: 11 items (DOCUP-BE-1–7, DOCUP-FE-1–4) — COMPLETE 2026-03-18. `todos/completed/11-conversation-doc-upload.md`. Adds `POST /api/v1/conversations/{conv_id}/documents` multipart upload endpoint wired to existing `DocumentIndexingPipeline`. No schema migration required (search_chunks already has conversation_id, user_id columns). 11 unit tests + 5 integration tests passing. Commit e63b4bc. Security review approved (HIGH findings tracked). TypeScript clean (0 errors).
+
 ---
 
-## 1. Phase 2+ Todo Files (as of 2026-03-17)
+## 1. Active Todo Files
 
-All Phase 1 and Phase 2+ todos are in `todos/completed/`. No active codegen work remains. Gated items that require external conditions before work can start are documented below.
+No active todos. All actionable codegen work is COMPLETE as of 2026-03-18.
+
+## 1a. Recently Completed
+
+| File                                            | Description                                                          | Items                           | Status                        |
+| ----------------------------------------------- | -------------------------------------------------------------------- | ------------------------------- | ----------------------------- |
+| `todos/completed/11-conversation-doc-upload.md` | Conversation document upload HTTP endpoint + frontend file-attach UI | 11 (DOCUP-BE-1–7, DOCUP-FE-1–4) | COMPLETE 2026-03-18 (e63b4bc) |
+
+## 2. Phase 2+ Todo Files (as of 2026-03-17)
+
+All Phase 1 and Phase 2+ todos are in `todos/completed/`. Gated items that require external conditions before work can start are documented below.
 
 | File                                             | Description                                                      | Items               | Status                                                                                                                                                                 |
 | ------------------------------------------------ | ---------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -27,7 +39,7 @@ All Phase 1 and Phase 2+ todos are in `todos/completed/`. No active codegen work
 | `todos/completed/07-deferred-phase1.md`          | Phase 1 deferred items — now actionable with Phase 2             | 20 (DEF-001–020)    | ✅ 17/20 COMPLETED — moved to completed/ 2026-03-17. DEF-006/020 GATED (Phase 5/6). DEF-015 TODO but gated on Auth0 CI secrets. No actionable work remains.            |
 | `todos/completed/08-llm-provider-config.md`      | Platform LLM provider credential management — DB-backed, no .env | 20 (PVDR-001–020)   | ✅ ALL 20 COMPLETED — moved to completed/ 2026-03-17 (Session 38). 2538 unit tests passing.                                                                            |
 | `todos/completed/09-dynamic-auth0-entra-sso.md`  | Dynamic Auth0 Azure Entra (waad) connection creation per tenant  | 11 (ENTRA-001–011)  | ✅ ALL 11 COMPLETED + ENTRA-008 re-configure mode fixed 2026-03-17. Re-configure PATCH flow, Azure Portal setup instructions, client_id read-only in update mode.      |
-| `todos/completed/10-pgvector-migration.md`       | Replace Azure AI Search with pgvector — schema, client, tests    | 33 (PGV-001–033)    | ✅ ALL 33 COMPLETED 2026-03-18. v040/v041 applied (head=041), halfvec(1536), hybrid RRF, per-tenant HNSW, Azure Search removed, 33 tests passing in 1.02s.            |
+| `todos/completed/10-pgvector-migration.md`       | Replace Azure AI Search with pgvector — schema, client, tests    | 33 (PGV-001–033)    | ✅ ALL 33 COMPLETED 2026-03-18. v040/v041 applied (head=041), halfvec(1536), hybrid RRF, per-tenant HNSW, Azure Search removed, 33 tests passing in 1.02s.             |
 
 **Total new Phase 2+ items**: 198 actionable + 8 gated + 2 blocked = 208 items
 
