@@ -111,11 +111,12 @@ async def get_sync_status(
         health_row[0].isoformat() if health_row and health_row[0] else None
     )
 
-    # Active glossary terms — live count from glossary_terms table
+    # Glossary terms — live count from glossary_terms table
+    # (glossary_terms has no soft-delete; all rows are active)
     glossary_result = await db.execute(
         text(
             "SELECT COUNT(*) FROM glossary_terms "
-            "WHERE tenant_id = :tenant_id AND is_active = true"
+            "WHERE tenant_id = :tenant_id"
         ),
         {"tenant_id": str(tenant_id)},
     )
