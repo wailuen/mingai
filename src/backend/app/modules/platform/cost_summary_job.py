@@ -26,6 +26,7 @@ import structlog
 from sqlalchemy import text
 
 from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
+from app.core.scheduler.timing import check_missed_job
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
@@ -335,6 +336,20 @@ async def start_cost_summary_scheduler() -> None:
 
     while True:
         try:
+            # SCHED-025: Missed-job recovery — runs immediately on the first
+            # iteration if the 03:30 UTC slot passed today with no completed row.
+            # On subsequent iterations check_missed_job returns False (row exists).
+            async with async_session_factory() as _db:
+                if await check_missed_job(
+                    _db, "cost_summary", scheduled_hour=3, scheduled_minute=30
+                ):
+                    async with DistributedJobLock("cost_summary", ttl=1800) as _acquired:
+                        if _acquired:
+                            async with job_run_context("cost_summary") as ctx:
+                                _processed = await run_cost_summary_job()
+                                ctx.records_processed = _processed or 0
+                    logger.info("cost_summary_missed_job_recovered")
+
             sleep_secs = seconds_until_utc(3, 30)
             logger.debug(
                 "cost_summary_next_run_in",

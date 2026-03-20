@@ -29,6 +29,7 @@ import structlog
 from sqlalchemy import text
 
 from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
+from app.core.scheduler.timing import check_missed_job
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
@@ -292,6 +293,22 @@ async def run_miss_signals_scheduler() -> None:
 
     while True:
         try:
+            # SCHED-025: Missed-job recovery — runs immediately on the first
+            # iteration if the 04:30 UTC slot passed today with no completed row.
+            # On subsequent iterations check_missed_job returns False (row exists).
+            async with async_session_factory() as _db:
+                if await check_missed_job(
+                    _db, "miss_signals", scheduled_hour=4, scheduled_minute=30
+                ):
+                    async with DistributedJobLock("miss_signals", ttl=1800) as _acquired:
+                        if _acquired:
+                            async with job_run_context("miss_signals") as ctx:
+                                _summary = await run_miss_signals_job()
+                                ctx.records_processed = (
+                                    sum(_summary.values()) if _summary else 0
+                                )
+                    logger.info("miss_signals_missed_job_recovered")
+
             sleep_secs = seconds_until_utc(4, 30)
             logger.debug("miss_signals_next_run_in", seconds=round(sleep_secs, 0))
             await asyncio.sleep(sleep_secs)

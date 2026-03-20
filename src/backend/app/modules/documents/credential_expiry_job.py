@@ -23,6 +23,7 @@ import structlog
 from sqlalchemy import text
 
 from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
+from app.core.scheduler.timing import check_missed_job
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
@@ -336,6 +337,29 @@ async def run_credential_expiry_scheduler() -> None:
 
     while True:
         try:
+            # SCHED-025: Missed-job recovery — runs immediately on the first
+            # iteration if the 05:00 UTC slot passed today with no completed row.
+            # On subsequent iterations check_missed_job returns False (row exists).
+            async with async_session_factory() as _db:
+                if await check_missed_job(
+                    _db, "credential_expiry", scheduled_hour=5, scheduled_minute=0
+                ):
+                    async with DistributedJobLock(
+                        "credential_expiry", ttl=1800
+                    ) as _acquired:
+                        if _acquired:
+                            async with job_run_context("credential_expiry") as ctx:
+                                _summary = await run_credential_expiry_job()
+                                ctx.records_processed = (
+                                    sum(
+                                        s.get("checked", 0)
+                                        for s in _summary.values()
+                                    )
+                                    if _summary
+                                    else 0
+                                )
+                    logger.info("credential_expiry_missed_job_recovered")
+
             sleep_secs = seconds_until_utc(5, 0)
             logger.debug("credential_expiry_next_run_in", seconds=round(sleep_secs, 0))
             await asyncio.sleep(sleep_secs)

@@ -30,6 +30,7 @@ import structlog
 from sqlalchemy import text
 
 from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
+from app.core.scheduler.timing import check_missed_job
 from app.core.session import async_session_factory
 from app.modules.platform.health_score import calculate_health_score
 
@@ -502,6 +503,20 @@ async def run_health_score_scheduler() -> None:
 
     while True:
         try:
+            # SCHED-025: Missed-job recovery — runs immediately on the first
+            # iteration if the 02:00 UTC slot passed today with no completed row.
+            # On subsequent iterations check_missed_job returns False (row exists).
+            async with async_session_factory() as _db:
+                if await check_missed_job(
+                    _db, "health_score", scheduled_hour=2, scheduled_minute=0
+                ):
+                    async with DistributedJobLock("health_score", ttl=3600) as _acquired:
+                        if _acquired:
+                            async with job_run_context("health_score") as ctx:
+                                _tenants_scored = await run_health_score_job()
+                                ctx.records_processed = _tenants_scored or 0
+                    logger.info("health_score_missed_job_recovered")
+
             sleep_secs = seconds_until_utc(2, 0)
             logger.debug(
                 "health_score_next_run_in",

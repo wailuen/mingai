@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
 from app.core.scheduler.tenant_throttle import run_tenants_throttled
+from app.core.scheduler.timing import check_missed_job
 from app.core.session import async_session_factory
 from app.modules.chat.embedding import EmbeddingService
 
@@ -244,6 +245,20 @@ async def run_query_warming_scheduler() -> None:
 
     while True:
         try:
+            # SCHED-025: Missed-job recovery — runs immediately on the first
+            # iteration if the 03:00 UTC slot passed today with no completed row.
+            # On subsequent iterations check_missed_job returns False (row exists).
+            async with async_session_factory() as _db:
+                if await check_missed_job(
+                    _db, "query_warming", scheduled_hour=3, scheduled_minute=0
+                ):
+                    async with DistributedJobLock("query_warming", ttl=3600) as _acquired:
+                        if _acquired:
+                            async with job_run_context("query_warming") as ctx:
+                                _total_warmed = await run_query_warming_job()
+                                ctx.records_processed = _total_warmed or 0
+                    logger.info("query_warming_missed_job_recovered")
+
             sleep_secs = seconds_until_utc(3, 0)
             logger.debug(
                 "query_warming_next_run_in",
