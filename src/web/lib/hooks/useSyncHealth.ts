@@ -11,6 +11,7 @@ export interface Integration {
   library_name: string;
   last_sync_at: string | null;
   last_sync_status: string | null;
+  next_run_at?: string | null;
 }
 
 export interface IntegrationListResponse {

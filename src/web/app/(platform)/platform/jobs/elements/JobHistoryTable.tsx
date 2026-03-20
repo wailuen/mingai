@@ -118,7 +118,7 @@ export function JobHistoryTable({
               data.items.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-border-faint hover:bg-accent-dim"
+                  className={`border-b border-border-faint ${row.status === "running" ? "animate-pulse bg-accent-dim" : "hover:bg-accent-dim"}`}
                 >
                   <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
                     {row.job_name}
@@ -149,7 +149,7 @@ export function JobHistoryTable({
                     className="px-3.5 py-3 max-w-[200px] truncate font-mono text-[11px] text-alert"
                     title={row.error_message ?? undefined}
                   >
-                    {row.error_message ?? ""}
+                    {row.error_message ?? "—"}
                   </td>
                 </tr>
               ))

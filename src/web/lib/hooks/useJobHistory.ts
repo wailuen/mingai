@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,7 +59,34 @@ export function useJobHistory(
     queryFn: () =>
       apiGet<JobHistoryResponse>(`/api/v1/platform/jobs/history?${qs}`),
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000, // refresh every minute so 'running' rows update
+    refetchInterval: (query) => {
+      const items = query.state.data?.items;
+      return items?.some((r) => r.status === "running") ? 15_000 : 60_000;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useTriggerJob
+// ---------------------------------------------------------------------------
+
+export interface TriggerJobResponse {
+  job_name: string;
+  run_id: string | null;
+  status: "triggered";
+}
+
+export function useTriggerJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobName: string) =>
+      apiPost<TriggerJobResponse>(
+        `/api/v1/platform/jobs/${jobName}/trigger`,
+        {},
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform-job-history"] });
+    },
   });
 }
 

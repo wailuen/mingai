@@ -1,9 +1,19 @@
 "use client";
 
-import { useSyncStatus } from "@/lib/hooks/useSyncHealth";
+import { useSyncStatus, useIntegrations } from "@/lib/hooks/useSyncHealth";
 import { Skeleton } from "@/components/shared/LoadingState";
 import { CheckCircle2, AlertTriangle, AlertOctagon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function formatFuture(isoStr: string | null | undefined): string | null {
+  if (!isoStr) return null;
+  const date = new Date(isoStr);
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs < 0) return "Overdue";
+  if (diffMs < 60_000) return "< 1 minute";
+  if (diffMs < 3_600_000) return `in ${Math.floor(diffMs / 60_000)}m`;
+  return `in ${Math.floor(diffMs / 3_600_000)}h`;
+}
 
 function formatRelative(isoStr: string | null): string {
   if (!isoStr) return "Never";
@@ -57,6 +67,15 @@ function SignalRow({ label, value, status = "neutral" }: SignalRowProps) {
  */
 export function SchedulerSignalsCard() {
   const { data, isPending, isError } = useSyncStatus();
+  const { data: integrationsData } = useIntegrations();
+
+  // Find the earliest next_run_at across all integrations
+  const earliestNextRunAt =
+    (integrationsData?.items ?? [])
+      .map((i) => i.next_run_at)
+      .filter((v): v is string => typeof v === "string" && v.length > 0)
+      .sort()
+      .at(0) ?? null;
 
   const expiryDays = data?.credentials_expiry_days_remaining;
   const expiryStatus =
@@ -120,6 +139,15 @@ export function SchedulerSignalsCard() {
             value={String(data.glossary_terms_active)}
             status="neutral"
           />
+          {earliestNextRunAt && (
+            <div title={new Date(earliestNextRunAt).toLocaleString()}>
+              <SignalRow
+                label="Next scheduled sync"
+                value={formatFuture(earliestNextRunAt) ?? "—"}
+                status="neutral"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

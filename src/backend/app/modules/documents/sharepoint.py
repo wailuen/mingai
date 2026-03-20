@@ -311,6 +311,9 @@ async def list_integrations_db(
         if isinstance(last_sync_at, datetime):
             last_sync_at = last_sync_at.isoformat()
 
+        schedule = config_val.get("schedule", {}) if isinstance(config_val, dict) else {}
+        next_run_at = schedule.get("next_run_at") if isinstance(schedule, dict) else None
+
         items.append(
             {
                 "id": str(row["id"]),
@@ -320,6 +323,7 @@ async def list_integrations_db(
                 "library_name": config_val.get("library_name", ""),
                 "last_sync_at": str(last_sync_at) if last_sync_at else None,
                 "last_sync_status": row["last_sync_status"],
+                "next_run_at": next_run_at,
             }
         )
     return {"items": items}

@@ -7,6 +7,7 @@ import { SourceHealthCard } from "./elements/SourceHealthCard";
 import { SyncJobHistory } from "./elements/SyncJobHistory";
 import { SyncFailureList } from "./elements/SyncFailureList";
 import { SchedulerSignalsCard } from "./elements/SchedulerSignalsCard";
+import { TenantJobHistoryCard } from "./elements/TenantJobHistoryCard";
 import { CredentialExpiryBanner } from "./elements/CredentialExpiryBanner";
 import { useIntegrations, useSyncStatus } from "@/lib/hooks/useSyncHealth";
 import { Loader2 } from "lucide-react";
@@ -101,6 +102,11 @@ export default function SyncHealthPage() {
         {/* SCHED-027: Scheduler health signals */}
         <ErrorBoundary>
           <SchedulerSignalsCard />
+        </ErrorBoundary>
+
+        {/* TODO-13B: Tenant job history */}
+        <ErrorBoundary>
+          <TenantJobHistoryCard />
         </ErrorBoundary>
       </div>
     </AppShell>

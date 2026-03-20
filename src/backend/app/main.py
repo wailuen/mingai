@@ -382,6 +382,16 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
+    # SCHED-039: Start document sync scheduler (fires due syncs every 60s).
+    _doc_sync_task = None
+    try:
+        from app.modules.documents.sync_scheduler_job import run_document_sync_scheduler
+
+        _doc_sync_task = asyncio.create_task(run_document_sync_scheduler())
+        logger.info("doc_sync_scheduler_started", interval_seconds=60)
+    except Exception as exc:
+        logger.warning("doc_sync_scheduler_startup_failed", error=str(exc))
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -501,6 +511,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("tool_health_scheduler_stopped")
+
+    if _doc_sync_task is not None and not _doc_sync_task.done():
+        _doc_sync_task.cancel()
+        try:
+            await _doc_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("doc_sync_scheduler_stopped")
 
     if _glossary_warmup_task is not None and not _glossary_warmup_task.done():
         _glossary_warmup_task.cancel()

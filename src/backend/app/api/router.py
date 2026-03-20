@@ -296,6 +296,16 @@ from app.modules.admin.sync_status import router as sync_status_router
 
 router.include_router(sync_status_router)
 
+# Tenant Admin job history endpoint (TODO-13B)
+from app.modules.admin.tenant_jobs import router as tenant_jobs_router
+
+router.include_router(tenant_jobs_router)
+
+# Platform Admin manual job trigger endpoint (TODO-13C)
+from app.modules.platform.job_trigger import router as job_trigger_router
+
+router.include_router(job_trigger_router)
+
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.
 # Cloud deployments (aws/azure/gcp) never receive requests at these routes.
