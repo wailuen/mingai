@@ -412,7 +412,7 @@ async def start_cost_alert_scheduler() -> None:
                             async with job_run_context("cost_alert") as ctx:
                                 _processed = await run_cost_alert_job()
                                 ctx.records_processed = _processed or 0
-                    logger.info("cost_alert_missed_job_recovered")
+                            logger.info("cost_alert_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(4, 0)
             logger.debug(

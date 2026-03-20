@@ -358,7 +358,7 @@ async def run_credential_expiry_scheduler() -> None:
                                     if _summary
                                     else 0
                                 )
-                    logger.info("credential_expiry_missed_job_recovered")
+                            logger.info("credential_expiry_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(5, 0)
             logger.debug("credential_expiry_next_run_in", seconds=round(sleep_secs, 0))

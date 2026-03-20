@@ -253,7 +253,10 @@ async def _process_tenant(tenant_id: str) -> int:
                         "INSERT INTO glossary_miss_signals "
                         "  (tenant_id, query_text, unresolved_term, occurrence_count) "
                         "VALUES (:tenant_id, :query_text, :term, :count) "
-                        "ON CONFLICT DO NOTHING"
+                        "ON CONFLICT (tenant_id, unresolved_term) DO UPDATE "
+                        "SET occurrence_count = glossary_miss_signals.occurrence_count "
+                        "                     + EXCLUDED.occurrence_count, "
+                        "    updated_at = NOW()"
                     ),
                     {
                         "tenant_id": tenant_id,
@@ -307,7 +310,7 @@ async def run_miss_signals_scheduler() -> None:
                                 ctx.records_processed = (
                                     sum(_summary.values()) if _summary else 0
                                 )
-                    logger.info("miss_signals_missed_job_recovered")
+                            logger.info("miss_signals_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(4, 30)
             logger.debug("miss_signals_next_run_in", seconds=round(sleep_secs, 0))

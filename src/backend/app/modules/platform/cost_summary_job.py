@@ -1,7 +1,7 @@
 """
 PA-012: Nightly token attribution and cost summary batch job.
 
-Scheduled daily at 03:30 UTC (30 minutes after the health score job at 03:00 UTC).
+Scheduled daily at 03:30 UTC (90 minutes after the health score job at 02:00 UTC).
 For each active tenant, aggregates usage_events by (provider, model) for the
 previous day and upserts the result into cost_summary_daily.
 
@@ -348,7 +348,7 @@ async def start_cost_summary_scheduler() -> None:
                             async with job_run_context("cost_summary") as ctx:
                                 _processed = await run_cost_summary_job()
                                 ctx.records_processed = _processed or 0
-                    logger.info("cost_summary_missed_job_recovered")
+                            logger.info("cost_summary_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(3, 30)
             logger.debug(

@@ -449,7 +449,7 @@ async def start_azure_cost_scheduler() -> None:
                             async with job_run_context("azure_cost") as ctx:
                                 _days_processed = await run_azure_cost_job()
                                 ctx.records_processed = _days_processed or 0
-                    logger.info("azure_cost_missed_job_recovered")
+                            logger.info("azure_cost_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(3, 45)
             logger.debug(

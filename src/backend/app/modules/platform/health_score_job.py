@@ -515,7 +515,7 @@ async def run_health_score_scheduler() -> None:
                             async with job_run_context("health_score") as ctx:
                                 _tenants_scored = await run_health_score_job()
                                 ctx.records_processed = _tenants_scored or 0
-                    logger.info("health_score_missed_job_recovered")
+                            logger.info("health_score_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(2, 0)
             logger.debug(

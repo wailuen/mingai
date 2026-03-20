@@ -257,7 +257,7 @@ async def run_query_warming_scheduler() -> None:
                             async with job_run_context("query_warming") as ctx:
                                 _total_warmed = await run_query_warming_job()
                                 ctx.records_processed = _total_warmed or 0
-                    logger.info("query_warming_missed_job_recovered")
+                            logger.info("query_warming_missed_job_recovered")
 
             sleep_secs = seconds_until_utc(3, 0)
             logger.debug(
