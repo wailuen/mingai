@@ -1,10 +1,13 @@
 """
-Unit tests for PA-032: Tool health monitoring job.
+Unit tests for PA-032 / SCHED-008: Tool health monitoring job.
 
 Tests the core state-machine logic: healthy → degraded → unavailable → healthy.
 P1 issue creation and auto-close on state transitions.
 
 Tier 1: Fast, isolated. AsyncMock + direct function calls (no HTTP server).
+Failure counters are mocked at the Redis helper layer (_get_failure_count,
+_incr_failure_count, _reset_failure_count) — production code uses Redis so
+in-process _failure_counts no longer exists.
 """
 import asyncio
 import uuid
@@ -15,13 +18,14 @@ import pytest
 from app.modules.platform.tool_health_job import (
     _DEGRADED_THRESHOLD,
     _UNAVAILABLE_THRESHOLD,
-    _failure_counts,
     _handle_tool_result,
     run_tool_health_job,
 )
 
 TOOL_ID = str(uuid.uuid4())
 TOOL_NAME = "test-tool"
+
+_COUNTER_MODULE = "app.modules.platform.tool_health_job"
 
 
 def _make_db(call_responses: list):
@@ -66,11 +70,23 @@ def _make_db(call_responses: list):
 
 
 @pytest.fixture(autouse=True)
-def reset_failure_counts():
-    """Reset global failure counter before each test."""
-    _failure_counts.clear()
-    yield
-    _failure_counts.clear()
+def mock_redis_counters():
+    """Patch Redis counter helpers with safe defaults.
+
+    Tests that need specific counter values should override via patch() in the
+    test body or use pytest parametrize.
+
+    Defaults:
+      _get_failure_count  → returns 0
+      _incr_failure_count → returns 1
+      _reset_failure_count → no-op
+    """
+    with (
+        patch(f"{_COUNTER_MODULE}._get_failure_count", new=AsyncMock(return_value=0)),
+        patch(f"{_COUNTER_MODULE}._incr_failure_count", new=AsyncMock(return_value=1)),
+        patch(f"{_COUNTER_MODULE}._reset_failure_count", new=AsyncMock()),
+    ):
+        yield
 
 
 class TestHandleToolResult:
@@ -78,69 +94,85 @@ class TestHandleToolResult:
 
     @pytest.mark.asyncio
     async def test_success_resets_counter(self):
-        _failure_counts[TOOL_ID] = 5
-        db = _make_db([None, None, None])  # UPDATE, open_issue check, audit_log
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=True
-        )
+        with (
+            patch(f"{_COUNTER_MODULE}._get_failure_count", new=AsyncMock(return_value=5)),
+            patch(f"{_COUNTER_MODULE}._reset_failure_count", new=AsyncMock()) as mock_reset,
+        ):
+            db = _make_db([None, None, None])  # UPDATE, open_issue check, audit_log
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=True
+            )
         assert new_status == "healthy"
-        assert _failure_counts[TOOL_ID] == 0
+        mock_reset.assert_called_once_with(TOOL_ID)
 
     @pytest.mark.asyncio
     async def test_success_when_already_healthy_returns_none(self):
-        _failure_counts[TOOL_ID] = 0
-        db = _make_db([])
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=True
-        )
+        with (
+            patch(f"{_COUNTER_MODULE}._get_failure_count", new=AsyncMock(return_value=0)),
+            patch(f"{_COUNTER_MODULE}._reset_failure_count", new=AsyncMock()) as mock_reset,
+        ):
+            db = _make_db([])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=True
+            )
         assert new_status is None
-        assert _failure_counts[TOOL_ID] == 0
+        # Counter is always reset on success, even if status was already healthy.
+        mock_reset.assert_called_once_with(TOOL_ID)
 
     @pytest.mark.asyncio
     async def test_degraded_after_3_consecutive_failures(self):
-        _failure_counts[TOOL_ID] = _DEGRADED_THRESHOLD - 1
-        # On exactly the 3rd failure: UPDATE + audit_log
-        db = _make_db([None, None])
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=False
-        )
+        # incr returns exactly DEGRADED_THRESHOLD — triggers degraded branch.
+        with patch(
+            f"{_COUNTER_MODULE}._incr_failure_count",
+            new=AsyncMock(return_value=_DEGRADED_THRESHOLD),
+        ):
+            # UPDATE + audit_log
+            db = _make_db([None, None])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=False
+            )
         assert new_status == "degraded"
-        assert _failure_counts[TOOL_ID] == _DEGRADED_THRESHOLD
 
     @pytest.mark.asyncio
     async def test_no_state_change_before_degraded_threshold(self):
         """2 failures should not trigger degraded."""
-        _failure_counts[TOOL_ID] = _DEGRADED_THRESHOLD - 2
-        db = _make_db([])
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=False
-        )
+        with patch(
+            f"{_COUNTER_MODULE}._incr_failure_count",
+            new=AsyncMock(return_value=_DEGRADED_THRESHOLD - 1),
+        ):
+            db = _make_db([])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=False
+            )
         assert new_status is None
-        assert _failure_counts[TOOL_ID] == _DEGRADED_THRESHOLD - 1
 
     @pytest.mark.asyncio
     async def test_unavailable_after_10_consecutive_failures(self):
-        _failure_counts[TOOL_ID] = _UNAVAILABLE_THRESHOLD - 1
-        # On exactly 10th: UPDATE + open_issue_check + CREATE_P1_ISSUE + audit_log
-        # open issue check returns None (no existing)
-        db = _make_db([None, None, None, None])
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=False
-        )
+        with patch(
+            f"{_COUNTER_MODULE}._incr_failure_count",
+            new=AsyncMock(return_value=_UNAVAILABLE_THRESHOLD),
+        ):
+            # UPDATE + open_issue_check (None) + CREATE_P1_ISSUE + audit_log
+            db = _make_db([None, None, None, None])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=False
+            )
         assert new_status == "unavailable"
-        assert _failure_counts[TOOL_ID] == _UNAVAILABLE_THRESHOLD
 
     @pytest.mark.asyncio
     async def test_no_duplicate_p1_when_issue_already_open(self):
         """If a P1 issue already exists, do NOT create another."""
-        _failure_counts[TOOL_ID] = _UNAVAILABLE_THRESHOLD - 1
         existing_issue = (uuid.uuid4(),)
-        # UPDATE + open_issue_check (returns existing) + audit_log
-        # CREATE_P1_ISSUE should NOT be called
-        db = _make_db([None, existing_issue, None])
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=False
-        )
+        with patch(
+            f"{_COUNTER_MODULE}._incr_failure_count",
+            new=AsyncMock(return_value=_UNAVAILABLE_THRESHOLD),
+        ):
+            # UPDATE + open_issue_check (returns existing) + audit_log
+            # CREATE_P1_ISSUE should NOT be called
+            db = _make_db([None, existing_issue, None])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=False
+            )
         assert new_status == "unavailable"
         # execute was called 3 times (UPDATE + check + audit), not 4 (no INSERT)
         assert db.execute.call_count == 3
@@ -148,15 +180,34 @@ class TestHandleToolResult:
     @pytest.mark.asyncio
     async def test_recovery_closes_open_p1_issue(self):
         """When tool recovers, open P1 issue should be auto-closed."""
-        _failure_counts[TOOL_ID] = 15
         existing_issue = (uuid.uuid4(),)
-        # UPDATE (healthy) + open_issue_check (returns existing) + CLOSE + audit_log
-        db = _make_db([None, existing_issue, None, None])
-        new_status = await _handle_tool_result(
-            db, TOOL_ID, TOOL_NAME, "unavailable", is_healthy=True
-        )
+        with (
+            patch(f"{_COUNTER_MODULE}._get_failure_count", new=AsyncMock(return_value=15)),
+            patch(f"{_COUNTER_MODULE}._reset_failure_count", new=AsyncMock()) as mock_reset,
+        ):
+            # UPDATE (healthy) + open_issue_check (returns existing) + CLOSE + audit_log
+            db = _make_db([None, existing_issue, None, None])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "unavailable", is_healthy=True
+            )
         assert new_status == "healthy"
-        assert _failure_counts[TOOL_ID] == 0
+        mock_reset.assert_called_once_with(TOOL_ID)
+
+    @pytest.mark.asyncio
+    async def test_unavailable_beats_degraded_when_both_thresholds_crossed(self):
+        """If count jumps from 0 to >=10 in one cycle, unavailable wins (not degraded)."""
+        with patch(
+            f"{_COUNTER_MODULE}._incr_failure_count",
+            new=AsyncMock(return_value=_UNAVAILABLE_THRESHOLD),
+        ):
+            # Tool is currently healthy — both thresholds crossed simultaneously.
+            # UPDATE + open_issue_check (None) + CREATE_P1 + audit_log
+            db = _make_db([None, None, None, None])
+            new_status = await _handle_tool_result(
+                db, TOOL_ID, TOOL_NAME, "healthy", is_healthy=False
+            )
+        # Must be 'unavailable', NOT 'degraded'
+        assert new_status == "unavailable"
 
 
 class TestRunToolHealthJob:
@@ -196,13 +247,18 @@ class TestRunToolHealthJob:
 
     @pytest.mark.asyncio
     async def test_failing_tool_after_3_failures_becomes_degraded(self):
-        _failure_counts[TOOL_ID] = _DEGRADED_THRESHOLD - 1
         tool_row = (uuid.UUID(TOOL_ID), TOOL_NAME, "healthy", "https://tool.io/health")
         # set_config ×2, LIST_TOOLS, UPDATE (degraded), audit_log
         db = _make_db([None, None, [tool_row], None, None])
-        with patch(
-            "app.modules.platform.tool_health_job._ping_tool",
-            new=AsyncMock(return_value=False),
+        with (
+            patch(
+                "app.modules.platform.tool_health_job._ping_tool",
+                new=AsyncMock(return_value=False),
+            ),
+            patch(
+                f"{_COUNTER_MODULE}._incr_failure_count",
+                new=AsyncMock(return_value=_DEGRADED_THRESHOLD),
+            ),
         ):
             summary = await run_tool_health_job(db)
         assert summary["checked"] == 1
@@ -230,13 +286,18 @@ class TestRunToolHealthJob:
 
     @pytest.mark.asyncio
     async def test_recovered_tool_counted(self):
-        _failure_counts[TOOL_ID] = 5
         tool_row = (uuid.UUID(TOOL_ID), TOOL_NAME, "degraded", "https://tool.io/health")
         # set_config ×2, LIST_TOOLS, UPDATE, open_issue_check (None), audit_log
         db = _make_db([None, None, [tool_row], None, None, None])
-        with patch(
-            "app.modules.platform.tool_health_job._ping_tool",
-            new=AsyncMock(return_value=True),
+        with (
+            patch(
+                "app.modules.platform.tool_health_job._ping_tool",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                f"{_COUNTER_MODULE}._get_failure_count",
+                new=AsyncMock(return_value=5),
+            ),
         ):
             summary = await run_tool_health_job(db)
         assert summary["checked"] == 1

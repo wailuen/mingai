@@ -14,11 +14,12 @@ This job is separate and targets profile_learning_events, not messages.
 """
 import asyncio
 import time
-from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
+from app.core.scheduler.tenant_throttle import run_tenants_throttled
 from app.core.session import async_session_factory
 from app.modules.chat.embedding import EmbeddingService
 
@@ -29,10 +30,6 @@ _MAX_QUERIES_PER_TENANT = 100
 
 # Minimum interval between embedding calls (0.1s → 10/sec max)
 _RATE_LIMIT_INTERVAL_SECS = 0.1
-
-# Target run time: 03:00 UTC
-_SCHEDULE_HOUR_UTC = 3
-_SCHEDULE_MINUTE_UTC = 0
 
 
 async def warm_query_embeddings_for_tenant(
@@ -198,19 +195,26 @@ async def run_query_warming_job() -> None:
         logger.info("query_warming_no_active_tenants")
         return
 
-    for tenant_id in tenant_ids:
-        try:
-            stats = await warm_query_embeddings_for_tenant(tenant_id, embedding_svc)
-            total_warmed += stats["warmed_count"]
-            total_skipped += stats["skipped_count"]
-            total_errors += stats["error_count"]
-        except Exception as exc:
+    # SCHED-038: Run tenants concurrently, throttled by
+    # SCHEDULER_MAX_CONCURRENT_TENANTS (default 5) to avoid saturating the
+    # embedding API or the DB connection pool.
+    results = await run_tenants_throttled(
+        tenant_ids,
+        coro_factory=lambda tid: warm_query_embeddings_for_tenant(tid, embedding_svc),
+    )
+
+    for tenant_id, result in zip(tenant_ids, results):
+        if isinstance(result, Exception):
             total_errors += 1
             logger.error(
                 "query_warming_tenant_failed",
                 tenant_id=tenant_id,
-                error=str(exc),
+                error=str(result),
             )
+        else:
+            total_warmed += result["warmed_count"]
+            total_skipped += result["skipped_count"]
+            total_errors += result["error_count"]
 
     job_elapsed_ms = round((time.monotonic() - job_start) * 1000, 1)
 
@@ -223,35 +227,7 @@ async def run_query_warming_job() -> None:
         duration_ms=job_elapsed_ms,
     )
 
-
-def _seconds_until_next_run() -> float:
-    """
-    Calculate seconds until the next 03:00 UTC trigger.
-
-    Returns at least 60s (minimum jitter guard) to avoid edge-case
-    double-fires on startup if the clock is very close to 03:00.
-    """
-    now = datetime.now(timezone.utc)
-    next_run = now.replace(
-        hour=_SCHEDULE_HOUR_UTC,
-        minute=_SCHEDULE_MINUTE_UTC,
-        second=0,
-        microsecond=0,
-    )
-    if next_run <= now:
-        # Already past today's 03:00 — schedule for tomorrow
-        # Use timedelta to handle month/year rollover correctly
-        from datetime import timedelta
-
-        next_run = now.replace(
-            hour=_SCHEDULE_HOUR_UTC,
-            minute=_SCHEDULE_MINUTE_UTC,
-            second=0,
-            microsecond=0,
-        ) + timedelta(days=1)
-
-    delta = (next_run - now).total_seconds()
-    return max(delta, 60.0)
+    return total_warmed
 
 
 async def run_query_warming_scheduler() -> None:
@@ -268,13 +244,22 @@ async def run_query_warming_scheduler() -> None:
 
     while True:
         try:
-            sleep_secs = _seconds_until_next_run()
+            sleep_secs = seconds_until_utc(3, 0)
             logger.debug(
                 "query_warming_next_run_in",
                 seconds=round(sleep_secs, 0),
             )
             await asyncio.sleep(sleep_secs)
-            await run_query_warming_job()
+            async with DistributedJobLock("query_warming", ttl=3600) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "query_warming_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("query_warming") as ctx:
+                        total_warmed = await run_query_warming_job()
+                        ctx.records_processed = total_warmed or 0
         except asyncio.CancelledError:
             logger.info("query_warming_scheduler_cancelled")
             return

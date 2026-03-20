@@ -29,14 +29,11 @@ from typing import Optional
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
 from app.core.session import async_session_factory
 from app.modules.platform.health_score import calculate_health_score
 
 logger = structlog.get_logger()
-
-# Target run time: 02:00 UTC
-_SCHEDULE_HOUR_UTC = 2
-_SCHEDULE_MINUTE_UTC = 0
 
 # At-risk thresholds
 _AT_RISK_COMPOSITE_THRESHOLD = 40.0
@@ -483,36 +480,12 @@ async def run_health_score_job() -> None:
         duration_ms=duration_ms,
     )
 
+    return processed
+
 
 # ---------------------------------------------------------------------------
 # Scheduler (daily at 02:00 UTC)
 # ---------------------------------------------------------------------------
-
-
-def _seconds_until_next_run() -> float:
-    """
-    Calculate seconds until the next 02:00 UTC trigger.
-
-    Returns at least 60s (minimum jitter guard) to avoid double-fires
-    if the clock is very close to 02:00 UTC at startup.
-    """
-    now = datetime.now(timezone.utc)
-    next_run = now.replace(
-        hour=_SCHEDULE_HOUR_UTC,
-        minute=_SCHEDULE_MINUTE_UTC,
-        second=0,
-        microsecond=0,
-    )
-    if next_run <= now:
-        next_run = now.replace(
-            hour=_SCHEDULE_HOUR_UTC,
-            minute=_SCHEDULE_MINUTE_UTC,
-            second=0,
-            microsecond=0,
-        ) + timedelta(days=1)
-
-    delta = (next_run - now).total_seconds()
-    return max(delta, 60.0)
 
 
 async def run_health_score_scheduler() -> None:
@@ -529,13 +502,22 @@ async def run_health_score_scheduler() -> None:
 
     while True:
         try:
-            sleep_secs = _seconds_until_next_run()
+            sleep_secs = seconds_until_utc(2, 0)
             logger.debug(
                 "health_score_next_run_in",
                 seconds=round(sleep_secs, 0),
             )
             await asyncio.sleep(sleep_secs)
-            await run_health_score_job()
+            async with DistributedJobLock("health_score", ttl=3600) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "health_score_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("health_score") as ctx:
+                        tenants_scored = await run_health_score_job()
+                        ctx.records_processed = tenants_scored or 0
         except asyncio.CancelledError:
             logger.info("health_score_scheduler_cancelled")
             return

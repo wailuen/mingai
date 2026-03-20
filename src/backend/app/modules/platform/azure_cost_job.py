@@ -31,16 +31,10 @@ import httpx
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
-
-# ---------------------------------------------------------------------------
-# Schedule constants (03:45 UTC)
-# ---------------------------------------------------------------------------
-
-_SCHEDULE_HOUR_UTC = 3
-_SCHEDULE_MINUTE_UTC = 45
 
 # ---------------------------------------------------------------------------
 # Azure API constants
@@ -360,7 +354,7 @@ async def pull_azure_infra_costs() -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
-async def run_azure_cost_job() -> None:
+async def run_azure_cost_job() -> int:
     """
     Execute one full Azure cost pull and update cost_summary_daily.
 
@@ -382,7 +376,7 @@ async def run_azure_cost_job() -> None:
         logger.info(
             "azure_cost_job_skipped_no_data",
         )
-        return
+        return 0
 
     for date_str, per_tenant_cost in azure_costs.items():
         try:
@@ -419,39 +413,12 @@ async def run_azure_cost_job() -> None:
                 error=str(exc),
             )
 
+    return len(azure_costs)
+
 
 # ---------------------------------------------------------------------------
 # Scheduler (daily at 03:45 UTC)
 # ---------------------------------------------------------------------------
-
-
-def _seconds_until_next_run() -> float:
-    """
-    Calculate seconds until the next 03:45 UTC trigger.
-
-    Returns at least 60s (minimum jitter guard) to avoid double-fires when
-    the process starts very close to 03:45 UTC.
-
-    Returns:
-        Float number of seconds to sleep, always >= 60.0.
-    """
-    now = datetime.now(timezone.utc)
-    next_run = now.replace(
-        hour=_SCHEDULE_HOUR_UTC,
-        minute=_SCHEDULE_MINUTE_UTC,
-        second=0,
-        microsecond=0,
-    )
-    if next_run <= now:
-        next_run = now.replace(
-            hour=_SCHEDULE_HOUR_UTC,
-            minute=_SCHEDULE_MINUTE_UTC,
-            second=0,
-            microsecond=0,
-        ) + timedelta(days=1)
-
-    delta = (next_run - now).total_seconds()
-    return max(delta, 60.0)
 
 
 async def start_azure_cost_scheduler() -> None:
@@ -469,13 +436,22 @@ async def start_azure_cost_scheduler() -> None:
 
     while True:
         try:
-            sleep_secs = _seconds_until_next_run()
+            sleep_secs = seconds_until_utc(3, 45)
             logger.debug(
                 "azure_cost_next_run_in",
                 seconds=round(sleep_secs, 0),
             )
             await asyncio.sleep(sleep_secs)
-            await run_azure_cost_job()
+            async with DistributedJobLock("azure_cost", ttl=1200) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "azure_cost_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("azure_cost") as ctx:
+                        days_processed = await run_azure_cost_job()
+                        ctx.records_processed = days_processed or 0
         except asyncio.CancelledError:
             logger.info("azure_cost_scheduler_cancelled")
             return

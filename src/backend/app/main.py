@@ -5,6 +5,12 @@ Port: 8022
 Framework: FastAPI + Kailash SDK (DataFlow + Nexus + Kaizen)
 
 All configuration from .env - never hardcode secrets or model names.
+
+SCHED-030 (K8s deployment requirement):
+When deploying on Kubernetes, set terminationGracePeriodSeconds: 120 in the
+pod spec so background jobs can complete before the pod is force-killed.
+Background jobs may run up to 2 minutes; 30s default is insufficient.
+See docker-compose.yml for the local equivalent (stop_grace_period: 2m).
 """
 import asyncio
 import os
@@ -101,17 +107,64 @@ async def lifespan(app: FastAPI):
             hint="Check .env file and .env.example for required variables",
         )
 
-    # AI-048: Start agent health monitor background job.
+    # SCHED-002 / C-02: Check Redis AOF persistence at startup.
+    # Distributed job locks require AOF=yes so tokens survive Redis restart.
+    # This is a WARNING only — never block startup.
+    try:
+        from app.core.redis_client import get_redis as _get_redis
+
+        _redis = _get_redis()
+        _aof_config = await _redis.config_get("appendonly")
+        _aof_enabled = _aof_config.get("appendonly", "no") == "yes"
+        if not _aof_enabled:
+            logger.warning(
+                "redis_aof_disabled",
+                message=(
+                    "Job lock correctness requires Redis AOF persistence. "
+                    "Set appendonly=yes in redis.conf or use Standard/Premium tier."
+                ),
+            )
+    except Exception as _exc:
+        logger.debug("redis_aof_check_failed", error=str(_exc))
+
+    # SCHED-005: At startup, mark stale 'running' rows in job_run_log as
+    # 'abandoned'.  Rows are stale when a pod was SIGKILL'd without cleanup.
+    # 1-hour threshold: no legitimate job should run longer than 1 hour without
+    # completing (lock TTLs are at most 7200s but expected runtime is much less).
+    try:
+        from sqlalchemy import text as _sa_text
+
+        from app.core.session import async_session_factory as _sf
+
+        async with _sf() as _db:
+            _result = await _db.execute(
+                _sa_text(
+                    "UPDATE job_run_log "
+                    "SET status = 'abandoned', completed_at = NOW() "
+                    "WHERE status = 'running' "
+                    "  AND started_at < NOW() - INTERVAL '1 hour' "
+                    "RETURNING job_name"
+                )
+            )
+            _abandoned = _result.fetchall()
+            await _db.commit()
+        # Always log — even 0 rows confirms the cleanup ran (helps distinguish from errors).
+        logger.info(
+            "job_run_log_zombie_cleanup",
+            rows_abandoned=len(_abandoned),
+            jobs=[r[0] for r in _abandoned] if _abandoned else [],
+        )
+    except Exception as _exc:
+        # job_run_log may not exist yet (pre-migration environment) — never block startup.
+        logger.warning("startup_zombie_cleanup_failed", error=str(_exc))
+
+    # AI-048 / SCHED-019: Start agent health monitor background job.
     # Recomputes trust scores for all published agents every hour.
     _health_monitor_task = None
     try:
-        from app.core.session import async_session_factory
-        from app.modules.har.health_monitor import AgentHealthMonitor
+        from app.modules.har.health_monitor import run_agent_health_scheduler
 
-        monitor = AgentHealthMonitor(
-            db_session_factory=async_session_factory, interval_seconds=3600
-        )
-        _health_monitor_task = asyncio.create_task(monitor.start())
+        _health_monitor_task = asyncio.create_task(run_agent_health_scheduler())
         logger.info("agent_health_monitor_scheduled", interval_seconds=3600)
     except Exception as exc:
         logger.warning(
@@ -119,13 +172,16 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
-    # INFRA-026: Warm up glossary cache for all active tenants.
-    # Lazy import to avoid import errors if Redis/DB not ready at module load.
-    # Failure never blocks startup.
+    # INFRA-026 / SCHED-020: Warm up glossary cache for all active tenants.
+    # Run as a background task (not blocking await) so the application becomes
+    # ready immediately. Glossary cache writes are idempotent Redis SETs — a
+    # second pod running warm-up simultaneously is harmless (last write wins,
+    # both writes are identical for the same glossary data). No lock needed.
+    _glossary_warmup_task = None
     try:
         from app.modules.glossary.warmup import warm_up_glossary_cache
 
-        await warm_up_glossary_cache()
+        _glossary_warmup_task = asyncio.create_task(warm_up_glossary_cache())
     except Exception as exc:
         logger.warning(
             "glossary_warmup_startup_failed",
@@ -294,13 +350,12 @@ async def lifespan(app: FastAPI):
             error=str(exc),
         )
 
-    # PVDR-007: Start provider health check job (runs every 600 seconds).
+    # PVDR-007 / SCHED-006: Start provider health check job (asyncio loop, every 600s).
+    _provider_health_task = None
     try:
-        from app.modules.platform.provider_health_job import (
-            start_provider_health_scheduler,
-        )
+        from app.modules.platform.provider_health_job import run_provider_health_scheduler
 
-        start_provider_health_scheduler(app)
+        _provider_health_task = asyncio.create_task(run_provider_health_scheduler())
         logger.info(
             "provider_health_scheduler_started",
             interval_seconds=600,
@@ -308,6 +363,22 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning(
             "provider_health_scheduler_startup_failed",
+            error=str(exc),
+        )
+
+    # SCHED-008: Start tool health check job (asyncio loop, every 300s).
+    _tool_health_task = None
+    try:
+        from app.modules.platform.tool_health_job import run_tool_health_scheduler
+
+        _tool_health_task = asyncio.create_task(run_tool_health_scheduler())
+        logger.info(
+            "tool_health_scheduler_started",
+            interval_seconds=300,
+        )
+    except Exception as exc:
+        logger.warning(
+            "tool_health_scheduler_startup_failed",
             error=str(exc),
         )
 
@@ -414,6 +485,45 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("har_approval_timeout_scheduler_stopped")
+
+    if _provider_health_task is not None and not _provider_health_task.done():
+        _provider_health_task.cancel()
+        try:
+            await _provider_health_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("provider_health_scheduler_stopped")
+
+    if _tool_health_task is not None and not _tool_health_task.done():
+        _tool_health_task.cancel()
+        try:
+            await _tool_health_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("tool_health_scheduler_stopped")
+
+    if _glossary_warmup_task is not None and not _glossary_warmup_task.done():
+        _glossary_warmup_task.cancel()
+        try:
+            await _glossary_warmup_task
+        except asyncio.CancelledError:
+            pass
+
+    # SCHED-007: Gracefully stop any APScheduler instances that are still running.
+    # After SCHED-006/008 convert both jobs to asyncio loops this becomes a no-op,
+    # but during rolling deploys old pods may still carry APScheduler schedulers.
+    for _sched_attr in ("provider_health_scheduler", "tool_health_scheduler"):
+        _sched = getattr(app.state, _sched_attr, None)
+        if _sched is not None:
+            try:
+                _sched.shutdown(wait=False)
+                logger.info("apscheduler_stopped", scheduler=_sched_attr)
+            except Exception as _exc:
+                logger.warning(
+                    "apscheduler_stop_failed",
+                    scheduler=_sched_attr,
+                    error=str(_exc),
+                )
 
     # Close Redis connections
     try:

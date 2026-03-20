@@ -68,9 +68,9 @@ class TestExtractExpiry:
 
 class TestSecondsUntilNextRun:
     def setup_method(self):
-        from app.modules.documents.credential_expiry_job import _seconds_until_next_run
+        from app.core.scheduler import seconds_until_utc
 
-        self._fn = _seconds_until_next_run
+        self._fn = lambda: seconds_until_utc(5, 0)
 
     def test_always_positive(self):
         assert self._fn() > 0

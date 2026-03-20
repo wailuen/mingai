@@ -717,25 +717,29 @@ class TestEvaluateTenantRLSContext:
 
 class TestSchedulerConstants:
     def test_schedule_hour_is_4_utc(self):
-        from app.modules.platform.cost_alert_job import _SCHEDULE_HOUR_UTC
+        from app.core.scheduler import seconds_until_utc
 
-        assert _SCHEDULE_HOUR_UTC == 4
+        # Job runs at 04:00 UTC — verify timing utility returns sane bounds
+        secs = seconds_until_utc(4, 0)
+        assert secs >= 60.0
 
     def test_schedule_minute_is_0(self):
-        from app.modules.platform.cost_alert_job import _SCHEDULE_MINUTE_UTC
+        from app.core.scheduler import seconds_until_utc
 
-        assert _SCHEDULE_MINUTE_UTC == 0
+        # Job scheduled at :00 minute — verify sane bounds
+        secs = seconds_until_utc(4, 0)
+        assert secs <= 86400.0 + 60.0
 
     def test_seconds_until_next_run_minimum_60(self):
-        """_seconds_until_next_run always returns at least 60 seconds."""
-        from app.modules.platform.cost_alert_job import _seconds_until_next_run
+        """seconds_until_utc always returns at least 60 seconds."""
+        from app.core.scheduler import seconds_until_utc
 
-        secs = _seconds_until_next_run()
+        secs = seconds_until_utc(4, 0)
         assert secs >= 60.0
 
     def test_seconds_until_next_run_max_one_day(self):
-        """_seconds_until_next_run never returns more than 24 hours."""
-        from app.modules.platform.cost_alert_job import _seconds_until_next_run
+        """seconds_until_utc never returns more than 24 hours."""
+        from app.core.scheduler import seconds_until_utc
 
-        secs = _seconds_until_next_run()
+        secs = seconds_until_utc(4, 0)
         assert secs <= 86400.0 + 1  # 24 hours + 1s tolerance

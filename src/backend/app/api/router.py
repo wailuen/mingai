@@ -286,6 +286,16 @@ from app.modules.documents.reindex import router as reindex_router
 
 router.include_router(reindex_router)
 
+# Platform Admin job history endpoint (SCHED-026)
+from app.modules.platform.jobs_history import router as jobs_history_router
+
+router.include_router(jobs_history_router)
+
+# Tenant Admin sync-status endpoint (SCHED-027)
+from app.modules.admin.sync_status import router as sync_status_router
+
+router.include_router(sync_status_router)
+
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.
 # Cloud deployments (aws/azure/gcp) never receive requests at these routes.

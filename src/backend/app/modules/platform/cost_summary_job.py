@@ -25,13 +25,10 @@ from typing import Any, Optional
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
-
-# Target run time: 03:30 UTC
-_SCHEDULE_HOUR_UTC = 3
-_SCHEDULE_MINUTE_UTC = 30
 
 # ---------------------------------------------------------------------------
 # Plan revenue / infrastructure cost config (PA-013)
@@ -316,36 +313,12 @@ async def run_cost_summary_job() -> None:
         duration_ms=duration_ms,
     )
 
+    return processed
+
 
 # ---------------------------------------------------------------------------
 # Scheduler (daily at 03:30 UTC)
 # ---------------------------------------------------------------------------
-
-
-def _seconds_until_next_run() -> float:
-    """
-    Calculate seconds until the next 03:30 UTC trigger.
-
-    Returns at least 60s (minimum jitter guard) to avoid double-fires
-    if the clock is very close to 03:30 UTC at startup.
-    """
-    now = datetime.now(timezone.utc)
-    next_run = now.replace(
-        hour=_SCHEDULE_HOUR_UTC,
-        minute=_SCHEDULE_MINUTE_UTC,
-        second=0,
-        microsecond=0,
-    )
-    if next_run <= now:
-        next_run = now.replace(
-            hour=_SCHEDULE_HOUR_UTC,
-            minute=_SCHEDULE_MINUTE_UTC,
-            second=0,
-            microsecond=0,
-        ) + timedelta(days=1)
-
-    delta = (next_run - now).total_seconds()
-    return max(delta, 60.0)
 
 
 async def start_cost_summary_scheduler() -> None:
@@ -362,13 +335,23 @@ async def start_cost_summary_scheduler() -> None:
 
     while True:
         try:
-            sleep_secs = _seconds_until_next_run()
+            sleep_secs = seconds_until_utc(3, 30)
             logger.debug(
                 "cost_summary_next_run_in",
                 seconds=round(sleep_secs, 0),
             )
             await asyncio.sleep(sleep_secs)
-            await run_cost_summary_job()
+            # C-01: heartbeat in DistributedJobLock renews TTL for 30+ min Azure jobs
+            async with DistributedJobLock("cost_summary", ttl=1800) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "cost_summary_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("cost_summary") as ctx:
+                        processed = await run_cost_summary_job()
+                        ctx.records_processed = processed or 0
         except asyncio.CancelledError:
             logger.info("cost_summary_scheduler_cancelled")
             return

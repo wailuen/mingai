@@ -21,8 +21,10 @@ from typing import Optional
 
 import httpx
 import structlog
+from sqlalchemy import text
 
 from app.core.redis_client import build_redis_key
+from app.core.scheduler import DistributedJobLock, job_run_context
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
@@ -401,6 +403,30 @@ def _jitter_interval(base_seconds: float = _BASE_INTERVAL_SECONDS) -> float:
 # ---------------------------------------------------------------------------
 
 
+async def _get_agent_count() -> int:
+    """
+    Query COUNT(*) of agent cards with a health_check_url set.
+
+    Used to compute dynamic TTL: max(600, agent_count * 15).
+    H-05 remediation: worst-case runtime is proportional to agent count;
+    15s buffer per agent beyond the 10s per-agent timeout; 600s floor.
+    Returns 0 on any error (caller uses the floor).
+    """
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                text(
+                    "SELECT COUNT(*) FROM agent_cards "
+                    "WHERE health_check_url IS NOT NULL"
+                )
+            )
+            row = result.fetchone()
+            return int(row[0]) if row and row[0] else 0
+    except Exception as exc:
+        logger.warning("url_health_monitor_agent_count_failed", error=str(exc))
+        return 0
+
+
 async def run_url_health_monitor_scheduler() -> None:
     """
     Infinite asyncio loop that fires run_url_health_monitor() every ~5 minutes.
@@ -422,7 +448,19 @@ async def run_url_health_monitor_scheduler() -> None:
                 seconds=round(interval, 0),
             )
             await asyncio.sleep(interval)
-            await run_url_health_monitor()
+            # H-05 remediation: dynamic TTL = max(600, agent_count × 15)
+            agent_count = await _get_agent_count()
+            dynamic_ttl = max(600, agent_count * 15)
+            async with DistributedJobLock("url_health_monitor", ttl=dynamic_ttl) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "url_health_monitor_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("url_health_monitor") as ctx:
+                        await run_url_health_monitor()
+                        ctx.records_processed = agent_count
         except asyncio.CancelledError:
             logger.info("url_health_monitor_scheduler_cancelled")
             return

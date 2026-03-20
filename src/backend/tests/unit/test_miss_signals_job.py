@@ -148,9 +148,9 @@ class TestMissSignalsJob:
 
     def test_seconds_until_next_run_positive(self):
         """Scheduler always returns a positive sleep time."""
-        from app.modules.glossary.miss_signals_job import _seconds_until_next_run
+        from app.core.scheduler import seconds_until_utc
 
-        secs = _seconds_until_next_run()
+        secs = seconds_until_utc(4, 30)
         assert secs > 0
         assert secs <= 24 * 3600 + 60
 

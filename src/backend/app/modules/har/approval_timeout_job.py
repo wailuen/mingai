@@ -28,6 +28,8 @@ from typing import Any
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context
+
 logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
@@ -290,8 +292,17 @@ async def run_approval_timeout_scheduler() -> None:
     logger.info("har_approval_timeout_scheduler_started")
     while True:
         try:
-            async with async_session_factory() as db:
-                await run_approval_timeout_job(db)
+            async with DistributedJobLock("har_approval_timeout", ttl=600) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "har_approval_timeout_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with async_session_factory() as db:
+                        async with job_run_context("har_approval_timeout") as ctx:
+                            count = await run_approval_timeout_job(db)
+                            ctx.records_processed = count
         except asyncio.CancelledError:
             logger.info("har_approval_timeout_scheduler_cancelled")
             raise

@@ -88,6 +88,44 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+  redis-aof-check:
+    name: Redis AOF Persistence Check (SCHED-029)
+    runs-on: ubuntu-22.04
+    # This job validates the check_redis_aof.sh script itself:
+    # Step 1 confirms it exits 1 (fail) when AOF is off.
+    # Step 2 enables AOF and confirms the script exits 0 (pass).
+    # In production/staging pipelines, run the script directly against
+    # the target Redis without the "enable AOF" step — it must pass already.
+
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install redis-tools
+        run: sudo apt-get install -y redis-tools
+
+      - name: Verify script correctly detects AOF disabled
+        run: |
+          # CI Redis starts with AOF off — the script must exit 1
+          bash src/backend/scripts/check_redis_aof.sh redis://localhost:6379 && \
+            { echo "ERROR: script should have failed when AOF is off"; exit 1; } || \
+            echo "PASS: script correctly detected AOF disabled"
+
+      - name: Enable AOF on CI Redis and verify check passes
+        run: |
+          redis-cli -u redis://localhost:6379 CONFIG SET appendonly yes
+          bash src/backend/scripts/check_redis_aof.sh redis://localhost:6379
+
   security-scan:
     name: Security Scan (Bandit)
     runs-on: ubuntu-22.04

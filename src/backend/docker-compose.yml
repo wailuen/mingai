@@ -36,8 +36,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: mingai-backend
+    # SCHED-030: Background jobs may run up to 2 minutes; grace period ensures
+    # clean shutdown so jobs can complete before the container is force-killed.
+    stop_grace_period: 2m
     ports:
-      - "8022:8022"
+      - "8025:8025"
     env_file:
       - .env
     depends_on:
@@ -47,7 +50,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8022 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8025 --reload
 
 volumes:
   postgres_data:

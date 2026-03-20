@@ -22,13 +22,10 @@ from typing import Optional
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
-
-# Daily schedule at 05:00 UTC
-_SCHEDULE_HOUR_UTC = 5
-_SCHEDULE_MINUTE_UTC = 0
 
 # Warning thresholds (days until expiry)
 _WARN_DAYS = 30  # P2 notification
@@ -328,20 +325,6 @@ async def _insert_issue(
         )
 
 
-def _seconds_until_next_run() -> float:
-    """Calculate seconds until next 05:00 UTC trigger. Minimum 60s."""
-    now = datetime.now(timezone.utc)
-    next_run = now.replace(
-        hour=_SCHEDULE_HOUR_UTC,
-        minute=_SCHEDULE_MINUTE_UTC,
-        second=0,
-        microsecond=0,
-    )
-    if next_run <= now:
-        next_run += timedelta(days=1)
-    return max((next_run - now).total_seconds(), 60.0)
-
-
 async def run_credential_expiry_scheduler() -> None:
     """
     Infinite asyncio loop that fires run_credential_expiry_job() daily at 05:00 UTC.
@@ -353,10 +336,22 @@ async def run_credential_expiry_scheduler() -> None:
 
     while True:
         try:
-            sleep_secs = _seconds_until_next_run()
+            sleep_secs = seconds_until_utc(5, 0)
             logger.debug("credential_expiry_next_run_in", seconds=round(sleep_secs, 0))
             await asyncio.sleep(sleep_secs)
-            await run_credential_expiry_job()
+            # CORRECTNESS CRITICAL: lock prevents duplicate expiry emails to tenant admins
+            async with DistributedJobLock("credential_expiry", ttl=1800) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "credential_expiry_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("credential_expiry") as ctx:
+                        summary = await run_credential_expiry_job()
+                        ctx.records_processed = sum(
+                            s.get("checked", 0) for s in summary.values()
+                        ) if summary else 0
         except asyncio.CancelledError:
             logger.info("credential_expiry_scheduler_cancelled")
             return

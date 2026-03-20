@@ -14,13 +14,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core.scheduler import seconds_until_utc
 from app.modules.platform.health_score_job import (
     _AT_RISK_COMPOSITE_THRESHOLD,
     _AT_RISK_SATISFACTION_THRESHOLD,
     _SATISFACTION_WEEKS_REQUIRED,
     _USAGE_DECLINE_WEEKS_REQUIRED,
     _detect_at_risk,
-    _seconds_until_next_run,
 )
 
 
@@ -234,12 +234,12 @@ class TestSecondsUntilNextRun:
 
     def test_returns_at_least_60_seconds(self):
         """Always returns >= 60s regardless of current time."""
-        delay = _seconds_until_next_run()
+        delay = seconds_until_utc(2, 0)
         assert delay >= 60.0
 
     def test_returns_at_most_one_day(self):
         """Delay cannot exceed 24 hours plus 60s buffer."""
-        delay = _seconds_until_next_run()
+        delay = seconds_until_utc(2, 0)
         assert delay <= 24 * 3600 + 60.0
 
 

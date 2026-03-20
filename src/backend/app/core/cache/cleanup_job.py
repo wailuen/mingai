@@ -4,6 +4,9 @@ Semantic cache cleanup job (CACHE-014).
 Runs hourly via asyncio background task (started in app/main.py lifespan).
 Deletes expired entries from semantic_cache where expires_at < NOW().
 
+Also piggybacked: 90-day job_run_log retention cleanup (SCHED-022).
+Runs in the same pass to avoid a separate scheduler for a trivial DELETE.
+
 Uses a platform-scope session (no tenant RLS) so it can clean across all
 tenants in a single query — this is an internal maintenance task not a
 user-facing operation.
@@ -14,6 +17,8 @@ crashes the application.
 import asyncio
 
 import structlog
+
+from app.core.scheduler import DistributedJobLock, job_run_context
 
 logger = structlog.get_logger()
 
@@ -34,7 +39,16 @@ async def run_semantic_cache_cleanup_loop() -> None:
     while True:
         try:
             await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
-            await _run_cleanup()
+            async with DistributedJobLock("semantic_cache_cleanup", ttl=600) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "semantic_cache_cleanup_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("semantic_cache_cleanup") as ctx:
+                        deleted_count = await _run_cleanup()
+                        ctx.records_processed = deleted_count
         except asyncio.CancelledError:
             logger.info("semantic_cache_cleanup_cancelled")
             return
@@ -46,14 +60,17 @@ async def run_semantic_cache_cleanup_loop() -> None:
             )
 
 
-async def _run_cleanup() -> None:
+async def _run_cleanup() -> int:
     """
     Execute one cleanup pass: delete all rows with expires_at < NOW().
 
     Logs per-tenant deletion counts for observability.
+    Returns the total number of rows deleted.
     """
     from app.core.session import async_session_factory
     from sqlalchemy import text
+
+    deleted = 0
 
     try:
         async with async_session_factory() as session:
@@ -89,3 +106,28 @@ async def _run_cleanup() -> None:
             "semantic_cache_cleanup_error",
             error=str(exc),
         )
+
+    # SCHED-022: 90-day job_run_log retention cleanup.
+    # Piggyback onto this job to avoid a separate scheduler for a trivial DELETE.
+    # Runs after the semantic cache cleanup — failure does not abort the main cleanup.
+    try:
+        from app.core.session import async_session_factory
+        from sqlalchemy import text
+
+        async with async_session_factory() as session:
+            retention_result = await session.execute(
+                text("DELETE FROM job_run_log WHERE started_at < NOW() - INTERVAL '90 days'")
+            )
+            rows_deleted = retention_result.rowcount or 0
+            await session.commit()
+        logger.debug(
+            "job_run_log_retention_cleanup",
+            rows_deleted=rows_deleted,
+        )
+    except Exception as exc:
+        logger.warning(
+            "job_run_log_retention_cleanup_error",
+            error=str(exc),
+        )
+
+    return deleted

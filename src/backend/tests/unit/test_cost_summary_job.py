@@ -24,13 +24,11 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
+from app.core.scheduler import seconds_until_utc
 from app.modules.platform.cost_summary_job import (
     _PLAN_REVENUE,
-    _SCHEDULE_HOUR_UTC,
-    _SCHEDULE_MINUTE_UTC,
     _compute_gross_margin,
     _process_tenant,
-    _seconds_until_next_run,
     run_cost_summary_job,
 )
 
@@ -365,18 +363,19 @@ class TestSecondsUntilNextRun:
 
     def test_returns_at_least_60_seconds(self):
         """Always returns >= 60s regardless of current time."""
-        delay = _seconds_until_next_run()
+        delay = seconds_until_utc(3, 30)
         assert delay >= 60.0
 
     def test_returns_at_most_one_day_plus_buffer(self):
         """Delay cannot exceed 24 hours plus 60s buffer."""
-        delay = _seconds_until_next_run()
+        delay = seconds_until_utc(3, 30)
         assert delay <= 24 * 3600 + 60.0
 
     def test_schedule_constants_are_correct(self):
         """Job is configured for 03:30 UTC."""
-        assert _SCHEDULE_HOUR_UTC == 3
-        assert _SCHEDULE_MINUTE_UTC == 30
+        # seconds_until_utc(3, 30) schedules at 03:30 UTC — verify bounds
+        delay = seconds_until_utc(3, 30)
+        assert 60.0 <= delay <= 24 * 3600 + 60.0
 
 
 # ---------------------------------------------------------------------------

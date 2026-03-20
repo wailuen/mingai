@@ -28,13 +28,10 @@ from typing import Optional
 import structlog
 from sqlalchemy import text
 
+from app.core.scheduler import DistributedJobLock, job_run_context, seconds_until_utc
 from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
-
-# Daily schedule at 04:30 UTC (after health score and cost summary)
-_SCHEDULE_HOUR_UTC = 4
-_SCHEDULE_MINUTE_UTC = 30
 
 # Batch job parameters
 _LOOKBACK_DAYS = 30
@@ -284,20 +281,6 @@ async def _process_tenant(tenant_id: str) -> int:
         return upserted
 
 
-def _seconds_until_next_run() -> float:
-    """Calculate seconds until next 04:30 UTC trigger. Minimum 60s."""
-    now = datetime.now(timezone.utc)
-    next_run = now.replace(
-        hour=_SCHEDULE_HOUR_UTC,
-        minute=_SCHEDULE_MINUTE_UTC,
-        second=0,
-        microsecond=0,
-    )
-    if next_run <= now:
-        next_run = next_run + timedelta(days=1)
-    return max((next_run - now).total_seconds(), 60.0)
-
-
 async def run_miss_signals_scheduler() -> None:
     """
     Infinite asyncio loop that fires run_miss_signals_job() daily at 04:30 UTC.
@@ -309,10 +292,19 @@ async def run_miss_signals_scheduler() -> None:
 
     while True:
         try:
-            sleep_secs = _seconds_until_next_run()
+            sleep_secs = seconds_until_utc(4, 30)
             logger.debug("miss_signals_next_run_in", seconds=round(sleep_secs, 0))
             await asyncio.sleep(sleep_secs)
-            await run_miss_signals_job()
+            async with DistributedJobLock("miss_signals", ttl=1800) as acquired:
+                if not acquired:
+                    logger.debug(
+                        "miss_signals_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+                else:
+                    async with job_run_context("miss_signals") as ctx:
+                        summary = await run_miss_signals_job()
+                        ctx.records_processed = sum(summary.values()) if summary else 0
         except asyncio.CancelledError:
             logger.info("miss_signals_scheduler_cancelled")
             return

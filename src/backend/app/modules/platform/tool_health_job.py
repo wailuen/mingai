@@ -1,44 +1,69 @@
 """
-PA-032: Continuous tool health monitoring job.
+PA-032 / SCHED-008: Continuous tool health monitoring job.
 
 Pings each tool's health_check_url every 5 minutes (with ±30s jitter) using a
-HEAD request. Tracks consecutive failures per tool in an in-process dict;
-updates tool_catalog.health_status and last_health_check on state transitions:
+HEAD request.  Tracks consecutive failures per tool in Redis (7-day TTL) so
+counters survive pod restarts and multi-instance deployments.
 
+State transitions:
   healthy    → 0 consecutive failures (reset on any success)
-  degraded   → 3 consecutive failures (no issue created)
-  unavailable → 10 consecutive failures → creates P1 issue in issue_reports
+  degraded   → >= 3 consecutive failures (no issue created)
+  unavailable → >= 10 consecutive failures → creates P1 issue in issue_reports
   unavailable → healthy → auto-closes the open P1 issue
 
-This module provides:
-  - run_tool_health_job(db) — one-shot check of all tools (called by scheduler)
-  - start_tool_health_scheduler(app) — launches APScheduler job on app startup
+Pre-existing bugs fixed (SCHED-008):
+  H-01: threshold check was `== threshold` (could skip exact value under
+        concurrent INCR). Fixed to `>= threshold`.
+  H-02: _failure_counts was an in-process dict; lost on restart.  Migrated to
+        Redis with atomic Lua INCR + 7-day TTL.
+  H-06: P1 issue was inserted with non-deterministic tenant via `LIMIT 1`
+        with no ORDER BY.  Fixed to platform-scope insert with ORDER BY created_at.
+  H-07: start_tool_health_scheduler() was never called in main.py.  Fixed by
+        replacing with run_tool_health_scheduler() which is wired in lifespan.
 
-State is held in _failure_counts: Dict[tool_id, int].  Since this is a single
-process, in-memory counters survive individual check cycles but are reset on
-restart (acceptable — persistent counters would require a new DB column).
+Public API:
+  run_tool_health_job()      — one-shot check (called by scheduler + tests)
+  run_tool_health_scheduler() — asyncio loop, called from app lifespan
 """
+from __future__ import annotations
+
 import asyncio
+import json
 import random
+import uuid
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Optional
 
 import httpx
 import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.scheduler import DistributedJobLock, job_run_context
+
 logger = structlog.get_logger()
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 _DEGRADED_THRESHOLD = 3
 _UNAVAILABLE_THRESHOLD = 10
-_HEALTH_CHECK_TIMEOUT = 10  # seconds
-_CHECK_INTERVAL_SECONDS = 300  # 5 minutes
+_HEALTH_CHECK_TIMEOUT = 10      # seconds
+_CHECK_INTERVAL_SECONDS = 300   # 5 minutes
+_LOCK_TTL_SECONDS = 400         # > interval + max jitter (300 + 30 + 70 headroom)
 _JITTER_SECONDS = 30
+_COUNTER_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 
-# In-process failure counter: tool_id → consecutive failure count.
-_failure_counts: Dict[str, int] = {}
+# Redis key prefix for failure counters
+_COUNTER_KEY_PREFIX = "mingai:scheduler:tool_failures:"
+
+# Lua script: INCR key and set TTL if key is new (atomic).
+# Returns new counter value.
+_LUA_INCR_TTL = """
+local val = redis.call('INCR', KEYS[1])
+if val == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return val
+"""
 
 # ── Queries ───────────────────────────────────────────────────────────────────
 
@@ -70,17 +95,20 @@ _OPEN_P1_ISSUE_QUERY = text(
     """
 )
 
+# H-06 fix: platform-scope insert — tenant_id = NULL (platform-level issue,
+# not tenant-specific) + deterministic reporter via ORDER BY created_at ASC.
 _CREATE_P1_ISSUE_QUERY = text(
     """
     INSERT INTO issue_reports
         (id, tenant_id, reporter_id, issue_type, description, severity,
          status, blur_acknowledged, metadata)
     SELECT
-        :id, u.tenant_id, u.id, 'tool_health',
+        :id, NULL, u.id, 'tool_health',
         :description, 'critical', 'open', false,
         CAST(:metadata AS jsonb)
     FROM users u
     WHERE u.role = 'platform_admin'
+    ORDER BY u.created_at ASC
     LIMIT 1
     """
 )
@@ -99,16 +127,65 @@ _AUDIT_LOG_QUERY = text(
                            resource_id, details, created_at)
     SELECT 'system', u.id, :action, 'tool_catalog', :tool_id,
            CAST(:details AS jsonb), NOW()
-    FROM users u WHERE u.role = 'platform_admin' LIMIT 1
+    FROM users u WHERE u.role = 'platform_admin'
+    ORDER BY u.created_at ASC
+    LIMIT 1
     """
 )
+
+
+# ── Redis counter helpers ─────────────────────────────────────────────────────
+
+
+async def _get_failure_count(tool_id: str) -> int:
+    """Read the current consecutive failure count for a tool from Redis."""
+    try:
+        from app.core.redis_client import get_redis
+
+        redis = get_redis()
+        val = await redis.get(f"{_COUNTER_KEY_PREFIX}{tool_id}")
+        return int(val) if val else 0
+    except Exception as exc:
+        logger.warning("tool_health_counter_read_error", tool_id=tool_id, error=str(exc))
+        return 0
+
+
+async def _incr_failure_count(tool_id: str) -> int:
+    """Atomically increment the failure counter and set TTL on first write.
+    Returns the new counter value."""
+    try:
+        from app.core.redis_client import get_redis
+
+        redis = get_redis()
+        script = redis.register_script(_LUA_INCR_TTL)
+        val = await script(
+            keys=[f"{_COUNTER_KEY_PREFIX}{tool_id}"],
+            args=[str(_COUNTER_TTL_SECONDS)],
+        )
+        return int(val)
+    except Exception as exc:
+        logger.warning("tool_health_counter_incr_error", tool_id=tool_id, error=str(exc))
+        return 0
+
+
+async def _reset_failure_count(tool_id: str) -> None:
+    """Reset (delete) the failure counter for a tool in Redis."""
+    try:
+        from app.core.redis_client import get_redis
+
+        redis = get_redis()
+        await redis.delete(f"{_COUNTER_KEY_PREFIX}{tool_id}")
+    except Exception as exc:
+        logger.warning(
+            "tool_health_counter_reset_error", tool_id=tool_id, error=str(exc)
+        )
 
 
 # ── Core logic ────────────────────────────────────────────────────────────────
 
 
 async def _ping_tool(health_check_url: str) -> bool:
-    """Return True if HEAD request to health_check_url succeeds (2xx/3xx)."""
+    """Return True if HEAD request to health_check_url succeeds (< 500)."""
     try:
         async with httpx.AsyncClient(timeout=_HEALTH_CHECK_TIMEOUT) as client:
             resp = await client.head(health_check_url)
@@ -128,13 +205,11 @@ async def _handle_tool_result(
     Update failure counter and tool status based on latest ping result.
     Returns the new status string if it changed, else None.
     """
-    import json
-
     new_status: Optional[str] = None
 
     if is_healthy:
-        prev_failures = _failure_counts.get(tool_id, 0)
-        _failure_counts[tool_id] = 0
+        prev_failures = await _get_failure_count(tool_id)
+        await _reset_failure_count(tool_id)
 
         if current_status != "healthy":
             new_status = "healthy"
@@ -162,32 +237,14 @@ async def _handle_tool_result(
                 },
             )
     else:
-        count = _failure_counts.get(tool_id, 0) + 1
-        _failure_counts[tool_id] = count
+        # H-02 fix: Redis counter instead of in-process dict.
+        count = await _incr_failure_count(tool_id)
 
-        if count == _DEGRADED_THRESHOLD and current_status == "healthy":
-            new_status = "degraded"
-            await db.execute(
-                _UPDATE_TOOL_STATUS,
-                {"health_status": "degraded", "tool_id": tool_id},
-            )
-            await db.execute(
-                _AUDIT_LOG_QUERY,
-                {
-                    "action": "tool_health_degraded",
-                    "tool_id": tool_id,
-                    "details": json.dumps(
-                        {"tool_name": tool_name, "consecutive_failures": count}
-                    ),
-                },
-            )
-            logger.warning(
-                "tool_health_degraded",
-                tool_id=tool_id,
-                tool_name=tool_name,
-                consecutive_failures=count,
-            )
-        elif count == _UNAVAILABLE_THRESHOLD and current_status != "unavailable":
+        # H-01 fix: >= threshold instead of == to handle concurrent INCR.
+        # Unavailable is checked first: if a tool crosses both thresholds in a
+        # single observation cycle (e.g. 10 failures since last run), the higher
+        # severity wins without also writing a transient 'degraded' row.
+        if count >= _UNAVAILABLE_THRESHOLD and current_status != "unavailable":
             new_status = "unavailable"
             await db.execute(
                 _UPDATE_TOOL_STATUS,
@@ -196,8 +253,6 @@ async def _handle_tool_result(
             # Create P1 issue (only if none open already).
             existing = await db.execute(_OPEN_P1_ISSUE_QUERY, {"tool_id": tool_id})
             if not existing.fetchone():
-                import uuid
-
                 description = (
                     f"Tool '{tool_name}' (id: {tool_id}) is unavailable — "
                     f"{count} consecutive health check failures."
@@ -232,6 +287,28 @@ async def _handle_tool_result(
                         {"tool_name": tool_name, "consecutive_failures": count}
                     ),
                 },
+            )
+        elif count >= _DEGRADED_THRESHOLD and current_status == "healthy":
+            new_status = "degraded"
+            await db.execute(
+                _UPDATE_TOOL_STATUS,
+                {"health_status": "degraded", "tool_id": tool_id},
+            )
+            await db.execute(
+                _AUDIT_LOG_QUERY,
+                {
+                    "action": "tool_health_degraded",
+                    "tool_id": tool_id,
+                    "details": json.dumps(
+                        {"tool_name": tool_name, "consecutive_failures": count}
+                    ),
+                },
+            )
+            logger.warning(
+                "tool_health_degraded",
+                tool_id=tool_id,
+                tool_name=tool_name,
+                consecutive_failures=count,
             )
 
     return new_status
@@ -296,58 +373,79 @@ async def run_tool_health_job(db: AsyncSession) -> dict:
     }
 
 
-# ── APScheduler integration ───────────────────────────────────────────────────
+# ── Asyncio scheduler loop (replaces APScheduler) ────────────────────────────
 
 
-def start_tool_health_scheduler(app) -> None:
+async def run_tool_health_scheduler() -> None:
     """
-    Register the tool health monitoring job with APScheduler.
+    Asyncio-native scheduler loop for tool health checks.
 
-    Called from app lifespan on startup. Schedules run_tool_health_job every
-    5 minutes with ±30s jitter to prevent thundering herd across tools.
+    Runs every _CHECK_INTERVAL_SECONDS with ±30s jitter.
+    Uses DistributedJobLock to ensure only one pod executes per cycle.
+
+    Replaces start_tool_health_scheduler() / APScheduler integration.
+    Called from app lifespan via asyncio.create_task().  Wires H-07 fix.
     """
-    try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from apscheduler.triggers.interval import IntervalTrigger
+    logger.info(
+        "tool_health_scheduler_loop_started",
+        interval_seconds=_CHECK_INTERVAL_SECONDS,
+    )
+    while True:
+        try:
+            # Dynamic TTL: worst-case runtime is proportional to number of tools.
+            # TTL = max(600, tool_count × 15) — 15s buffer per tool beyond 10s timeout.
+            # Heartbeat in DistributedJobLock renews the lock if job runs past initial TTL.
+            dynamic_ttl = _LOCK_TTL_SECONDS
+            try:
+                from app.core.session import async_session_factory
 
-        from app.core.session import AsyncSessionLocal
+                async with async_session_factory() as _db:
+                    from sqlalchemy import text as _text
 
-        scheduler = AsyncIOScheduler()
+                    await _db.execute(_text("SELECT set_config('app.scope', 'platform', true)"))
+                    _count_result = await _db.execute(
+                        _text(
+                            "SELECT COUNT(*) FROM tool_catalog WHERE health_check_url IS NOT NULL"
+                        )
+                    )
+                    _tool_count = _count_result.scalar() or 0
+                    dynamic_ttl = max(600, int(_tool_count) * 15)
+            except Exception as _ttl_exc:
+                logger.warning("tool_health_ttl_query_failed", error=str(_ttl_exc))
 
-        async def _job_wrapper():
-            jitter = random.randint(-_JITTER_SECONDS, _JITTER_SECONDS)
-            await asyncio.sleep(max(0, jitter))
-            async with AsyncSessionLocal() as db:
-                try:
-                    summary = await run_tool_health_job(db)
-                    await db.commit()
-                    logger.info("tool_health_job_complete", **summary)
-                except Exception as exc:
-                    await db.rollback()
-                    logger.error("tool_health_job_failed", error=str(exc))
+            async with DistributedJobLock(
+                "tool_health", ttl=dynamic_ttl
+            ) as acquired:
+                if acquired:
+                    jitter = random.randint(-_JITTER_SECONDS, _JITTER_SECONDS)
+                    await asyncio.sleep(max(0, jitter))
 
-        scheduler.add_job(
-            _job_wrapper,
-            trigger=IntervalTrigger(seconds=_CHECK_INTERVAL_SECONDS),
-            id="tool_health_monitor",
-            replace_existing=True,
-            misfire_grace_time=60,
-        )
-        scheduler.start()
-        logger.info(
-            "tool_health_scheduler_started",
-            interval_seconds=_CHECK_INTERVAL_SECONDS,
-            jitter_seconds=_JITTER_SECONDS,
-        )
+                    from app.core.session import async_session_factory
 
-        # Store reference to allow graceful shutdown.
-        if hasattr(app, "state"):
-            app.state.tool_health_scheduler = scheduler
+                    async with async_session_factory() as db:
+                        try:
+                            async with job_run_context("tool_health") as ctx:
+                                summary = await run_tool_health_job(db)
+                                await db.commit()
+                                ctx.records_processed = summary.get("checked", 0)
+                            logger.info("tool_health_job_complete", **summary)
+                        except Exception as exc:
+                            await db.rollback()
+                            logger.error("tool_health_job_failed", error=str(exc))
+                else:
+                    logger.debug(
+                        "tool_health_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
 
-    except ImportError:
-        logger.warning(
-            "tool_health_scheduler_skipped",
-            reason="apscheduler not installed — tool health monitoring disabled",
-        )
-    except Exception as exc:
-        logger.error("tool_health_scheduler_start_failed", error=str(exc))
+            await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
+
+        except asyncio.CancelledError:
+            logger.info("tool_health_scheduler_loop_stopped")
+            raise
+        except Exception as exc:
+            logger.error(
+                "tool_health_scheduler_loop_error",
+                error=str(exc),
+            )
+            await asyncio.sleep(30)

@@ -97,7 +97,7 @@ def get_cors_config() -> dict:
         raise ValueError(
             "FRONTEND_URL environment variable is not set. "
             "CORS requires an explicit origin. Set FRONTEND_URL in .env "
-            "to the frontend URL (e.g., http://localhost:3022)"
+            "to the frontend URL (e.g., http://localhost:3025)"
         )
 
     if frontend_url == "*":

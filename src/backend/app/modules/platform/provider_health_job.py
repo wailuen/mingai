@@ -1,23 +1,28 @@
 """
-PVDR-007: Platform LLM Provider health check background job.
+PVDR-007 / SCHED-006: Platform LLM Provider health check background job.
 
 Checks connectivity for all enabled providers every 600 seconds.
-Per-provider jitter (0–30s) prevents thundering herd. One failure
+Per-provider jitter (0–30s) prevents thundering herd.  One provider failure
 does not abort others.
+
+In multi-instance (Kubernetes) deployments a Redis distributed lock
+(DistributedJobLock) ensures only one pod runs the check each cycle.
+The lock TTL is 700s — 100s headroom over the 600s interval plus jitter.
 
 Structured logs per provider at key:
     provider_health_check — fields: provider_id, provider_type, success, latency_ms
-
-Mirrors the pattern from tool_health_job.py (APScheduler + AsyncIOScheduler).
 """
 import asyncio
 import random
 
 import structlog
 
+from app.core.scheduler import DistributedJobLock, job_run_context
+
 logger = structlog.get_logger()
 
 _CHECK_INTERVAL_SECONDS = 600  # 10 minutes
+_LOCK_TTL_SECONDS = 700        # > interval + max jitter (600 + 30 + 70 headroom)
 _JITTER_MAX_SECONDS = 30
 
 
@@ -149,46 +154,48 @@ async def run_provider_health_job() -> dict:
     }
 
 
-def start_provider_health_scheduler(app) -> None:
+async def run_provider_health_scheduler() -> None:
     """
-    Register the provider health monitoring job with APScheduler.
+    Asyncio-native scheduler loop for provider health checks.
 
-    Called from app lifespan on startup. Schedules run_provider_health_job
-    every 600 seconds.
+    Runs every _CHECK_INTERVAL_SECONDS.  Uses DistributedJobLock to ensure
+    only one pod executes per cycle in a multi-instance deployment.
+
+    Replaces start_provider_health_scheduler() / APScheduler integration.
+    Called from app lifespan via asyncio.create_task().
     """
-    try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from apscheduler.triggers.interval import IntervalTrigger
+    logger.info(
+        "provider_health_scheduler_loop_started",
+        interval_seconds=_CHECK_INTERVAL_SECONDS,
+    )
+    while True:
+        try:
+            async with DistributedJobLock(
+                "provider_health", ttl=_LOCK_TTL_SECONDS
+            ) as acquired:
+                if acquired:
+                    try:
+                        async with job_run_context("provider_health") as ctx:
+                            summary = await run_provider_health_job()
+                            ctx.records_processed = summary.get("checked", 0)
+                        logger.info("provider_health_job_complete", **summary)
+                    except Exception as exc:
+                        logger.error("provider_health_job_failed", error=str(exc))
+                else:
+                    logger.debug(
+                        "provider_health_job_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
 
-        scheduler = AsyncIOScheduler()
+            await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
 
-        async def _job_wrapper():
-            try:
-                summary = await run_provider_health_job()
-                logger.info("provider_health_job_complete", **summary)
-            except Exception as exc:
-                logger.error("provider_health_job_failed", error=str(exc))
-
-        scheduler.add_job(
-            _job_wrapper,
-            trigger=IntervalTrigger(seconds=_CHECK_INTERVAL_SECONDS),
-            id="provider_health_monitor",
-            replace_existing=True,
-            misfire_grace_time=60,
-        )
-        scheduler.start()
-        logger.info(
-            "provider_health_scheduler_started",
-            interval_seconds=_CHECK_INTERVAL_SECONDS,
-        )
-
-        if hasattr(app, "state"):
-            app.state.provider_health_scheduler = scheduler
-
-    except ImportError:
-        logger.warning(
-            "provider_health_scheduler_skipped",
-            reason="apscheduler not installed — provider health monitoring disabled",
-        )
-    except Exception as exc:
-        logger.error("provider_health_scheduler_start_failed", error=str(exc))
+        except asyncio.CancelledError:
+            logger.info("provider_health_scheduler_loop_stopped")
+            raise
+        except Exception as exc:
+            logger.error(
+                "provider_health_scheduler_loop_error",
+                error=str(exc),
+            )
+            # Back off briefly to avoid a tight crash loop before retrying.
+            await asyncio.sleep(30)

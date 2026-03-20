@@ -106,15 +106,28 @@ class AgentHealthMonitor:
 
     async def start(self) -> None:
         """Start the background monitoring loop."""
+        from app.core.scheduler import DistributedJobLock, job_run_context
+
         logger.info(
             "agent_health_monitor_started",
             interval_seconds=self._interval_seconds,
         )
         while True:
             try:
-                async with self._db_session_factory() as db:
-                    await self.run_once(db)
-                    await db.commit()
+                async with DistributedJobLock("agent_health", ttl=7200) as acquired:
+                    if not acquired:
+                        logger.debug(
+                            "agent_health_job_skipped",
+                            reason="lock_held_by_another_pod",
+                        )
+                    else:
+                        async with self._db_session_factory() as db:
+                            async with job_run_context("agent_health") as ctx:
+                                summary = await self.run_once(db)
+                                await db.commit()
+                                ctx.records_processed = summary.get("agents_checked", 0)
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 logger.error(
                     "agent_health_monitor_cycle_error",
@@ -122,3 +135,21 @@ class AgentHealthMonitor:
                     error_type=type(exc).__name__,
                 )
             await asyncio.sleep(self._interval_seconds)
+
+
+async def run_agent_health_scheduler() -> None:
+    """
+    SCHED-019: Standalone asyncio scheduler function for agent health monitoring.
+
+    Wraps AgentHealthMonitor.start() as a top-level async function so main.py
+    can call asyncio.create_task(run_agent_health_scheduler()) — matching the
+    canonical pattern used by all other 12 background jobs.
+
+    The AgentHealthMonitor class remains as the internal implementation.
+    """
+    from app.core.session import async_session_factory
+
+    monitor = AgentHealthMonitor(
+        db_session_factory=async_session_factory, interval_seconds=3600
+    )
+    await monitor.start()
