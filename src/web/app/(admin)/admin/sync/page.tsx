@@ -6,7 +6,9 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { SourceHealthCard } from "./elements/SourceHealthCard";
 import { SyncJobHistory } from "./elements/SyncJobHistory";
 import { SyncFailureList } from "./elements/SyncFailureList";
-import { useIntegrations } from "@/lib/hooks/useSyncHealth";
+import { SchedulerSignalsCard } from "./elements/SchedulerSignalsCard";
+import { CredentialExpiryBanner } from "./elements/CredentialExpiryBanner";
+import { useIntegrations, useSyncStatus } from "@/lib/hooks/useSyncHealth";
 import { Loader2 } from "lucide-react";
 
 /**
@@ -16,7 +18,9 @@ import { Loader2 } from "lucide-react";
  */
 export default function SyncHealthPage() {
   const { data, isPending, error } = useIntegrations();
+  const { data: syncStatus } = useSyncStatus();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expiryDismissed, setExpiryDismissed] = useState(false);
 
   const integrations = data?.items ?? [];
 
@@ -34,6 +38,17 @@ export default function SyncHealthPage() {
             Document source sync status and health
           </p>
         </div>
+
+        {/* Credential expiry banner — shown when expiry is within 30 days */}
+        {!expiryDismissed &&
+          syncStatus?.credentials_expiry_days_remaining !== null &&
+          syncStatus?.credentials_expiry_days_remaining !== undefined && (
+            <CredentialExpiryBanner
+              daysUntilExpiry={syncStatus.credentials_expiry_days_remaining}
+              integrationName="connected integrations"
+              onDismiss={() => setExpiryDismissed(true)}
+            />
+          )}
 
         {/* Source cards */}
         <ErrorBoundary>
@@ -81,6 +96,11 @@ export default function SyncHealthPage() {
         {/* FE-031: Sync Failure List */}
         <ErrorBoundary>
           <SyncFailureList integrationId={effectiveSelectedId ?? undefined} />
+        </ErrorBoundary>
+
+        {/* SCHED-027: Scheduler health signals */}
+        <ErrorBoundary>
+          <SchedulerSignalsCard />
         </ErrorBoundary>
       </div>
     </AppShell>

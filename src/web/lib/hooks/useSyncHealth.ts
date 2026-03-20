@@ -33,8 +33,25 @@ export interface TriggerSyncResponse {
   status: string;
 }
 
+export interface SyncStatusResponse {
+  last_credentials_checked_at: string | null;
+  credentials_expiry_days_remaining: number | null;
+  last_query_warming_completed_at: string | null;
+  last_health_score_calculated_at: string | null;
+  glossary_terms_active: number;
+}
+
 const INTEGRATIONS_KEY = "sharepoint-integrations";
 const SYNC_JOBS_KEY = "sync-jobs";
+const SYNC_STATUS_KEY = "tenant-sync-status";
+
+export function useSyncStatus() {
+  return useQuery({
+    queryKey: [SYNC_STATUS_KEY],
+    queryFn: () => apiGet<SyncStatusResponse>("/api/v1/tenant/sync-status"),
+    staleTime: 60_000,
+  });
+}
 
 export function useIntegrations() {
   return useQuery({
