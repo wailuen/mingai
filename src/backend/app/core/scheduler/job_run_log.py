@@ -174,12 +174,14 @@ async def job_run_context(
     except Exception as exc:
         duration_ms = int((time.monotonic() - started_ms) * 1000)
         if row_id is not None:
+            # Truncate to 2000 chars to fit typical VARCHAR column constraints
+            # and avoid storing verbose tracebacks with infrastructure details.
             await _write_final_status(
                 row_id=row_id,
                 status="failed",
                 duration_ms=duration_ms,
                 records_processed=ctx.records_processed,
-                error_message=str(exc),
+                error_message=str(exc)[:2000],
             )
         raise
     else:

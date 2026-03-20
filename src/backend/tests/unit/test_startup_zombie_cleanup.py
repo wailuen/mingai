@@ -8,13 +8,20 @@ it into a helper, then verifying:
   - Rows with status='running' within 30 minutes → NOT touched (SQL contract)
   - Rows with non-running status → NOT touched (SQL contract)
   - DB failure during cleanup logs a warning and does NOT block startup
+
+NOTE: `_run_zombie_cleanup` below is a copy of the zombie cleanup block from
+main.py.  A static analysis test verifies the canonical SQL fragments exist in
+main.py so drift is caught immediately.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import text
+
+MAIN_PY = Path(__file__).parent.parent.parent / "app" / "main.py"
 
 # ---------------------------------------------------------------------------
 # Extracted helper that mirrors the main.py zombie cleanup block exactly.
@@ -130,6 +137,19 @@ async def test_zombie_cleanup_does_not_touch_non_running_rows():
     assert "status = 'running'" in sql_str
     # The UPDATE only targets the stale running subset — no blanket UPDATE
     assert "started_at < NOW() - INTERVAL '1 hour'" in sql_str
+
+
+def test_main_py_zombie_cleanup_sql_matches_extracted_copy():
+    """
+    Static analysis tripwire: verifies that main.py still contains the
+    canonical SQL fragments so drift from _run_zombie_cleanup() is caught.
+    If main.py changes the SQL threshold or table name, this test fails.
+    """
+    src = MAIN_PY.read_text()
+    assert "UPDATE job_run_log" in src, "zombie cleanup UPDATE missing from main.py"
+    assert "'abandoned'" in src, "zombie cleanup target status 'abandoned' missing from main.py"
+    assert "INTERVAL '1 hour'" in src, "zombie cleanup 1-hour threshold missing from main.py"
+    assert "status = 'running'" in src, "zombie cleanup running filter missing from main.py"
 
 
 @pytest.mark.asyncio

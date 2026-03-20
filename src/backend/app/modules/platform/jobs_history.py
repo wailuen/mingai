@@ -70,7 +70,11 @@ async def get_job_history(
             detail=f"Invalid status. Must be one of: {', '.join(sorted(_VALID_STATUSES))}",
         )
 
-    # Build WHERE clauses
+    # Build WHERE clauses.
+    # INVARIANT: every element appended to `conditions` MUST be a hardcoded
+    # string literal (e.g. "job_name = :job_name").  User-supplied values
+    # MUST only appear in the `params` dict as named bind parameters.
+    # Never interpolate user values directly into a conditions string.
     conditions = []
     params: dict = {}
 
@@ -94,7 +98,7 @@ async def get_job_history(
 
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
-    # Count query
+    # Count query — where_clause is composed of hardcoded literal strings only
     count_sql = text(f"SELECT COUNT(*) FROM job_run_log {where_clause}")
     count_result = await db.execute(count_sql, params)
     total_count = count_result.scalar() or 0
