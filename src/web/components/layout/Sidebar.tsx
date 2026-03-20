@@ -17,6 +17,8 @@ import {
   Wrench,
   DollarSign,
   Globe,
+  Clock,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import type { JWTClaims } from "@/lib/auth";
@@ -56,6 +58,7 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
         icon: LayoutDashboard,
       },
       { label: "Documents", href: "/settings/knowledge-base", icon: FileText },
+      { label: "Sync Health", href: "/admin/sync", icon: RefreshCw },
       { label: "Users", href: "/settings/users", icon: Users },
       { label: "Agents", href: "/admin/agents", icon: Bot },
       { label: "Glossary", href: "/settings/glossary", icon: BookOpen },
@@ -94,6 +97,7 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
         href: "/platform/issues/queue",
         icon: AlertCircle,
       },
+      { label: "Scheduler", href: "/platform/jobs", icon: Clock },
     ],
   },
   {
