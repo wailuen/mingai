@@ -38,6 +38,7 @@ class ConversationPersistenceService:
         query: str,
         response: str,
         sources: list,
+        guardrail_violations: list | None = None,
     ) -> tuple[str, str]:
         """
         Save a complete query-response exchange.
@@ -52,6 +53,9 @@ class ConversationPersistenceService:
             query: The user's query text.
             response: The assistant's response text.
             sources: List of SearchResult objects (for metadata).
+            guardrail_violations: Optional list of guardrail violation dicts to
+                merge into the assistant message metadata JSONB. Original blocked
+                response text MUST NOT appear here (RULE A2A-01).
 
         Returns:
             Tuple of (assistant_message_id, conversation_id).
@@ -117,6 +121,12 @@ class ConversationPersistenceService:
             for s in sources
         ]
 
+        # Build metadata dict; merge guardrail_violations if non-empty (ATA-021)
+        # RULE A2A-01: Original blocked response text must NEVER appear here.
+        assistant_metadata: dict = {"sources": source_metadata}
+        if guardrail_violations:
+            assistant_metadata["guardrail_violations"] = guardrail_violations
+
         result = await self._db.execute(
             text(self._insert_assistant_message_sql()),
             {
@@ -124,7 +134,7 @@ class ConversationPersistenceService:
                 "conversation_id": conversation_id,
                 "role": "assistant",
                 "content": response,
-                "metadata": json.dumps({"sources": source_metadata}),
+                "metadata": json.dumps(assistant_metadata),
             },
         )
         assistant_msg_id = result.scalar_one()

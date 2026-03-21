@@ -33,7 +33,7 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
 from jose import jwt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,6 +126,59 @@ class GuardrailRule(BaseModel):
     reason: str = Field(default="", max_length=500)
 
 
+# ---------------------------------------------------------------------------
+# ATA-022: Structured guardrail configuration schema
+# ---------------------------------------------------------------------------
+
+_VALID_GUARDRAIL_RULE_TYPES = frozenset({
+    "keyword_block",
+    "citation_required",
+    "max_length",
+    "confidence_threshold",
+    "semantic_check",
+})
+_VALID_GUARDRAIL_ACTIONS = frozenset({"block", "redact", "warn"})
+
+
+class GuardrailsSchema(BaseModel):
+    """
+    ATA-022 / RULE A2A-02: Structured guardrail configuration for agent templates.
+
+    This schema validates guardrail *configuration*.
+    Configuration stored here is a declaration only.
+    Runtime enforcement is handled by OutputGuardrailChecker in guardrails.py.
+    Storing a guardrail config without the checker running has NO effect.
+    """
+
+    blocked_topics: Optional[List[str]] = Field(default=None, max_length=50)
+    confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    max_response_length: Optional[int] = Field(default=None, ge=0, le=10000)
+    rules: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=20)
+
+    @validator("rules", each_item=True)
+    def validate_rule(cls, rule: Dict[str, Any]) -> Dict[str, Any]:  # noqa: N805
+        rule_type = rule.get("type")
+        if rule_type not in _VALID_GUARDRAIL_RULE_TYPES:
+            raise ValueError(
+                f"Invalid rule type '{rule_type}'. "
+                f"Must be one of: {sorted(_VALID_GUARDRAIL_RULE_TYPES)}"
+            )
+        action = rule.get("action")
+        if action is not None and action not in _VALID_GUARDRAIL_ACTIONS:
+            raise ValueError(
+                f"Invalid action '{action}'. "
+                f"Must be one of: {sorted(_VALID_GUARDRAIL_ACTIONS)}"
+            )
+        for pattern in rule.get("patterns", []):
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(
+                    f"Invalid regex pattern '{pattern}': {exc}"
+                ) from exc
+        return rule
+
+
 class CreateAgentTemplateRequest(BaseModel):
     """PA-020: Create a new Draft template."""
 
@@ -136,6 +189,8 @@ class CreateAgentTemplateRequest(BaseModel):
     variable_definitions: List[TemplateVariableDef] = Field(default_factory=list)
     guardrails: List[GuardrailRule] = Field(default_factory=list, max_length=50)
     confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # ATA-022: structured guardrail configuration (validated by GuardrailsSchema)
+    guardrails_config: Optional[GuardrailsSchema] = None
 
 
 class PatchAgentTemplateRequest(BaseModel):
@@ -148,8 +203,10 @@ class PatchAgentTemplateRequest(BaseModel):
     variable_definitions: Optional[List[TemplateVariableDef]] = None
     guardrails: Optional[List[GuardrailRule]] = Field(None, max_length=50)
     confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
-    # Only forward transitions via API — no Draft (already default), no seed.
-    # Draft → Deprecated is intentionally allowed (abandon without publishing).
+    # ATA-022: structured guardrail configuration (validated by GuardrailsSchema)
+    guardrails_config: Optional[GuardrailsSchema] = None
+    # ATA-058: allow Published | Deprecated transitions.
+    # Deprecated → Published restores the template to the tenant catalog.
     status: Optional[str] = Field(None, pattern=r"^(Published|Deprecated)$")
     changelog: Optional[str] = Field(None, max_length=5000)
 
@@ -823,11 +880,12 @@ async def patch_agent_template(
             detail="changelog is required when publishing a template.",
         )
 
-    # Cannot transition out of Deprecated
-    if current_status == "Deprecated" and body.status is not None:
+    # ATA-058: Deprecated → Published is allowed (restore template to catalog).
+    # Any other attempt to transition out of Deprecated is rejected.
+    if current_status == "Deprecated" and body.status is not None and body.status != "Published":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Deprecated templates cannot change status.",
+            detail="Deprecated templates can only be restored to Published status.",
         )
 
     # system_prompt must exist before publishing

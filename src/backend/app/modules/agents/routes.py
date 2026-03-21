@@ -149,6 +149,7 @@ class DeployAgentRequest(BaseModel):
     kb_ids: List[str] = Field(default_factory=list)
     allowed_roles: List[str] = Field(default_factory=list)
     allowed_user_ids: List[str] = Field(default_factory=list)
+    credentials: Optional[Dict[str, str]] = None  # Required when auth_mode='tenant_credentials'
 
 
 class GuardrailsSchema(BaseModel):
@@ -216,6 +217,107 @@ class DeployFromLibraryRequest(BaseModel):
     access_mode: Literal["workspace_wide", "role_restricted", "user_specific"] = Field(
         "workspace_wide"
     )
+    credentials: Optional[Dict[str, str]] = None  # Required when auth_mode='tenant_credentials'
+
+
+# ---------------------------------------------------------------------------
+# ATA-025: Credential deploy validation helper
+# ---------------------------------------------------------------------------
+
+
+def _pre_validate_credentials(
+    auth_mode: str,
+    required_credentials: list,
+    provided_credentials: Optional[Dict[str, str]],
+) -> None:
+    """
+    Pure validation — raises HTTPException 422 if credentials are invalid.
+    No vault or DB interaction. Call this BEFORE inserting the agent card so
+    that a 422 does not leave an orphaned agent row.
+    """
+    if not auth_mode or auth_mode == "none":
+        return
+
+    if auth_mode == "platform_credentials":
+        raise HTTPException(
+            status_code=422,
+            detail="Platform credentials auth_mode is not yet available. Use 'tenant_credentials' or 'none'.",
+        )
+
+    if auth_mode == "tenant_credentials":
+        required_keys = [
+            c["key"] for c in (required_credentials or [])
+            if c.get("required", False)
+        ]
+        provided = provided_credentials or {}
+        missing = sorted([k for k in required_keys if k not in provided])
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Missing required credentials: {missing}",
+            )
+
+
+async def _validate_and_store_credentials(
+    tenant_id: str,
+    agent_id: str,
+    auth_mode: str,
+    required_credentials: list,
+    provided_credentials: Optional[Dict[str, str]],
+    vault_client,
+    db: AsyncSession,
+) -> Optional[str]:
+    """
+    Validate and store agent credentials in vault.
+
+    Returns the vault path prefix if credentials were stored, None otherwise.
+
+    SSRF note: This function does not make outbound calls. RULE A2A-04 applies
+    only to credential test endpoints (separate step, not implemented here).
+
+    Raises HTTPException 422 for:
+    - auth_mode='platform_credentials' (not yet available)
+    - auth_mode='tenant_credentials' with missing required credential keys
+    """
+    if not auth_mode or auth_mode == "none":
+        return None
+
+    if auth_mode == "platform_credentials":
+        raise HTTPException(
+            status_code=422,
+            detail="Platform credentials auth_mode is not yet available. Use 'tenant_credentials' or 'none'.",
+        )
+
+    if auth_mode == "tenant_credentials":
+        required_keys = [
+            c["key"] for c in (required_credentials or [])
+            if c.get("required", False)
+        ]
+        provided = provided_credentials or {}
+        missing = sorted([k for k in required_keys if k not in provided])
+
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Missing required credentials: {missing}",
+            )
+
+        vault_path_prefix = f"{tenant_id}/agents/{agent_id}"
+        if vault_client is not None and provided:
+            for key, value in provided.items():
+                vault_client.store_secret(f"{vault_path_prefix}/{key}", value)
+
+        await db.execute(
+            text(
+                "UPDATE agent_cards SET credentials_vault_path = :path "
+                "WHERE id = :id AND tenant_id = :tenant_id"
+            ),
+            {"path": vault_path_prefix, "id": agent_id, "tenant_id": tenant_id},
+        )
+
+        return vault_path_prefix
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -942,7 +1044,7 @@ async def get_agent_by_id_db(
         text(
             "SELECT id, name, description, category, avatar, source, system_prompt, "
             "capabilities, status, version, template_id, template_version, "
-            "created_at, updated_at "
+            "credentials_vault_path, created_at, updated_at "
             "FROM agent_cards "
             "WHERE id = :id AND tenant_id = :tenant_id"
         ),
@@ -967,6 +1069,8 @@ async def get_agent_by_id_db(
         "version": row["version"],
         "template_id": row["template_id"],
         "template_version": row["template_version"],
+        # has_credentials: True if vault path is set; vault path itself is NOT exposed
+        "has_credentials": row["credentials_vault_path"] is not None,
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
     }
@@ -1222,6 +1326,26 @@ async def deploy_from_library_db(
     }
 
 
+async def _is_agent_template_deprecated(
+    template_id: str, db: AsyncSession
+) -> bool:
+    """
+    ATA-058: Return True if the template exists in agent_templates with status='Deprecated'.
+
+    Used to surface a specific 422 instead of a generic 404 when a caller
+    tries to deploy a deprecated template.
+    """
+    if not _UUID_RE.match(str(template_id)):
+        return False
+    result = await db.execute(
+        text(
+            "SELECT 1 FROM agent_templates WHERE id = :id AND status = 'Deprecated'"
+        ),
+        {"id": template_id},
+    )
+    return result.first() is not None
+
+
 async def _get_agent_template_by_id(
     template_id: str, db: AsyncSession
 ) -> Optional[dict]:
@@ -1237,7 +1361,8 @@ async def _get_agent_template_by_id(
     result = await db.execute(
         text(
             "SELECT id, name, description, category, system_prompt, "
-            "variable_definitions, guardrails, confidence_threshold, version "
+            "variable_definitions, guardrails, confidence_threshold, version, "
+            "auth_mode, required_credentials "
             "FROM agent_templates "
             "WHERE id = :id AND status IN ('Published', 'seed')"
         ),
@@ -1255,6 +1380,8 @@ async def _get_agent_template_by_id(
         "variable_definitions": row["variable_definitions"] or [],
         "guardrails": row["guardrails"] or [],
         "version": row["version"],
+        "auth_mode": row["auth_mode"] or "none",
+        "required_credentials": row["required_credentials"] or [],
     }
 
 
@@ -1344,6 +1471,22 @@ async def list_workspace_agents(
         "page": page,
         "page_size": page_size,
     }
+
+
+@admin_router.get("/{agent_id}")
+async def get_agent_detail(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """ATA-025: Get a single agent's detail. Returns has_credentials (bool) but NOT vault path."""
+    agent = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+    return agent
 
 
 @admin_router.post("", status_code=status.HTTP_201_CREATED)
@@ -1521,9 +1664,18 @@ async def deploy_from_library(
         body.variable_values if body.variable_values is not None else body.variables
     )
     template_display_name: str = ""
+    # ATA-025: track auth_mode and required_credentials from the template
+    _tmpl_auth_mode: str = "none"
+    _tmpl_required_credentials: list = []
 
     # 1. Check agent_templates (PA-019) first
     agent_tmpl = await _get_agent_template_by_id(template_id, session)
+    # ATA-058: surface a specific 422 when the template exists but is Deprecated
+    if agent_tmpl is None and await _is_agent_template_deprecated(template_id, session):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Template has been deprecated and is no longer available.",
+        )
     if agent_tmpl is not None:
         # Validate required variables
         var_defs = agent_tmpl.get("variable_definitions") or []
@@ -1547,6 +1699,8 @@ async def deploy_from_library(
         capabilities = [
             {"type": "knowledge_base", "id": kb_id} for kb_id in body.kb_ids
         ]
+        _tmpl_auth_mode = agent_tmpl.get("auth_mode") or "none"
+        _tmpl_required_credentials = agent_tmpl.get("required_credentials") or []
 
     elif template_id in _SEED_BY_ID:
         # 2. Legacy seed
@@ -1590,6 +1744,14 @@ async def deploy_from_library(
         template_display_name = db_row["name"] or template_id
         capabilities = caps if isinstance(caps, list) else []
 
+    # ATA-025: pre-validate credentials BEFORE inserting the agent card so that
+    # a 422 does not leave an orphaned agent row in the DB.
+    _pre_validate_credentials(
+        auth_mode=_tmpl_auth_mode,
+        required_credentials=_tmpl_required_credentials,
+        provided_credentials=body.credentials,
+    )
+
     result = await deploy_from_library_db(
         tenant_id=current_user.tenant_id,
         template_id=template_id,
@@ -1604,6 +1766,22 @@ async def deploy_from_library(
         db=session,
         access_mode=body.access_mode,
     )
+
+    # ATA-025: store credentials to vault (agent_id is now available after INSERT)
+    if _tmpl_auth_mode and _tmpl_auth_mode != "none":
+        from app.core.secrets.vault_client import get_vault_client as _get_vault_client
+        _vault = _get_vault_client()
+        await _validate_and_store_credentials(
+            tenant_id=current_user.tenant_id,
+            agent_id=result["id"],
+            auth_mode=_tmpl_auth_mode,
+            required_credentials=_tmpl_required_credentials,
+            provided_credentials=body.credentials,
+            vault_client=_vault,
+            db=session,
+        )
+        await session.commit()
+
     await insert_audit_log(
         tenant_id=current_user.tenant_id,
         user_id=current_user.id,

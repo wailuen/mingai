@@ -1,19 +1,29 @@
 """
-ChatOrchestrationService (AI-056) - The 8-stage RAG pipeline orchestrator.
+ChatOrchestrationService (AI-056) - The 9-stage RAG pipeline orchestrator.
 
 Wires all AI services into a streaming SSE response pipeline:
   Stage 1: Glossary expansion (query pre-translation)
   Stage 2: Intent detection (reserved for future routing)
   Stage 3: Embedding generation (uses ORIGINAL query, NOT expanded)
   Stage 4: Vector search (tenant-scoped, agent-scoped)
+  Stage 4.5: Confidence threshold pre-LLM gate (ATA-020) — canned response
+             if retrieval_confidence < guardrail_config.confidence_threshold
   Stage 5: Context assembly (profile, working memory, org context, team memory)
   Stage 6: System prompt build (6-layer with token budgets)
   Stage 7: LLM streaming (response generation)
+             If guardrails enabled: buffer all chunks; no token delivered until
+             Stage 7b completes (RULE A2A-01).
+             If guardrails disabled: stream chunks live to SSE.
+  Stage 7b: Output guardrail check (ATA-019) — runs AFTER LLM, BEFORE
+             save_exchange(). Blocked responses are NEVER persisted.
+             RULE A2A-01: The blocked LLM response text MUST NOT be stored
+             anywhere. Only violation metadata is persisted.
   Stage 8: Post-processing (persistence, memory update, profile learning)
 
 Memory fast path: "Remember that..." / "Remember:..." / "Please remember..." /
 "Note that..." / "Save this:..." queries bypass RAG and save directly to memory notes.
 """
+import json
 import os
 import re
 from typing import AsyncGenerator
@@ -286,7 +296,7 @@ class ChatOrchestrationService:
         # --- Stage 4: Vector Search ---
         yield {"event": "status", "data": {"stage": "vector_search"}}
 
-        # Load agent prompt early to get kb_ids for fan-out search
+        # Load agent prompt early to get kb_ids for fan-out search and guardrail config
         _stage4_agent_prompt, _stage4_capabilities, agent_kb_ids = (
             await self._prompt_builder._get_agent_prompt(
                 agent_id=agent_id,
@@ -294,6 +304,16 @@ class ChatOrchestrationService:
                 db_session=self._db_session,
             )
         )
+
+        # Extract guardrail config from capabilities (ATA-019/020)
+        from app.modules.chat.guardrails import (
+            OutputGuardrailChecker,
+            _has_active_guardrails,
+            _CANNED_LOW_CONFIDENCE,
+            GUARDRAIL_TRIGGERED_EVENT,
+        )
+        guardrail_config = _stage4_capabilities.get("guardrails", {})
+        guardrail_enabled = _has_active_guardrails(guardrail_config)
 
         search_results = await self._vector_search.search(
             query_vector=query_vector,
@@ -349,6 +369,56 @@ class ChatOrchestrationService:
             confidence=retrieval_confidence,
             tenant_id=tenant_id,
         )
+
+        # --- Stage 4.5: Confidence threshold pre-LLM gate (ATA-020) ---
+        # This check short-circuits before any LLM call when retrieval_confidence
+        # falls below the configured threshold. The canned response IS saved to
+        # conversation history (valid exchange) but the LLM is never invoked.
+        conf_threshold = float(guardrail_config.get("confidence_threshold", 0.0)) if isinstance(guardrail_config.get("confidence_threshold"), (int, float)) else 0.0
+        if conf_threshold > 0 and retrieval_confidence < conf_threshold:
+            logger.info(
+                "stage_4_5_confidence_gate_blocked",
+                retrieval_confidence=retrieval_confidence,
+                threshold=conf_threshold,
+                tenant_id=tenant_id,
+                agent_id=agent_id,
+            )
+            yield {"event": "token", "data": {"text": _CANNED_LOW_CONFIDENCE}}
+            # Save to conversation history BEFORE emitting done so done carries the IDs.
+            # Low confidence response is still valid history.
+            _conf_message_id = None
+            _conf_conversation_id = conversation_id
+            try:
+                _conf_message_id, _conf_conversation_id = await self._persistence.save_exchange(
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    query=query,
+                    response=_CANNED_LOW_CONFIDENCE,
+                    sources=search_results,
+                    guardrail_violations=[{
+                        "rule_id": "confidence_threshold",
+                        "action": "block",
+                        "reason": (
+                            f"retrieval_confidence={retrieval_confidence:.2f} "
+                            f"< threshold={conf_threshold}"
+                        ),
+                    }],
+                )
+            except Exception as _conf_save_err:
+                logger.warning(
+                    "confidence_gate_save_failed",
+                    tenant_id=tenant_id,
+                    error=str(_conf_save_err),
+                )
+            yield {
+                "event": "done",
+                "data": {
+                    "conversation_id": _conf_conversation_id,
+                    "message_id": _conf_message_id,
+                },
+            }
+            return
 
         # --- Stage 5: Context Assembly ---
         yield {"event": "status", "data": {"stage": "context_assembly"}}
@@ -409,18 +479,78 @@ class ChatOrchestrationService:
             tenant_id=tenant_id,
         )
 
-        # --- Stage 7: LLM Streaming (real call) ---
+        # --- Stage 7: LLM Streaming ---
+        # When guardrails are enabled: buffer ALL chunks — no token is delivered
+        # to the client until Stage 7b (guardrail check) completes.
+        # When guardrails are disabled: stream chunks live to SSE.
         yield {"event": "status", "data": {"stage": "llm_streaming"}}
 
-        response_chunks = []
-        async for chunk in self._stream_llm(
+        llm_response_stream = self._stream_llm(
             system_prompt=system_prompt,
             query=expanded_query,
             tenant_id=tenant_id,
-        ):
-            response_chunks.append(chunk)
-            yield {"event": "response_chunk", "data": {"chunk": chunk}}
-        response_text = "".join(response_chunks)
+        )
+
+        if guardrail_enabled:
+            # Buffer all chunks — RULE A2A-01: no token delivered until guardrail passes
+            response_chunks = []
+            async for chunk in llm_response_stream:
+                response_chunks.append(chunk)
+            response_text = "".join(response_chunks)
+        else:
+            # Default path: stream chunks live to SSE, collect for Stage 8
+            response_chunks = []
+            async for chunk in llm_response_stream:
+                yield {"event": "response_chunk", "data": {"chunk": chunk}}
+                response_chunks.append(chunk)
+            response_text = "".join(response_chunks)
+
+        # --- Stage 7b: Output guardrail check (ATA-019) ---
+        # RULE A2A-01: Runs AFTER the LLM completes, BEFORE save_exchange().
+        # Blocked responses are NEVER persisted.
+        guardrail_violations: list = []
+        if guardrail_enabled:
+            checker = OutputGuardrailChecker(
+                agent_capabilities=_stage4_capabilities,
+                retrieval_confidence=retrieval_confidence,
+            )
+            result = await checker.check(response_text)
+
+            if result.action == "block":
+                # Emit guardrail_triggered SSE event
+                yield {
+                    "event": GUARDRAIL_TRIGGERED_EVENT,
+                    "data": {
+                        "rule_id": result.rule_id,
+                        "action": "block",
+                        "user_message": result.filtered_text or result.reason,
+                        "agent_id": str(agent_id),
+                    },
+                }
+                # Yield canned message as token (blocked text is discarded)
+                yield {"event": "token", "data": {"text": result.filtered_text or ""}}
+                yield {"event": "done", "data": {}}
+                # Write audit trail — RULE A2A-01: blocked text never stored
+                await self._write_guardrail_violation_audit(
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    violation_metadata=result.violation_metadata or {},
+                    rule_id=result.rule_id,
+                    action=result.action,
+                )
+                return  # Do NOT call save_exchange
+
+            elif result.action in ("redact", "warn"):
+                response_text = result.filtered_text or response_text
+                guardrail_violations = [
+                    result.violation_metadata or {
+                        "rule_id": result.rule_id,
+                        "action": result.action,
+                    }
+                ]
+
+            # Now yield the buffered (possibly modified) text as a response_chunk
+            yield {"event": "response_chunk", "data": {"chunk": response_text}}
 
         # --- Stage 8: Post-processing ---
         yield {"event": "status", "data": {"stage": "post_processing"}}
@@ -433,6 +563,7 @@ class ChatOrchestrationService:
             query=query,
             response=response_text,
             sources=search_results,
+            guardrail_violations=guardrail_violations,
         )
 
         # Update working memory with this query
@@ -602,6 +733,53 @@ class ChatOrchestrationService:
             visibility_mode=visibility_mode,
         )
         return True
+
+    async def _write_guardrail_violation_audit(
+        self,
+        *,
+        agent_id: str,
+        tenant_id: str,
+        violation_metadata: dict,
+        rule_id: str | None,
+        action: str,
+    ) -> None:
+        """
+        Write guardrail violation to audit_log.
+
+        RULE A2A-01: The blocked LLM response text MUST NOT be stored here or
+        anywhere. Only metadata is persisted. The original text is discarded.
+        """
+        try:
+            if not self._db_session:
+                return
+            import sqlalchemy as sa
+
+            await self._db_session.execute(
+                sa.text(
+                    """
+                    INSERT INTO audit_log (tenant_id, action, resource_type, resource_id, metadata, created_at)
+                    VALUES (:tenant_id, 'guardrail_violation', 'agent', :agent_id, CAST(:metadata AS jsonb), NOW())
+                    """
+                ),
+                {
+                    "tenant_id": str(tenant_id),
+                    "agent_id": str(agent_id),
+                    "metadata": json.dumps(
+                        {
+                            "rule_id": rule_id,
+                            "action": action,
+                            **{
+                                k: v
+                                for k, v in violation_metadata.items()
+                                if k != "original_text"
+                            },
+                        }
+                    ),
+                },
+            )
+            await self._db_session.commit()
+        except Exception as e:
+            logger.warning("guardrail_audit_write_failed", error=str(e))
 
     def inject_intent_service(self, intent_service) -> None:
         """Inject an IntentDetectionService instance (used in tests and wiring)."""

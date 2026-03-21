@@ -817,6 +817,12 @@ async def ready_check():
     return JSONResponse(content=response, status_code=status_code)
 
 
+# A2A discovery endpoint — mounted at domain root (no prefix) per A2A spec.
+# Must be registered BEFORE the /api/v1 router so path matching is unambiguous.
+from app.modules.discovery.routes import well_known_router
+
+app.include_router(well_known_router)  # No prefix — A2A spec requires domain root
+
 # Include API router with all module endpoints
 from app.api.router import router as api_router
 

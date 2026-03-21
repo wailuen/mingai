@@ -62,7 +62,17 @@ def _is_private_ip(ip_str: str) -> bool:
 
 
 def _validate_ssrf_safe_url(url: str) -> None:
-    """
+    """RULE A2A-04: DNS resolution must happen on EVERY outbound HTTP call.
+
+    This function MUST be called immediately before every external HTTP request,
+    not just at registration time. DNS rebinding attacks work by having the DNS
+    record resolve to a safe IP at registration time, then changing the IP to a
+    private address before the actual request. Pre-flight DNS checks are NOT
+    sufficient — they must be per-request.
+
+    Import from app.modules.registry.a2a_routing — never reimplement inline.
+    Reference: CWE-918 (SSRF), OWASP Testing Guide OTG-INPVAL-019.
+
     Validate that a URL does not target internal/private infrastructure.
 
     Raises ValueError if the URL is SSRF-unsafe:
