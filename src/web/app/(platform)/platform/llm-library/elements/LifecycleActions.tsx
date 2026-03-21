@@ -48,21 +48,28 @@ export function LifecycleActions({ entry }: LifecycleActionsProps) {
 
   return (
     <div className="flex items-center gap-2">
-      {entry.status === "Draft" && (
-        <button
-          type="button"
-          onClick={handlePublish}
-          disabled={publishMutation.isPending}
-          className="inline-flex items-center gap-1 rounded-control bg-accent px-2.5 py-1 text-[11px] font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
-          {publishMutation.isPending ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <CheckCircle2 size={12} />
-          )}
-          Publish
-        </button>
-      )}
+      {entry.status === "Draft" && (() => {
+        const canPublish = !!entry.last_test_passed_at;
+        const publishTitle = canPublish
+          ? undefined
+          : "Run the connectivity test before publishing";
+        return (
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={publishMutation.isPending || !canPublish}
+            title={publishTitle}
+            className="inline-flex items-center gap-1 rounded-control bg-accent px-2.5 py-1 text-[11px] font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            {publishMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <CheckCircle2 size={12} />
+            )}
+            Publish
+          </button>
+        );
+      })()}
 
       {entry.status === "Published" && (
         <>

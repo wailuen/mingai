@@ -7,24 +7,9 @@ import { apiGet, apiPost, apiPatch } from "@/lib/api";
 // Types
 // ---------------------------------------------------------------------------
 
-export type LLMLibraryProvider =
-  | "azure_openai"
-  | "openai_direct"
-  | "anthropic";
+export type LLMLibraryProvider = "azure_openai" | "openai_direct" | "anthropic";
 export type LLMLibraryStatus = "Draft" | "Published" | "Deprecated";
 export type PlanTier = "starter" | "professional" | "enterprise";
-
-export type ModelSlotKey =
-  | "intent_model"
-  | "primary_model"
-  | "vision_model"
-  | "embedding_model";
-
-export interface ModelSlot {
-  provider: LLMLibraryProvider;
-  deployment_name: string;
-  override: boolean;
-}
 
 export interface LLMLibraryEntry {
   id: string;
@@ -34,10 +19,14 @@ export interface LLMLibraryEntry {
   plan_tier: PlanTier;
   is_recommended: boolean;
   status: LLMLibraryStatus;
-  best_practices_md: string;
-  pricing_per_1k_tokens_in: number;
-  pricing_per_1k_tokens_out: number;
-  model_slots?: Record<ModelSlotKey, ModelSlot>;
+  best_practices_md?: string;
+  pricing_per_1k_tokens_in: number | null;
+  pricing_per_1k_tokens_out: number | null;
+  endpoint_url?: string;
+  api_version?: string;
+  key_present: boolean;
+  api_key_last4?: string;
+  last_test_passed_at?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -48,11 +37,17 @@ export interface TenantAssignment {
   assigned_at: string;
 }
 
-export interface TestProfileResult {
-  success: boolean;
+export interface TestPromptResult {
+  prompt: string;
+  response: string;
+  tokens_in: number;
+  tokens_out: number;
   latency_ms: number;
-  error?: string;
-  slot_results: Record<ModelSlotKey, { reachable: boolean; latency_ms: number; error?: string }>;
+  estimated_cost_usd: number | null;
+}
+
+export interface TestEntryResult {
+  tests: TestPromptResult[];
 }
 
 export interface CreateLLMLibraryPayload {
@@ -64,7 +59,9 @@ export interface CreateLLMLibraryPayload {
   best_practices_md?: string;
   pricing_per_1k_tokens_in: number;
   pricing_per_1k_tokens_out: number;
-  model_slots?: Record<ModelSlotKey, ModelSlot>;
+  endpoint_url?: string;
+  api_key?: string;
+  api_version?: string;
 }
 
 export interface UpdateLLMLibraryPayload {
@@ -76,7 +73,9 @@ export interface UpdateLLMLibraryPayload {
   best_practices_md?: string;
   pricing_per_1k_tokens_in?: number;
   pricing_per_1k_tokens_out?: number;
-  model_slots?: Record<ModelSlotKey, ModelSlot>;
+  endpoint_url?: string;
+  api_key?: string;
+  api_version?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +114,9 @@ export function useCreateLLMLibraryEntry() {
 
   return useMutation({
     mutationFn: (payload: CreateLLMLibraryPayload) =>
-      apiPost<LLMLibraryEntry>("/api/v1/platform/llm-library", payload),
+      apiPost<LLMLibraryEntry>("/api/v1/platform/llm-library", payload, {
+        skipRedirectOn401: true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: LIBRARY_KEY });
     },
@@ -134,10 +135,9 @@ export function useUpdateLLMLibraryEntry() {
       id: string;
       payload: UpdateLLMLibraryPayload;
     }) =>
-      apiPatch<LLMLibraryEntry>(
-        `/api/v1/platform/llm-library/${id}`,
-        payload
-      ),
+      apiPatch<LLMLibraryEntry>(`/api/v1/platform/llm-library/${id}`, payload, {
+        skipRedirectOn401: true,
+      }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: LIBRARY_KEY });
       queryClient.invalidateQueries({
@@ -155,7 +155,8 @@ export function usePublishLLMLibraryEntry() {
     mutationFn: (id: string) =>
       apiPost<LLMLibraryEntry>(
         `/api/v1/platform/llm-library/${id}/publish`,
-        {}
+        {},
+        { skipRedirectOn401: true },
       ),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: LIBRARY_KEY });
@@ -174,7 +175,8 @@ export function useDeprecateLLMLibraryEntry() {
     mutationFn: (id: string) =>
       apiPost<LLMLibraryEntry>(
         `/api/v1/platform/llm-library/${id}/deprecate`,
-        {}
+        {},
+        { skipRedirectOn401: true },
       ),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: LIBRARY_KEY });
@@ -189,14 +191,22 @@ export function useDeprecateLLMLibraryEntry() {
 // Test Profile (POST /api/v1/platform/llm-library/:id/test)
 // ---------------------------------------------------------------------------
 
-/** Tests connectivity and latency for all model slots in a profile. */
+/** Tests connectivity and basic prompts for a library entry. */
 export function useTestProfile() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiPost<TestProfileResult>(
+      apiPost<TestEntryResult>(
         `/api/v1/platform/llm-library/${id}/test`,
-        {}
+        {},
+        { skipRedirectOn401: true },
       ),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({
+        queryKey: ["platform-llm-library-entry", id],
+      });
+      queryClient.invalidateQueries({ queryKey: LIBRARY_KEY });
+    },
   });
 }
 
@@ -210,7 +220,7 @@ export function useTenantAssignments(id: string | null) {
     queryKey: ["platform-llm-library-assignments", id],
     queryFn: () =>
       apiGet<TenantAssignment[]>(
-        `/api/v1/platform/llm-library/${id}/tenant-assignments`
+        `/api/v1/platform/llm-library/${id}/tenant-assignments`,
       ),
     enabled: !!id,
   });

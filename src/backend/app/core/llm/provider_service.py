@@ -125,11 +125,11 @@ class ProviderService:
 
         Returns raw bytes suitable for storing in BYTEA column.
         The plaintext_key should be cleared by the caller after this call.
+        Delegates to app.core.crypto.encrypt_api_key for shared key derivation.
         """
-        from app.modules.har.crypto import get_fernet
+        from app.core.crypto import encrypt_api_key
 
-        fernet = get_fernet()
-        return fernet.encrypt(plaintext_key.encode("utf-8"))
+        return encrypt_api_key(plaintext_key)
 
     def decrypt_api_key(self, encrypted_bytes: bytes) -> str:
         """
@@ -138,18 +138,11 @@ class ProviderService:
         Returns the plaintext key string.
         Caller MUST clear the returned string (key = "") after use.
         Raises ValueError if decryption fails (invalid token or wrong JWT_SECRET_KEY).
+        Delegates to app.core.crypto.decrypt_api_key for shared key derivation.
         """
-        from app.modules.har.crypto import get_fernet
-        from cryptography.fernet import InvalidToken
+        from app.core.crypto import decrypt_api_key
 
-        fernet = get_fernet()
-        try:
-            return fernet.decrypt(encrypted_bytes).decode("utf-8")
-        except InvalidToken as exc:
-            raise ValueError(
-                "Failed to decrypt provider API key — Fernet token is invalid. "
-                "This may indicate JWT_SECRET_KEY has changed since the key was stored."
-            ) from exc
+        return decrypt_api_key(encrypted_bytes)
 
     # ------------------------------------------------------------------
     # CRUD

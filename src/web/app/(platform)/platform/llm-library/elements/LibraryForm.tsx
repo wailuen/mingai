@@ -6,23 +6,25 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  Plus,
   CheckCircle2,
   Archive,
+  KeyRound,
+  FlaskConical,
 } from "lucide-react";
+import { ApiException } from "@/lib/api";
 import {
   useCreateLLMLibraryEntry,
   useUpdateLLMLibraryEntry,
   usePublishLLMLibraryEntry,
   useDeprecateLLMLibraryEntry,
+  useTestProfile,
   useTenantAssignments,
   type LLMLibraryEntry,
   type LLMLibraryProvider,
   type PlanTier,
-  type ModelSlotKey,
-  type ModelSlot,
   type CreateLLMLibraryPayload,
   type UpdateLLMLibraryPayload,
+  type TestPromptResult,
 } from "@/lib/hooks/useLLMLibrary";
 import { cn } from "@/lib/utils";
 
@@ -36,12 +38,6 @@ interface LibraryFormProps {
   onSaved: () => void;
 }
 
-interface SlotFormState {
-  provider: LLMLibraryProvider;
-  deployment_name: string;
-  override: boolean;
-}
-
 interface FormState {
   provider: LLMLibraryProvider;
   model_name: string;
@@ -51,25 +47,14 @@ interface FormState {
   pricing_per_1k_tokens_in: string;
   pricing_per_1k_tokens_out: string;
   best_practices_md: string;
-  slots: Record<ModelSlotKey, SlotFormState>;
+  endpoint_url: string;
+  api_key: string;
+  api_version: string;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const SLOT_KEYS: { key: ModelSlotKey; label: string }[] = [
-  { key: "intent_model", label: "Intent Model" },
-  { key: "primary_model", label: "Primary Model" },
-  { key: "vision_model", label: "Vision Model" },
-  { key: "embedding_model", label: "Embedding Model" },
-];
-
-const EMPTY_SLOT: SlotFormState = {
-  provider: "azure_openai",
-  deployment_name: "",
-  override: false,
-};
 
 const EMPTY_FORM: FormState = {
   provider: "azure_openai",
@@ -80,12 +65,9 @@ const EMPTY_FORM: FormState = {
   pricing_per_1k_tokens_in: "",
   pricing_per_1k_tokens_out: "",
   best_practices_md: "",
-  slots: {
-    intent_model: { ...EMPTY_SLOT },
-    primary_model: { ...EMPTY_SLOT },
-    vision_model: { ...EMPTY_SLOT },
-    embedding_model: { ...EMPTY_SLOT },
-  },
+  endpoint_url: "",
+  api_key: "",
+  api_version: "2024-12-01-preview",
 };
 
 const PROVIDERS: { value: LLMLibraryProvider; label: string }[] = [
@@ -104,53 +86,102 @@ const PLAN_TIERS: { value: PlanTier; label: string }[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-function slotFromEntry(slot: ModelSlot | undefined): SlotFormState {
-  if (!slot) return { ...EMPTY_SLOT };
-  return {
-    provider: slot.provider,
-    deployment_name: slot.deployment_name,
-    override: slot.override,
-  };
-}
-
 function formFromEntry(entry: LLMLibraryEntry): FormState {
-  const slots = entry.model_slots;
   return {
     provider: entry.provider,
     model_name: entry.model_name,
     display_name: entry.display_name,
     plan_tier: entry.plan_tier,
     is_recommended: entry.is_recommended,
-    pricing_per_1k_tokens_in: entry.pricing_per_1k_tokens_in.toString(),
-    pricing_per_1k_tokens_out: entry.pricing_per_1k_tokens_out.toString(),
+    pricing_per_1k_tokens_in:
+      entry.pricing_per_1k_tokens_in != null
+        ? entry.pricing_per_1k_tokens_in.toString()
+        : "",
+    pricing_per_1k_tokens_out:
+      entry.pricing_per_1k_tokens_out != null
+        ? entry.pricing_per_1k_tokens_out.toString()
+        : "",
     best_practices_md: entry.best_practices_md ?? "",
-    slots: {
-      intent_model: slotFromEntry(slots?.intent_model),
-      primary_model: slotFromEntry(slots?.primary_model),
-      vision_model: slotFromEntry(slots?.vision_model),
-      embedding_model: slotFromEntry(slots?.embedding_model),
-    },
+    endpoint_url: entry.endpoint_url ?? "",
+    api_key: "", // never pre-filled from entry
+    api_version: entry.api_version ?? "2024-12-01-preview",
   };
 }
 
-function allSlotsHaveDeployment(
-  slots: Record<ModelSlotKey, SlotFormState>,
-): boolean {
-  return SLOT_KEYS.every((s) => slots[s.key].deployment_name.trim().length > 0);
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
-function buildModelSlots(
-  slots: Record<ModelSlotKey, SlotFormState>,
-): Record<ModelSlotKey, ModelSlot> {
-  const result: Partial<Record<ModelSlotKey, ModelSlot>> = {};
-  for (const { key } of SLOT_KEYS) {
-    result[key] = {
-      provider: slots[key].provider,
-      deployment_name: slots[key].deployment_name.trim(),
-      override: slots[key].override,
-    };
-  }
-  return result as Record<ModelSlotKey, ModelSlot>;
+// ---------------------------------------------------------------------------
+// TestResultsPanel sub-component
+// ---------------------------------------------------------------------------
+
+interface TestResultsPanelProps {
+  results: TestPromptResult[];
+}
+
+function TestResultsPanel({ results }: TestResultsPanelProps) {
+  return (
+    <div className="mt-4 rounded-card border border-border bg-bg-base p-4 space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <CheckCircle2 size={14} className="text-accent" />
+        <span className="text-[13px] font-semibold text-text-primary">
+          Test Results ({results.length} prompt{results.length !== 1 ? "s" : ""})
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="py-1.5 pr-3 text-left text-label-nav uppercase text-text-faint font-medium">
+                Prompt
+              </th>
+              <th className="py-1.5 pr-3 text-right text-label-nav uppercase text-text-faint font-medium whitespace-nowrap">
+                Latency
+              </th>
+              <th className="py-1.5 pr-3 text-right text-label-nav uppercase text-text-faint font-medium">
+                Tokens In/Out
+              </th>
+              <th className="py-1.5 text-right text-label-nav uppercase text-text-faint font-medium whitespace-nowrap">
+                Est. Cost
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r, i) => (
+              <tr key={i} className="border-b border-border-faint">
+                <td className="py-2 pr-3 text-text-muted max-w-[200px] truncate">
+                  {r.prompt}
+                </td>
+                <td className="py-2 pr-3 text-right font-mono text-text-muted whitespace-nowrap">
+                  {r.latency_ms}ms
+                </td>
+                <td className="py-2 pr-3 text-right font-mono text-text-muted whitespace-nowrap">
+                  {r.tokens_in}/{r.tokens_out}
+                </td>
+                <td className="py-2 text-right font-mono text-text-muted whitespace-nowrap">
+                  {r.estimated_cost_usd != null
+                    ? `$${r.estimated_cost_usd.toFixed(8)}`
+                    : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[12px] text-accent font-medium pt-1">
+        All {results.length} test{results.length !== 1 ? "s" : ""} passed — entry is ready to publish
+      </p>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -163,11 +194,14 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   const updateMutation = useUpdateLLMLibraryEntry();
   const publishMutation = usePublishLLMLibraryEntry();
   const deprecateMutation = useDeprecateLLMLibraryEntry();
+  const testMutation = useTestProfile();
+
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
     publishMutation.isPending ||
     deprecateMutation.isPending;
+
   const mutationError =
     createMutation.error ??
     updateMutation.error ??
@@ -179,7 +213,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   );
   const [showPreview, setShowPreview] = useState(false);
   const [showDeprecateConfirm, setShowDeprecateConfirm] = useState(false);
-  const [publishAttempted, setPublishAttempted] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testResults, setTestResults] = useState<TestPromptResult[] | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   // Fetch tenant assignments only when deprecate dialog is open
   const { data: tenantAssignments } = useTenantAssignments(
@@ -189,56 +226,43 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
 
   useEffect(() => {
     setForm(entry ? formFromEntry(entry) : EMPTY_FORM);
+    setTestResults(null);
+    setTestError(null);
   }, [entry]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function updateSlot(
-    slotKey: ModelSlotKey,
-    field: keyof SlotFormState,
-    value: string | boolean,
-  ) {
-    setForm((prev) => ({
-      ...prev,
-      slots: {
-        ...prev.slots,
-        [slotKey]: {
-          ...prev.slots[slotKey],
-          [field]: value,
-        },
-      },
-    }));
-  }
-
+  // Pricing validation — optional for Draft, only needed for publish
   const pricingInValid =
-    form.pricing_per_1k_tokens_in !== "" &&
-    !isNaN(Number(form.pricing_per_1k_tokens_in)) &&
-    Number(form.pricing_per_1k_tokens_in) >= 0;
+    form.pricing_per_1k_tokens_in === "" ||
+    (!isNaN(Number(form.pricing_per_1k_tokens_in)) &&
+      Number(form.pricing_per_1k_tokens_in) >= 0);
   const pricingOutValid =
-    form.pricing_per_1k_tokens_out !== "" &&
-    !isNaN(Number(form.pricing_per_1k_tokens_out)) &&
-    Number(form.pricing_per_1k_tokens_out) >= 0;
+    form.pricing_per_1k_tokens_out === "" ||
+    (!isNaN(Number(form.pricing_per_1k_tokens_out)) &&
+      Number(form.pricing_per_1k_tokens_out) >= 0);
 
   const canSave =
-    form.model_name.trim() &&
-    form.display_name.trim() &&
-    form.provider &&
+    !!form.model_name.trim() &&
+    !!form.display_name.trim() &&
+    !!form.provider &&
     pricingInValid &&
     pricingOutValid;
 
   const canPublish =
     canSave &&
-    allSlotsHaveDeployment(form.slots) &&
     isEditing &&
-    entry.status === "Draft";
+    entry.status === "Draft" &&
+    !!entry.last_test_passed_at;
+
+  // Test button: enabled once entry is saved and key is present
+  const canTest = isEditing && !!entry.key_present;
 
   function handleSaveDraft(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
-
-    const modelSlots = buildModelSlots(form.slots);
 
     if (isEditing) {
       const payload: UpdateLLMLibraryPayload = {};
@@ -254,18 +278,39 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
       if (form.best_practices_md !== (entry.best_practices_md ?? ""))
         payload.best_practices_md = form.best_practices_md;
 
-      const newPriceIn = Number(form.pricing_per_1k_tokens_in);
+      const newPriceIn =
+        form.pricing_per_1k_tokens_in !== ""
+          ? Number(form.pricing_per_1k_tokens_in)
+          : null;
       if (newPriceIn !== entry.pricing_per_1k_tokens_in)
-        payload.pricing_per_1k_tokens_in = newPriceIn;
-      const newPriceOut = Number(form.pricing_per_1k_tokens_out);
-      if (newPriceOut !== entry.pricing_per_1k_tokens_out)
-        payload.pricing_per_1k_tokens_out = newPriceOut;
+        payload.pricing_per_1k_tokens_in = newPriceIn ?? undefined;
 
-      payload.model_slots = modelSlots;
+      const newPriceOut =
+        form.pricing_per_1k_tokens_out !== ""
+          ? Number(form.pricing_per_1k_tokens_out)
+          : null;
+      if (newPriceOut !== entry.pricing_per_1k_tokens_out)
+        payload.pricing_per_1k_tokens_out = newPriceOut ?? undefined;
+
+      if (form.endpoint_url !== (entry.endpoint_url ?? ""))
+        payload.endpoint_url = form.endpoint_url || undefined;
+
+      if (form.api_version !== (entry.api_version ?? ""))
+        payload.api_version = form.api_version || undefined;
+
+      // Only send api_key if user typed something — empty means "keep existing"
+      if (form.api_key) payload.api_key = form.api_key;
 
       updateMutation.mutate(
         { id: entry.id, payload },
-        { onSuccess: () => onSaved() },
+        {
+          onSuccess: () => onSaved(),
+          onError: (err) => {
+            if (err instanceof ApiException && err.status === 401) {
+              setSessionExpired(true);
+            }
+          },
+        },
       );
     } else {
       const payload: CreateLLMLibraryPayload = {
@@ -274,25 +319,36 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         display_name: form.display_name,
         plan_tier: form.plan_tier,
         is_recommended: form.is_recommended,
-        pricing_per_1k_tokens_in: Number(form.pricing_per_1k_tokens_in),
-        pricing_per_1k_tokens_out: Number(form.pricing_per_1k_tokens_out),
+        pricing_per_1k_tokens_in: form.pricing_per_1k_tokens_in
+          ? Number(form.pricing_per_1k_tokens_in)
+          : 0,
+        pricing_per_1k_tokens_out: form.pricing_per_1k_tokens_out
+          ? Number(form.pricing_per_1k_tokens_out)
+          : 0,
         best_practices_md: form.best_practices_md || undefined,
-        model_slots: modelSlots,
+        endpoint_url: form.endpoint_url || undefined,
+        api_key: form.api_key || undefined,
+        api_version: form.api_version || undefined,
       };
 
-      createMutation.mutate(payload, { onSuccess: () => onSaved() });
+      createMutation.mutate(payload, {
+        onSuccess: () => onSaved(),
+        onError: (err) => {
+          if (err instanceof ApiException && err.status === 401) {
+            setSessionExpired(true);
+          }
+        },
+      });
     }
   }
 
   function handlePublish() {
-    setPublishAttempted(true);
     if (!isEditing || !canPublish) return;
-    // Save + Publish in sequence: update first, then publish
-    const modelSlots = buildModelSlots(form.slots);
+    // Save current form state then publish
     const payload: UpdateLLMLibraryPayload = {
-      model_slots: modelSlots,
       best_practices_md: form.best_practices_md,
     };
+    if (form.api_key) payload.api_key = form.api_key;
 
     updateMutation.mutate(
       { id: entry.id, payload },
@@ -300,10 +356,19 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         onSuccess: () => {
           publishMutation.mutate(entry.id, {
             onSuccess: () => {
-              setPublishAttempted(false);
               onSaved();
             },
+            onError: (err) => {
+              if (err instanceof ApiException && err.status === 401) {
+                setSessionExpired(true);
+              }
+            },
           });
+        },
+        onError: (err) => {
+          if (err instanceof ApiException && err.status === 401) {
+            setSessionExpired(true);
+          }
         },
       },
     );
@@ -319,13 +384,27 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
     });
   }
 
+  function handleTest() {
+    if (!isEditing || !canTest) return;
+    setTestError(null);
+    setTestResults(null);
+    testMutation.mutate(entry.id, {
+      onSuccess: (data) => setTestResults(data.tests),
+      onError: (err) => {
+        setTestResults(null);
+        if (err instanceof ApiException) {
+          setTestError(
+            `Test failed: ${err.message ?? "Connection error. Check credentials."}`,
+          );
+        } else {
+          setTestError("Test failed. Check credentials and try again.");
+        }
+      },
+    });
+  }
+
   const isDeprecated = isEditing && entry.status === "Deprecated";
   const isPublished = isEditing && entry.status === "Published";
-  const showSlotValidationHint =
-    publishAttempted &&
-    isEditing &&
-    entry.status === "Draft" &&
-    !allSlotsHaveDeployment(form.slots);
 
   return (
     <div
@@ -371,6 +450,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         )}
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+          {/* ---------------------------------------------------------------- */}
+          {/* Section 1 — Identity                                             */}
+          {/* ---------------------------------------------------------------- */}
+
           {/* Display Name */}
           <div>
             <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
@@ -407,10 +490,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             </select>
           </div>
 
-          {/* Model Name */}
+          {/* Deployment Name */}
           <div>
             <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-              Model Name *
+              Deployment Name *
             </label>
             <input
               type="text"
@@ -426,27 +509,39 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             </p>
           </div>
 
-          {/* Plan Tier */}
+          {/* Plan Tier — segmented single-select */}
           <div>
             <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
               Plan Tier *
             </label>
-            <div className="flex items-center gap-2">
-              {PLAN_TIERS.map((tier) => (
-                <button
-                  key={tier.value}
-                  type="button"
-                  onClick={() => updateField("plan_tier", tier.value)}
-                  className={cn(
-                    "rounded-control border px-3 py-1.5 text-[12px] font-medium transition-colors",
-                    form.plan_tier === tier.value
-                      ? "border-accent bg-accent-dim text-accent"
-                      : "border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:text-text-primary",
-                  )}
-                >
-                  {tier.label}
-                </button>
-              ))}
+            <div
+              role="radiogroup"
+              aria-label="Plan tier"
+              className="inline-flex rounded-control border border-border bg-bg-base"
+            >
+              {PLAN_TIERS.map((tier, idx) => {
+                const isSelected = form.plan_tier === tier.value;
+                return (
+                  <button
+                    key={tier.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => updateField("plan_tier", tier.value)}
+                    className={cn(
+                      "px-4 py-1.5 text-[12px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      idx === 0 && "rounded-l-control",
+                      idx === PLAN_TIERS.length - 1 && "rounded-r-control",
+                      idx > 0 && "border-l border-border",
+                      isSelected
+                        ? "bg-accent-dim text-accent"
+                        : "bg-transparent text-text-faint hover:text-text-muted",
+                    )}
+                  >
+                    {tier.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -454,35 +549,43 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-                Price / 1K Tokens In *
+                Price / 1K Tokens In
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.pricing_per_1k_tokens_in}
-                onChange={(e) =>
-                  updateField("pricing_per_1k_tokens_in", e.target.value)
-                }
-                required
-                placeholder="0.000150"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
-              />
+              <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
+                <span className="flex items-center rounded-l-control border-r border-border bg-bg-base px-2.5 font-mono text-sm text-text-faint select-none">
+                  $
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.pricing_per_1k_tokens_in}
+                  onChange={(e) =>
+                    updateField("pricing_per_1k_tokens_in", e.target.value)
+                  }
+                  placeholder="0.000150"
+                  className="min-w-0 flex-1 rounded-r-control bg-transparent px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                />
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-                Price / 1K Tokens Out *
+                Price / 1K Tokens Out
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.pricing_per_1k_tokens_out}
-                onChange={(e) =>
-                  updateField("pricing_per_1k_tokens_out", e.target.value)
-                }
-                required
-                placeholder="0.000600"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
-              />
+              <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
+                <span className="flex items-center rounded-l-control border-r border-border bg-bg-base px-2.5 font-mono text-sm text-text-faint select-none">
+                  $
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.pricing_per_1k_tokens_out}
+                  onChange={(e) =>
+                    updateField("pricing_per_1k_tokens_out", e.target.value)
+                  }
+                  placeholder="0.000600"
+                  className="min-w-0 flex-1 rounded-r-control bg-transparent px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -498,31 +601,89 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
           </label>
 
           {/* ---------------------------------------------------------------- */}
-          {/* Model Slots (4 slots)                                            */}
+          {/* Section 2 — Connection Credentials                               */}
           {/* ---------------------------------------------------------------- */}
-          <div className="rounded-card border border-border bg-bg-base p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Plus size={14} className="text-accent" />
-              <h3 className="text-[13px] font-semibold text-text-primary">
-                Model Slots
+          <div className="rounded-card border border-border bg-bg-base p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <KeyRound size={14} className="text-text-faint" />
+              <h3 className="text-label-nav uppercase text-text-faint tracking-wider">
+                Connection Credentials
               </h3>
             </div>
-            <p className="mb-4 text-[11px] text-text-faint">
-              Configure deployment names for each model slot. All 4 slots must
-              have a deployment name to publish.
-            </p>
 
-            <div className="space-y-4">
-              {SLOT_KEYS.map(({ key, label }) => (
-                <ModelSlotField
-                  key={key}
-                  label={label}
-                  slot={form.slots[key]}
-                  onUpdate={(field, value) => updateSlot(key, field, value)}
+            {/* Endpoint URL — Azure only */}
+            {form.provider === "azure_openai" && (
+              <div>
+                <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
+                  Endpoint URL
+                </label>
+                <input
+                  type="text"
+                  value={form.endpoint_url}
+                  onChange={(e) => updateField("endpoint_url", e.target.value)}
+                  maxLength={512}
+                  placeholder="https://ai-xxx.cognitiveservices.azure.com/"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
-              ))}
+              </div>
+            )}
+
+            {/* API Key — all providers */}
+            <div>
+              <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
+                API Key
+              </label>
+              <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={form.api_key}
+                  onChange={(e) => updateField("api_key", e.target.value)}
+                  placeholder={
+                    isEditing && entry.key_present
+                      ? `••••••••${entry.api_key_last4 ?? "****"}`
+                      : "Enter API key"
+                  }
+                  autoComplete="new-password"
+                  className="min-w-0 flex-1 rounded-l-control bg-transparent px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey((v) => !v)}
+                  className="flex items-center px-2.5 text-text-faint transition-colors hover:text-text-muted"
+                  tabIndex={-1}
+                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                >
+                  {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              {isEditing && entry.key_present && (
+                <p className="mt-1 text-[10px] text-text-faint">
+                  Leave blank to keep the existing key
+                </p>
+              )}
             </div>
+
+            {/* API Version — Azure only */}
+            {form.provider === "azure_openai" && (
+              <div>
+                <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
+                  API Version
+                </label>
+                <input
+                  type="text"
+                  value={form.api_version}
+                  onChange={(e) => updateField("api_version", e.target.value)}
+                  maxLength={64}
+                  placeholder="2024-12-01-preview"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                />
+              </div>
+            )}
           </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Section 3 — Catalog                                              */}
+          {/* ---------------------------------------------------------------- */}
 
           {/* Best Practices (Markdown) */}
           <div>
@@ -559,17 +720,30 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               />
             )}
           </div>
+
+          {/* Test results inline */}
+          {testResults && <TestResultsPanel results={testResults} />}
+
+          {/* Test error */}
+          {testError && (
+            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2.5">
+              <p className="text-[12px] text-alert">{testError}</p>
+            </div>
+          )}
         </div>
 
-        {/* Slot validation hint */}
-        {showSlotValidationHint && (
-          <p className="mt-3 text-[12px] text-warn">
-            All 4 model slots must have a deployment name before publishing.
-          </p>
+        {/* Session-expired warning */}
+        {sessionExpired && (
+          <div className="mt-3 rounded-control border border-warn/40 bg-warn-dim px-3 py-2.5">
+            <p className="text-[12px] text-warn">
+              Your session expired. Please copy your form data, log in again,
+              and re-enter it.
+            </p>
+          </div>
         )}
 
-        {/* Mutation error */}
-        {mutationError && (
+        {/* Mutation error (not shown when session-expired banner is active) */}
+        {mutationError && !sessionExpired && (
           <p className="mt-4 text-sm text-alert">
             {mutationError.message ?? "Operation failed."}
           </p>
@@ -592,8 +766,8 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             )}
           </div>
 
-          {/* Right side: Cancel / Save Draft / Save & Publish */}
-          <div className="flex items-center gap-3">
+          {/* Right side: Cancel / Test / Save Draft / Publish */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -604,13 +778,43 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
 
             {!isDeprecated && (
               <>
-                {/* Draft -> Publish (only for Draft entries — shown even when
-                    slots are incomplete so user gets validation hint) */}
+                {/* Test button — only shown when editing a saved entry */}
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={handleTest}
+                    disabled={!canTest || testMutation.isPending}
+                    title={
+                      !isEditing
+                        ? "Save the entry first to enable testing"
+                        : !entry.key_present
+                          ? "Add an API key to enable testing"
+                          : entry.last_test_passed_at
+                            ? `Last tested ${formatDate(entry.last_test_passed_at)}`
+                            : "Run connectivity test"
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
+                  >
+                    {testMutation.isPending ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <FlaskConical size={14} />
+                    )}
+                    Test
+                  </button>
+                )}
+
+                {/* Publish — only for Draft entries that have passed a test */}
                 {isEditing && entry.status === "Draft" && (
                   <button
                     type="button"
                     onClick={handlePublish}
-                    disabled={isPending || !canSave}
+                    disabled={isPending || !canPublish}
+                    title={
+                      !canPublish
+                        ? "Run the connectivity test before publishing"
+                        : undefined
+                    }
                     className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
                   >
                     {publishMutation.isPending || updateMutation.isPending ? (
@@ -618,7 +822,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                     ) : (
                       <CheckCircle2 size={14} />
                     )}
-                    Save &amp; Publish
+                    Publish
                   </button>
                 )}
 
@@ -627,12 +831,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   disabled={!canSave || isPending}
                   className="flex items-center gap-1.5 rounded-control border border-accent px-4 py-1.5 text-sm font-semibold text-accent transition-opacity hover:bg-accent-dim disabled:opacity-40"
                 >
-                  {updateMutation.isPending && !publishMutation.isPending && (
+                  {(updateMutation.isPending && !publishMutation.isPending) ||
+                  createMutation.isPending ? (
                     <Loader2 size={14} className="animate-spin" />
-                  )}
-                  {createMutation.isPending && (
-                    <Loader2 size={14} className="animate-spin" />
-                  )}
+                  ) : null}
                   {isEditing ? "Save Draft" : "Save Draft"}
                 </button>
               </>
@@ -711,63 +913,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
 }
 
 // ---------------------------------------------------------------------------
-// ModelSlotField sub-component
-// ---------------------------------------------------------------------------
-
-interface ModelSlotFieldProps {
-  label: string;
-  slot: SlotFormState;
-  onUpdate: (field: keyof SlotFormState, value: string | boolean) => void;
-}
-
-function ModelSlotField({ label, slot, onUpdate }: ModelSlotFieldProps) {
-  return (
-    <div className="rounded-control border border-border-faint bg-bg-surface p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[12px] font-medium text-text-primary">
-          {label}
-        </span>
-        <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-text-faint">
-          <input
-            type="checkbox"
-            checked={slot.override}
-            onChange={(e) => onUpdate("override", e.target.checked)}
-            className="accent-accent"
-          />
-          Override
-        </label>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <select
-          value={slot.provider}
-          onChange={(e) => onUpdate("provider", e.target.value)}
-          className="rounded-control border border-border bg-bg-elevated px-2.5 py-1.5 text-[12px] text-text-primary transition-colors focus:border-accent focus:outline-none"
-        >
-          {PROVIDERS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          value={slot.deployment_name}
-          onChange={(e) => onUpdate("deployment_name", e.target.value)}
-          maxLength={255}
-          placeholder="deployment-name"
-          className="rounded-control border border-border bg-bg-elevated px-2.5 py-1.5 font-mono text-[12px] text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Simple markdown preview (renders basic markdown without external dep)
 // ---------------------------------------------------------------------------
 
 function MarkdownPreview({ content }: { content: string }) {
-  // Simple line-by-line rendering: headings, bold, lists, paragraphs
   const lines = content.split("\n");
   return (
     <div className="space-y-1 text-[13px] leading-relaxed text-text-primary">

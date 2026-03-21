@@ -149,9 +149,9 @@ alembic upgrade head                              # apply all
 alembic revision --autogenerate -m "description" # generate new
 ```
 
-49 migrations applied (v001–v048 + **init**).
+50 migrations applied (v001–v049 + **init**).
 
-Alembic chain (v045–v048 — Agent Template A2A Compliance):
+Alembic chain (v045–v049):
 
 ```
 v044 → v045 (agent_templates: required_credentials, auth_mode, plan_required)
@@ -159,6 +159,7 @@ v044 → v045 (agent_templates: required_credentials, auth_mode, plan_required)
      → v046b (agent_access_control backfill — DML only)
      → v047 (agent_cards: credentials_vault_path)
      → v048 (tool_catalog RLS update: allow degraded health_status)
+     → v049 (llm_library: endpoint_url, api_key_encrypted, api_key_last4, api_version, last_test_passed_at)
 ```
 
 ---
@@ -361,6 +362,34 @@ finally:
 ```
 
 `list_providers()` and `get_provider()` NEVER return `api_key_encrypted`. They return `key_present: bool` instead.
+
+### 15b. LLM Library Credentials — Shared Crypto Module
+
+`llm_library` also stores encrypted API keys via `app.core.crypto` (extracted from `ProviderService`). This module provides pure utility functions that both `llm_providers` (via `ProviderService` thin wrappers) and `llm_library` routes consume directly.
+
+```python
+from app.core.crypto import encrypt_api_key, decrypt_api_key
+
+# Encrypt before storing in BYTEA
+encrypted_bytes = encrypt_api_key(plaintext_api_key)
+last4 = plaintext_api_key[-4:]  # store in api_key_last4 for masked display
+
+# Decrypt for use (e.g. in test endpoint)
+decrypted_key = ""
+try:
+    decrypted_key = decrypt_api_key(encrypted_bytes)
+    # construct provider client using decrypted_key
+finally:
+    decrypted_key = ""  # ALWAYS clear in finally block
+```
+
+**`llm_library` credential invariants:**
+
+- `api_key_encrypted` is NEVER in `_SELECT_COLUMNS` — fetched only in the test endpoint via separate query
+- Responses return `key_present: bool` and `api_key_last4: str|null`, never the key itself
+- When `api_key`, `endpoint_url`, or `api_version` is PATCHed, `last_test_passed_at` is reset to `NULL` (stale test invalidated)
+- Test endpoint (`POST /{id}/test`) constructs client from entry's stored credentials — never from `AZURE_PLATFORM_OPENAI_*` env vars
+- `last_test_passed_at` must be set before publish is allowed (enforced server-side)
 
 ### 16. InstrumentedLLMClient — DB-First, Env Fallback
 
@@ -572,6 +601,8 @@ Requires: Full running stack. Uses Playwright.
 28. `OutputGuardrailChecker` (guardrails.py) is invoked at **Stage 7b** — after LLM synthesis (Stage 7) but **before** persistence (Stage 8). Never call it after Stage 8. Guardrail config stored in `agent_cards.capabilities.guardrails` does nothing unless the orchestrator reads and applies it.
 29. `_validate_ssrf_safe_url()` in a2a_routing.py must be called on every outbound A2A URL — never import-inline-reimplement this check. DNS rebinding attacks require the check to happen at execution time, not at config time.
 30. `DistributedJobLock(f"cred_health:{tenant_id}", ttl=86000)` must be held before any vault operations in the credential health job — prevents duplicate notifications across pods.
+31. `llm_library` test endpoint (`POST /{id}/test`) uses entry's stored credentials — NOT `AZURE_PLATFORM_OPENAI_*` env vars. `_SELECT_COLUMNS` never includes `api_key_encrypted`; the test endpoint fetches it via a separate `_get_encrypted_key()` query. If `key_present=false`, the endpoint returns 422 — do not re-implement in any new feature that calls the test endpoint.
+32. `app.core.crypto` provides module-level `encrypt_api_key()` / `decrypt_api_key()` for use outside `ProviderService`. `ProviderService.encrypt_api_key()` / `.decrypt_api_key()` are thin wrappers that delegate to `app.core.crypto` — both use the same Fernet key derived from `JWT_SECRET_KEY`. Never duplicate the Fernet logic; always import from `app.core.crypto`.
 
 ---
 

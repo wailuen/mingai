@@ -1,12 +1,12 @@
-commit: 8ebad86
-timestamp: 2026-03-21T12:00:00Z
-baseline_pass: 2768
-baseline_fail: 11
-final_pass: 2774
-final_fail: 11
-new_tests: 6
+commit: 7479ec8 (LLM Library redesign uncommitted)
+timestamp: 2026-03-21T14:00:00Z
+baseline_pass: 2838
+baseline_fail: 7
+final_pass: 2838
+final_fail: 7
+new_tests: 56
 regressions: 0
-command: python -m pytest src/backend/tests/unit/ --ignore=src/backend/tests/unit/test_azure_cost_job.py -q --tb=short
+command: pytest tests/unit/ --ignore=tests/unit/test_azure_cost_job.py --ignore=tests/unit/test_embedding_service.py --tb=short -q
 
 Notes:
   - Excluded test_azure_cost_job.py: error at collection (pre-existing env config issue)

@@ -296,23 +296,57 @@ Cost lookup: `InstrumentedLLMClient` reads per-model pricing from Redis key `min
 
 ---
 
-## llm_library Table (v009)
+## llm_library Table (v009 + v049)
 
-Platform admins manage available models through this table. Tenant admins select from Published entries.
+Platform admins manage available LLM deployment endpoints through this table. Each row is a **fully-specified connection to one LLM deployment** — not just a metadata label. Tenant admins select from Published entries when configuring LLM Profiles.
 
-| Column               | Type          | Notes                                                           |
-| -------------------- | ------------- | --------------------------------------------------------------- |
-| `id`                 | UUID          | PK                                                              |
-| `provider`           | TEXT          | e.g. `azure_openai`, `openai`                                   |
-| `model_name`         | TEXT          | Deployment or model string                                      |
-| `plan_tier`          | TEXT          | Minimum plan required (`starter`, `professional`, `enterprise`) |
-| `status`             | TEXT          | CHECK(`Draft` or `Published` or `Deprecated`)                   |
-| `pricing_per_1k_in`  | NUMERIC(10,6) | Cost per 1k input tokens in USD                                 |
-| `pricing_per_1k_out` | NUMERIC(10,6) | Cost per 1k output tokens in USD                                |
-| `created_at`         | TIMESTAMPTZ   |                                                                 |
-| `updated_at`         | TIMESTAMPTZ   |                                                                 |
+### ADR-001: Credential Storage Approach
 
-Lifecycle: `Draft → Published → Deprecated`. Only Published entries are visible to tenant admins. Deprecated entries are retained for historical cost lookups.
+Credentials are stored directly in `llm_library` (Option A), not via FK to `llm_providers`. Rationale: one entry = one self-contained connection. Different deployments may share an account today but diverge tomorrow. `llm_providers` serves platform-wide provider management with a different lifecycle — coupling them would entangle two distinct features.
+
+Consequence: if the same subscription key appears in 10 entries, rotation requires patching 10 rows. Acceptable Day 1 cost — a bulk-rotate admin action can address this later.
+
+### Schema (17 columns after v049)
+
+| Column                      | Type          | Notes                                                                            |
+| --------------------------- | ------------- | -------------------------------------------------------------------------------- |
+| `id`                        | UUID          | PK                                                                               |
+| `provider`                  | TEXT          | `azure_openai`, `openai_direct`, `anthropic` (immutable after creation)          |
+| `model_name`                | TEXT          | Deployment or model string (immutable after creation)                            |
+| `display_name`              | TEXT          | Human-readable label shown to tenant admins                                      |
+| `plan_tier`                 | TEXT          | Minimum plan required (`starter`, `professional`, `enterprise`)                  |
+| `status`                    | TEXT          | CHECK(`Draft` or `Published` or `Deprecated`)                                    |
+| `is_recommended`            | BOOLEAN       | Platform admin flag — surfaces in tenant LLM profile picker                      |
+| `best_practices_md`         | TEXT          | Markdown usage guidance shown in LLM profile slot picker                         |
+| `pricing_per_1k_tokens_in`  | NUMERIC(10,6) | Cost per 1k input tokens in USD                                                  |
+| `pricing_per_1k_tokens_out` | NUMERIC(10,6) | Cost per 1k output tokens in USD                                                 |
+| `endpoint_url`              | VARCHAR(500)  | **Added v049.** Required for `azure_openai`. Must start with `https://`.         |
+| `api_key_encrypted`         | BYTEA         | **Added v049.** Fernet-encrypted API key. NEVER returned in any API response.    |
+| `api_key_last4`             | VARCHAR(4)    | **Added v049.** Last 4 chars of plaintext key. Safe to show in UI as `****1234`. |
+| `api_version`               | VARCHAR(50)   | **Added v049.** Required for `azure_openai`, e.g. `2024-12-01-preview`.          |
+| `last_test_passed_at`       | TIMESTAMPTZ   | **Added v049.** Set to `NOW()` when test endpoint passes. Required for publish.  |
+| `created_at`                | TIMESTAMPTZ   |                                                                                  |
+| `updated_at`                | TIMESTAMPTZ   |                                                                                  |
+
+### Provider Field Requirements
+
+| Field                       |    `azure_openai`    |   `openai_direct`    |     `anthropic`      |
+| --------------------------- | :------------------: | :------------------: | :------------------: |
+| `model_name`                |       REQUIRED       |       REQUIRED       |       REQUIRED       |
+| `endpoint_url`              |     **REQUIRED**     |          —           |          —           |
+| `api_key`                   |     **REQUIRED**     |     **REQUIRED**     |     **REQUIRED**     |
+| `api_version`               |     **REQUIRED**     |          —           |          —           |
+| `pricing_per_1k_tokens_in`  | required for publish | required for publish | required for publish |
+| `pricing_per_1k_tokens_out` | required for publish | required for publish | required for publish |
+| `last_test_passed_at`       | required for publish | required for publish | required for publish |
+
+### Encryption
+
+`api_key_encrypted` uses Fernet (module `app.core.crypto`). Key derived from `JWT_SECRET_KEY` via PBKDF2HMAC (200k iterations, SHA256, salt `b"mingai-har-v1"`) — same derivation as HAR private keys and `llm_providers`. Decrypted key is cleared (`key = ""`) in a `finally` block immediately after client construction. `api_key_encrypted` is **never** in `_SELECT_COLUMNS`; it is fetched only in the test endpoint via a separate query.
+
+### Lifecycle
+
+`Draft → Published → Deprecated`. Only Published entries are visible to tenant admins. Deprecated entries are retained for historical cost lookups. Publish is gated on: credentials set + test passed + pricing set (provider-specific requirements above).
 
 ---
 
@@ -347,7 +381,7 @@ alembic upgrade head   # apply all migrations
 alembic revision --autogenerate -m "description"  # generate new migration
 ```
 
-42 migrations applied (v001–v041 + init). Migration files: `alembic/versions/`. Notable groups: v001–v008 core schema + HAR + cache; v009–v011 LLM library + semantic cache; v039 llm_providers; v040–v041 pgvector search (search_index_registry, search_chunks).
+49 migrations applied (v001–v049 + init). Migration files: `alembic/versions/`. Notable groups: v001–v008 core schema + HAR + cache; v009–v011 LLM library + semantic cache; v039 llm_providers; v040–v041 pgvector search (search_index_registry, search_chunks); v045–v048 agent template A2A compliance; **v049 llm_library credentials** (adds `endpoint_url`, `api_key_encrypted`, `api_key_last4`, `api_version`, `last_test_passed_at`).
 
 ---
 
@@ -514,14 +548,14 @@ Migrations v040 (`search_index_registry`) and v041 (`search_chunks`). Replaces A
 
 **search_chunks** (v041): Unified content store for all source types (SharePoint KB, Google Drive KB, conversation documents). Key columns:
 
-| Column         | Type                        | Notes                                                              |
-| -------------- | --------------------------- | ------------------------------------------------------------------ |
-| `chunk_key`    | TEXT                        | Business key — unique per `(tenant_id, index_id, chunk_key)`       |
+| Column         | Type                        | Notes                                                                                   |
+| -------------- | --------------------------- | --------------------------------------------------------------------------------------- |
+| `chunk_key`    | TEXT                        | Business key — unique per `(tenant_id, index_id, chunk_key)`                            |
 | `index_id`     | TEXT                        | KB: `{tenant_id}-{integration_id}` · Conversation: `conv-{tenant_id}-{conversation_id}` |
-| `source_type`  | TEXT                        | `sharepoint`, `google_drive`, `conversation`, `tenant`             |
-| `embedding`    | `halfvec(1536)`             | text-embedding-3-small output                                      |
-| `fts_doc`      | `tsvector GENERATED STORED` | `title` (weight A) + `content` (weight D), `'simple'` dictionary   |
-| `content_hash` | TEXT                        | SHA-256 of content — upsert guard (unchanged chunks skip re-write) |
+| `source_type`  | TEXT                        | `sharepoint`, `google_drive`, `conversation`, `tenant`                                  |
+| `embedding`    | `halfvec(1536)`             | text-embedding-3-small output                                                           |
+| `fts_doc`      | `tsvector GENERATED STORED` | `title` (weight A) + `content` (weight D), `'simple'` dictionary                        |
+| `content_hash` | TEXT                        | SHA-256 of content — upsert guard (unchanged chunks skip re-write)                      |
 
 RLS: same policy as all other tenant tables (`app.current_tenant_id`). Platform bypass via `app.scope = 'platform'`.
 

@@ -26,6 +26,15 @@ function formatPrice(val: number): string {
   return val.toFixed(6);
 }
 
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return "< 1 hr ago";
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 function statusBadgeClass(status: LLMLibraryStatus): string {
   switch (status) {
     case "Published":
@@ -66,7 +75,7 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 4 }).map((_, i) => (
         <tr key={i} className="border-b border-border-faint">
-          {Array.from({ length: 8 }).map((_, j) => (
+          {Array.from({ length: 11 }).map((_, j) => (
             <td key={j} className="px-3.5 py-3">
               <div className="h-4 w-20 animate-pulse rounded-badge bg-bg-elevated" />
             </td>
@@ -151,7 +160,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
       },
       {
         accessorKey: "model_name",
-        header: "Model Name",
+        header: "Deployment Name",
         cell: (info) => (
           <span className="font-mono text-data-value text-text-muted">
             {info.getValue<string>()}
@@ -194,6 +203,53 @@ export function LibraryList({ onEdit }: LibraryListProps) {
           );
         },
         enableSorting: true,
+      },
+      {
+        id: "endpoint_url",
+        header: "Endpoint",
+        cell: ({ row }) => {
+          const url = row.original.endpoint_url;
+          if (!url) return <span className="text-text-faint">—</span>;
+          const display = url.length > 40 ? url.slice(0, 40) + "…" : url;
+          return (
+            <span className="font-mono text-[11px] text-text-muted">
+              {display}
+            </span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "key_present",
+        header: "Key",
+        cell: ({ row }) => {
+          const present = row.original.key_present;
+          return present ? (
+            <span className="inline-flex items-center gap-1 rounded-badge border border-accent bg-accent-dim px-2 py-0.5 text-[10px] text-accent">
+              Key set
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-badge border border-border px-2 py-0.5 text-[10px] text-text-faint">
+              No key
+            </span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "last_test_passed_at",
+        header: "Tested",
+        cell: ({ row }) => {
+          const iso = row.original.last_test_passed_at;
+          if (!iso)
+            return <span className="text-[12px] text-text-faint">Never</span>;
+          return (
+            <span className="font-mono text-[11px] text-text-muted">
+              {relativeTime(iso)}
+            </span>
+          );
+        },
+        enableSorting: false,
       },
       {
         accessorKey: "status",

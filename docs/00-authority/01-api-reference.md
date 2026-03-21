@@ -23,14 +23,14 @@ Login body: `{ "email": str, "password": str }`. Returns `{ "access_token", "tok
 
 ## Chat
 
-| Method | Path                  | Auth | Description                                                                                 |
-| ------ | --------------------- | ---- | ------------------------------------------------------------------------------------------- |
-| POST   | `/chat/stream`        | Any  | SSE streaming chat. Body: `{ "query", "agent_id", "conversation_id"?, "active_team_id"? }`. |
-| POST   | `/chat/feedback`      | Any  | Thumbs up/down on a message. Body: `{ "message_id", "rating": "up"\|"down", "comment"? }`.  |
-| GET    | `/conversations`                          | Any  | List conversations (paginated: `page`, `page_size`).                                                                                                                              |
-| GET    | `/conversations/{id}`                     | Any  | Get conversation with messages.                                                                                                                                                   |
-| DELETE | `/conversations/{id}`                     | Any  | Delete conversation (also purges conversation-scoped search_chunks).                                                                                                              |
-| POST   | `/conversations/{id}/documents`           | Any  | Upload a document (PDF/DOCX/PPTX/TXT ≤ 20 MB) for context-aware chat. Multipart form-data. Returns `{ conversation_id, file_name, chunks_indexed, index_id }`. 500 if no chunks extracted. |
+| Method | Path                            | Auth | Description                                                                                                                                                                                |
+| ------ | ------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/chat/stream`                  | Any  | SSE streaming chat. Body: `{ "query", "agent_id", "conversation_id"?, "active_team_id"? }`.                                                                                                |
+| POST   | `/chat/feedback`                | Any  | Thumbs up/down on a message. Body: `{ "message_id", "rating": "up"\|"down", "comment"? }`.                                                                                                 |
+| GET    | `/conversations`                | Any  | List conversations (paginated: `page`, `page_size`).                                                                                                                                       |
+| GET    | `/conversations/{id}`           | Any  | Get conversation with messages.                                                                                                                                                            |
+| DELETE | `/conversations/{id}`           | Any  | Delete conversation (also purges conversation-scoped search_chunks).                                                                                                                       |
+| POST   | `/conversations/{id}/documents` | Any  | Upload a document (PDF/DOCX/PPTX/TXT ≤ 20 MB) for context-aware chat. Multipart form-data. Returns `{ conversation_id, file_name, chunks_indexed, index_id }`. 500 if no chunks extracted. |
 
 ---
 
@@ -113,16 +113,16 @@ All require `scope=platform` (i.e. `platform_admin` role).
 
 All require `scope=platform`. `api_key` is accepted on POST/PATCH but **never returned** in any response. Responses include `key_present: bool` instead.
 
-| Method | Path                                    | Auth           | Description                                                                                                                                                                                           |
-| ------ | --------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/platform/providers`                   | platform_admin | List all providers. Query: `?enabled_only=true`. Returns `{ providers: [...], bootstrap_active: bool }`. `bootstrap_active=true` means 0 rows exist and env fallback is in use.                       |
-| GET    | `/platform/providers/health-summary`    | platform_admin | Aggregate health counts: `{ total, healthy, error, unchecked, last_checked_at }`.                                                                                                                     |
-| GET    | `/platform/providers/{id}`              | platform_admin | Get single provider. Never returns `api_key_encrypted`.                                                                                                                                               |
-| POST   | `/platform/providers`                   | platform_admin | Create provider. Body: `{ "provider_type", "display_name", "api_key", "endpoint"?, "models"?, "options"?, "pricing"?, "is_enabled"?, "is_default"? }`. Returns 201. `azure_openai` requires endpoint. |
-| PATCH  | `/platform/providers/{id}`              | platform_admin | Update provider. Omit `api_key` to keep existing encrypted key.                                                                                                                                       |
-| DELETE | `/platform/providers/{id}`              | platform_admin | Delete provider. 409 if it is the default provider or the only enabled provider.                                                                                                                      |
-| POST   | `/platform/providers/{id}/test`         | platform_admin | Test connectivity via real API call. Returns `{ success, latency_ms, error? }`. Updates `provider_status` and `last_health_check_at`.                                                                 |
-| POST   | `/platform/providers/{id}/set-default`  | platform_admin | Atomically set this provider as the default (clears all others). 422 if provider is disabled.                                                                                                         |
+| Method | Path                                   | Auth           | Description                                                                                                                                                                                           |
+| ------ | -------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/platform/providers`                  | platform_admin | List all providers. Query: `?enabled_only=true`. Returns `{ providers: [...], bootstrap_active: bool }`. `bootstrap_active=true` means 0 rows exist and env fallback is in use.                       |
+| GET    | `/platform/providers/health-summary`   | platform_admin | Aggregate health counts: `{ total, healthy, error, unchecked, last_checked_at }`.                                                                                                                     |
+| GET    | `/platform/providers/{id}`             | platform_admin | Get single provider. Never returns `api_key_encrypted`.                                                                                                                                               |
+| POST   | `/platform/providers`                  | platform_admin | Create provider. Body: `{ "provider_type", "display_name", "api_key", "endpoint"?, "models"?, "options"?, "pricing"?, "is_enabled"?, "is_default"? }`. Returns 201. `azure_openai` requires endpoint. |
+| PATCH  | `/platform/providers/{id}`             | platform_admin | Update provider. Omit `api_key` to keep existing encrypted key.                                                                                                                                       |
+| DELETE | `/platform/providers/{id}`             | platform_admin | Delete provider. 409 if it is the default provider or the only enabled provider.                                                                                                                      |
+| POST   | `/platform/providers/{id}/test`        | platform_admin | Test connectivity via real API call. Returns `{ success, latency_ms, error? }`. Updates `provider_status` and `last_health_check_at`.                                                                 |
+| POST   | `/platform/providers/{id}/set-default` | platform_admin | Atomically set this provider as the default (clears all others). 422 if provider is disabled.                                                                                                         |
 
 Provider response shape: `id`, `provider_type`, `display_name`, `description`, `endpoint`, `models` (dict), `options` (dict), `pricing`, `is_enabled`, `is_default`, `provider_status` (`unchecked`\|`healthy`\|`error`\|`timeout`\|`auth_failed`), `last_health_check_at`, `health_error`, `key_present`.
 
@@ -130,14 +130,115 @@ Valid `provider_type` values: `azure_openai`, `openai`, `anthropic`, `deepseek`,
 
 ### Platform LLM Library
 
-| Method | Path                                   | Auth           | Description                                                                                                                                                                    |
-| ------ | -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| POST   | `/platform/llm-library`                | platform_admin | Create a Draft entry. Body: `{ "provider", "model_name", "plan_tier", "pricing_per_1k_in", "pricing_per_1k_out" }`. Returns 201 with new entry.                                |
-| GET    | `/platform/llm-library`                | platform_admin | List entries. Query: `?status=Draft\|Published\|Deprecated`. Omitting `status` returns all.                                                                                    |
-| GET    | `/platform/llm-library/{id}`           | platform_admin | Get single entry.                                                                                                                                                              |
-| PATCH  | `/platform/llm-library/{id}`           | platform_admin | Update Draft or Published entry. Allowlisted fields: `provider`, `model_name`, `plan_tier`, `pricing_per_1k_in`, `pricing_per_1k_out`. Cannot update a Deprecated entry — 409. |
-| POST   | `/platform/llm-library/{id}/publish`   | platform_admin | Transition `Draft → Published`. Makes the entry visible to tenant admins. 409 if already Published or Deprecated.                                                              |
-| POST   | `/platform/llm-library/{id}/deprecate` | platform_admin | Transition `Published → Deprecated`. Entry is hidden from tenant admins but retained for cost history. 409 if not currently Published.                                         |
+Each LLM Library entry is a **fully-specified connection to one LLM deployment** — not just a metadata label. It stores endpoint URL, encrypted API key, API version (for Azure), and pricing. Tenant admins select from Published entries when configuring LLM Profiles.
+
+**Security invariant**: `api_key_encrypted` (BYTEA) is NEVER returned in any response. The response includes `key_present: bool` and `api_key_last4: str` instead. The plaintext key exists in memory only for the duration of one test call and is cleared in a `finally` block.
+
+#### Request / Response Shapes
+
+**`POST /platform/llm-library` — Request body**
+
+| Field                       | Required                  | Type   | Notes                                                    |
+| --------------------------- | ------------------------- | ------ | -------------------------------------------------------- |
+| `provider`                  | Yes                       | string | `azure_openai`, `openai_direct`, `anthropic`             |
+| `model_name`                | Yes                       | string | Deployment name or model ID. Immutable after creation.   |
+| `display_name`              | Yes                       | string | Human-readable label shown to tenant admins.             |
+| `plan_tier`                 | Yes                       | string | `starter`, `professional`, `enterprise`                  |
+| `endpoint_url`              | azure_openai only         | string | Must start with `https://`                               |
+| `api_key`                   | Recommended               | string | Plaintext; encrypted before storage, never stored as-is. |
+| `api_version`               | azure_openai only         | string | Format: `YYYY-MM-DD` or `YYYY-MM-DD-preview`             |
+| `pricing_per_1k_tokens_in`  | No (required for publish) | number | USD cost per 1k input tokens                             |
+| `pricing_per_1k_tokens_out` | No (required for publish) | number | USD cost per 1k output tokens                            |
+| `is_recommended`            | No                        | bool   |                                                          |
+| `best_practices_md`         | No                        | string | Markdown usage guidance                                  |
+
+**`PATCH /platform/llm-library/{id}` — Allowlisted fields**
+
+`display_name`, `plan_tier`, `is_recommended`, `best_practices_md`, `pricing_per_1k_tokens_in`, `pricing_per_1k_tokens_out`, `endpoint_url`, `api_key`, `api_key_encrypted`, `api_key_last4`, `api_version`
+
+`provider` and `model_name` are immutable. When `api_key`, `endpoint_url`, or `api_version` is updated, `last_test_passed_at` is cleared (stale test invalidated).
+
+**`LLMLibraryEntry` — Response object**
+
+| Field                       | Type         | Notes                                                              |
+| --------------------------- | ------------ | ------------------------------------------------------------------ |
+| `id`                        | UUID         |                                                                    |
+| `provider`                  | string       |                                                                    |
+| `model_name`                | string       |                                                                    |
+| `display_name`              | string       |                                                                    |
+| `plan_tier`                 | string       |                                                                    |
+| `status`                    | string       | `Draft`, `Published`, `Deprecated`                                 |
+| `is_recommended`            | bool         |                                                                    |
+| `best_practices_md`         | string\|null |                                                                    |
+| `pricing_per_1k_tokens_in`  | number\|null |                                                                    |
+| `pricing_per_1k_tokens_out` | number\|null |                                                                    |
+| `endpoint_url`              | string\|null | Never `null` for Published azure_openai entries                    |
+| `api_version`               | string\|null | Never `null` for Published azure_openai entries                    |
+| `key_present`               | bool         | `true` if `api_key_encrypted IS NOT NULL`. api_key NEVER returned. |
+| `api_key_last4`             | string\|null | Last 4 chars of original plaintext key, e.g. `"qaN9"`              |
+| `last_test_passed_at`       | string\|null | ISO 8601 timestamp or `null` if never tested                       |
+| `created_at`                | string       |                                                                    |
+| `updated_at`                | string       |                                                                    |
+
+#### Endpoints
+
+| Method | Path                                            | Auth           | Description                                                                                                                  |
+| ------ | ----------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/platform/llm-library`                         | platform_admin | Create a Draft entry. Returns 201 with new `LLMLibraryEntry`.                                                                |
+| GET    | `/platform/llm-library`                         | platform_admin | List entries. Query: `?status=Draft\|Published\|Deprecated`. Omitting `status` returns all.                                  |
+| GET    | `/platform/llm-library/{id}`                    | platform_admin | Get single entry.                                                                                                            |
+| PATCH  | `/platform/llm-library/{id}`                    | platform_admin | Update Draft or Published entry. Returns 409 for Deprecated entries.                                                         |
+| POST   | `/platform/llm-library/{id}/publish`            | platform_admin | Transition `Draft → Published`. See publish gate conditions below. 409 if not currently Draft.                               |
+| POST   | `/platform/llm-library/{id}/deprecate`          | platform_admin | Transition `Published → Deprecated`. Entry hidden from tenant admins but retained for cost history. 409 if not Published.    |
+| POST   | `/platform/llm-library/{id}/test`               | platform_admin | Fire 3 test prompts using entry's stored credentials. Sets `last_test_passed_at` on all-pass. See test response shape below. |
+| GET    | `/platform/llm-library/{id}/tenant-assignments` | platform_admin | List LLM profiles across all tenants that have this library entry assigned to a slot. Check before deprecating.              |
+
+#### Publish Gate (`POST /{id}/publish`)
+
+422 conditions (all checked server-side):
+
+| Condition                                                                | Error                                                                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `status != "Draft"`                                                      | 409 `Only Draft entries can be published. Current status: {status}`                        |
+| `provider == "azure_openai"` and missing `endpoint_url` or `api_version` | 422 `Azure OpenAI entries require endpoint_url and api_version before publishing`          |
+| `key_present == false`                                                   | 422 `api_key must be set before publishing`                                                |
+| `last_test_passed_at IS NULL`                                            | 422 `Entry must pass a connectivity test before publishing`                                |
+| `pricing_per_1k_tokens_in` or `pricing_per_1k_tokens_out` is null        | 422 `pricing_per_1k_tokens_in and pricing_per_1k_tokens_out must be set before publishing` |
+
+#### Test Endpoint (`POST /{id}/test`)
+
+Fires 3 test prompts using the entry's stored credentials (decrypted at call time, cleared in `finally`). Does NOT use `AZURE_PLATFORM_OPENAI_*` env vars.
+
+**Response shape:**
+
+```json
+{
+  "entry_id": "uuid",
+  "provider": "azure_openai",
+  "model_name": "aihub2-main",
+  "tests": [
+    {
+      "prompt": "Hello, can you hear me?",
+      "passed": true,
+      "response_preview": "Yes, I can hear you...",
+      "latency_ms": 342,
+      "input_tokens": 12,
+      "output_tokens": 18,
+      "estimated_cost_usd": 0.000042,
+      "error": null
+    }
+  ],
+  "all_passed": true,
+  "last_test_passed_at": "2026-03-21T10:30:00Z"
+}
+```
+
+**Error conditions:**
+
+- 409 `Cannot test a Deprecated entry.`
+- 422 `This entry has no API key configured. Edit the entry and add credentials before testing.`
+- 502 if any LLM call fails
+- 504 if LLM calls exceed 30 seconds total
 
 ---
 
@@ -239,17 +340,18 @@ All stored under `tenant_configs` table using JSONB `config_data`. Auth0 enterpr
 
 Each tenant gets its own Auth0 `waad` enterprise connection. Connection is created dynamically and scoped to the tenant's Auth0 Organization.
 
-| Method | Path                             | Auth         | Description                                                                                                                                                                    |
-| ------ | -------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| POST   | `/admin/sso/entra/configure`     | tenant_admin | Create a new Entra ID enterprise connection in Auth0. Body: `{ "domain": "contoso.com", "client_id": "<uuid>", "client_secret": "<secret>" }`. Returns `{ connection_id, test_url, domain }`. 409 if SSO already configured. |
-| PATCH  | `/admin/sso/entra/configure`     | tenant_admin | Update existing Entra connection (re-key or domain change). Body: `{ "domain"?: str, "client_secret"?: str }` — at least one field required. Returns same shape. 404 if not configured. |
-| POST   | `/admin/sso/entra/test`          | tenant_admin | Get Auth0 login test URL for the Entra connection. Returns `{ "test_url": str }`. 404 if not configured.                                                                       |
+| Method | Path                         | Auth         | Description                                                                                                                                                                                                                  |
+| ------ | ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/admin/sso/entra/configure` | tenant_admin | Create a new Entra ID enterprise connection in Auth0. Body: `{ "domain": "contoso.com", "client_id": "<uuid>", "client_secret": "<secret>" }`. Returns `{ connection_id, test_url, domain }`. 409 if SSO already configured. |
+| PATCH  | `/admin/sso/entra/configure` | tenant_admin | Update existing Entra connection (re-key or domain change). Body: `{ "domain"?: str, "client_secret"?: str }` — at least one field required. Returns same shape. 404 if not configured.                                      |
+| POST   | `/admin/sso/entra/test`      | tenant_admin | Get Auth0 login test URL for the Entra connection. Returns `{ "test_url": str }`. 404 if not configured.                                                                                                                     |
 
 **Security note**: `client_secret` is forwarded to Auth0 once and never stored in `tenant_configs` or returned in any response.
 
 **Connection naming**: Auth0 connection name is `entra-{tenant_id[:8]}`. Connection ID (`con_xxxxx`) stored in `tenant_configs` as `config_type='sso_config'`.
 
 **Validation**:
+
 - `client_id` must be UUID format (8-4-4-4-12)
 - `domain` must be a valid DNS name with at least one dot (e.g. `contoso.com`)
 

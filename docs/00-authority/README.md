@@ -18,11 +18,12 @@ mingai is a multi-tenant enterprise AI assistant platform. Three roles share one
 
 ## Document Map
 
-| Document              | What it covers                                                                                                                                                                                                                                                                                                                                                                        | Read when                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `CLAUDE.md`           | Full codegen instructions: architecture, all key file paths, backend patterns (18 patterns + 22 gotchas), frontend structure, design system summary, env vars, security invariants (30)                                                                                                                                                                                               | Start of every coding session   |
-| `01-api-reference.md` | All endpoints — method, path, auth requirement, request/response shape                                                                                                                                                                                                                                                                                                                | Adding or changing any endpoint |
-| `02-architecture.md`  | Deep dives: multi-tenancy + RLS, JWT v2, cloud-agnostic storage, caching strategy, screenshot blur pipeline, issue triage stream, GitHub webhook, health score formula, HAR A2A protocol, **LLM provider credentials** (Fernet-encrypted BYTEA, DB-first resolution, bootstrap seed, background health job), **pgvector search** (hybrid RRF, HNSW provisioning, asyncpg DDL pattern) | Touching core infrastructure    |
+| Document              | What it covers                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Read when                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `CLAUDE.md`           | Full codegen instructions: architecture, all key file paths, backend patterns (18 patterns + 32 gotchas), frontend structure, design system summary, env vars, security invariants (35)                                                                                                                                                                                                                                                                              | Start of every coding session   |
+| `01-api-reference.md` | All endpoints — method, path, auth requirement, request/response shape                                                                                                                                                                                                                                                                                                                                                                                               | Adding or changing any endpoint |
+| `02-architecture.md`  | Deep dives: multi-tenancy + RLS, JWT v2, cloud-agnostic storage, caching strategy, screenshot blur pipeline, issue triage stream, GitHub webhook, health score formula, HAR A2A protocol, **LLM provider credentials** (Fernet-encrypted BYTEA, DB-first resolution, bootstrap seed, background health job), **LLM library credentials** (ADR-001, v049 schema, per-provider field matrix), **pgvector search** (hybrid RRF, HNSW provisioning, asyncpg DDL pattern) | Touching core infrastructure    |
+| `RUNBOOKS.md`         | Operational procedures: credentialize existing LLM Library entries, rotate API keys                                                                                                                                                                                                                                                                                                                                                                                  | Platform admin operations       |
 
 ---
 
@@ -55,7 +56,7 @@ API prefix: `/api/v1/` on all backend endpoints.
 | `tests/unit/`              | Tier 1 — mocked, 2087+ tests                                         |
 | `tests/integration/`       | Tier 2 — real PostgreSQL + Redis (Docker)                            |
 | `tests/e2e/`               | Tier 3 — Playwright, full stack                                      |
-| `alembic/versions/`        | Database migrations v001–v039 (40 total)                             |
+| `alembic/versions/`        | Database migrations v001–v049 (50 total)                             |
 | `docker-compose.yml`       | PostgreSQL + Redis for local dev                                     |
 
 ### Frontend (`src/web/`)
@@ -130,28 +131,29 @@ Agent-to-agent transactions with Ed25519 cryptographic signing, nonce replay pro
 
 These must pass before any feature is merged:
 
-| Gate                                                                                                   | Protects                            |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| RLS cross-tenant isolation                                                                             | All per-tenant DB reads/writes      |
-| JWT v2 auth on all protected routes                                                                    | Non-auth endpoints                  |
-| Screenshot blur gate (`blur_acknowledged=True`)                                                        | Issue create endpoint               |
-| `user_id` never in team working memory                                                                 | GDPR isolation                      |
-| Dynamic PATCH columns through allowlist                                                                | SQL injection                       |
-| `FRONTEND_URL != "*"`                                                                                  | CORS                                |
-| Secrets from env only                                                                                  | No hardcoded keys or model names    |
-| GitHub webhook HMAC-SHA256 verified; 503 if secret unset                                               | Webhook endpoint                    |
-| Issue actions validated against module-level allowlist                                                 | Admin/platform action endpoints     |
-| Redis key segments validated against `_SAFE_SEGMENT_RE`                                                | All Redis key construction          |
-| Ed25519 private keys Fernet-encrypted at rest                                                          | HAR agent keypairs                  |
-| LLM provider API keys Fernet-encrypted (BYTEA); `api_key_encrypted` never returned in any API response | `/platform/providers` all responses |
-| HAR nonce replay check (Redis SETNX TTL=600)                                                           | All signed HAR events               |
-| HAR human approval gate for amounts >= $5,000                                                          | HAR transaction commit path         |
+| Gate                                                                                                                                                                | Protects                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| RLS cross-tenant isolation                                                                                                                                          | All per-tenant DB reads/writes        |
+| JWT v2 auth on all protected routes                                                                                                                                 | Non-auth endpoints                    |
+| Screenshot blur gate (`blur_acknowledged=True`)                                                                                                                     | Issue create endpoint                 |
+| `user_id` never in team working memory                                                                                                                              | GDPR isolation                        |
+| Dynamic PATCH columns through allowlist                                                                                                                             | SQL injection                         |
+| `FRONTEND_URL != "*"`                                                                                                                                               | CORS                                  |
+| Secrets from env only                                                                                                                                               | No hardcoded keys or model names      |
+| GitHub webhook HMAC-SHA256 verified; 503 if secret unset                                                                                                            | Webhook endpoint                      |
+| Issue actions validated against module-level allowlist                                                                                                              | Admin/platform action endpoints       |
+| Redis key segments validated against `_SAFE_SEGMENT_RE`                                                                                                             | All Redis key construction            |
+| Ed25519 private keys Fernet-encrypted at rest                                                                                                                       | HAR agent keypairs                    |
+| LLM provider API keys Fernet-encrypted (BYTEA); `api_key_encrypted` never returned in any API response                                                              | `/platform/providers` all responses   |
+| LLM library API keys Fernet-encrypted (BYTEA via `app.core.crypto`); `key_present: bool` + `api_key_last4` only; test endpoint uses entry credentials, not env vars | `/platform/llm-library` all responses |
+| HAR nonce replay check (Redis SETNX TTL=600)                                                                                                                        | All signed HAR events                 |
+| HAR human approval gate for amounts >= $5,000                                                                                                                       | HAR transaction commit path           |
 
 ---
 
 ## Design System
 
-**Obsidian Intelligence** — dark-first enterprise AI. Full spec in `.claude/rules/design-system.md`. Visual ground truth: `workspaces/mingai/99-ui-proto/index.html` (screenshot via Playwright before implementing any screen).
+**Obsidian Intelligence** — dark-first enterprise AI. Full spec in `.claude/rules/design.md`. Visual ground truth: `workspaces/mingai/99-ui-proto/index.html` (screenshot via Playwright before implementing any screen).
 
 Critical rules:
 
@@ -169,6 +171,6 @@ Critical rules:
 - **Endpoint reference**: `01-api-reference.md` in this directory
 - **Architecture decisions**: `02-architecture.md` in this directory
 - **Active work items**: `todos/active/` at repo root
-- **Design system full spec**: `.claude/rules/design-system.md`
+- **Design system full spec**: `.claude/rules/design.md`
 - **Backend specialist agent**: `.claude/agents/project/mingai-backend-specialist.md`
 - **Proto UI**: `workspaces/mingai/99-ui-proto/index.html`
