@@ -365,6 +365,7 @@ async def _build_signed_envelope(
 
             canonical = json.dumps(envelope, sort_keys=True)
             signature = sign_payload(canonical.encode(), private_key_enc)
+            del private_key_enc  # Zeroize key material — do not leave in scope after use
             envelope["signature"] = signature
         except Exception as exc:
             logger.warning(

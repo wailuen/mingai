@@ -132,8 +132,8 @@ async def test_access_check_no_db_session_allows():
 
 
 @pytest.mark.asyncio
-async def test_access_check_db_error_fails_open():
-    """DB exception on access check — fail open (allow) and log."""
+async def test_access_check_db_error_fails_closed():
+    """DB exception on access check — fail closed (deny) to protect restricted agents."""
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(side_effect=RuntimeError("connection lost"))
     svc = ChatOrchestrationService.__new__(ChatOrchestrationService)
@@ -141,12 +141,12 @@ async def test_access_check_db_error_fails_open():
     result = await svc._check_agent_access(
         agent_id="a1", tenant_id="t1", user_id="u1", user_roles=[]
     )
-    assert result is True
+    assert result is False
 
 
 @pytest.mark.asyncio
-async def test_access_check_unknown_visibility_mode_fails_open():
-    """Unknown visibility_mode — fail open (allow)."""
+async def test_access_check_unknown_visibility_mode_fails_closed():
+    """Unknown visibility_mode — fail closed to prevent access via unrecognized modes."""
     svc = _make_service(
         db_result={
             "visibility_mode": "unknown_future_mode",
@@ -157,4 +157,4 @@ async def test_access_check_unknown_visibility_mode_fails_open():
     result = await svc._check_agent_access(
         agent_id="a1", tenant_id="t1", user_id="u1", user_roles=[]
     )
-    assert result is True
+    assert result is False

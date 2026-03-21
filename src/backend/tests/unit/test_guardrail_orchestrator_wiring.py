@@ -81,7 +81,11 @@ def _make_base_mocks(guardrail_config=None, retrieval_confidence=0.88):
     confidence.calculate = MagicMock(return_value=retrieval_confidence)
 
     db_session = AsyncMock()
-    db_session.execute = AsyncMock()
+    # Configure execute mock so that _check_agent_access works:
+    # result.mappings().first() must return None (no ACL row → workspace_wide → allow).
+    _access_result = MagicMock()
+    _access_result.mappings.return_value.first.return_value = None
+    db_session.execute = AsyncMock(return_value=_access_result)
     db_session.commit = AsyncMock()
 
     return {

@@ -312,6 +312,16 @@ async def _validate_and_store_credentials(
                 detail=f"Missing required credentials: {missing}",
             )
 
+        # Validate key names before constructing vault paths — prevents path traversal.
+        # Key names must be alphanumeric + underscore only (no slashes, dots, or special chars).
+        _VALID_CRED_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+        invalid_keys = [k for k in provided if not _VALID_CRED_KEY_RE.match(k)]
+        if invalid_keys:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid credential key names (must match ^[a-zA-Z_][a-zA-Z0-9_]*$): {sorted(invalid_keys)}",
+            )
+
         vault_path_prefix = f"{tenant_id}/agents/{agent_id}"
         if vault_client is not None and provided:
             for key, value in provided.items():
@@ -490,6 +500,7 @@ async def deploy_agent_template_db(
                 "tenant_id": tenant_id,
             },
         )
+        del private_key_enc  # Zeroize key material — do not leave in scope after DB write
         await db.commit()
         logger.info(
             "agent_keypair_generated",
@@ -788,10 +799,8 @@ async def deploy_agent_template(
         raise HTTPException(
             status_code=422,
             detail=(
-                "Access-restricted and KB-bound agent deployment requires runtime "
-                "enforcement to be active. Deploy with access_control='workspace' "
-                "and no kb_ids until enforcement is confirmed. "
-                "(ATA-057 removes this gate after Phase A is verified in staging)"
+                "Access-restricted and KB-bound agent deployment is not yet available. "
+                "Deploy with access_control='workspace' and no kb_ids."
             ),
         )
 
@@ -1296,6 +1305,7 @@ async def deploy_from_library_db(
                 "tenant_id": tenant_id,
             },
         )
+        del private_key_enc  # Zeroize key material — do not leave in scope after DB write
         await db.commit()
         logger.info(
             "agent_library_keypair_generated", agent_id=agent_id, tenant_id=tenant_id

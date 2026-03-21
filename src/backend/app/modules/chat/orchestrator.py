@@ -726,7 +726,7 @@ class ChatOrchestrationService:
                 tenant_id=tenant_id,
                 error=str(exc),
             )
-            return True  # Fail-open on DB error — log and allow
+            return False  # Fail-closed on DB error — deny access to protect role_restricted/user_specific agents
 
         if row is None:
             # No access control record — default workspace_wide (fallback for pre-migration agents)
@@ -745,14 +745,14 @@ class ChatOrchestrationService:
             allowed_user_ids = list(row["allowed_user_ids"] or [])
             return user_id in allowed_user_ids
 
-        # Unknown visibility_mode — fail open and log
+        # Unknown visibility_mode — fail closed and log
         logger.warning(
             "agent_access_unknown_visibility_mode",
             agent_id=agent_id,
             tenant_id=tenant_id,
             visibility_mode=visibility_mode,
         )
-        return True
+        return False
 
     async def _write_guardrail_violation_audit(
         self,

@@ -159,7 +159,7 @@ class TestToolResolverMissingIds:
         )
 
     @pytest.mark.asyncio
-    async def test_all_tool_ids_found_no_warning(self, caplog):
+    async def test_all_tool_ids_found_no_warning(self):
         """No warning logged when all tool IDs are resolved."""
         from app.modules.chat.tool_resolver import ToolResolver
 
@@ -170,12 +170,14 @@ class TestToolResolverMissingIds:
         db = _make_db_session(rows=rows)
         resolver = ToolResolver(db=db, tenant_id="ten-1")
 
-        with caplog.at_level(logging.WARNING, logger="app.modules.chat.tool_resolver"):
+        with structlog.testing.capture_logs() as cap_logs:
             result = await resolver.resolve(["t-1", "t-2"])
 
         assert len(result) == 2
-        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert not any("tool_resolution_missing" in m for m in warning_messages)
+        assert not any(
+            log.get("event") == "tool_resolution_missing"
+            for log in cap_logs
+        )
 
 
 # ---------------------------------------------------------------------------

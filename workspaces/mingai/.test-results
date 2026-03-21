@@ -1,6 +1,6 @@
-commit: 4b0cccf6e574426cfc947f760cfb8b1a00a8b136
-timestamp: 2026-03-21T02:30:00Z
-baseline_pass: 2760
+commit: 30347757801b2f1af69fc9b698a1aa23760b0ae0
+timestamp: 2026-03-21T10:50:00Z
+baseline_pass: 2761
 baseline_fail: 11
 final_pass: 2761
 final_fail: 11
@@ -16,5 +16,7 @@ Notes:
     - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
     - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
     - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
-  - Fixed this session: test_tool_resolver.py (2 tests) — updated from caplog (Python logging)
-    to structlog.testing.capture_logs() after switching module from logging to structlog
+  - Fixed this session (red team convergence):
+    - test_agent_access_check.py (2 tests) — renamed to reflect fail-closed semantics
+    - test_guardrail_orchestrator_wiring.py — fixed db_session mock to set up mappings().first() chain
+    - test_tool_resolver.py::test_all_tool_ids_found_no_warning — caplog → structlog.testing.capture_logs()

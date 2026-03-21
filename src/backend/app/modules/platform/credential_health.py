@@ -20,6 +20,7 @@ import sqlalchemy as sa
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis_client import build_redis_key, get_redis
 from app.core.scheduler import DistributedJobLock, seconds_until_utc
 from app.core.scheduler.timing import check_missed_job
 from app.core.session import async_session_factory
@@ -31,6 +32,9 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 
 _LOCK_TTL_SECONDS = 86000  # just under 24 hours
+# Dedup TTL: suppress repeat notifications for the same agent failure for 7 days.
+# Prevents notification storms when vault is unreachable for multiple consecutive days.
+_NOTIF_DEDUP_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 
 
 async def run_daily_credential_health_check(
@@ -109,54 +113,97 @@ async def run_daily_credential_health_check(
                     error=str(exc),
                 )
 
-                # Fetch admin users for this tenant to deliver the notification
+                # Deduplication: skip notification if already sent within the last 7 days.
+                # Prevents notification storms when vault is unreachable for multiple days.
+                _notified = False
                 try:
-                    admin_result = await db.execute(
-                        sa.text(
-                            """
-                            SELECT id FROM users
-                            WHERE tenant_id = :tenant_id
-                              AND role = 'admin'
-                              AND status = 'active'
-                            ORDER BY id
-                            LIMIT 10
-                            """
-                        ),
-                        {"tenant_id": tenant_id},
-                    )
-                    admin_rows = admin_result.fetchall()
-
-                    from app.modules.notifications.publisher import publish_notification
-
-                    for admin_row in admin_rows:
-                        admin_id = str(admin_row[0])
-                        try:
-                            await publish_notification(
-                                user_id=admin_id,
-                                tenant_id=tenant_id,
-                                notification_type="credential_unreachable",
-                                title="Agent credential unreachable",
-                                body=(
-                                    f"Agent '{agent_name}' credentials are unreachable. "
-                                    "Please re-deploy the agent with valid credentials."
-                                ),
-                            )
-                            notifications_sent += 1
-                        except Exception as notify_exc:
-                            logger.warning(
-                                "credential_health_notification_failed",
-                                tenant_id=tenant_id,
-                                agent_id=agent_id,
-                                admin_id=admin_id,
-                                error=str(notify_exc),
-                            )
-                except Exception as lookup_exc:
+                    _redis = get_redis()
+                    _dedup_key = build_redis_key(tenant_id, "cred_health_notified", agent_id)
+                    _already_notified = await _redis.exists(_dedup_key)
+                    if _already_notified:
+                        logger.debug(
+                            "credential_health_notification_suppressed",
+                            tenant_id=tenant_id,
+                            agent_id=agent_id,
+                            reason="dedup_key_exists",
+                        )
+                        _notified = True
+                except Exception as dedup_exc:
                     logger.warning(
-                        "credential_health_admin_lookup_failed",
+                        "credential_health_dedup_check_failed",
                         tenant_id=tenant_id,
                         agent_id=agent_id,
-                        error=str(lookup_exc),
+                        error=str(dedup_exc),
                     )
+
+                if not _notified:
+                    # Fetch admin users for this tenant to deliver the notification
+                    try:
+                        admin_result = await db.execute(
+                            sa.text(
+                                """
+                                SELECT id FROM users
+                                WHERE tenant_id = :tenant_id
+                                  AND role = 'admin'
+                                  AND status = 'active'
+                                ORDER BY id
+                                LIMIT 10
+                                """
+                            ),
+                            {"tenant_id": tenant_id},
+                        )
+                        admin_rows = admin_result.fetchall()
+
+                        from app.modules.notifications.publisher import publish_notification
+
+                        _any_sent = False
+                        for admin_row in admin_rows:
+                            admin_id = str(admin_row[0])
+                            try:
+                                await publish_notification(
+                                    user_id=admin_id,
+                                    tenant_id=tenant_id,
+                                    notification_type="credential_unreachable",
+                                    title="Agent credential unreachable",
+                                    body=(
+                                        f"Agent '{agent_name}' credentials are unreachable. "
+                                        "Please re-deploy the agent with valid credentials."
+                                    ),
+                                )
+                                notifications_sent += 1
+                                _any_sent = True
+                            except Exception as notify_exc:
+                                logger.warning(
+                                    "credential_health_notification_failed",
+                                    tenant_id=tenant_id,
+                                    agent_id=agent_id,
+                                    admin_id=admin_id,
+                                    error=str(notify_exc),
+                                )
+
+                        # Mark this agent as notified to prevent repeat storms.
+                        if _any_sent:
+                            try:
+                                _redis = get_redis()
+                                _dedup_key = build_redis_key(
+                                    tenant_id, "cred_health_notified", agent_id
+                                )
+                                await _redis.setex(_dedup_key, _NOTIF_DEDUP_TTL_SECONDS, "1")
+                            except Exception as dedup_write_exc:
+                                logger.warning(
+                                    "credential_health_dedup_write_failed",
+                                    tenant_id=tenant_id,
+                                    agent_id=agent_id,
+                                    error=str(dedup_write_exc),
+                                )
+
+                    except Exception as lookup_exc:
+                        logger.warning(
+                            "credential_health_admin_lookup_failed",
+                            tenant_id=tenant_id,
+                            agent_id=agent_id,
+                            error=str(lookup_exc),
+                        )
 
         logger.info(
             "credential_health_check_complete",
