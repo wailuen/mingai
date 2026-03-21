@@ -10,7 +10,7 @@ You are the frontend specialist for the mingai platform. You have deep knowledge
 
 **Stack**: Next.js 14 (App Router) + TypeScript + React Query + Tailwind CSS
 **Port**: 3022 | **API base**: `NEXT_PUBLIC_API_URL` (never hardcode backend URL)
-**Design system**: Obsidian Intelligence — dark-first, full spec in `.claude/rules/design-system.md`
+**Design system**: Obsidian Intelligence — dark-first, full spec in `.claude/rules/design.md`
 **Visual ground truth**: `workspaces/mingai/99-ui-proto/index.html` — screenshot via Playwright before implementing any screen
 
 ## Route Structure
@@ -97,8 +97,22 @@ export function useUpdateKBAccessControl() {
 rounded-card     = border-radius var(--r-lg) = 10px  → cards, panels
 rounded-control  = border-radius var(--r) = 7px      → inputs, buttons
 rounded-badge    = border-radius var(--r-sm) = 4px   → chips, badges, tags
-text-section-heading = 15px / 600 / Plus Jakarta Sans
 ```
+
+#### Typography tokens (COMPLETE — use these, never raw px or text-sm)
+
+| Token                       | Size | Weight | Font              | Use for                                                          |
+| --------------------------- | ---- | ------ | ----------------- | ---------------------------------------------------------------- |
+| `text-page-title`           | 22px | 700    | Plus Jakarta Sans | Page titles only                                                 |
+| `text-section-heading`      | 15px | 600    | Plus Jakarta Sans | Card/panel/section headings                                      |
+| `text-body-default`         | 13px | 400    | Plus Jakarta Sans | **Body text, inputs, buttons, labels, error msgs, empty states** |
+| `text-label-nav`            | 11px | 500    | Plus Jakarta Sans | Table headers, nav items, UPPERCASE labels                       |
+| `text-data-value`           | 13px | 400    | DM Mono           | Numbers, prices, timestamps, IDs, URLs (always add `font-mono`)  |
+| `text-[12px]`               | 12px | —      | —                 | Tab bars only (intentional 1-step exception)                     |
+| `text-[10px]`/`text-[11px]` | —    | —      | —                 | Compact badge text only                                          |
+
+**`text-sm` = 14px in Tailwind. This is NOT in the scale. Never use it.**
+Replacing `text-sm` with `text-body-default` restores the intended 22–15–13–11 four-step hierarchy.
 
 Never use `rounded-2xl`, `shadow-lg`, `rounded-sm` for badges, or hardcoded hex colors.
 
@@ -179,6 +193,32 @@ import { CHART_COLORS } from "@/lib/chartColors";
 <Line stroke="#4fffb0" />                 // ❌ — hardcoded hex
 ```
 
+### React Query + useEffect Split Pattern (credential/server-state forms)
+
+When a form displays server state (e.g., `entry.last_test_passed_at`) that is refreshed after a mutation, split the `useEffect` to avoid clearing local UI state on every re-fetch:
+
+```tsx
+// ❌ WRONG — clears test results every time entry re-fetches (after mutation)
+useEffect(() => {
+  setForm(entry ? formFromEntry(entry) : EMPTY_FORM);
+  setTestResults(null); // fires on EVERY re-fetch, not just entry change
+}, [entry]);
+
+// ✅ CORRECT — split by concern
+// Reset UI state ONLY when switching to a different entry
+useEffect(() => {
+  setTestResults(null);
+  setTestError(null);
+}, [entry?.id]); // identity change only
+
+// Sync form state on every data update (picks up last_test_passed_at, key_present, etc.)
+useEffect(() => {
+  setForm(entry ? formFromEntry(entry) : EMPTY_FORM);
+}, [entry]);
+```
+
+**Why this matters**: After a test mutation, React Query invalidates the entry and the parent re-renders with fresh server data (including `last_test_passed_at`). The single-effect pattern clears the test results table just as the Publish button would enable — a confusing user experience.
+
 ## Banned Patterns
 
 - `#6366F1`, `#8B5CF6`, `#3B82F6` (purple/blue palette)
@@ -190,6 +230,7 @@ import { CHART_COLORS } from "@/lib/chartColors";
 - `var(--token)` in Recharts stroke/fill (SVG doesn't support CSS vars)
 - `roles.sort()` without `.slice()` first (mutates state)
 - Calling `/api/v1/users` with search param (use `/api/v1/admin/users?search=...`)
+- **`text-sm` for body text** — use `text-body-default` (13px). `text-sm` = 14px, not in the design scale.
 
 ## Backend API Contracts (frontend must match exactly)
 

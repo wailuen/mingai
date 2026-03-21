@@ -23,6 +23,10 @@ This skill provides:
 
 ## Reference Documentation
 
+### Obsidian Intelligence Typography System
+
+- **[obsidian-typography](obsidian-typography.md)** - **START HERE for mingai frontend work** — The complete Obsidian Intelligence type scale: four-step hierarchy (22–15–13–11), token reference table, `text-sm` anti-pattern, UI text vs. data text distinction, helper text rules, and audit checklist
+
 ### Core Principles
 
 - **[design-principles](design-principles.md)** - Complete UI/UX design principles and guidelines
