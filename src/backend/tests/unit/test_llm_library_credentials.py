@@ -1203,3 +1203,258 @@ class TestModelNameChangeResetsTest:
         update_sql = " ".join(captured_sql)
         # last_test_passed_at should NOT be cleared for same model name
         assert "last_test_passed_at = NULL" not in update_sql
+
+
+# ---------------------------------------------------------------------------
+# IPv6 SSRF regression tests
+# ---------------------------------------------------------------------------
+
+
+class TestAssertEndpointSsrfSafeIPv6:
+    """_assert_endpoint_ssrf_safe also blocks IPv6 private/loopback/link-local addresses."""
+
+    def test_ipv6_loopback_raises(self):
+        """::1 (IPv6 loopback) must be blocked."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("::1", 0, 0, 0))]
+        ):
+            with pytest.raises(ValueError, match="non-routable"):
+                _assert_endpoint_ssrf_safe("https://ipv6-loopback.example.com/")
+
+    def test_ipv6_link_local_raises(self):
+        """fe80::1 (IPv6 link-local) must be blocked."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("fe80::1", 0, 0, 0))]
+        ):
+            with pytest.raises(ValueError, match="non-routable"):
+                _assert_endpoint_ssrf_safe("https://ipv6-link-local.example.com/")
+
+    def test_ipv6_ula_private_raises(self):
+        """fd00::1 (IPv6 ULA / private) must be blocked."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("fd00::1", 0, 0, 0))]
+        ):
+            with pytest.raises(ValueError, match="non-routable"):
+                _assert_endpoint_ssrf_safe("https://ipv6-ula.example.com/")
+
+
+# ---------------------------------------------------------------------------
+# api_version change triggers last_test_passed_at reset
+# ---------------------------------------------------------------------------
+
+
+class TestApiVersionChangeResetsTest:
+    """api_version change must set credential_changed=True → clear last_test_passed_at."""
+
+    @pytest.mark.asyncio
+    async def test_api_version_change_clears_test_timestamp(self):
+        """Changing api_version must reset last_test_passed_at (same as endpoint_url change)."""
+        from app.modules.platform.llm_library.routes import (
+            LLMLibraryEntry,
+            UpdateLLMLibraryRequest,
+            update_llm_library_entry,
+        )
+
+        now = datetime(2026, 3, 21, tzinfo=timezone.utc)
+        existing_entry = LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="azure_openai",
+            model_name="gpt-4o",
+            display_name="My Entry",
+            plan_tier="Professional",
+            is_recommended=False,
+            status="Draft",
+            key_present=True,
+            last_test_passed_at=now.isoformat(),
+            endpoint_url="https://ai.openai.azure.com/",
+            api_version="2024-12-01-preview",
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+        updated_entry = LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="azure_openai",
+            model_name="gpt-4o",
+            display_name="My Entry",
+            plan_tier="Professional",
+            is_recommended=False,
+            status="Draft",
+            key_present=True,
+            last_test_passed_at=None,  # cleared
+            endpoint_url="https://ai.openai.azure.com/",
+            api_version="2025-01-01-preview",
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+        mock_db.commit = AsyncMock()
+        captured_sql = []
+
+        async def capture_execute(sql, params=None):
+            captured_sql.append(str(sql))
+            return mock_result
+
+        mock_db.execute.side_effect = capture_execute
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            side_effect=[existing_entry, updated_entry],
+        ):
+            result = await update_llm_library_entry(
+                entry_id=TEST_ENTRY_ID,
+                request=UpdateLLMLibraryRequest(api_version="2025-01-01-preview"),
+                current_user=mock_user,
+                db=mock_db,
+            )
+
+        update_sql = " ".join(captured_sql)
+        assert "last_test_passed_at = NULL" in update_sql
+        assert result.last_test_passed_at is None
+
+
+# ---------------------------------------------------------------------------
+# Test endpoint error path tests (504, 502)
+# ---------------------------------------------------------------------------
+
+
+class TestLLMLibraryTestEndpointErrorPaths:
+    """Test harness error paths: 504 timeout and 502 provider error with URL sanitization."""
+
+    def _make_entry(self, key_present: bool = True, status: str = "Draft"):
+        from app.modules.platform.llm_library.routes import LLMLibraryEntry
+
+        return LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="azure_openai",
+            model_name="gpt-4o",
+            display_name="Test Entry",
+            plan_tier="Professional",
+            is_recommended=False,
+            status=status,
+            key_present=key_present,
+            last_test_passed_at=None,
+            endpoint_url="https://ai.openai.azure.com/",
+            api_version="2024-12-01-preview",
+            created_at="2026-03-21T00:00:00+00:00",
+            updated_at="2026-03-21T00:00:00+00:00",
+        )
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_504(self):
+        """asyncio.TimeoutError during LLM calls returns HTTP 504."""
+        import asyncio
+        from fastapi import HTTPException
+        from app.modules.platform.llm_library.routes import test_llm_library_profile
+
+        entry = self._make_entry(key_present=True)
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            return_value=entry,
+        ):
+            with patch(
+                "app.modules.platform.llm_library.routes._get_encrypted_key",
+                return_value=b"\x00" * 32,
+            ):
+                with patch(
+                    "app.core.crypto.decrypt_api_key",
+                    return_value="sk-fake-key-for-test",
+                ):
+                    with patch(
+                        "asyncio.wait_for",
+                        side_effect=asyncio.TimeoutError(),
+                    ):
+                        with pytest.raises(HTTPException) as exc_info:
+                            await test_llm_library_profile(
+                                entry_id=TEST_ENTRY_ID,
+                                current_user=mock_user,
+                                db=mock_db,
+                            )
+
+        assert exc_info.value.status_code == 504
+        assert "timeout" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_provider_error_returns_502_with_sanitized_url(self):
+        """Provider exception returns 502; Azure URLs in error are replaced with [URL]."""
+        from fastapi import HTTPException
+        from app.modules.platform.llm_library.routes import test_llm_library_profile
+
+        entry = self._make_entry(key_present=True)
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        azure_error_with_url = (
+            "DeploymentNotFound: The deployment 'gpt-4o' was not found. "
+            "Check https://eastus2.api.cognitive.microsoft.com/openai/deployments "
+            "for available deployments."
+        )
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            return_value=entry,
+        ):
+            with patch(
+                "app.modules.platform.llm_library.routes._get_encrypted_key",
+                return_value=b"\x00" * 32,
+            ):
+                with patch(
+                    "app.core.crypto.decrypt_api_key",
+                    return_value="sk-fake-key-for-test",
+                ):
+                    with patch(
+                        "asyncio.wait_for",
+                        side_effect=Exception(azure_error_with_url),
+                    ):
+                        with pytest.raises(HTTPException) as exc_info:
+                            await test_llm_library_profile(
+                                entry_id=TEST_ENTRY_ID,
+                                current_user=mock_user,
+                                db=mock_db,
+                            )
+
+        assert exc_info.value.status_code == 502
+        # URL must be sanitized
+        assert "cognitive.microsoft.com" not in exc_info.value.detail
+        assert "[URL]" in exc_info.value.detail
+        # Error classification still present
+        assert "DeploymentNotFound" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_endpoint_url_with_no_hostname_rejected(self):
+        """endpoint_url 'https://' with no hostname is rejected by schema validator."""
+        from pydantic import ValidationError
+        from app.modules.platform.llm_library.routes import CreateLLMLibraryRequest
+
+        with pytest.raises(ValidationError) as exc_info:
+            CreateLLMLibraryRequest(
+                provider="azure_openai",
+                model_name="gpt-4o",
+                display_name="Test",
+                plan_tier="Professional",
+                endpoint_url="https://",
+            )
+
+        errors = exc_info.value.errors()
+        assert any("hostname" in str(e).lower() for e in errors)

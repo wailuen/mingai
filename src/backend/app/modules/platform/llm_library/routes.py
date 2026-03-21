@@ -107,7 +107,7 @@ class CreateLLMLibraryRequest(BaseModel):
     display_name: str = Field(..., max_length=200)
     plan_tier: str = Field(..., max_length=50)
     is_recommended: bool = False
-    best_practices_md: Optional[str] = None
+    best_practices_md: Optional[str] = Field(None, max_length=50000)
     pricing_per_1k_tokens_in: Optional[Decimal] = Field(None, ge=0)
     pricing_per_1k_tokens_out: Optional[Decimal] = Field(None, ge=0)
     endpoint_url: Optional[str] = Field(
@@ -115,6 +115,7 @@ class CreateLLMLibraryRequest(BaseModel):
     )
     api_key: Optional[str] = Field(
         None,
+        min_length=8,
         description="Plaintext API key — encrypted before storage, never returned",
     )
     api_version: Optional[str] = Field(
@@ -134,8 +135,15 @@ class CreateLLMLibraryRequest(BaseModel):
     @field_validator("endpoint_url")
     @classmethod
     def validate_endpoint_url(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not v.startswith("https://"):
+        if v is None:
+            return v
+        if not v.startswith("https://"):
             raise ValueError("endpoint_url must start with https://")
+        from urllib.parse import urlparse
+
+        parsed = urlparse(v)
+        if not parsed.hostname:
+            raise ValueError("endpoint_url must have a valid hostname")
         return v
 
     @field_validator("api_version")
@@ -153,12 +161,13 @@ class UpdateLLMLibraryRequest(BaseModel):
     display_name: Optional[str] = Field(None, max_length=200)
     plan_tier: Optional[str] = Field(None, max_length=50)
     is_recommended: Optional[bool] = None
-    best_practices_md: Optional[str] = None
+    best_practices_md: Optional[str] = Field(None, max_length=50000)
     pricing_per_1k_tokens_in: Optional[Decimal] = Field(None, ge=0)
     pricing_per_1k_tokens_out: Optional[Decimal] = Field(None, ge=0)
     endpoint_url: Optional[str] = Field(None, max_length=500)
     api_key: Optional[str] = Field(
         None,
+        min_length=8,
         description="Plaintext API key — encrypted before storage, never returned",
     )
     api_version: Optional[str] = Field(None, max_length=50)
@@ -168,8 +177,15 @@ class UpdateLLMLibraryRequest(BaseModel):
     @field_validator("endpoint_url")
     @classmethod
     def validate_endpoint_url(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not v.startswith("https://"):
+        if v is None:
+            return v
+        if not v.startswith("https://"):
             raise ValueError("endpoint_url must start with https://")
+        from urllib.parse import urlparse
+
+        parsed = urlparse(v)
+        if not parsed.hostname:
+            raise ValueError("endpoint_url must have a valid hostname")
         return v
 
     @field_validator("api_version")
@@ -918,19 +934,24 @@ async def test_llm_library_profile(
             timeout=_TEST_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
+        decrypted_key = ""  # Clear before re-raising to limit traceback exposure
         raise HTTPException(
             status_code=504,
             detail=f"LLM test calls exceeded {_TEST_TIMEOUT_SECONDS}s timeout.",
-        )
+        ) from None
     except asyncio.CancelledError:
+        decrypted_key = ""
         raise
     except Exception as exc:
-        # Surface the provider's actual error message (e.g. "Deployment not found",
-        # "Invalid API version") so the admin can self-diagnose without server log access.
-        # Truncate to 500 chars to prevent response flooding. The decrypted key is cleared
-        # in the finally block below — LLM client exceptions do not embed API keys in their
-        # error messages; they appear only in HTTP request headers.
-        provider_error = str(exc)[:500]
+        # Clear the decrypted key BEFORE capturing error details so it cannot
+        # appear in exception tracebacks, log capture, or APM frame serialization.
+        decrypted_key = ""
+        # Surface provider error for admin self-diagnosis. Strip URLs to avoid
+        # leaking Azure subscription paths or resource group names.
+        import re as _re
+
+        raw_error = str(exc)[:500]
+        provider_error = _re.sub(r"https?://\S+", "[URL]", raw_error)
         logger.warning(
             "llm_library_test_failed",
             entry_id=entry_id,
@@ -939,9 +960,9 @@ async def test_llm_library_profile(
         raise HTTPException(
             status_code=502,
             detail=f"LLM call failed: {provider_error}",
-        )
+        ) from None
     finally:
-        decrypted_key = ""  # ALWAYS clear decrypted key
+        decrypted_key = ""  # Belt-and-suspenders: always clear on exit
 
     # Record successful test — required for publish gate
     await db.execute(

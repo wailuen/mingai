@@ -1,10 +1,10 @@
-commit: 3bf3312 (LLM Library redesign — security hardening, error surfacing)
-timestamp: 2026-03-21T16:00:00Z
-baseline_pass: 2838
+commit: 41c2d5c (security hardening — red team findings round 2)
+timestamp: 2026-03-21T17:30:00Z
+baseline_pass: 2850
 baseline_fail: 7
-final_pass: 2850
+final_pass: 2857
 final_fail: 7
-new_tests: 12
+new_tests: 7
 regressions: 0
 command: pytest tests/unit/ --ignore=tests/unit/test_azure_cost_job.py --ignore=tests/unit/test_embedding_service.py --tb=short -q
 
@@ -16,24 +16,23 @@ Notes:
     - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
     - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
     - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
-  - Red team fixes (cumulative across this session):
+  - Cumulative fixes this session (LLM Library credential store):
     - HIGH-1 (prev session): E2E LLM-C-007 test response shape fixed (tokens_in/tokens_out, no all_passed)
     - HIGH-2: Added DELETE /platform/llm-library/{id} endpoint (Draft-only delete)
-      - routes.py: delete_llm_library_entry() — 204 for Draft, 409 for Published/Deprecated
-      - E2E tests LLM-C-001–005, LLM-C-008: cleanup changed from POST /deprecate to DELETE
-      - test_llm_library_credentials.py: 4 unit tests for DELETE endpoint
-      - 01-api-reference.md: DELETE endpoint documented
     - HIGH-3: LibraryForm.tsx handlePublish() — removed api_key re-send that cleared last_test_passed_at
-    - Security H1: model_name change now sets credential_changed = True (re-test required)
-      - test_llm_library_credentials.py: 2 new unit tests (TestModelNameChangeResetsTest)
-    - Security H2: Publish gate WHERE clause now atomically validates api_key_encrypted IS NOT NULL
-      AND last_test_passed_at IS NOT NULL (TOCTOU fix)
-    - Security H3: Added _assert_endpoint_ssrf_safe() — DNS-resolves endpoint_url and blocks
-      private/loopback/link-local/reserved IPs before connecting
-      - test_llm_library_credentials.py: 6 new unit tests (TestAssertEndpointSsrfSafe)
-    - Value V1: Test harness now surfaces actual provider error str(exc)[:500] in 502 response
-      instead of generic "check server logs" message
-  - Frontend fix (post-test-suite):
-    - FE-BUG-1 (MEDIUM): LibraryForm.tsx useEffect split — testResults now cleared only on entry.id
-      change (switching entries), not on every re-fetch. Publish button now enables correctly
-      after test passes and React Query invalidation updates entry.last_test_passed_at.
+    - Security H1: model_name change now sets credential_changed = True
+    - Security H2: Publish gate atomic TOCTOU fix (api_key_encrypted + last_test_passed_at)
+    - Security H3: SSRF protection via _assert_endpoint_ssrf_safe() with IPv6 coverage
+    - Value V1: Test harness surfaces actual provider error (URL-sanitized) in 502
+    - FE-BUG-1: LibraryForm.tsx useEffect split — Publish button enables after test pass
+  - Red team round 2 security fixes:
+    - SEC-H1: decrypted_key cleared before logging/re-raising in except blocks (traceback protection)
+               + `raise ... from None` strips original traceback chain
+    - SEC-M1: best_practices_md max_length=50000 added to Create and Update schemas
+    - SEC-M2: Provider error URLs sanitized before logging and 502 response (re.sub https?://\S+ → [URL])
+    - SEC-M5: api_key min_length=8 enforced on Create and Update schemas
+    - SEC-L3: endpoint_url validator now checks parsed hostname is non-empty (rejects "https://")
+  - New unit tests (round 2, 7 tests):
+    - TestAssertEndpointSsrfSafeIPv6: IPv6 loopback (::1), link-local (fe80::1), ULA (fd00::1)
+    - TestApiVersionChangeResetsTest: api_version change clears last_test_passed_at
+    - TestLLMLibraryTestEndpointErrorPaths: 504 timeout, 502 URL sanitization, endpoint_url no-hostname
