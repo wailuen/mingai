@@ -14,6 +14,8 @@ Tier 1: Fast, isolated, mocks all DB interaction.
 import logging
 from unittest.mock import AsyncMock, MagicMock
 
+import structlog
+
 import pytest
 
 
@@ -78,17 +80,20 @@ class TestToolResolverDbFailure:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_db_error_is_logged(self, caplog):
-        """DB failure is logged at ERROR level."""
+    async def test_db_error_is_logged(self):
+        """DB failure is logged at ERROR level via structlog."""
         from app.modules.chat.tool_resolver import ToolResolver
 
         db = _make_db_session(raise_on_execute=True)
         resolver = ToolResolver(db=db, tenant_id="tenant-1")
 
-        with caplog.at_level(logging.ERROR, logger="app.modules.chat.tool_resolver"):
+        with structlog.testing.capture_logs() as cap_logs:
             await resolver.resolve(["tool-uuid-1"])
 
-        assert any("DB query failed" in r.message for r in caplog.records)
+        assert any(
+            log.get("event") == "tool_resolver_db_query_failed"
+            for log in cap_logs
+        )
 
 
 class TestToolResolverQueryStructure:
@@ -135,8 +140,8 @@ class TestToolResolverQueryStructure:
 
 class TestToolResolverMissingIds:
     @pytest.mark.asyncio
-    async def test_missing_tool_ids_are_logged(self, caplog):
-        """tool IDs not returned from DB are logged with tool_resolution_missing."""
+    async def test_missing_tool_ids_are_logged(self):
+        """tool IDs not returned from DB are logged with tool_resolution_missing via structlog."""
         from app.modules.chat.tool_resolver import ToolResolver
 
         rows = [
@@ -145,11 +150,13 @@ class TestToolResolverMissingIds:
         db = _make_db_session(rows=rows)
         resolver = ToolResolver(db=db, tenant_id="t-1")
 
-        with caplog.at_level(logging.WARNING, logger="app.modules.chat.tool_resolver"):
+        with structlog.testing.capture_logs() as cap_logs:
             await resolver.resolve(["known-1", "unknown-2", "unknown-3"])
 
-        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("tool_resolution_missing" in m for m in warning_messages)
+        assert any(
+            log.get("event") == "tool_resolution_missing"
+            for log in cap_logs
+        )
 
     @pytest.mark.asyncio
     async def test_all_tool_ids_found_no_warning(self, caplog):
