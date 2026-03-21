@@ -79,15 +79,17 @@ class TestDeployFromLibrary:
 
         # Build sequential call results:
         # call 0: INSERT agent_cards
-        # call 1: (keypair) UPDATE agent_cards
-        # call 2: SELECT created_at
+        # call 1: INSERT agent_access_control (ACL)
+        # call 2: (keypair) UPDATE agent_cards
+        # call 3: SELECT created_at
         insert_result = MagicMock()
+        acl_result = MagicMock()
         update_result = MagicMock()
 
         ts_result = MagicMock()
         ts_result.mappings.return_value.first.return_value = ts_row
 
-        db.execute = AsyncMock(side_effect=[insert_result, update_result, ts_result])
+        db.execute = AsyncMock(side_effect=[insert_result, acl_result, update_result, ts_result])
 
         with patch(
             "app.modules.agents.routes.generate_agent_keypair",
@@ -120,11 +122,12 @@ class TestDeployFromLibrary:
         )
 
         insert_result = MagicMock()
+        acl_result = MagicMock()
         update_result = MagicMock()
         ts_result = MagicMock()
         ts_result.mappings.return_value.first.return_value = ts_row
 
-        db.execute = AsyncMock(side_effect=[insert_result, update_result, ts_result])
+        db.execute = AsyncMock(side_effect=[insert_result, acl_result, update_result, ts_result])
 
         with patch(
             "app.modules.agents.routes.generate_agent_keypair",

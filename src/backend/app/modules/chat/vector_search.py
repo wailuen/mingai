@@ -431,38 +431,20 @@ class VectorSearchService:
     def __init__(self, cloud_provider: str | None = None) -> None:
         self._client = get_search_client(cloud_provider)
 
-    async def search(
+    async def _search_single_index(
         self,
+        index_id: str,
         query_vector: list[float],
-        tenant_id: str,
-        agent_id: str,
-        top_k: int = 10,
+        top_k: int,
+        tenant_id: str = "",
         query_text: str | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
     ) -> list[SearchResult]:
         """
-        Search tenant's document index for this agent.
-
-        Pass query_text to activate hybrid RRF search (FTS + vector).
-        Without query_text, falls back to vector-only (backward compatible).
-
-        Args:
-            query_vector: Embedding of the query.
-            tenant_id: Tenant identifier — index is tenant-scoped.
-            agent_id: Agent identifier — index is per-agent.
-            top_k: Maximum number of results.
-            query_text: Raw user query text for FTS leg (optional).
-            conversation_id: Scope to conversation docs (optional).
-            user_id: Scope to user's docs (optional).
+        Search a single named vector index.
+        Raises on network/DB error — caller (fan-out gather) must handle exceptions.
         """
-        if not tenant_id:
-            raise ValueError("tenant_id is required for vector search.")
-        if not agent_id:
-            raise ValueError("agent_id is required for vector search.")
-
-        index_id = f"{tenant_id}-{agent_id}"
-
         raw_results = await self._client.knn_search(
             index_id=index_id,
             vector=query_vector,
@@ -472,8 +454,7 @@ class VectorSearchService:
             conversation_id=conversation_id,
             user_id=user_id,
         )
-
-        results = [
+        return [
             SearchResult(
                 title=r.get("title") or "",
                 content=r.get("content") or "",
@@ -484,11 +465,105 @@ class VectorSearchService:
             for r in raw_results
         ]
 
+    async def search(
+        self,
+        query_vector: list[float],
+        tenant_id: str,
+        agent_id: str,
+        top_k: int = 10,
+        query_text: str | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
+        kb_ids: list[str] | None = None,
+    ) -> list[SearchResult]:
+        """
+        Search vector indexes.
+
+        If kb_ids is non-empty, fan-out to each KB index in addition to the agent's
+        own index via asyncio.gather.
+
+        Index naming:
+        - Agent's own index: f"{tenant_id}-{agent_id}"
+        - KB binding index: kb_id directly (the integration's index_id)
+
+        kb_ids entries must be pre-validated at the route handler layer.
+        Exceptions from individual indexes are logged and skipped (resilient fan-out).
+
+        Args:
+            query_vector: Embedding of the query.
+            tenant_id: Tenant identifier — index is tenant-scoped.
+            agent_id: Agent identifier — index is per-agent.
+            top_k: Maximum number of results.
+            query_text: Raw user query text for FTS leg (optional).
+            conversation_id: Scope to conversation docs (optional).
+            user_id: Scope to user's docs (optional).
+            kb_ids: Additional KB index IDs to search (optional).
+        """
+        if not tenant_id:
+            raise ValueError("tenant_id is required for vector search.")
+        if not agent_id:
+            raise ValueError("agent_id is required for vector search.")
+
+        agent_index = f"{tenant_id}-{agent_id}"
+        indexes_to_search: list[str] = [agent_index]
+
+        # Fan out to each KB binding
+        if kb_ids:
+            for kb_id in kb_ids:
+                if kb_id not in indexes_to_search:
+                    indexes_to_search.append(kb_id)
+
+        if len(indexes_to_search) == 1:
+            # Fast path: single index, no gather overhead
+            results = await self._search_single_index(
+                index_id=indexes_to_search[0],
+                query_vector=query_vector,
+                top_k=top_k,
+                tenant_id=tenant_id,
+                query_text=query_text,
+                conversation_id=conversation_id,
+                user_id=user_id,
+            )
+        else:
+            # Fan-out path: parallel search across multiple indexes
+            import asyncio
+
+            search_tasks = [
+                self._search_single_index(
+                    index_id=idx,
+                    query_vector=query_vector,
+                    top_k=top_k,
+                    tenant_id=tenant_id,
+                    query_text=query_text,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                )
+                for idx in indexes_to_search
+            ]
+            all_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+            results = []
+            for i, result in enumerate(all_results):
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "kb_search_index_failed",
+                        index_id=indexes_to_search[i],
+                        tenant_id=tenant_id,
+                        agent_id=agent_id,
+                        error=str(result),
+                    )
+                else:
+                    results.extend(result)
+
+            # Re-rank merged results by score, return top_k
+            results.sort(key=lambda r: r.score, reverse=True)
+            results = results[:top_k]
+
         logger.info(
             "vector_search_completed",
             tenant_id=tenant_id,
             agent_id=agent_id,
-            index_id=index_id,
+            indexes_searched=len(indexes_to_search),
             result_count=len(results),
             search_mode="hybrid" if query_text else "vector_only",
             top_score=results[0].score if results else 0.0,

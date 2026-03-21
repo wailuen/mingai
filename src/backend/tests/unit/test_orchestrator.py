@@ -44,6 +44,7 @@ def _make_mock_services():
     ]
     vector_search = AsyncMock()
     vector_search.search = AsyncMock(return_value=search_results)
+    vector_search.search_conversation_index = AsyncMock(return_value=[])
 
     profile = AsyncMock()
     profile.get_profile_context = AsyncMock(return_value={"technical_level": "expert"})
@@ -77,6 +78,7 @@ def _make_mock_services():
             ["profile", "org_context"],
         )
     )
+    prompt_builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
 
     persistence = AsyncMock()
     persistence.save_exchange = AsyncMock(return_value=("msg-123", "conv-456"))

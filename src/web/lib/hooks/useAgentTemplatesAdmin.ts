@@ -37,6 +37,13 @@ export interface AgentTemplateAdmin {
   created_by: string | null;
   created_at: string;
   updated_at: string | null;
+  // ----- ATA-056 Phase A additions -----
+  /** Credential keys tenants must configure to deploy this template. */
+  required_credentials: string[];
+  /** Auth mechanism required by this template. */
+  auth_mode: "none" | "tenant_credentials" | "platform_credentials";
+  /** Minimum plan tier required; null means no restriction. */
+  plan_required: "free" | "professional" | "enterprise" | null;
 }
 
 /** Response wrapper for paginated list endpoint */
@@ -65,6 +72,10 @@ export interface CreateAgentTemplatePayload {
   variable_definitions?: AgentTemplateVariable[];
   guardrails?: GuardrailRule[];
   confidence_threshold?: number;
+  // ATA-056 Phase A
+  required_credentials?: string[];
+  auth_mode?: "none" | "tenant_credentials" | "platform_credentials";
+  plan_required?: "free" | "professional" | "enterprise" | null;
 }
 
 export interface UpdateAgentTemplatePayload {
@@ -77,6 +88,10 @@ export interface UpdateAgentTemplatePayload {
   confidence_threshold?: number;
   status?: "Published" | "Deprecated";
   changelog?: string;
+  // ATA-056 Phase A
+  required_credentials?: string[];
+  auth_mode?: "none" | "tenant_credentials" | "platform_credentials";
+  plan_required?: "free" | "professional" | "enterprise" | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -111,6 +111,22 @@ class ChatOrchestrationService:
         if not agent_id:
             raise ValueError("agent_id is required for chat orchestration.")
 
+        # --- Access Control Check (pre-Stage 1) ---
+        # RULE A2A-06: tenant_id included in all agent_access_control queries.
+        user_roles = list(jwt_claims.get("roles", []) or [])
+        has_access = await self._check_agent_access(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            user_roles=user_roles,
+        )
+        if not has_access:
+            yield {
+                "event": "error",
+                "data": {"code": 403, "message": "You do not have access to this agent."},
+            }
+            return
+
         # Check for memory fast path before entering RAG pipeline
         memory_content = self._extract_memory_command(query)
         if memory_content is not None:
@@ -270,11 +286,21 @@ class ChatOrchestrationService:
         # --- Stage 4: Vector Search ---
         yield {"event": "status", "data": {"stage": "vector_search"}}
 
+        # Load agent prompt early to get kb_ids for fan-out search
+        _stage4_agent_prompt, _stage4_capabilities, agent_kb_ids = (
+            await self._prompt_builder._get_agent_prompt(
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                db_session=self._db_session,
+            )
+        )
+
         search_results = await self._vector_search.search(
             query_vector=query_vector,
             tenant_id=tenant_id,
             agent_id=agent_id,
             query_text=query,
+            kb_ids=agent_kb_ids if agent_kb_ids else None,
         )
 
         # Search conversation-uploaded document index (if conversation exists)
@@ -506,6 +532,76 @@ class ChatOrchestrationService:
                 "message_id": message_id,
             },
         }
+
+    async def _check_agent_access(
+        self,
+        *,
+        agent_id: str,
+        tenant_id: str,
+        user_id: str,
+        user_roles: list[str],
+    ) -> bool:
+        """
+        Check if the user has access to this agent via agent_access_control.
+
+        Returns True if access is granted.
+        Returns False if access is denied.
+
+        If no agent_access_control row exists for this agent, defaults to allow
+        (workspace_wide fallback for pre-Phase-A agents).
+
+        RULE A2A-06: All agent_access_control reads include tenant_id in WHERE
+        to prevent cross-tenant access control bypass.
+        """
+        if self._db_session is None:
+            return True  # No DB session — allow (degraded mode)
+
+        from sqlalchemy import text
+
+        try:
+            result = await self._db_session.execute(
+                text("""
+                    SELECT visibility_mode, allowed_roles, allowed_user_ids
+                    FROM agent_access_control
+                    WHERE agent_id = :agent_id AND tenant_id = :tenant_id
+                """),
+                {"agent_id": agent_id, "tenant_id": tenant_id},
+            )
+            row = result.mappings().first()
+        except Exception as exc:
+            logger.warning(
+                "agent_access_check_failed",
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+            return True  # Fail-open on DB error — log and allow
+
+        if row is None:
+            # No access control record — default workspace_wide (fallback for pre-migration agents)
+            return True
+
+        visibility_mode = row["visibility_mode"]
+
+        if visibility_mode == "workspace_wide":
+            return True
+
+        if visibility_mode == "role_restricted":
+            allowed_roles = list(row["allowed_roles"] or [])
+            return bool(set(user_roles) & set(allowed_roles))
+
+        if visibility_mode == "user_specific":
+            allowed_user_ids = list(row["allowed_user_ids"] or [])
+            return user_id in allowed_user_ids
+
+        # Unknown visibility_mode — fail open and log
+        logger.warning(
+            "agent_access_unknown_visibility_mode",
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            visibility_mode=visibility_mode,
+        )
+        return True
 
     def inject_intent_service(self, intent_service) -> None:
         """Inject an IntentDetectionService instance (used in tests and wiring)."""

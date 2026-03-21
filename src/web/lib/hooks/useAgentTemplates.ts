@@ -3,11 +3,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api";
 
+/**
+ * Structured capabilities object returned on agent cards (ATA-056 Phase A).
+ * Replaces the old untyped `capabilities: string[]` on the wire.
+ */
+export interface AgentCapabilities {
+  kb_ids?: string[];
+  tools?: string[];
+  guardrails?: {
+    blocked_topics?: string[];
+    max_response_length?: number;
+    require_sources?: boolean;
+  };
+}
+
 export interface AgentTemplate {
   id: string;
   name: string;
   description: string | null;
   system_prompt: string;
+  /** Legacy flat list kept for display-only badge rendering in AgentCard / TemplatePreviewModal. */
   capabilities: string[];
   category?: string;
   status: "published" | "draft" | "Published" | "Draft";
@@ -21,6 +36,13 @@ export interface AgentTemplate {
     options?: string[];
   }[];
   created_at?: string;
+  // ----- ATA-056 Phase A additions -----
+  /** Credential keys the tenant must configure before deploying (e.g. "sharepoint_oauth"). */
+  required_credentials: string[];
+  /** Auth mechanism required by this template. */
+  auth_mode: "none" | "tenant_credentials" | "platform_credentials";
+  /** Minimum plan required to deploy; null means no restriction. */
+  plan_required: "free" | "professional" | "enterprise" | null;
 }
 
 export interface AgentTemplatesResponse {
@@ -36,7 +58,15 @@ export interface DeployFromLibraryPayload {
   description?: string;
   variable_values?: Record<string, string>;
   kb_ids?: string[];
-  access_mode?: "workspace_wide" | "role_restricted" | "user_specific";
+  /**
+   * ATA-056 Phase A: access control scope for the deployed agent.
+   * Defaults to "workspace" on the backend when omitted.
+   */
+  access_control?: "workspace" | "role" | "user";
+  /** Required when access_control === "role". */
+  allowed_roles?: string[];
+  /** Required when access_control === "user". */
+  allowed_user_ids?: string[];
 }
 
 export interface DeployAgentResponse {

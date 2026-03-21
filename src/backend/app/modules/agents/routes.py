@@ -113,7 +113,19 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
 
-# Hardcoded SQL fragments for agent_cards UPDATE — column names never from user input.
+# C2: Map DeployAgentRequest.access_control API values to agent_access_control.visibility_mode
+# DB column uses CHECK constraint values: 'workspace_wide', 'role_restricted', 'user_specific'.
+# API uses shorter human-readable values. MUST be used in ALL three deploy paths.
+_ACCESS_CONTROL_MAP = {
+    "workspace": "workspace_wide",
+    "role": "role_restricted",
+    "user": "user_specific",
+}
+
+# RULE A2A-06: Every UPDATE to agent_cards MUST include tenant_id = :tenant_id
+# in the WHERE clause — not only the initial INSERT. Missing tenant_id on the
+# UPDATE path allows a crafted request to overwrite a different tenant's agent
+# access control configuration (cross-tenant RLS bypass via application layer).
 _AGENT_UPDATE_SQL: dict[str, str] = {
     "name": "name = :name",
     "description": "description = :description",
@@ -133,8 +145,10 @@ _AGENT_UPDATE_SQL: dict[str, str] = {
 
 class DeployAgentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    access_control: Literal["workspace", "role", "user"] = Field(...)
+    access_control: Literal["workspace", "role", "user"] = Field("workspace")
     kb_ids: List[str] = Field(default_factory=list)
+    allowed_roles: List[str] = Field(default_factory=list)
+    allowed_user_ids: List[str] = Field(default_factory=list)
 
 
 class GuardrailsSchema(BaseModel):
@@ -294,8 +308,17 @@ async def deploy_agent_template_db(
     kb_ids: list,
     created_by: str,
     db: AsyncSession,
+    allowed_roles: list | None = None,
+    allowed_user_ids: list | None = None,
 ) -> dict:
-    """Insert a new published agent_cards row from a template deployment."""
+    """
+    Insert a new published agent_cards row from a template deployment.
+
+    RULE A2A-03: access_control and kb_ids are enforced via a 422 gate at the route
+    handler layer until Phase A enforcement (ATA-006–ATA-009) is fully deployed.
+    Once enforcement is confirmed in staging, the gate is removed in ATA-057 and
+    these values will be persisted and enforced at runtime.
+    """
     agent_id = str(uuid.uuid4())
     capabilities_json = json.dumps(capabilities)
     kb_ids_json = json.dumps(kb_ids)
@@ -316,8 +339,29 @@ async def deploy_agent_template_db(
             "created_by": created_by,
         },
     )
-    # Commit the agent row unconditionally — keypair generation is best-effort.
+
+    # INSERT access control record in the same transaction as the agent row.
+    # Removing the intermediate commit prevents an orphaned agent with no ACL
+    # row if a crash occurs between the two INSERTs.
+    visibility_mode = _ACCESS_CONTROL_MAP.get(access_control, "workspace_wide")
+    await db.execute(
+        text("""
+            INSERT INTO agent_access_control
+                (agent_id, tenant_id, visibility_mode, allowed_roles, allowed_user_ids)
+            VALUES
+                (:agent_id, :tenant_id, :visibility_mode, :allowed_roles, :allowed_user_ids)
+            ON CONFLICT (tenant_id, agent_id) DO NOTHING
+        """),
+        {
+            "agent_id": agent_id,
+            "tenant_id": tenant_id,
+            "visibility_mode": visibility_mode,
+            "allowed_roles": list(allowed_roles or []),
+            "allowed_user_ids": list(allowed_user_ids or []),
+        },
+    )
     await db.commit()
+
     # Generate Ed25519 keypair and store encrypted private key (AI-040)
     try:
         public_key, private_key_enc = generate_agent_keypair()
@@ -624,6 +668,21 @@ async def deploy_agent_template(
                 detail=f"Agent template '{template_id}' not found",
             )
 
+    # RULE A2A-03: Return 422 for access-restricted or KB-bound deploys.
+    # This gate will be removed in ATA-057 once Phase A enforcement (ATA-006–ATA-009) is live.
+    # Note: ATA-003 covers access_control and kb_ids fields only.
+    # platform_credentials interim 422 is handled separately in ATA-025.
+    if body.access_control not in ("workspace", None) or body.kb_ids:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Access-restricted and KB-bound agent deployment requires runtime "
+                "enforcement to be active. Deploy with access_control='workspace' "
+                "and no kb_ids until enforcement is confirmed. "
+                "(ATA-057 removes this gate after Phase A is verified in staging)"
+            ),
+        )
+
     result = await deploy_agent_template_db(
         tenant_id=current_user.tenant_id,
         name=body.name,
@@ -634,21 +693,9 @@ async def deploy_agent_template(
         kb_ids=body.kb_ids,
         created_by=current_user.id,
         db=session,
+        allowed_roles=body.allowed_roles,
+        allowed_user_ids=body.allowed_user_ids,
     )
-
-    # Log access_control and kb_ids received — these fields are not yet fully persisted
-    # to the agent_cards schema (columns pending in next migration). They are accepted
-    # in the API contract so the frontend deploy form works without changes once the
-    # schema is extended. Without this log, the values would be silently discarded.
-    if body.kb_ids or body.access_control != "workspace":
-        logger.warning(
-            "agent_deploy_config_not_persisted",
-            agent_id=result["id"],
-            tenant_id=current_user.tenant_id,
-            access_control=body.access_control,
-            kb_ids_count=len(body.kb_ids),
-            note="access_control and kb_ids require schema migration before they are enforced",
-        )
 
     return result
 
@@ -830,6 +877,7 @@ async def create_agent_studio_db(
     agent_status: str,
     created_by: str,
     db: AsyncSession,
+    access_mode: str = "workspace_wide",
 ) -> dict:
     """Insert a new agent_cards row for Agent Studio (API-070)."""
     agent_id = str(uuid.uuid4())
@@ -853,6 +901,27 @@ async def create_agent_studio_db(
             "capabilities": capabilities_json,
             "status": agent_status,
             "created_by": created_by,
+        },
+    )
+    # INSERT ACL row in the same transaction as the agent row.
+    # access_mode already uses DB values (workspace_wide/role_restricted/user_specific).
+    visibility_mode = access_mode if access_mode in (
+        "workspace_wide", "role_restricted", "user_specific"
+    ) else "workspace_wide"
+    await db.execute(
+        text("""
+            INSERT INTO agent_access_control
+                (agent_id, tenant_id, visibility_mode, allowed_roles, allowed_user_ids)
+            VALUES
+                (:agent_id, :tenant_id, :visibility_mode, :allowed_roles, :allowed_user_ids)
+            ON CONFLICT (tenant_id, agent_id) DO NOTHING
+        """),
+        {
+            "agent_id": agent_id,
+            "tenant_id": tenant_id,
+            "visibility_mode": visibility_mode,
+            "allowed_roles": [],
+            "allowed_user_ids": [],
         },
     )
     await db.commit()
@@ -1046,6 +1115,7 @@ async def deploy_from_library_db(
     capabilities: list,
     created_by: str,
     db: AsyncSession,
+    access_mode: str = "workspace_wide",
 ) -> dict:
     """Create a new published agent from a library or seed template (API-073)."""
     agent_id = str(uuid.uuid4())
@@ -1074,7 +1144,28 @@ async def deploy_from_library_db(
             "created_by": created_by,
         },
     )
-    # Commit the agent row unconditionally — keypair generation is best-effort.
+    # INSERT ACL row in the same transaction as the agent row.
+    # access_mode already uses DB values (workspace_wide/role_restricted/user_specific).
+    visibility_mode = access_mode if access_mode in (
+        "workspace_wide", "role_restricted", "user_specific"
+    ) else "workspace_wide"
+    await db.execute(
+        text("""
+            INSERT INTO agent_access_control
+                (agent_id, tenant_id, visibility_mode, allowed_roles, allowed_user_ids)
+            VALUES
+                (:agent_id, :tenant_id, :visibility_mode, :allowed_roles, :allowed_user_ids)
+            ON CONFLICT (tenant_id, agent_id) DO NOTHING
+        """),
+        {
+            "agent_id": agent_id,
+            "tenant_id": tenant_id,
+            "visibility_mode": visibility_mode,
+            "allowed_roles": [],
+            "allowed_user_ids": [],
+        },
+    )
+    # Commit agent + ACL together — keypair generation is best-effort after commit.
     await db.commit()
     try:
         public_key, private_key_enc = generate_agent_keypair()
@@ -1280,6 +1371,7 @@ async def create_agent(
         agent_status=body.status,
         created_by=current_user.id,
         db=session,
+        access_mode=body.access_mode,
     )
     agent_id = result["id"]
     await insert_audit_log(
@@ -1510,6 +1602,7 @@ async def deploy_from_library(
         capabilities=capabilities,
         created_by=current_user.id,
         db=session,
+        access_mode=body.access_mode,
     )
     await insert_audit_log(
         tenant_id=current_user.tenant_id,
@@ -1923,9 +2016,23 @@ async def test_agent(
 
 
 async def list_published_agents_db(
-    tenant_id: str, page: int, page_size: int, db: AsyncSession
+    tenant_id: str,
+    user_id: str = "",
+    user_roles: list | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = None,
 ) -> dict:
-    """List published agent_cards for the end-user agents list (API-117)."""
+    """List published agent_cards for the end-user agents list (API-117).
+
+    # RULE A2A-01: agent list filtered by access_control — users only see agents they can access.
+    Uses a LEFT JOIN against agent_access_control to apply per-agent visibility rules:
+      - No ACL row → include (workspace_wide fallback)
+      - workspace_wide → include for any user
+      - role_restricted → include if user's roles intersect allowed_roles
+      - user_specific → include if user_id is in allowed_user_ids
+    """
+    user_roles = user_roles or []
     offset = (page - 1) * page_size
 
     await db.execute(
@@ -1933,23 +2040,50 @@ async def list_published_agents_db(
         {"tid": tenant_id},
     )
 
+    # RULE A2A-01: agent list filtered by access_control — users only see agents they can access.
+    # The access filter mirrors _check_agent_access in orchestrator.py.
+    # LEFT JOIN means agents with no ACL row are included (workspace_wide fallback).
+    access_filter_sql = (
+        "LEFT JOIN agent_access_control aac "
+        "  ON aac.agent_id = ac.id AND aac.tenant_id = :tenant_id "
+        "WHERE ac.tenant_id = :tenant_id AND ac.status IN ('published', 'active') "
+        "  AND ("
+        "    aac.agent_id IS NULL"                                    # no ACL row → allow
+        "    OR aac.visibility_mode = 'workspace_wide'"               # workspace_wide → allow all
+        "    OR (aac.visibility_mode = 'role_restricted'"
+        "        AND aac.allowed_roles && CAST(:user_roles AS VARCHAR[]))"  # role intersection
+        "    OR (aac.visibility_mode = 'user_specific'"
+        "        AND :user_id_cast = ANY(aac.allowed_user_ids))"      # user in list
+        "  )"
+    )
+
     count_result = await db.execute(
         text(
-            "SELECT COUNT(*) FROM agent_cards "
-            "WHERE tenant_id = :tenant_id AND status IN ('published', 'active')"
+            "SELECT COUNT(*) FROM agent_cards ac "
+            + access_filter_sql
         ),
-        {"tenant_id": tenant_id},
+        {
+            "tenant_id": tenant_id,
+            "user_roles": list(user_roles),
+            "user_id_cast": user_id,
+        },
     )
     total = count_result.scalar() or 0
 
     rows_result = await db.execute(
         text(
-            "SELECT id, name, description, category, avatar "
-            "FROM agent_cards "
-            "WHERE tenant_id = :tenant_id AND status IN ('published', 'active') "
-            "ORDER BY name ASC LIMIT :limit OFFSET :offset"
+            "SELECT ac.id, ac.name, ac.description, ac.category, ac.avatar "
+            "FROM agent_cards ac "
+            + access_filter_sql
+            + " ORDER BY ac.name ASC LIMIT :limit OFFSET :offset"
         ),
-        {"tenant_id": tenant_id, "limit": page_size, "offset": offset},
+        {
+            "tenant_id": tenant_id,
+            "user_roles": list(user_roles),
+            "user_id_cast": user_id,
+            "limit": page_size,
+            "offset": offset,
+        },
     )
     items = [
         {
@@ -1976,9 +2110,12 @@ async def list_agents_for_user(
 
     End-user view — returns only published agents with name, description,
     category, and avatar. No metrics, no draft status. RLS enforces tenant scope.
+    Access is filtered by agent_access_control (RULE A2A-01).
     """
     result = await list_published_agents_db(
         tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        user_roles=current_user.roles,
         page=page,
         page_size=page_size,
         db=session,

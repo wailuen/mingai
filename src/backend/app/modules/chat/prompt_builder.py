@@ -191,7 +191,9 @@ class SystemPromptBuilder:
         overhead = 0
 
         # Layer 0: Agent base prompt (from agent_cards table)
-        agent_prompt = await self._get_agent_prompt(agent_id, tenant_id, db_session)
+        agent_prompt, _capabilities, _kb_ids = await self._get_agent_prompt(
+            agent_id, tenant_id, db_session
+        )
         layers.append(agent_prompt)
 
         # Layer 1: Platform base (universal standards)
@@ -263,14 +265,19 @@ class SystemPromptBuilder:
 
     async def _get_agent_prompt(
         self, agent_id: str, tenant_id: str, db_session=None
-    ) -> str:
+    ) -> tuple[str, dict, list[str]]:
         """
-        Load agent's base system prompt from the agent_cards table.
+        Load agent's base system prompt and capabilities from the agent_cards table.
 
         Queries agent_cards by agent_id and tenant_id. Returns the configured
         system_prompt if found and active. Falls back to the default platform
         prompt if the agent card is not found, the agent_id is not a valid UUID,
         or no DB session is available.
+
+        Returns:
+            Tuple of (system_prompt, capabilities_dict, kb_ids_list).
+            kb_ids_list is extracted from capabilities["kb_ids"] for use by
+            VectorSearchService in Stage 4 fan-out.
         """
         import uuid as _uuid
 
@@ -282,7 +289,7 @@ class SystemPromptBuilder:
                 agent_id=agent_id,
                 reason="no db_session — using default platform prompt",
             )
-            return self._DEFAULT_AGENT_PROMPT
+            return self._DEFAULT_AGENT_PROMPT, {}, []
 
         # Validate agent_id is a UUID before querying (agent_cards uses UUID PK)
         try:
@@ -293,12 +300,12 @@ class SystemPromptBuilder:
                 agent_id=agent_id,
                 reason="agent_id is not a UUID — using default platform prompt",
             )
-            return self._DEFAULT_AGENT_PROMPT
+            return self._DEFAULT_AGENT_PROMPT, {}, []
 
         try:
             result = await db_session.execute(
                 text(
-                    "SELECT system_prompt FROM agent_cards "
+                    "SELECT system_prompt, capabilities FROM agent_cards "
                     "WHERE id = :agent_id AND tenant_id = :tenant_id "
                     "AND status = 'active' LIMIT 1"
                 ),
@@ -312,7 +319,7 @@ class SystemPromptBuilder:
                 tenant_id=tenant_id,
                 error=str(exc),
             )
-            return self._DEFAULT_AGENT_PROMPT
+            return self._DEFAULT_AGENT_PROMPT, {}, []
 
         if row is None:
             logger.debug(
@@ -321,15 +328,34 @@ class SystemPromptBuilder:
                 tenant_id=tenant_id,
                 reason="no active agent_card found — using default platform prompt",
             )
-            return self._DEFAULT_AGENT_PROMPT
+            return self._DEFAULT_AGENT_PROMPT, {}, []
+
+        system_prompt = row[0] or self._DEFAULT_AGENT_PROMPT
+        raw_capabilities = row[1]
+
+        # Normalise capabilities — may come back as dict (asyncpg) or str (psycopg2)
+        if isinstance(raw_capabilities, str):
+            try:
+                capabilities: dict = json.loads(raw_capabilities)
+            except (ValueError, TypeError):
+                capabilities = {}
+        elif isinstance(raw_capabilities, dict):
+            capabilities = raw_capabilities
+        else:
+            capabilities = {}
+
+        # Extract kb_ids list for Stage 4 fan-out
+        raw_kb_ids = capabilities.get("kb_ids", []) if capabilities else []
+        kb_ids: list[str] = [str(k) for k in raw_kb_ids if k] if isinstance(raw_kb_ids, list) else []
 
         logger.info(
             "agent_prompt_loaded",
             agent_id=agent_id,
             tenant_id=tenant_id,
-            prompt_length=len(row[0]),
+            prompt_length=len(system_prompt),
+            kb_ids_count=len(kb_ids),
         )
-        return row[0]
+        return system_prompt, capabilities, kb_ids
 
     def _platform_base(self) -> str:
         """Layer 1: Universal platform standards."""
