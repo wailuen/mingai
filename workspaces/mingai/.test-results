@@ -1,0 +1,20 @@
+commit: 4b0cccf6e574426cfc947f760cfb8b1a00a8b136
+timestamp: 2026-03-21T02:30:00Z
+baseline_pass: 2760
+baseline_fail: 11
+final_pass: 2761
+final_fail: 11
+new_tests: 0
+regressions: 0
+command: python -m pytest src/backend/tests/unit/ --ignore=src/backend/tests/unit/test_azure_cost_job.py -q --tb=line
+
+Notes:
+  - Excluded test_azure_cost_job.py: error at collection (pre-existing env config issue)
+  - Pre-existing failures (not introduced this session):
+    - test_embedding_service.py::TestEmbeddingCaching (4 tests) — mock patches non-existent get_redis path
+    - test_glossary_routes.py::TestDeleteGlossaryTerm::test_delete_term_returns_204 — 404 instead of 204
+    - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
+    - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
+    - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
+  - Fixed this session: test_tool_resolver.py (2 tests) — updated from caplog (Python logging)
+    to structlog.testing.capture_logs() after switching module from logging to structlog

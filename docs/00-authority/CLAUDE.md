@@ -3,7 +3,7 @@
 Preloaded instructions for AI codegen agents working on the mingai platform.
 Read this before writing any backend or frontend code.
 
-Last validated: 2026-03-18.
+Last validated: 2026-03-21.
 
 ---
 
@@ -113,6 +113,11 @@ src/backend/
       teams/routes.py         # CRUD, members, working memory, audit log
       agents/routes.py        # list, create, update, status toggle, deploy from template, test run, upgrade check
       agents/templates.py     # Agent template CRUD (platform admin)
+      chat/tool_resolver.py   # ToolResolver — single UNION ALL query across tool_catalog + mcp_servers (ATA-028)
+      chat/mcp_resolver.py    # MCPToolResolver — Redis-cached MCP server config, build_redis_key(tid,"mcp_tool",tool_id), 300s TTL (ATA-029)
+      chat/guardrails.py      # OutputGuardrailChecker — keyword_block / confidence / max_length; Stage 7b in orchestrator (Phase B)
+      registry/a2a_routing.py # A2A protocol routing — _validate_ssrf_safe_url() SSRF guard, RULE A2A-04 (ATA-022/026)
+      platform/credential_health.py # Daily vault credential health job — DistributedJobLock "cred_health:{tid}", 05:30 UTC (ATA-036)
       tenants/routes.py       # Tenant CRUD, health, quota, LLM profiles, token budget
       platform/routes.py      # Platform admin dashboard, audit log
       registry/routes.py      # HAR agent registry — public discovery + CRUD
@@ -144,7 +149,17 @@ alembic upgrade head                              # apply all
 alembic revision --autogenerate -m "description" # generate new
 ```
 
-42 migrations applied (v001–v041 + **init**).
+49 migrations applied (v001–v048 + **init**).
+
+Alembic chain (v045–v048 — Agent Template A2A Compliance):
+
+```
+v044 → v045 (agent_templates: required_credentials, auth_mode, plan_required)
+     → v046a (agent_cards GIN index on capabilities->kb_ids)
+     → v046b (agent_access_control backfill — DML only)
+     → v047 (agent_cards: credentials_vault_path)
+     → v048 (tool_catalog RLS update: allow degraded health_status)
+```
 
 ---
 
@@ -552,6 +567,39 @@ Requires: Full running stack. Uses Playwright.
 23. `process_conversation_file()` uses `asyncio.to_thread()` for text extraction — `import asyncio` must be at module level in `indexing.py`, not inside the function body. An inside-function import works once but breaks re-import in test sessions.
 24. Conversation document upload returns HTTP 500 when `chunks_indexed == 0` (non-empty file, unextractable content). Never return 200 with zero chunks — the frontend cannot distinguish success from a silent failure.
 25. `delete_conversation()` must explicitly `DELETE FROM search_chunks WHERE conversation_id = :conv_id AND tenant_id = :tid` before deleting the conversation row — there is no FK cascade from `conversations` to `search_chunks`.
+26. `ToolResolver.resolve()` returns `[]` on DB failure — it never raises. Use `structlog.testing.capture_logs()` in tests (not `caplog`) because tool_resolver uses structlog, which routes through a different processor chain than `logging.getLogger`.
+27. `MCPToolResolver` (mcp_resolver.py) caches both hits and misses (`json.dumps(None)`) to prevent thundering-herd on unknown tool IDs. `invalidate_mcp_tool_cache()` must be called after any create/delete/status-change on `mcp_servers`.
+28. `OutputGuardrailChecker` (guardrails.py) is invoked at **Stage 7b** — after LLM synthesis (Stage 7) but **before** persistence (Stage 8). Never call it after Stage 8. Guardrail config stored in `agent_cards.capabilities.guardrails` does nothing unless the orchestrator reads and applies it.
+29. `_validate_ssrf_safe_url()` in a2a_routing.py must be called on every outbound A2A URL — never import-inline-reimplement this check. DNS rebinding attacks require the check to happen at execution time, not at config time.
+30. `DistributedJobLock(f"cred_health:{tenant_id}", ttl=86000)` must be held before any vault operations in the credential health job — prevents duplicate notifications across pods.
+
+---
+
+## A2A Compliance — COC Institutional Rules
+
+Six rules encoded in source (not just in docs). Violation is regression:
+
+| Rule        | Location                                                     | Invariant                                                      |
+| ----------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
+| RULE A2A-01 | `orchestrator.py` class + `OutputGuardrailChecker` docstring | Stage 7b (filter) fires BEFORE Stage 8 (persist). Never after. |
+| RULE A2A-02 | `GuardrailsSchema` docstring + create_agent inline comment   | DB storage ≠ enforcement. Must be wired at Stage 7b.           |
+| RULE A2A-03 | `deploy_agent_template_db()` docstring                       | 422 on silent discard until Phase A verified in staging.       |
+| RULE A2A-04 | `_validate_ssrf_safe_url()` docstring                        | Per-request SSRF check. Never skip. Import from a2a_routing.   |
+| RULE A2A-05 | `run_daily_credential_health_check()` docstring              | DistributedJobLock per tenant before vault ops.                |
+| RULE A2A-06 | `_AGENT_UPDATE_SQL` comment block in agents/routes.py        | tenant_id in all UPDATE WHERE clauses (never omit).            |
+
+**ATA-055 pre-deploy gate**: Before deploying Stage 7b (guardrail enforcement), run this query against the DB to identify agents with `max_response_length > 0` that will start truncating responses:
+
+```sql
+SELECT id, capabilities->'guardrails' AS guardrails
+FROM agent_cards
+WHERE capabilities->'guardrails' IS NOT NULL
+  AND (capabilities->'guardrails'->>'max_response_length')::int > 0;
+```
+
+**V1 latency regression lesson**: Setting `max_response_length = 0` in guardrail config caused `_has_active_guardrails()` to return `True` for ALL agents, adding 1–2s buffering to every chat request. The guardrail key MUST BE ABSENT (not `{max_response_length: 0}`) for agents with no active guardrails.
+
+**ATA-057 human gate**: The 422 guard in `deploy_agent_template_db()` (which rejects `access_control='role'` and non-empty `kb_ids`) MUST remain until Phase A (ATA-006 KB fan-out + ATA-008 orchestrator wiring + ATA-009 access control check) is deployed to staging and verified by a human. Remove only after explicit staging sign-off.
 
 ---
 
@@ -621,6 +669,10 @@ Never violate these:
 29. Per-tenant HNSW index names are derived from `SHA256(tenant_id)[:20]` — an assertion `re.fullmatch(r"[0-9a-f]{20}", short)` must guard the f-string DDL before execution. If the assertion fails, the DDL must not run.
 30. `search_chunks` RLS uses the standard tenant isolation policy (`app.current_tenant_id`) — cross-tenant chunk reads are impossible at the DB level, same as all other tenant tables.
 31. Conversation document search (`search_conversation_index`) must pass `user_id` to enforce per-user data scoping at the vector layer — not just at the route ownership check.
+32. Outbound A2A endpoint URLs must be validated through `_validate_ssrf_safe_url()` in `registry/a2a_routing.py` before every request. Never reimplement inline. Private IPs, link-local, and DNS rebinding targets are blocked.
+33. Guardrail violations (keyword match, low confidence, max_length) are logged as audit events via `_write_guardrail_violation_audit()` — only metadata is logged, never the response content (SOC 2 requirement).
+34. `vault_path` from `agent_cards.credentials_vault_path` must never appear in tenant-visible notification bodies — internal vault topology is infrastructure detail. Log it in structured logs only.
+35. `agent_access_control` rows must exist for every deployed agent card — a missing row means the agent is implicitly accessible to all workspace users. The v046b backfill migration handles existing rows; new deploys must insert via `deploy_agent_template_db()`.
 
 ---
 
