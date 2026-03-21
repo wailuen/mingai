@@ -705,7 +705,14 @@ class ChatOrchestrationService:
         to prevent cross-tenant access control bypass.
         """
         if self._db_session is None:
-            return True  # No DB session — allow (degraded mode)
+            # No DB session — fail closed. Production code always passes db;
+            # reaching this path indicates a constructor bug, not a valid degraded state.
+            logger.warning(
+                "agent_access_check_no_db_session",
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+            )
+            return False
 
         from sqlalchemy import text
 

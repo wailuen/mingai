@@ -245,9 +245,9 @@ class OutputGuardrailChecker:
                 passed=False,
                 action="block",
                 rule_id="internal_error",
-                reason=str(exc),
+                reason="Internal guardrail check error",
                 filtered_text=_CANNED_BLOCK_RESPONSE,
-                violation_metadata={"error": str(exc)},
+                violation_metadata=None,  # Never expose internal exc details to client
             )
 
     # ------------------------------------------------------------------
@@ -260,7 +260,7 @@ class OutputGuardrailChecker:
         threshold = self._guardrails.get("confidence_threshold", 0)
         retrieval_conf = self._retrieval_confidence
         if not isinstance(retrieval_conf, (int, float)) or not math.isfinite(retrieval_conf):
-            retrieval_conf = 1.0  # treat invalid confidence as full confidence (fail-open)
+            retrieval_conf = 0.0  # invalid confidence → fail closed (block if threshold set)
         if isinstance(threshold, (int, float)) and math.isfinite(threshold) and threshold > 0:
             if retrieval_conf < threshold:
                 return FilterResult(

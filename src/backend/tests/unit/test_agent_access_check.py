@@ -121,14 +121,14 @@ async def test_access_check_user_specific_no_match():
 
 
 @pytest.mark.asyncio
-async def test_access_check_no_db_session_allows():
-    """No DB session means degraded mode — allow access."""
+async def test_access_check_no_db_session_denies():
+    """No DB session — fail closed. Production code always passes db; no-session is a bug."""
     svc = ChatOrchestrationService.__new__(ChatOrchestrationService)
     svc._db_session = None
     result = await svc._check_agent_access(
         agent_id="a1", tenant_id="t1", user_id="u1", user_roles=[]
     )
-    assert result is True
+    assert result is False
 
 
 @pytest.mark.asyncio

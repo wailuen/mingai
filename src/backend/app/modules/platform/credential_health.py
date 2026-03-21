@@ -109,7 +109,7 @@ async def run_daily_credential_health_check(
                     "credential_health_check_unreachable",
                     tenant_id=tenant_id,
                     agent_id=agent_id,
-                    vault_path=vault_path,
+                    # vault_path intentionally omitted from logs — reveals internal path schema
                     error=str(exc),
                 )
 

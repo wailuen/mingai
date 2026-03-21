@@ -247,3 +247,96 @@ async def test_vault_client_none_succeeds_gracefully():
     assert result == expected_prefix
     # DB execute still called to persist vault_path_prefix
     db.execute.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Credential key name validation — path traversal regression tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_path_traversal_key_raises_422():
+    """
+    Credential key name '../etc/passwd' must be rejected with 422.
+    Regression: _validate_and_store_credentials blocks path traversal via
+    _VALID_CRED_KEY_RE before vault path construction.
+    """
+    db = _make_db()
+    vault = _make_vault()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_store_credentials(
+            tenant_id=_TENANT_ID,
+            agent_id=_AGENT_ID,
+            auth_mode="tenant_credentials",
+            required_credentials=[{"key": "api_key", "required": True}],
+            provided_credentials={
+                "../etc/passwd": "malicious",
+                "api_key": "valid",
+            },
+            vault_client=vault,
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 422
+    assert "../etc/passwd" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_slash_in_key_raises_422():
+    """Credential key with slash (path separator) raises 422."""
+    db = _make_db()
+    vault = _make_vault()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_store_credentials(
+            tenant_id=_TENANT_ID,
+            agent_id=_AGENT_ID,
+            auth_mode="tenant_credentials",
+            required_credentials=[{"key": "api_key", "required": True}],
+            provided_credentials={"api/key": "v"},
+            vault_client=vault,
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_dot_in_key_raises_422():
+    """Credential key with dot (e.g., 'api.key') raises 422."""
+    db = _make_db()
+    vault = _make_vault()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_store_credentials(
+            tenant_id=_TENANT_ID,
+            agent_id=_AGENT_ID,
+            auth_mode="tenant_credentials",
+            required_credentials=[{"key": "api_key", "required": True}],
+            provided_credentials={"api.key": "v"},
+            vault_client=vault,
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_valid_key_names_pass_validation():
+    """Valid key names (letters, digits, underscores) are accepted."""
+    db = _make_db()
+    vault = _make_vault()
+
+    # Should NOT raise — these names are all valid
+    await _validate_and_store_credentials(
+        tenant_id=_TENANT_ID,
+        agent_id=_AGENT_ID,
+        auth_mode="tenant_credentials",
+        required_credentials=[{"key": "api_key_1", "required": True}],
+        provided_credentials={"api_key_1": "value", "_private": "x", "CamelCase": "y"},
+        vault_client=vault,
+        db=db,
+    )
+
+    vault.store_secret.assert_called()

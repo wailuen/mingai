@@ -112,6 +112,7 @@ _VALID_SORT_COLUMNS = {"created_at", "name", "status"}
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
+_VALID_CRED_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 # C2: Map DeployAgentRequest.access_control API values to agent_access_control.visibility_mode
 # DB column uses CHECK constraint values: 'workspace_wide', 'role_restricted', 'user_specific'.
@@ -314,7 +315,6 @@ async def _validate_and_store_credentials(
 
         # Validate key names before constructing vault paths — prevents path traversal.
         # Key names must be alphanumeric + underscore only (no slashes, dots, or special chars).
-        _VALID_CRED_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
         invalid_keys = [k for k in provided if not _VALID_CRED_KEY_RE.match(k)]
         if invalid_keys:
             raise HTTPException(

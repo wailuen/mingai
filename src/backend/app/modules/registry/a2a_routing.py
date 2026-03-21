@@ -43,7 +43,8 @@ _BLOCKED_NETWORKS = [
     ipaddress.ip_network("172.16.0.0/12"),  # RFC1918 private
     ipaddress.ip_network("192.168.0.0/16"),  # RFC1918 private
     ipaddress.ip_network("127.0.0.0/8"),  # Loopback
-    ipaddress.ip_network("169.254.0.0/16"),  # Link-local / cloud metadata
+    ipaddress.ip_network("169.254.0.0/16"),  # Link-local / cloud metadata (AWS IMDSv1, GCP, Azure)
+    ipaddress.ip_network("168.63.129.16/32"),  # Azure Wire Server (platform services)
     ipaddress.ip_network("::1/128"),  # IPv6 loopback
     ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
     ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
@@ -255,7 +256,10 @@ async def route_message(
 
     for attempt in range(_MAX_RETRIES):
         try:
-            async with httpx.AsyncClient(timeout=_A2A_TIMEOUT_SECONDS) as client:
+            async with httpx.AsyncClient(
+                timeout=_A2A_TIMEOUT_SECONDS,
+                follow_redirects=False,  # SSRF: 302 redirects could bypass IP validation
+            ) as client:
                 response = await client.post(
                     _safe_endpoint,
                     content=json.dumps(signed_payload),
@@ -402,7 +406,6 @@ async def _build_signed_envelope(
 
             canonical = json.dumps(envelope, sort_keys=True)
             signature = sign_payload(canonical.encode(), private_key_enc)
-            del private_key_enc  # Zeroize key material — do not leave in scope after use
             envelope["signature"] = signature
         except Exception as exc:
             logger.warning(
@@ -411,6 +414,8 @@ async def _build_signed_envelope(
                 initiator_agent_id=initiator_agent_id,
                 error_type=type(exc).__name__,
             )
+        finally:
+            del private_key_enc  # Zeroize on all paths (success, exception, return)
     else:
         logger.warning(
             "a2a_no_private_key_unsigned_envelope",
