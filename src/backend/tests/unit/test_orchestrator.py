@@ -86,6 +86,18 @@ def _make_mock_services():
     confidence = MagicMock()
     confidence.calculate = MagicMock(return_value=0.88)
 
+    # DB session mock for _check_agent_access — returns workspace_wide ACL row so
+    # access checks pass without a real database. Required because _db_session=None
+    # now fails closed (returns False) per the fail-closed security fix.
+    db_session = AsyncMock()
+    _acl_result = MagicMock()
+    _acl_result.mappings.return_value.first.return_value = {
+        "visibility_mode": "workspace_wide",
+        "allowed_roles": [],
+        "allowed_user_ids": [],
+    }
+    db_session.execute = AsyncMock(return_value=_acl_result)
+
     return {
         "embedding_service": embedding,
         "vector_search_service": vector_search,
@@ -96,6 +108,7 @@ def _make_mock_services():
         "prompt_builder": prompt_builder,
         "persistence_service": persistence,
         "confidence_calculator": confidence,
+        "db_session": db_session,
     }
 
 

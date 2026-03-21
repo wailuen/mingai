@@ -528,7 +528,13 @@ class TestFailClosed:
         assert result.filtered_text == _CANNED_BLOCK_RESPONSE
 
     @pytest.mark.asyncio
-    async def test_exception_violation_metadata_contains_error(self):
+    async def test_exception_violation_metadata_is_none(self):
+        """Internal errors must NOT expose exception details in violation_metadata.
+
+        violation_metadata=None is the correct fail-closed behavior — internal
+        exception strings must never reach the client (could leak stack traces,
+        config paths, or service details).  See FilterResult sanitization (H3).
+        """
         checker = _checker({})
 
         async def _raise(*args, **kwargs):
@@ -537,8 +543,10 @@ class TestFailClosed:
         checker._check_internal = _raise
 
         result = await checker.check("Text.")
-        assert "error" in result.violation_metadata
-        assert "Deliberate test error" in result.violation_metadata["error"]
+        assert result.passed is False
+        assert result.action == "block"
+        assert result.violation_metadata is None  # sanitized — no internal details
+        assert result.filtered_text == _CANNED_BLOCK_RESPONSE
 
 
 # ---------------------------------------------------------------------------

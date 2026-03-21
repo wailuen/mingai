@@ -113,6 +113,9 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
 _VALID_CRED_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+# Strip control characters (including newlines) from variable substitution values
+# to prevent newline-based prompt injection in system prompts (H3 — CWE-93).
+_CTRL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 # C2: Map DeployAgentRequest.access_control API values to agent_access_control.visibility_mode
 # DB column uses CHECK constraint values: 'workspace_wide', 'role_restricted', 'user_specific'.
@@ -1445,11 +1448,14 @@ def _substitute_variables(prompt: str, variables: dict) -> str:
     """Replace {{variable_name}} placeholders.
 
     Only alphanumeric/underscore variable names are substituted to prevent
-    injection via malformed placeholder names.
+    injection via malformed placeholder names.  Control characters (including
+    newlines) are stripped from substituted values to prevent newline-based
+    instruction injection into system prompts (CWE-93).
     """
     for key, value in variables.items():
         if re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", key):
-            prompt = prompt.replace("{{" + key + "}}", str(value))
+            safe_value = _CTRL_CHAR_RE.sub("", str(value))
+            prompt = prompt.replace("{{" + key + "}}", safe_value)
     return prompt
 
 

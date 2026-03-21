@@ -253,7 +253,7 @@ class ChatOrchestrationService:
                 query=query,
             )
         except Exception:
-            pass  # analytics path must never block the response
+            logger.debug("cache_event_emit_failed", exc_info=True)  # analytics must never block
 
         if _cache_hit and _cache_result is not None:
             # Serve from cache — skip stages 4-7

@@ -109,8 +109,9 @@ async def run_daily_credential_health_check(
                     "credential_health_check_unreachable",
                     tenant_id=tenant_id,
                     agent_id=agent_id,
-                    # vault_path intentionally omitted from logs — reveals internal path schema
-                    error=str(exc),
+                    # vault_path and full error intentionally omitted — may reveal internal path
+                    # schema or vault connection strings to log aggregators.
+                    error_type=type(exc).__name__,
                 )
 
                 # Deduplication: skip notification if already sent within the last 7 days.
@@ -244,7 +245,7 @@ async def run_credential_health_job() -> int:
 
         vault_client = get_vault_client()
     except Exception as exc:
-        logger.error("credential_health_vault_client_init_failed", error=str(exc))
+        logger.error("credential_health_vault_client_init_failed", error_type=type(exc).__name__)
         return 0
 
     try:

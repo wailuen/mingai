@@ -20,6 +20,7 @@ Endpoints:
 - POST /platform/tenants/{id}/gdpr-delete  — GDPR deletion workflow (API-116)
 """
 import asyncio
+import concurrent.futures as _cf
 import csv
 import io
 import json
@@ -130,6 +131,10 @@ class GuardrailRule(BaseModel):
 # ATA-022: Structured guardrail configuration schema
 # ---------------------------------------------------------------------------
 
+# ReDoS probe: known catastrophic backtracking input for patterns like (a+)+ or (a*)*.
+# Legitimate regex patterns match in microseconds; exponential patterns time out at 50ms.
+_REDOS_TEST_STRING = "a" * 30 + "b"
+
 _VALID_GUARDRAIL_RULE_TYPES = frozenset({
     "keyword_block",
     "citation_required",
@@ -176,14 +181,13 @@ class GuardrailsSchema(BaseModel):
                 raise ValueError(
                     f"Invalid regex pattern '{pattern}': {exc}"
                 ) from exc
-            # ReDoS guard: run the compiled pattern against a known catastrophic
-            # backtracking input (30 'a' chars + 'b' — triggers exponential
-            # backtracking in patterns like (a+)+ or (a*)*). Use a thread with
-            # a 50ms timeout. Any legitimate pattern completes in microseconds.
-            import concurrent.futures as _cf
-            _REDOS_TEST = "a" * 30 + "b"
+            # ReDoS guard: run the compiled pattern against _REDOS_TEST_STRING
+            # (30 'a' chars + 'b' — triggers exponential backtracking in patterns
+            # like (a+)+ or (a*)*). Thread pool with 50ms timeout. Legitimate
+            # patterns complete in microseconds. _cf and _REDOS_TEST_STRING are
+            # module-scope constants — never re-import or redefine inline.
             with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
-                _fut = _pool.submit(compiled.search, _REDOS_TEST)
+                _fut = _pool.submit(compiled.search, _REDOS_TEST_STRING)
                 try:
                     _fut.result(timeout=0.05)
                 except _cf.TimeoutError:
@@ -1470,6 +1474,18 @@ async def register_tool(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="endpoint_url must use HTTPS (http:// URLs are not allowed).",
         )
+
+    # SSRF protection: reject URLs targeting private/internal infrastructure.
+    # Uses _validate_ssrf_safe_url() (registration-time check, no DNS pinning needed
+    # since no outbound request is made here). RULE A2A-04.
+    try:
+        from app.modules.registry.a2a_routing import _validate_ssrf_safe_url
+        _validate_ssrf_safe_url(body.endpoint_url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"endpoint_url targets internal infrastructure: {exc}",
+        ) from exc
 
     # Validate auth_type
     if body.auth_type not in _VALID_AUTH_TYPES:
