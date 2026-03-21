@@ -1,10 +1,10 @@
-commit: 7479ec8 (LLM Library redesign uncommitted)
-timestamp: 2026-03-21T14:00:00Z
+commit: 3898afb (LLM Library redesign — red team fixes)
+timestamp: 2026-03-21T15:00:00Z
 baseline_pass: 2838
 baseline_fail: 7
-final_pass: 2838
+final_pass: 2842
 final_fail: 7
-new_tests: 56
+new_tests: 4
 regressions: 0
 command: pytest tests/unit/ --ignore=tests/unit/test_azure_cost_job.py --ignore=tests/unit/test_embedding_service.py --tb=short -q
 
@@ -16,18 +16,11 @@ Notes:
     - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
     - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
     - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
-  - Round 2 security fixes (commit ba132bc):
-    - a2a_routing.py: _resolve_ssrf_safe_url() pins DNS to prevent rebinding TOCTOU (CWE-918)
-    - platform/routes.py: ReDoS guard in GuardrailsSchema.validate_rule() — 50ms timeout
-    - test_template_deprecation.py:369 — strengthened assertion from weak OR to assert 201
-    - test_mcp_resolver.py (2 tests) — Redis ConnectionError fallback coverage
-    - test_a2a_routing.py (5 tests) — _resolve_ssrf_safe_url DNS pinning regression tests
-  - Round 3 security fixes (commit 8ebad86):
-    - a2a_routing.py: Azure Wire Server (168.63.129.16) blocked, key zeroization via finally, follow_redirects=False
-    - orchestrator.py: _db_session=None → return False (fail-closed)
-    - guardrails.py: FilterResult exception sanitization + confidence 0.0 fail-closed
-    - credential_health.py: vault_path removed from WARNING log (schema leak)
-    - agents/routes.py: _VALID_CRED_KEY_RE moved to module scope
-    - test_credential_health.py (6 tests) — credential health check dedup/notification coverage
-    - test_credential_deploy_validation.py (4 tests) — path traversal regression tests
-    - test_agent_access_check.py — no-db-session test renamed + fail-closed assertion
+  - Red team fixes (this update):
+    - HIGH-1 (prev session): E2E LLM-C-007 test response shape fixed (tokens_in/tokens_out, no all_passed)
+    - HIGH-2: Added DELETE /platform/llm-library/{id} endpoint (Draft-only delete)
+      - routes.py: delete_llm_library_entry() — 204 for Draft, 409 for Published/Deprecated
+      - E2E tests LLM-C-001–005, LLM-C-008: cleanup changed from POST /deprecate to DELETE
+      - test_llm_library_credentials.py: 4 new unit tests for DELETE endpoint
+      - 01-api-reference.md: DELETE endpoint documented
+    - HIGH-3: LibraryForm.tsx handlePublish() — removed api_key re-send that cleared last_test_passed_at

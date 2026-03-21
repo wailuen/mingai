@@ -847,3 +847,130 @@ class TestUpdateCredentialChanged:
         assert entry.api_key_last4 == "5678"
         # Verify api_key_encrypted is NOT in response
         assert "api_key_encrypted" not in entry.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# DELETE endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteLLMLibraryEntry:
+    """DELETE /{entry_id} — Draft entries only."""
+
+    def _make_entry(self, status: str = "Draft"):
+        from app.modules.platform.llm_library.routes import LLMLibraryEntry
+
+        return LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="openai_direct",
+            model_name="gpt-4o-mini",
+            display_name="Test Entry",
+            plan_tier="Starter",
+            is_recommended=False,
+            status=status,
+            key_present=False,
+            last_test_passed_at=None,
+            created_at="2026-03-21T00:00:00+00:00",
+            updated_at="2026-03-21T00:00:00+00:00",
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_draft_entry_succeeds(self):
+        """DELETE on a Draft entry returns 204 and executes DELETE SQL."""
+        from app.modules.platform.llm_library.routes import delete_llm_library_entry
+
+        entry = self._make_entry("Draft")
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            return_value=entry,
+        ):
+            result = await delete_llm_library_entry(
+                entry_id=TEST_ENTRY_ID,
+                current_user=mock_user,
+                db=mock_db,
+            )
+
+        assert result is None  # 204 No Content
+        mock_db.commit.assert_called_once()
+
+        # Verify DELETE SQL was executed
+        call_args = mock_db.execute.call_args_list[0]
+        sql_str = str(call_args[0][0])
+        assert "DELETE" in sql_str
+        assert "status = 'Draft'" in sql_str
+
+    @pytest.mark.asyncio
+    async def test_delete_published_entry_fails_409(self):
+        """DELETE on a Published entry returns 409 Conflict."""
+        from fastapi import HTTPException
+        from app.modules.platform.llm_library.routes import delete_llm_library_entry
+
+        entry = self._make_entry("Published")
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            return_value=entry,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_llm_library_entry(
+                    entry_id=TEST_ENTRY_ID,
+                    current_user=mock_user,
+                    db=mock_db,
+                )
+
+        assert exc_info.value.status_code == 409
+        assert "Draft" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_deprecated_entry_fails_409(self):
+        """DELETE on a Deprecated entry returns 409 Conflict."""
+        from fastapi import HTTPException
+        from app.modules.platform.llm_library.routes import delete_llm_library_entry
+
+        entry = self._make_entry("Deprecated")
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            return_value=entry,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_llm_library_entry(
+                    entry_id=TEST_ENTRY_ID,
+                    current_user=mock_user,
+                    db=mock_db,
+                )
+
+        assert exc_info.value.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_entry_fails_404(self):
+        """DELETE on a missing entry returns 404."""
+        from fastapi import HTTPException
+        from app.modules.platform.llm_library.routes import delete_llm_library_entry
+
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            return_value=None,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_llm_library_entry(
+                    entry_id=TEST_ENTRY_ID,
+                    current_user=mock_user,
+                    db=mock_db,
+                )
+
+        assert exc_info.value.status_code == 404

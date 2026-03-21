@@ -190,6 +190,7 @@ Each LLM Library entry is a **fully-specified connection to one LLM deployment**
 | PATCH  | `/platform/llm-library/{id}`                    | platform_admin | Update Draft or Published entry. Returns 409 for Deprecated entries.                                                         |
 | POST   | `/platform/llm-library/{id}/publish`            | platform_admin | Transition `Draft → Published`. See publish gate conditions below. 409 if not currently Draft.                               |
 | POST   | `/platform/llm-library/{id}/deprecate`          | platform_admin | Transition `Published → Deprecated`. Entry hidden from tenant admins but retained for cost history. 409 if not Published.    |
+| DELETE | `/platform/llm-library/{id}`                    | platform_admin | Permanently delete a `Draft` entry. 409 if Published or Deprecated (use deprecate instead). 204 No Content.                 |
 | POST   | `/platform/llm-library/{id}/test`               | platform_admin | Fire 3 test prompts using entry's stored credentials. Sets `last_test_passed_at` on all-pass. See test response shape below. |
 | GET    | `/platform/llm-library/{id}/tenant-assignments` | platform_admin | List LLM profiles across all tenants that have this library entry assigned to a slot. Check before deprecating.              |
 

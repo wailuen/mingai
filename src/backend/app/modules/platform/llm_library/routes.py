@@ -685,6 +685,31 @@ async def deprecate_llm_library_entry(
     return updated
 
 
+@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_llm_library_entry(
+    entry_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Delete a Draft entry. Published and Deprecated entries cannot be deleted."""
+    entry = await _get_entry(entry_id, db)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="LLM Library entry not found")
+
+    if entry.status != "Draft":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Only Draft entries can be deleted. Use deprecate for Published entries. Current status: {entry.status}",
+        )
+
+    await db.execute(
+        text("DELETE FROM llm_library WHERE id = :id AND status = 'Draft'"),
+        {"id": entry_id},
+    )
+    await db.commit()
+    logger.info("llm_library_entry_deleted", entry_id=entry_id)
+
+
 # ---------------------------------------------------------------------------
 # PA-002: Profile test harness
 # ---------------------------------------------------------------------------

@@ -134,7 +134,8 @@ function TestResultsPanel({ results }: TestResultsPanelProps) {
       <div className="flex items-center gap-2 mb-1">
         <CheckCircle2 size={14} className="text-accent" />
         <span className="text-[13px] font-semibold text-text-primary">
-          Test Results ({results.length} prompt{results.length !== 1 ? "s" : ""})
+          Test Results ({results.length} prompt{results.length !== 1 ? "s" : ""}
+          )
         </span>
       </div>
       <div className="overflow-x-auto">
@@ -178,7 +179,8 @@ function TestResultsPanel({ results }: TestResultsPanelProps) {
         </table>
       </div>
       <p className="text-[12px] text-accent font-medium pt-1">
-        All {results.length} test{results.length !== 1 ? "s" : ""} passed — entry is ready to publish
+        All {results.length} test{results.length !== 1 ? "s" : ""} passed —
+        entry is ready to publish
       </p>
     </div>
   );
@@ -215,7 +217,9 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   const [showDeprecateConfirm, setShowDeprecateConfirm] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [testResults, setTestResults] = useState<TestPromptResult[] | null>(null);
+  const [testResults, setTestResults] = useState<TestPromptResult[] | null>(
+    null,
+  );
   const [testError, setTestError] = useState<string | null>(null);
 
   // Fetch tenant assignments only when deprecate dialog is open
@@ -344,11 +348,12 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
 
   function handlePublish() {
     if (!isEditing || !canPublish) return;
-    // Save current form state then publish
+    // Save non-credential metadata before publishing.
+    // api_key is already stored in DB — re-sending it would clear last_test_passed_at
+    // and cause the subsequent publish call to fail 422.
     const payload: UpdateLLMLibraryPayload = {
       best_practices_md: form.best_practices_md,
     };
-    if (form.api_key) payload.api_key = form.api_key;
 
     updateMutation.mutate(
       { id: entry.id, payload },

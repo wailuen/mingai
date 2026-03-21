@@ -178,17 +178,18 @@ test("LLM-C-001: Creating entry with api_key stores key_present=true and api_key
   expect(bodyStr).not.toContain(testKey); // plaintext never returned
 
   // endpoint_url and api_version are returned
-  expect(entry.endpoint_url).toBe("https://ai-test.cognitiveservices.azure.com/");
+  expect(entry.endpoint_url).toBe(
+    "https://ai-test.cognitiveservices.azure.com/",
+  );
   expect(entry.api_version).toBe("2024-12-01-preview");
 
   // last_test_passed_at is null until a test is run
   expect(entry.last_test_passed_at).toBeNull();
 
-  // Cleanup
-  await ctx.post(
-    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
+  // Cleanup — entry is Draft, use DELETE (deprecate requires Published status)
+  await ctx.delete(`${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   await ctx.dispose();
 });
 
@@ -244,11 +245,10 @@ test("LLM-C-002: GET responses never contain api_key_encrypted or plaintext key"
   expect(listBody).not.toContain("api_key_encrypted");
   expect(listBody).not.toContain(testKey);
 
-  // Cleanup
-  await ctx.post(
-    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
+  // Cleanup — entry is Draft, use DELETE (deprecate requires Published status)
+  await ctx.delete(`${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   await ctx.dispose();
 });
 
@@ -309,11 +309,10 @@ test("LLM-C-003: Updating api_key clears last_test_passed_at (stale test invalid
   const newKey = `sk-rotated-key-${suffix}`;
   expect(patched.api_key_last4).toBe(newKey.slice(-4));
 
-  // Cleanup
-  await ctx.post(
-    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
+  // Cleanup — entry is Draft, use DELETE (deprecate requires Published status)
+  await ctx.delete(`${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   await ctx.dispose();
 });
 
@@ -359,11 +358,10 @@ test("LLM-C-004: Publish is blocked until connectivity test has passed", async (
   const publishBody = await publishResp.json();
   expect(publishBody.detail).toContain("connectivity test");
 
-  // Cleanup
-  await ctx.post(
-    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
+  // Cleanup — entry is Draft, use DELETE (deprecate requires Published status)
+  await ctx.delete(`${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   await ctx.dispose();
 });
 
@@ -408,11 +406,10 @@ test("LLM-C-005: Test endpoint returns 422 for entry with no API key", async () 
   const body = await testResp.json();
   expect(body.detail).toContain("API key");
 
-  // Cleanup
-  await ctx.post(
-    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
+  // Cleanup — entry is Draft, use DELETE (deprecate requires Published status)
+  await ctx.delete(`${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   await ctx.dispose();
 });
 
@@ -503,6 +500,9 @@ test("LLM-C-007: Full create → credentials → test → publish flow (requires
   expect(JSON.stringify(entry)).not.toContain(AZURE_CREDS.apiKey);
 
   // Step 2: Run connectivity test using entry's stored credentials
+  // ProfileTestResponse shape: { tests: [{ prompt, response, tokens_in, tokens_out, latency_ms, estimated_cost_usd }] }
+  // last_test_passed_at is SET on the DB row but NOT returned in the response body —
+  // verify by GETting the entry after the test call.
   const testResp = await ctx.post(
     `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/test`,
     {
@@ -513,19 +513,18 @@ test("LLM-C-007: Full create → credentials → test → publish flow (requires
   expect(testResp.status()).toBe(200);
   const testResult = await testResp.json();
 
-  expect(testResult.entry_id).toBe(entry.id);
+  // Verify shape matches ProfileTestResponse (routes.py:218-221)
+  expect(Array.isArray(testResult.tests)).toBe(true);
   expect(testResult.tests).toHaveLength(3);
-  expect(testResult.all_passed).toBe(true);
-  expect(testResult.last_test_passed_at).not.toBeNull();
 
-  // Each test result has expected fields
+  // Each TestPromptResult has: prompt, response, tokens_in, tokens_out, latency_ms, estimated_cost_usd
   for (const t of testResult.tests) {
-    expect(t.passed).toBe(true);
+    expect(typeof t.prompt).toBe("string");
+    expect(typeof t.response).toBe("string");
     expect(typeof t.latency_ms).toBe("number");
     expect(t.latency_ms).toBeGreaterThan(0);
-    expect(typeof t.input_tokens).toBe("number");
-    expect(typeof t.output_tokens).toBe("number");
-    expect(t.error).toBeNull();
+    expect(typeof t.tokens_in).toBe("number"); // NOT input_tokens
+    expect(typeof t.tokens_out).toBe("number"); // NOT output_tokens
   }
 
   // api_key never in test response
@@ -533,15 +532,16 @@ test("LLM-C-007: Full create → credentials → test → publish flow (requires
   expect(testResultStr).not.toContain("api_key_encrypted");
   expect(testResultStr).not.toContain(AZURE_CREDS.apiKey);
 
-  // Step 3: GET entry — last_test_passed_at is now set
+  // Step 3: GET entry — last_test_passed_at is now set (DB was updated by test endpoint)
   const getResp = await ctx.get(
     `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   const refreshed = await getResp.json();
   expect(refreshed.last_test_passed_at).not.toBeNull();
+  expect(refreshed.last_test_passed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/); // ISO 8601
 
-  // Step 4: Publish
+  // Step 4: Publish (now allowed because last_test_passed_at is set)
   const publishResp = await ctx.post(
     `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/publish`,
     { headers: { Authorization: `Bearer ${token}` } },
@@ -556,7 +556,7 @@ test("LLM-C-007: Full create → credentials → test → publish flow (requires
   const published = await verifyResp.json();
   expect(published.status).toBe("Published");
 
-  // Step 6: Cleanup — deprecate the test entry
+  // Step 6: Cleanup — entry is Published so deprecate works (Published → Deprecated)
   await ctx.post(
     `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
     { headers: { Authorization: `Bearer ${token}` } },
@@ -572,8 +572,7 @@ test("LLM-C-007: Full create → credentials → test → publish flow (requires
 test("LLM-C-008: UI shows api_key_last4 masking when key is set (requires frontend)", async ({
   page,
 }) => {
-  if (!(await backendAvailable()) || !(await frontendAvailable()))
-    test.skip();
+  if (!(await backendAvailable()) || !(await frontendAvailable())) test.skip();
 
   // Create an entry with a known key via API
   const ctx = await request.newContext();
@@ -626,15 +625,15 @@ test("LLM-C-008: UI shows api_key_last4 masking when key is set (requires fronte
     await expect(keyBadge).toContainText("Set");
   }
 
-  // Cleanup via API
+  // Cleanup via API — entry is Draft, use DELETE (deprecate requires Published status)
   const cleanupCtx = await request.newContext();
   const cleanupToken = await apiLogin(
     cleanupCtx,
     PLATFORM_ADMIN.email,
     PLATFORM_ADMIN.pass,
   );
-  await cleanupCtx.post(
-    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}/deprecate`,
+  await cleanupCtx.delete(
+    `${BACKEND_URL}/api/v1/platform/llm-library/${entry.id}`,
     { headers: { Authorization: `Bearer ${cleanupToken}` } },
   );
   await cleanupCtx.dispose();
