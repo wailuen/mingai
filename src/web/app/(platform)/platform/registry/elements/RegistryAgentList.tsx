@@ -73,7 +73,7 @@ export function RegistryAgentList({ statusFilter }: RegistryAgentListProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load registry agents: {error.message}
       </p>
     );
@@ -116,7 +116,7 @@ export function RegistryAgentList({ statusFilter }: RegistryAgentListProps) {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-3.5 py-12 text-center text-sm text-text-faint"
+                    className="px-3.5 py-12 text-center text-body-default text-text-faint"
                   >
                     No registry agents found.
                   </td>
@@ -129,17 +129,17 @@ export function RegistryAgentList({ statusFilter }: RegistryAgentListProps) {
                   className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
                   <td className="px-3.5 py-3">
-                    <span className="text-[13px] font-medium text-text-primary">
+                    <span className="text-body-default font-medium text-text-primary">
                       {agent.name}
                     </span>
                   </td>
                   <td className="px-3.5 py-3">
-                    <span className="text-[13px] text-text-muted">
+                    <span className="text-body-default text-text-muted">
                       {agent.category}
                     </span>
                   </td>
                   <td className="px-3.5 py-3">
-                    <span className="text-[13px] text-text-muted">
+                    <span className="text-body-default text-text-muted">
                       {agent.publisher_tenant}
                     </span>
                   </td>
@@ -188,7 +188,7 @@ export function RegistryAgentList({ statusFilter }: RegistryAgentListProps) {
         {/* Pagination info */}
         {!isPending && filteredAgents.length > 0 && (
           <div className="border-t border-border px-5 py-2.5">
-            <p className="font-mono text-[11px] text-text-faint">
+            <p className="font-mono text-data-value text-text-faint">
               Showing {filteredAgents.length} agent
               {filteredAgents.length !== 1 ? "s" : ""}
             </p>
@@ -203,7 +203,7 @@ export function RegistryAgentList({ statusFilter }: RegistryAgentListProps) {
             <h3 className="text-[15px] font-semibold text-text-primary">
               Confirm Unpublish
             </h3>
-            <p className="mt-2 text-sm text-text-muted">
+            <p className="mt-2 text-body-default text-text-muted">
               This will remove the agent from the public registry. Existing
               installations will not be affected.
             </p>

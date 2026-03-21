@@ -39,7 +39,7 @@ export function TenantHeader({
         <TenantStatusBadge status={status} />
         <TenantPlanBadge plan={plan} />
       </div>
-      <p className="mt-1.5 text-sm text-text-muted">
+      <p className="mt-1.5 text-body-default text-text-muted">
         <span className="font-mono">{primaryContactEmail}</span>
         <span className="mx-2 text-text-faint">&middot;</span>
         <span className="font-mono">Created {formatDate(createdAt)}</span>

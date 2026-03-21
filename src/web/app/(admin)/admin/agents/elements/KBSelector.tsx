@@ -57,7 +57,7 @@ export function KBSelector({ value, onChange }: KBSelectorProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load knowledge bases: {error.message}
       </p>
     );
@@ -67,7 +67,7 @@ export function KBSelector({ value, onChange }: KBSelectorProps) {
 
   if (integrations.length === 0) {
     return (
-      <p className="text-sm text-text-faint">
+      <p className="text-body-default text-text-faint">
         No knowledge bases connected. Connect a source in Documents first.
       </p>
     );
@@ -92,9 +92,7 @@ export function KBSelector({ value, onChange }: KBSelectorProps) {
 
   function handleModeSwitch(id: string, mode: "grounded" | "extended") {
     onChange(
-      value.map((kb) =>
-        kb.integrationId === id ? { ...kb, mode } : kb,
-      ),
+      value.map((kb) => (kb.integrationId === id ? { ...kb, mode } : kb)),
     );
   }
 
@@ -123,7 +121,7 @@ export function KBSelector({ value, onChange }: KBSelectorProps) {
 
             {/* Source name */}
             <span
-              className={`text-sm ${
+              className={`text-body-default ${
                 selected ? "text-text-primary" : "text-text-faint"
               }`}
             >
@@ -142,9 +140,7 @@ export function KBSelector({ value, onChange }: KBSelectorProps) {
               <div className="ml-auto flex overflow-hidden rounded-control border border-border text-xs">
                 <button
                   type="button"
-                  onClick={() =>
-                    handleModeSwitch(integration.id, "grounded")
-                  }
+                  onClick={() => handleModeSwitch(integration.id, "grounded")}
                   className={`px-2 py-0.5 font-medium transition-colors ${
                     mode === "grounded"
                       ? "bg-accent text-bg-base"
@@ -155,9 +151,7 @@ export function KBSelector({ value, onChange }: KBSelectorProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    handleModeSwitch(integration.id, "extended")
-                  }
+                  onClick={() => handleModeSwitch(integration.id, "extended")}
                   className={`border-l border-border px-2 py-0.5 font-medium transition-colors ${
                     mode === "extended"
                       ? "bg-bg-elevated text-text-primary border-border"

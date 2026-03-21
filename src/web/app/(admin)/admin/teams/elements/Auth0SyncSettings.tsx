@@ -74,7 +74,7 @@ export function Auth0SyncSettings({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-[13px] font-semibold text-text-primary">
+        <h3 className="text-body-default font-semibold text-text-primary">
           Auth0 Group Sync
         </h3>
         <p className="mt-0.5 text-xs text-text-muted">
@@ -93,14 +93,14 @@ export function Auth0SyncSettings({
 
       {/* Error */}
       {error && (
-        <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+        <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
           {error}
         </div>
       )}
 
       {/* Success */}
       {saved && (
-        <div className="rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-sm text-accent">
+        <div className="rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-body-default text-accent">
           Sync patterns saved
         </div>
       )}
@@ -108,7 +108,7 @@ export function Auth0SyncSettings({
       {/* Pattern list */}
       {patterns.length === 0 ? (
         <div className="rounded-control border border-border-faint bg-bg-deep px-4 py-6 text-center">
-          <p className="text-sm text-text-faint">
+          <p className="text-body-default text-text-faint">
             No groups synced until configured
           </p>
           <p className="mt-1 text-xs text-text-faint">
@@ -142,7 +142,7 @@ export function Auth0SyncSettings({
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder='e.g. "Engineering*" or "Procurement-*"'
-          className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+          className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
         />
         <button
           onClick={addPattern}
@@ -159,7 +159,7 @@ export function Auth0SyncSettings({
         <button
           onClick={handleSave}
           disabled={updateMutation.isPending}
-          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
         >
           {updateMutation.isPending && (
             <Loader2 size={14} className="animate-spin" />

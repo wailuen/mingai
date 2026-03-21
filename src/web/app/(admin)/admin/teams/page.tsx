@@ -49,7 +49,7 @@ export default function TeamsPage() {
         {/* Page header */}
         <div className="mb-1">
           <h1 className="text-page-title text-text-primary">Teams</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Manage team memberships and working memory
           </p>
         </div>
@@ -62,7 +62,7 @@ export default function TeamsPage() {
               setEditingTeam(null);
               setShowTeamForm(true);
             }}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={14} />
             New Team

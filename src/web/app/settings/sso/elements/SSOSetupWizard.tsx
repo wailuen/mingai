@@ -322,7 +322,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
           {/* Step 1: Choose Provider */}
           {step === 1 && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Choose your identity provider.
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -368,7 +368,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
           {/* Step 2: Configure */}
           {step === 2 && provider === "saml" && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Provide your IdP SAML metadata — either a URL or paste the XML
                 directly.
               </p>
@@ -417,7 +417,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
 
           {step === 2 && provider === "oidc" && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Enter your OpenID Connect provider details.
               </p>
               <FormField
@@ -445,7 +445,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
 
           {step === 2 && provider === "google" && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Enter your Google OAuth 2.0 application credentials.
               </p>
               <FormField
@@ -466,7 +466,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
 
           {step === 2 && provider === "okta" && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Enter your Okta tenant details.
               </p>
               <FormField
@@ -495,7 +495,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
           {step === 2 && provider === "entra" && (
             <div className="space-y-4">
               {isUpdateMode ? (
-                <p className="text-sm text-text-muted">
+                <p className="text-body-default text-text-muted">
                   Update your Azure AD domain or rotate the client secret.
                   Leave the secret blank to keep the current value.
                 </p>
@@ -541,7 +541,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
           {/* Step 3: Review + Save */}
           {step === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Review your configuration and save to activate SSO.
               </p>
 
@@ -620,7 +620,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
                 <div className="rounded-card border border-accent/30 bg-accent-dim p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Check size={14} className="text-accent shrink-0" />
-                    <p className="text-sm font-medium text-accent">
+                    <p className="text-body-default font-medium text-accent">
                       SSO configured successfully
                     </p>
                   </div>
@@ -701,7 +701,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
                 type="button"
                 onClick={handleBack}
                 disabled={isSaving}
-                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
               >
                 <ChevronLeft size={14} />
                 Back
@@ -714,7 +714,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
               >
                 Cancel
               </button>
@@ -728,7 +728,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
                   (step === 1 && provider === null) ||
                   (step === 2 && !canProceedStep2)
                 }
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 Next
                 <ChevronRight size={14} />
@@ -740,7 +740,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 {isSaving ? (
                   <>
@@ -760,7 +760,7 @@ export function SSOSetupWizard({ onClose, existingEntraConfig }: SSOSetupWizardP
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+                className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
               >
                 Done
               </button>
@@ -798,7 +798,7 @@ function ProviderCard({
     >
       <h3
         className={cn(
-          "text-sm font-semibold",
+          "text-body-default font-semibold",
           selected ? "text-accent" : "text-text-primary",
         )}
       >
@@ -840,7 +840,7 @@ function FormField({
         onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
         readOnly={readOnly}
         placeholder={placeholder}
-        className={`w-full rounded-control border px-3 py-2 text-sm placeholder:text-text-faint focus:outline-none ${readOnly ? "border-border-faint bg-bg-base text-text-faint cursor-not-allowed" : "border-border bg-bg-elevated text-text-primary focus:border-accent"}`}
+        className={`w-full rounded-control border px-3 py-2 text-body-default placeholder:text-text-faint focus:outline-none ${readOnly ? "border-border-faint bg-bg-base text-text-faint cursor-not-allowed" : "border-border bg-bg-elevated text-text-primary focus:border-accent"}`}
       />
       {hint && <p className="mt-1 text-[11px] text-text-faint">{hint}</p>}
     </div>
@@ -862,7 +862,7 @@ function ReviewRow({
         {label}
       </dt>
       <dd
-        className={`truncate text-sm text-text-primary ${mono ? "font-mono text-text-muted" : ""}`}
+        className={`truncate text-body-default text-text-primary ${mono ? "font-mono text-text-muted" : ""}`}
       >
         {value}
       </dd>

@@ -37,7 +37,7 @@ function CostKPICard({
         {label}
       </p>
       {sublabel && (
-        <p className="mt-0.5 text-[10px] text-text-faint">{sublabel}</p>
+        <p className="mt-0.5 text-[11px] text-text-faint">{sublabel}</p>
       )}
     </div>
   );
@@ -77,7 +77,7 @@ export function PlatformCostSummary({ period }: PlatformCostSummaryProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load cost summary: {error.message}
       </p>
     );

@@ -69,7 +69,7 @@ export function ScheduleConfigForm({
               onChange={() => setSelected(opt.value)}
               className="accent-[var(--accent)]"
             />
-            <span className="text-sm text-text-primary">{opt.label}</span>
+            <span className="text-body-default text-text-primary">{opt.label}</span>
           </label>
         ))}
       </div>
@@ -78,7 +78,7 @@ export function ScheduleConfigForm({
         type="button"
         onClick={() => mutation.mutate()}
         disabled={!hasChanged || mutation.isPending}
-        className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+        className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
       >
         {mutation.isPending ? (
           <Loader2 size={14} className="animate-spin" />

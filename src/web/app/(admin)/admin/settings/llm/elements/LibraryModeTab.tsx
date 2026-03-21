@@ -75,7 +75,7 @@ function AnthropicEmbeddingNote() {
   return (
     <div className="mt-3 flex items-start gap-2 rounded-control border border-border bg-bg-elevated px-3 py-2.5">
       <Info size={13} className="mt-0.5 flex-shrink-0 text-text-muted" />
-      <p className="text-[12px] text-text-muted">
+      <p className="text-body-default text-text-muted">
         This provider does not support embeddings. The platform will
         automatically use an Azure OpenAI provider for document indexing.
       </p>
@@ -104,7 +104,7 @@ function PlatformProviderSection({
         <h3 className="mb-2 text-section-heading text-text-primary">
           Platform Provider
         </h3>
-        <p className="text-[12px] text-alert">{error.message}</p>
+        <p className="text-body-default text-alert">{error.message}</p>
       </div>
     );
   }
@@ -138,7 +138,7 @@ function PlatformProviderSection({
         )}
       </div>
 
-      <p className="mb-3 text-[12px] text-text-muted">
+      <p className="mb-3 text-body-default text-text-muted">
         Choose which LLM provider this workspace uses for AI processing.
       </p>
 
@@ -146,7 +146,7 @@ function PlatformProviderSection({
 
       {!isPending && providerList.length === 0 && (
         <div className="rounded-control border border-border bg-bg-surface px-4 py-3">
-          <p className="text-[12px] text-text-faint">
+          <p className="text-body-default text-text-faint">
             No providers are currently available. Contact the platform
             administrator.
           </p>
@@ -167,7 +167,7 @@ function PlatformProviderSection({
             )}
           >
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-medium text-text-primary">
+              <span className="text-body-default font-medium text-text-primary">
                 Using platform default
               </span>
               {!hasExplicitSelection && (
@@ -195,7 +195,7 @@ function PlatformProviderSection({
               >
                 <div className="flex items-center gap-2">
                   <HealthDot status={p.provider_status} />
-                  <span className="text-[13px] font-medium text-text-primary">
+                  <span className="text-body-default font-medium text-text-primary">
                     {p.display_name}
                   </span>
                   {p.is_default && (
@@ -203,7 +203,7 @@ function PlatformProviderSection({
                       default
                     </span>
                   )}
-                  <span className="ml-auto font-mono text-[11px] text-text-faint">
+                  <span className="ml-auto font-mono text-data-value text-text-faint">
                     {p.provider_type}
                   </span>
                   {isSelected && (
@@ -235,7 +235,7 @@ function SuccessToast({
   return (
     <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-card border border-accent-ring bg-bg-surface px-4 py-3 shadow-lg">
       <CheckCircle2 size={14} className="text-accent" />
-      <span className="text-[13px] text-text-primary">{message}</span>
+      <span className="text-body-default text-text-primary">{message}</span>
       <button
         type="button"
         onClick={onDismiss}
@@ -305,7 +305,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load published models: {error.message}
       </p>
     );
@@ -318,7 +318,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
   if (entries && entries.length === 0) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-8 text-center">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No published models available in the library yet.
         </p>
       </div>
@@ -336,7 +336,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
       />
 
       {selectProvider.error && (
-        <div className="mb-4 flex items-center gap-1.5 text-[12px] text-alert">
+        <div className="mb-4 flex items-center gap-1.5 text-body-default text-alert">
           <AlertCircle size={12} />
           {selectProvider.error.message}
         </div>
@@ -344,7 +344,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
 
       {/* Library model picker */}
       <div className="mb-1 border-t border-border pt-5">
-        <p className="mb-4 text-sm text-text-muted">
+        <p className="mb-4 text-body-default text-text-muted">
           Select a model from the platform library to use for all AI
           conversations in your workspace.
         </p>
@@ -366,20 +366,20 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
               )}
             >
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-text-primary">
+                <span className="text-body-default font-medium text-text-primary">
                   {entry.display_name}
                 </span>
                 {entry.is_recommended && (
                   <Star size={12} className="fill-accent text-accent" />
                 )}
-                <span className="ml-auto font-mono text-[11px] text-text-faint">
+                <span className="ml-auto font-mono text-data-value text-text-faint">
                   {entry.provider}
                 </span>
               </div>
-              <p className="mt-1.5 text-[12px] text-text-muted">
+              <p className="mt-1.5 text-body-default text-text-muted">
                 {entry.model_name}
               </p>
-              <div className="mt-2 flex items-center gap-3 font-mono text-[11px] text-text-faint">
+              <div className="mt-2 flex items-center gap-3 font-mono text-data-value text-text-faint">
                 <span>
                   In: $
                   {entry.pricing_per_1k_tokens_in != null
@@ -407,7 +407,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
           type="button"
           onClick={handleApply}
           disabled={!hasChanged || !selectedId || updateConfig.isPending}
-          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {updateConfig.isPending ? (
             <Loader2 size={14} className="animate-spin" />
@@ -417,12 +417,12 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
           Apply Profile
         </button>
         {config.llm_library_id && !hasChanged && (
-          <span className="text-[12px] text-accent">Currently active</span>
+          <span className="text-body-default text-accent">Currently active</span>
         )}
       </div>
 
       {updateConfig.error && (
-        <p className="mt-3 text-sm text-alert">{updateConfig.error.message}</p>
+        <p className="mt-3 text-body-default text-alert">{updateConfig.error.message}</p>
       )}
 
       {/* Confirmation dialog */}
@@ -437,7 +437,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
             <h3 className="text-section-heading text-text-primary">
               Change LLM Profile
             </h3>
-            <p className="mt-2 text-sm text-text-muted">
+            <p className="mt-2 text-body-default text-text-muted">
               Changing LLM profile will affect all future conversations.
               Existing conversation history will not be affected.
             </p>
@@ -445,7 +445,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
               <button
                 type="button"
                 onClick={() => setShowConfirm(false)}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
               >
                 Cancel
               </button>
@@ -453,7 +453,7 @@ export function LibraryModeTab({ config }: LibraryModeTabProps) {
                 type="button"
                 onClick={handleConfirmApply}
                 disabled={updateConfig.isPending}
-                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {updateConfig.isPending && (
                   <Loader2 size={14} className="animate-spin" />

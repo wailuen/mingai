@@ -39,7 +39,7 @@ export default function UsersPage() {
             <button
               type="button"
               onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+              className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
             >
               <UserPlus size={14} />
               Invite User
@@ -83,7 +83,7 @@ export default function UsersPage() {
                     setSearchQuery(e.target.value);
                     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                   }}
-                  className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -93,7 +93,7 @@ export default function UsersPage() {
                   setRoleFilter(e.target.value);
                   setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                 }}
-                className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-muted transition-colors focus:border-accent focus:outline-none"
+                className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors focus:border-accent focus:outline-none"
               >
                 <option value="">All Roles</option>
                 <option value="tenant_admin">Admin</option>
@@ -106,7 +106,7 @@ export default function UsersPage() {
                   setStatusFilter(e.target.value);
                   setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                 }}
-                className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-muted transition-colors focus:border-accent focus:outline-none"
+                className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors focus:border-accent focus:outline-none"
               >
                 <option value="">All Status</option>
                 <option value="active">Active</option>

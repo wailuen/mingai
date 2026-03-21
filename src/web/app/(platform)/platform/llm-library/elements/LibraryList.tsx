@@ -136,7 +136,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
         accessorKey: "display_name",
         header: "Display Name",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
             {info.row.original.is_recommended && (
               <Star
@@ -152,7 +152,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
         accessorKey: "provider",
         header: "Provider",
         cell: (info) => (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-body-default text-text-muted">
             {providerLabel(info.getValue<string>())}
           </span>
         ),
@@ -172,7 +172,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
         accessorKey: "plan_tier",
         header: "Plan Tier",
         cell: (info) => (
-          <span className="text-[13px] capitalize text-text-muted">
+          <span className="text-body-default capitalize text-text-muted">
             {info.getValue<string>()}
           </span>
         ),
@@ -212,7 +212,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
           if (!url) return <span className="text-text-faint">—</span>;
           const display = url.length > 40 ? url.slice(0, 40) + "…" : url;
           return (
-            <span className="font-mono text-[11px] text-text-muted">
+            <span className="font-mono text-data-value text-text-muted">
               {display}
             </span>
           );
@@ -242,9 +242,9 @@ export function LibraryList({ onEdit }: LibraryListProps) {
         cell: ({ row }) => {
           const iso = row.original.last_test_passed_at;
           if (!iso)
-            return <span className="text-[12px] text-text-faint">Never</span>;
+            return <span className="text-body-default text-text-faint">Never</span>;
           return (
-            <span className="font-mono text-[11px] text-text-muted">
+            <span className="font-mono text-data-value text-text-muted">
               {relativeTime(iso)}
             </span>
           );
@@ -307,7 +307,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load LLM library: {error.message}
       </p>
     );
@@ -369,7 +369,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
                 <tr>
                   <td
                     colSpan={columns.length}
-                    className="px-3.5 py-12 text-center text-sm text-text-faint"
+                    className="px-3.5 py-12 text-center text-body-default text-text-faint"
                   >
                     No models found. Create your first library entry to get
                     started.
@@ -403,7 +403,7 @@ export function LibraryList({ onEdit }: LibraryListProps) {
 
         {data && data.length > 0 && (
           <div className="border-t border-border px-5 py-2.5">
-            <p className="font-mono text-[11px] text-text-faint">
+            <p className="font-mono text-data-value text-text-faint">
               {data.length} entr{data.length !== 1 ? "ies" : "y"}
             </p>
           </div>

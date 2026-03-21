@@ -40,7 +40,7 @@ export default function LLMLibraryPage() {
                 LLM Library
               </h1>
             </div>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-1 text-body-default text-text-muted">
               Platform catalog of available models with pricing and lifecycle
               management
             </p>
@@ -51,7 +51,7 @@ export default function LLMLibraryPage() {
               setEditingEntry(null);
               setShowForm(true);
             }}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={16} />
             New Entry

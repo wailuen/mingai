@@ -66,7 +66,7 @@ export default function KnowledgeBasePage() {
           </div>
           <button
             onClick={handleConnectSource}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             Connect Source
           </button>
@@ -136,12 +136,12 @@ export default function KnowledgeBasePage() {
             ) : sharepointIntegrations.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-border py-16">
                 <FileText size={32} className="mb-3 text-text-faint" />
-                <p className="text-sm text-text-muted">
+                <p className="text-body-default text-text-muted">
                   No SharePoint sources connected
                 </p>
                 <button
                   onClick={() => setShowSharePointWizard(true)}
-                  className="mt-3 text-sm text-accent transition-colors hover:underline"
+                  className="mt-3 text-body-default text-accent transition-colors hover:underline"
                 >
                   Connect your first source
                 </button>
@@ -183,7 +183,7 @@ export default function KnowledgeBasePage() {
             ) : integrations.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-border py-16">
                 <FileText size={32} className="mb-3 text-text-faint" />
-                <p className="text-sm text-text-muted">
+                <p className="text-body-default text-text-muted">
                   No knowledge bases available. Connect a source first.
                 </p>
               </div>
@@ -213,7 +213,7 @@ export default function KnowledgeBasePage() {
                           }`}
                         >
                           <span
-                            className={`text-sm font-medium ${isSelected ? "text-text-primary" : "text-text-muted"}`}
+                            className={`text-body-default font-medium ${isSelected ? "text-text-primary" : "text-text-muted"}`}
                           >
                             {label}
                           </span>
@@ -231,7 +231,7 @@ export default function KnowledgeBasePage() {
                   <AccessControlPanel kbId={selectedKbId} />
                 ) : (
                   <div className="rounded-card border border-dashed border-border py-10 text-center">
-                    <p className="text-sm text-text-muted">
+                    <p className="text-body-default text-text-muted">
                       Select a knowledge base to configure access control.
                     </p>
                   </div>

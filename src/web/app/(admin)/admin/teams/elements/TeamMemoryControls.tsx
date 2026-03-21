@@ -81,7 +81,7 @@ export function TeamMemoryControls({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-[13px] font-semibold text-text-primary">
+        <h3 className="text-body-default font-semibold text-text-primary">
           Working Memory
         </h3>
         <p className="mt-0.5 text-xs text-text-muted">
@@ -91,21 +91,21 @@ export function TeamMemoryControls({
 
       {/* Error */}
       {error && (
-        <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+        <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
           {error}
         </div>
       )}
 
       {/* Success */}
       {saved && (
-        <div className="rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-sm text-accent">
+        <div className="rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-body-default text-accent">
           Memory configuration saved
         </div>
       )}
 
       {/* Enable/disable toggle */}
       <div className="flex items-center justify-between rounded-control border border-border bg-bg-elevated px-3 py-2.5">
-        <span className="text-sm text-text-primary">
+        <span className="text-body-default text-text-primary">
           Enable team working memory
         </span>
         <button
@@ -147,7 +147,7 @@ export function TeamMemoryControls({
               }}
               className="flex-1 accent-accent"
             />
-            <span className="w-16 text-right font-mono text-sm text-text-primary">
+            <span className="w-16 text-right font-mono text-body-default text-text-primary">
               {ttlDays}d
             </span>
           </div>
@@ -170,7 +170,7 @@ export function TeamMemoryControls({
       <div className="rounded-control border border-border-faint bg-bg-deep px-3 py-2.5">
         {enabled ? (
           <div className="space-y-1">
-            <p className="text-sm text-text-muted">
+            <p className="text-body-default text-text-muted">
               Team context shared across{" "}
               <span className="font-mono text-text-primary">{memberCount}</span>{" "}
               members, expires after{" "}
@@ -184,7 +184,7 @@ export function TeamMemoryControls({
             )}
           </div>
         ) : (
-          <p className="text-sm text-text-faint">
+          <p className="text-body-default text-text-faint">
             Team members&apos; shared context will not be preserved between
             sessions
           </p>
@@ -196,7 +196,7 @@ export function TeamMemoryControls({
         <button
           onClick={handleSave}
           disabled={updateMutation.isPending}
-          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+          className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
         >
           {updateMutation.isPending && (
             <Loader2 size={14} className="animate-spin" />

@@ -163,7 +163,7 @@ export function TenantJobHistoryCard() {
       </div>
 
       {error && (
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load job history: {error.message}
         </p>
       )}
@@ -196,7 +196,7 @@ export function TenantJobHistoryCard() {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-3.5 py-8 text-center text-sm text-text-faint"
+                  className="px-3.5 py-8 text-center text-body-default text-text-faint"
                 >
                   No job history found.
                 </td>
@@ -211,19 +211,19 @@ export function TenantJobHistoryCard() {
                       : "hover:bg-accent-dim"
                   }`}
                 >
-                  <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+                  <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
                     {row.job_name}
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted">
+                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {formatTimestamp(row.started_at)}
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted">
+                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {formatDuration(row.duration_ms)}
                   </td>
                   <td className="px-3.5 py-3">
                     <JobStatusBadge status={row.status} />
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted">
+                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {row.records_processed ?? "—"}
                   </td>
                 </tr>

@@ -58,11 +58,11 @@ function SingleBar({
         <span className="text-label-nav uppercase tracking-wider text-text-faint">
           {label}
         </span>
-        <span className={cn("font-mono text-sm", usageTextColor(pct))}>
+        <span className={cn("font-mono text-body-default", usageTextColor(pct))}>
           {pct.toFixed(1)}%
         </span>
       </div>
-      <p className="mt-1 font-mono text-sm text-text-muted">
+      <p className="mt-1 font-mono text-body-default text-text-muted">
         {formatFn(used)}
         {suffix} / {formatFn(limit)}
         {suffix}
@@ -85,7 +85,7 @@ export function QuotaUsageBar({ tenantId }: QuotaUsageBarProps) {
   if (error) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-5">
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load quota data: {error.message}
         </p>
       </div>

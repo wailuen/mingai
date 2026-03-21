@@ -95,7 +95,7 @@ function IssueDetailRow({ issue }: { issue: TenantIssue }) {
         <p className="text-[11px] font-medium uppercase tracking-wider text-text-faint">
           Description
         </p>
-        <p className="mt-1 text-sm leading-relaxed text-text-muted">
+        <p className="mt-1 text-body-default leading-relaxed text-text-muted">
           {issue.description || "No description provided."}
         </p>
         <div className="mt-3 flex items-center gap-4 text-xs text-text-faint">
@@ -131,7 +131,7 @@ export function IssueTable({ filters }: IssueTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load issues: {error.message}
       </p>
     );
@@ -169,7 +169,7 @@ export function IssueTable({ filters }: IssueTableProps) {
             <tr>
               <td
                 colSpan={6}
-                className="px-3.5 py-12 text-center text-sm text-text-faint"
+                className="px-3.5 py-12 text-center text-body-default text-text-faint"
               >
                 No issues found matching the current filters.
               </td>
@@ -217,14 +217,14 @@ function IssueRow({
         <td className="px-3.5 py-3">
           <span
             className={cn(
-              "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-[11px] font-medium",
+              "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-data-value font-medium",
               severityBadgeClass(issue.severity),
             )}
           >
             {issue.severity}
           </span>
         </td>
-        <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+        <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
           {issue.title}
         </td>
         <td className="hidden px-3.5 py-3 font-mono text-xs text-text-muted sm:table-cell">

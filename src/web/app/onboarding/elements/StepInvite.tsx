@@ -49,7 +49,7 @@ export function StepInvite({ onNext, onBack, onSkip }: StepInviteProps) {
         <h2 className="text-section-heading text-text-primary">
           Invite Team Members
         </h2>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-1 text-body-default text-text-muted">
           Bring your colleagues on board. You can always invite more people
           later.
         </p>
@@ -65,12 +65,12 @@ export function StepInvite({ onNext, onBack, onSkip }: StepInviteProps) {
             if (e.key === "Enter" && canSend) handleSendInvite();
           }}
           placeholder="colleague@company.com"
-          className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+          className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
         />
         <button
           onClick={handleSendInvite}
           disabled={!canSend}
-          className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+          className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
         >
           {sending && <Loader2 size={12} className="animate-spin" />}
           Send Invite
@@ -102,20 +102,20 @@ export function StepInvite({ onNext, onBack, onSkip }: StepInviteProps) {
       <div className="flex justify-between pt-2">
         <button
           onClick={onBack}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
         >
           Back
         </button>
         <div className="flex items-center gap-3">
           <button
             onClick={onSkip ?? onNext}
-            className="text-sm text-text-faint transition-colors hover:text-text-muted"
+            className="text-body-default text-text-faint transition-colors hover:text-text-muted"
           >
             Skip
           </button>
           <button
             onClick={onNext}
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             Next
           </button>

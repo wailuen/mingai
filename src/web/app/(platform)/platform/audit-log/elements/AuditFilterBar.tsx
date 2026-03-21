@@ -50,7 +50,7 @@ export function AuditFilterBar({
               e.target.value as AuditLogFilters["actor_type"] & string,
             )
           }
-          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-primary outline-none transition-colors focus:border-accent-ring"
+          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary outline-none transition-colors focus:border-accent-ring"
         >
           {ACTOR_TYPES.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -68,7 +68,7 @@ export function AuditFilterBar({
         <select
           value={filters.action_category ?? ""}
           onChange={(e) => updateFilter("action_category", e.target.value)}
-          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-primary outline-none transition-colors focus:border-accent-ring"
+          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary outline-none transition-colors focus:border-accent-ring"
         >
           {ACTION_CATEGORIES.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -88,7 +88,7 @@ export function AuditFilterBar({
           placeholder="Tenant ID"
           value={filters.tenant_id ?? ""}
           onChange={(e) => updateFilter("tenant_id", e.target.value)}
-          className="w-36 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-primary placeholder:text-text-faint outline-none transition-colors focus:border-accent-ring"
+          className="w-36 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary placeholder:text-text-faint outline-none transition-colors focus:border-accent-ring"
         />
       </div>
 
@@ -101,7 +101,7 @@ export function AuditFilterBar({
           type="date"
           value={filters.from ?? ""}
           onChange={(e) => updateFilter("from", e.target.value)}
-          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-primary outline-none transition-colors focus:border-accent-ring"
+          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary outline-none transition-colors focus:border-accent-ring"
         />
       </div>
 
@@ -114,7 +114,7 @@ export function AuditFilterBar({
           type="date"
           value={filters.to ?? ""}
           onChange={(e) => updateFilter("to", e.target.value)}
-          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-primary outline-none transition-colors focus:border-accent-ring"
+          className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary outline-none transition-colors focus:border-accent-ring"
         />
       </div>
 
@@ -122,14 +122,14 @@ export function AuditFilterBar({
       <button
         type="button"
         onClick={onApply}
-        className="rounded-control bg-accent px-4 py-1.5 text-[13px] font-semibold text-bg-base transition-opacity hover:opacity-90"
+        className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
       >
         Apply Filters
       </button>
       <button
         type="button"
         onClick={onClear}
-        className="px-2 py-1.5 text-[13px] text-text-muted transition-colors hover:text-text-primary"
+        className="px-2 py-1.5 text-body-default text-text-muted transition-colors hover:text-text-primary"
       >
         Clear
       </button>

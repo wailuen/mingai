@@ -43,7 +43,7 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
         <h2 className="mb-3 text-[15px] font-semibold text-text-primary">
           Sync Job History
         </h2>
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           Select a source to see sync history
         </p>
       </div>
@@ -56,7 +56,7 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
         <h2 className="mb-3 text-[15px] font-semibold text-text-primary">
           Sync Job History
         </h2>
-        <div className="flex items-center gap-2 text-sm text-text-muted">
+        <div className="flex items-center gap-2 text-body-default text-text-muted">
           <Loader2 size={14} className="animate-spin" />
           Loading sync jobs...
         </div>
@@ -70,7 +70,7 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
         <h2 className="mb-3 text-[15px] font-semibold text-text-primary">
           Sync Job History
         </h2>
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load sync jobs: {error.message}
         </p>
       </div>
@@ -86,7 +86,7 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
       </h2>
 
       {jobs.length === 0 ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No sync jobs found for this source
         </p>
       ) : (

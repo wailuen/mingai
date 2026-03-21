@@ -43,7 +43,7 @@ export function BootstrapBanner({ active }: BootstrapBannerProps) {
         <p className="text-section-heading text-text-primary">
           Running on environment fallback
         </p>
-        <p className="mt-1 text-[13px] text-text-muted">
+        <p className="mt-1 text-body-default text-text-muted">
           Platform LLM credentials are being read from .env. Add a provider
           above to move credentials into the database and enable rotation
           without restarting the server.

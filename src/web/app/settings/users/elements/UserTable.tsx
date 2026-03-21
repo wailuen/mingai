@@ -71,7 +71,7 @@ export function UserTable({
     columnHelper.accessor("name", {
       header: "Name",
       cell: (info) => (
-        <span className="text-sm font-medium text-text-primary">
+        <span className="text-body-default font-medium text-text-primary">
           {info.getValue()}
         </span>
       ),
@@ -208,7 +208,7 @@ export function UserTable({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-3.5 py-8 text-center text-sm text-text-faint"
+                className="px-3.5 py-8 text-center text-body-default text-text-faint"
               >
                 No users yet. Invite your first team member.
               </td>

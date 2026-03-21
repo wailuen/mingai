@@ -57,7 +57,7 @@ export function UserActionMenu({ user }: { user: UserRow }) {
             <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-card border border-border bg-bg-surface p-1">
               <button
                 onClick={handleRoleChange}
-                className="w-full rounded-control px-3 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+                className="w-full rounded-control px-3 py-1.5 text-left text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
               >
                 {user.role === "tenant_admin"
                   ? "Demote to User"
@@ -68,7 +68,7 @@ export function UserActionMenu({ user }: { user: UserRow }) {
                   setOpen(false);
                   setShowSuspendDialog(true);
                 }}
-                className="w-full rounded-control px-3 py-1.5 text-left text-sm text-warn transition-colors hover:bg-warn-dim"
+                className="w-full rounded-control px-3 py-1.5 text-left text-body-default text-warn transition-colors hover:bg-warn-dim"
               >
                 {user.status === "active" ? "Suspend User" : "Activate User"}
               </button>
@@ -78,7 +78,7 @@ export function UserActionMenu({ user }: { user: UserRow }) {
                   setOpen(false);
                   setShowDeleteDialog(true);
                 }}
-                className="w-full rounded-control px-3 py-1.5 text-left text-sm text-alert transition-colors hover:bg-alert-dim"
+                className="w-full rounded-control px-3 py-1.5 text-left text-body-default text-alert transition-colors hover:bg-alert-dim"
               >
                 Delete (Anonymize)
               </button>
@@ -154,19 +154,19 @@ function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-deep/70">
       <div className="w-full max-w-md rounded-card border border-border bg-bg-surface p-5">
         <h2 className="mb-2 text-section-heading text-text-primary">{title}</h2>
-        <p className="mb-5 text-sm text-text-muted">{description}</p>
+        <p className="mb-5 text-body-default text-text-muted">{description}</p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
             disabled={processing}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={processing}
-            className={`rounded-control px-4 py-1.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${buttonStyles[variant]}`}
+            className={`rounded-control px-4 py-1.5 text-body-default font-semibold transition-opacity disabled:opacity-50 ${buttonStyles[variant]}`}
           >
             {processing ? "Processing..." : confirmLabel}
           </button>

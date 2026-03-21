@@ -82,7 +82,7 @@ function ConnectionCard({ connection }: { connection: GoogleDriveConnection }) {
           )}
         />
         <div>
-          <span className="text-sm font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {connection.name}
           </span>
           <div className="flex items-center gap-2 text-xs text-text-faint">
@@ -140,7 +140,7 @@ export function GoogleDriveConnectionList() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load Google Drive connections: {error.message}
       </p>
     );
@@ -171,7 +171,7 @@ export function GoogleDriveConnectionList() {
   if (!connections || connections.length === 0) {
     return (
       <div className="rounded-card border border-dashed border-border py-10 text-center">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No Google Drive connections yet.
         </p>
       </div>

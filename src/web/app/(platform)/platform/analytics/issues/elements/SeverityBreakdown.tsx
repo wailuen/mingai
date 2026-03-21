@@ -41,7 +41,7 @@ export function SeverityBreakdown({ period }: SeverityBreakdownProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load severity breakdown: {error.message}
       </p>
     );
@@ -64,7 +64,7 @@ export function SeverityBreakdown({ period }: SeverityBreakdownProps) {
           ))}
         </div>
       ) : !breakdown || breakdown.length === 0 ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No severity data available for this period.
         </p>
       ) : (
@@ -73,14 +73,14 @@ export function SeverityBreakdown({ period }: SeverityBreakdownProps) {
             <div key={item.severity} className="flex items-center gap-3">
               <span
                 className={cn(
-                  "inline-block w-10 rounded-badge border px-1.5 py-0.5 text-center font-mono text-[11px] font-medium",
+                  "inline-block w-10 rounded-badge border px-1.5 py-0.5 text-center font-mono text-data-value font-medium",
                   severityBadgeClass(item.severity),
                 )}
               >
                 {item.severity}
               </span>
 
-              <span className="w-12 text-right font-mono text-sm text-text-primary">
+              <span className="w-12 text-right font-mono text-body-default text-text-primary">
                 {item.count}
               </span>
 

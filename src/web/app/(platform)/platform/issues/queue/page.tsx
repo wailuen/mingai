@@ -92,7 +92,7 @@ function IssueDetailRow({ issue }: { issue: PlatformIssue }) {
         <p className="text-[11px] font-medium uppercase tracking-wider text-text-faint">
           Description
         </p>
-        <p className="mt-1 text-sm leading-relaxed text-text-muted">
+        <p className="mt-1 text-body-default leading-relaxed text-text-muted">
           {issue.description || "No description provided."}
         </p>
         <div className="mt-3 flex items-center gap-4 text-xs text-text-faint">
@@ -164,14 +164,14 @@ function QueueIssueRow({
         <td className="px-3.5 py-3">
           <span
             className={cn(
-              "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-[11px] font-medium",
+              "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-data-value font-medium",
               severityBadgeClass(issue.severity),
             )}
           >
             {issue.severity}
           </span>
         </td>
-        <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+        <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
           {issue.title}
           {issue.sla_at_risk && (
             <span className="ml-2 rounded-badge bg-alert/15 px-1.5 py-0.5 text-[10px] font-semibold text-alert">
@@ -297,7 +297,7 @@ function QueueTable({
             <tr>
               <td
                 colSpan={8}
-                className="px-3.5 py-12 text-center text-sm text-text-faint"
+                className="px-3.5 py-12 text-center text-body-default text-text-faint"
               >
                 No issues found for this filter.
               </td>
@@ -386,7 +386,7 @@ export default function PlatformIssueQueuePage() {
           <h1 className="text-page-title text-text-primary">
             Engineering Issue Queue
           </h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Triage and manage cross-tenant engineering issues
           </p>
         </div>

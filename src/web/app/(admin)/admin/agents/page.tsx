@@ -51,7 +51,7 @@ export default function AgentsPage() {
         {/* Page header */}
         <div className="mb-1">
           <h1 className="text-page-title text-text-primary">Agent Library</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Browse and deploy agent templates to your workspace
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function AgentsPage() {
         {/* Grid */}
         <ErrorBoundary>
           {error && (
-            <p className="text-sm text-alert">
+            <p className="text-body-default text-alert">
               Failed to load templates: {error.message}
             </p>
           )}
@@ -84,7 +84,7 @@ export default function AgentsPage() {
           )}
 
           {data && data.items.length === 0 && (
-            <p className="py-12 text-center text-sm text-text-faint">
+            <p className="py-12 text-center text-body-default text-text-faint">
               No agent templates found
               {categoryFilter ? ` in "${categoryFilter}"` : ""}.
             </p>

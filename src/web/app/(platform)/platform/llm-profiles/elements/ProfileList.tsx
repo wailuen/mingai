@@ -125,7 +125,7 @@ export function ProfileList({ onEdit }: ProfileListProps) {
         accessorKey: "name",
         header: "Name",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
             <DefaultBadge isDefault={info.row.original.is_default} />
           </span>
@@ -217,7 +217,7 @@ export function ProfileList({ onEdit }: ProfileListProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load LLM profiles: {error.message}
       </p>
     );
@@ -258,7 +258,7 @@ export function ProfileList({ onEdit }: ProfileListProps) {
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No LLM profiles found. Create your first profile to get
                   started.
@@ -284,7 +284,7 @@ export function ProfileList({ onEdit }: ProfileListProps) {
 
       {data && data.length > 0 && (
         <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             {data.length} profile{data.length !== 1 ? "s" : ""}
           </p>
         </div>

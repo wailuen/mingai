@@ -54,7 +54,7 @@ export default function LLMSettingsPage() {
             <Cpu size={18} className="text-accent" />
             <h1 className="text-page-title text-text-primary">LLM Settings</h1>
           </div>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Configure which language model powers your workspace
           </p>
         </div>
@@ -80,7 +80,7 @@ export default function LLMSettingsPage() {
 
         {/* Content */}
         {error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load LLM configuration: {error.message}
           </p>
         )}

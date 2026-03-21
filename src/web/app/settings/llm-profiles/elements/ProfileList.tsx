@@ -65,7 +65,7 @@ export function ProfileList() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load profiles: {error.message}
       </p>
     );
@@ -78,7 +78,7 @@ export function ProfileList() {
           <Cpu size={24} className="text-text-faint" />
         </div>
         <div className="text-center">
-          <p className="text-sm font-medium text-text-muted">
+          <p className="text-body-default font-medium text-text-muted">
             No LLM profiles configured
           </p>
           <p className="mt-1 max-w-sm text-xs text-text-faint">
@@ -99,7 +99,7 @@ export function ProfileList() {
           >
             <div className="mb-3 flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-medium text-text-primary">
+                <h3 className="text-body-default font-medium text-text-primary">
                   {profile.name}
                 </h3>
                 <p className="mt-0.5 text-xs text-text-faint">
@@ -128,7 +128,7 @@ export function ProfileList() {
                   <span className="block text-[10px] uppercase tracking-wider text-text-faint">
                     {label}
                   </span>
-                  <span className="block truncate font-mono text-[11px] text-text-muted">
+                  <span className="block truncate font-mono text-data-value text-text-muted">
                     {(profile[key] as string) || "\u2014"}
                   </span>
                 </div>

@@ -23,13 +23,13 @@ export default function TenantsPage() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-page-title text-text-primary">Tenants</h1>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-1 text-body-default text-text-muted">
               Manage workspace tenants and their configurations
             </p>
           </div>
           <button
             onClick={() => setShowWizard(true)}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={16} />
             New Tenant
@@ -47,7 +47,7 @@ export default function TenantsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tenants..."
-            className="w-full max-w-sm rounded-control border border-border bg-bg-elevated py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+            className="w-full max-w-sm rounded-control border border-border bg-bg-elevated py-2 pl-9 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
           />
         </div>
 

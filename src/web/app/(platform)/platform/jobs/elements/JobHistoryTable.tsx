@@ -63,7 +63,7 @@ export function JobHistoryTable({
 }: JobHistoryTableProps) {
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load job history: {error.message}
       </p>
     );
@@ -109,7 +109,7 @@ export function JobHistoryTable({
               <tr>
                 <td
                   colSpan={7}
-                  className="px-3.5 py-8 text-center text-sm text-text-faint"
+                  className="px-3.5 py-8 text-center text-body-default text-text-faint"
                 >
                   No job history matches the current filters.
                 </td>
@@ -120,23 +120,23 @@ export function JobHistoryTable({
                   key={row.id}
                   className={`border-b border-border-faint ${row.status === "running" ? "animate-pulse bg-accent-dim" : "hover:bg-accent-dim"}`}
                 >
-                  <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+                  <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
                     {row.job_name}
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted">
+                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {formatTimestamp(row.started_at)}
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted">
+                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {formatDuration(row.duration_ms)}
                   </td>
                   <td className="px-3.5 py-3">
                     <JobStatusBadge status={row.status} />
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted">
+                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {row.records_processed ?? "—"}
                   </td>
                   <td
-                    className="px-3.5 py-3 font-mono text-[11px] text-text-faint"
+                    className="px-3.5 py-3 font-mono text-data-value text-text-faint"
                     title={row.instance_id ?? undefined}
                   >
                     {row.instance_id
@@ -146,7 +146,7 @@ export function JobHistoryTable({
                       : "—"}
                   </td>
                   <td
-                    className="px-3.5 py-3 max-w-[200px] truncate font-mono text-[11px] text-alert"
+                    className="px-3.5 py-3 max-w-[200px] truncate font-mono text-data-value text-alert"
                     title={row.error_message ?? undefined}
                   >
                     {row.error_message ?? "—"}

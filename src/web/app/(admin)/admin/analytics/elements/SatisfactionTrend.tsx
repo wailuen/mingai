@@ -42,7 +42,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
       <p className="text-xs font-medium text-text-primary">
         {formatDate(String(label))}
       </p>
-      <p className="font-mono text-sm text-accent">
+      <p className="font-mono text-data-value text-accent">
         {entry.satisfaction_pct.toFixed(1)}%
       </p>
       <p className="text-xs text-text-faint">
@@ -76,7 +76,9 @@ export function SatisfactionTrend({
         <h2 className="mb-3 text-[15px] font-semibold text-text-primary">
           Satisfaction Trend
         </h2>
-        <p className="text-sm text-text-muted">No feedback data yet</p>
+        <p className="text-body-default text-text-muted">
+          No feedback data yet
+        </p>
       </div>
     );
   }

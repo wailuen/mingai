@@ -74,7 +74,7 @@ export function LogoUpload({ currentLogo, onLogoChange }: LogoUploadProps) {
           </div>
           <button
             onClick={handleRemove}
-            className="flex items-center gap-1 text-sm text-text-faint transition-colors hover:text-alert"
+            className="flex items-center gap-1 text-body-default text-text-faint transition-colors hover:text-alert"
           >
             <X size={14} />
             Remove
@@ -95,7 +95,7 @@ export function LogoUpload({ currentLogo, onLogoChange }: LogoUploadProps) {
           }`}
         >
           <Upload size={20} className="mx-auto mb-2 text-text-faint" />
-          <span className="block text-sm text-text-muted">
+          <span className="block text-body-default text-text-muted">
             Drop logo here or click to browse
           </span>
           <span className="block text-xs text-text-faint">

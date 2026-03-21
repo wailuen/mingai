@@ -65,7 +65,7 @@ export function TeamDetail({ teamId, onClose, onAddMember }: TeamDetailProps) {
       {/* Description */}
       {team?.description && (
         <div className="border-b border-border-faint px-5 py-3">
-          <p className="text-sm text-text-muted">{team.description}</p>
+          <p className="text-body-default text-text-muted">{team.description}</p>
         </div>
       )}
 
@@ -142,7 +142,7 @@ function MembersTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-text-muted">
+        <span className="text-body-default text-text-muted">
           {memberCount} member{memberCount !== 1 ? "s" : ""}
         </span>
         <button
@@ -155,7 +155,7 @@ function MembersTab({
       </div>
 
       {memberCount === 0 ? (
-        <p className="py-8 text-center text-sm text-text-faint">
+        <p className="py-8 text-center text-body-default text-text-faint">
           No members yet. Add the first member to this team.
         </p>
       ) : (
@@ -193,7 +193,7 @@ function MemoryTab({
 
   if (!hasTopics && !hasQueries) {
     return (
-      <p className="py-8 text-center text-sm text-text-faint">
+      <p className="py-8 text-center text-body-default text-text-faint">
         No working memory stored for this team yet.
       </p>
     );
@@ -226,7 +226,7 @@ function MemoryTab({
           </h4>
           <div className="space-y-1.5">
             {memory?.recent_queries.map((query, i) => (
-              <p key={i} className="text-sm text-text-muted">
+              <p key={i} className="text-body-default text-text-muted">
                 {query}
               </p>
             ))}

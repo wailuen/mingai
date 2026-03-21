@@ -76,7 +76,7 @@ function ComponentCard({ label, score }: ComponentCardProps) {
 function TrendChart({ trend }: { trend: HealthTrendPoint[] }) {
   if (trend.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-text-faint">
+      <p className="py-4 text-center text-body-default text-text-faint">
         No trend data available
       </p>
     );
@@ -176,7 +176,7 @@ export function HealthBreakdown({ tenantId }: HealthBreakdownProps) {
   if (error) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-5">
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load health data: {error.message}
         </p>
       </div>

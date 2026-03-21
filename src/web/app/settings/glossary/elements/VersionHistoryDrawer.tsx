@@ -102,7 +102,7 @@ export function VersionHistoryDrawer({
             </div>
           ) : entries.length === 0 ? (
             <div className="flex h-40 items-center justify-center">
-              <p className="text-sm text-text-faint">No edit history yet</p>
+              <p className="text-body-default text-text-faint">No edit history yet</p>
             </div>
           ) : (
             <div className="space-y-3">

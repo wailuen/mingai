@@ -58,7 +58,7 @@ export default function EngineeringIssuesPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Issue Queue</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Issues reported by your workspace users
           </p>
         </div>
@@ -76,7 +76,7 @@ export default function EngineeringIssuesPage() {
                 type="button"
                 onClick={() => toggleSeverity(sev)}
                 className={cn(
-                  "rounded-control border px-2 py-0.5 font-mono text-[11px] uppercase transition-colors",
+                  "rounded-control border px-2 py-0.5 font-mono text-data-value uppercase transition-colors",
                   selectedSeverities.includes(sev)
                     ? "border-accent-ring bg-accent-dim text-accent"
                     : "border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:text-text-primary",

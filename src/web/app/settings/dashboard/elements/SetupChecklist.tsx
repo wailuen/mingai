@@ -85,7 +85,7 @@ export function SetupChecklist() {
             key={item.id}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-control px-3 py-2 text-sm transition-colors",
+              "flex items-center gap-3 rounded-control px-3 py-2 text-body-default transition-colors",
               item.completed
                 ? "text-text-faint"
                 : "text-text-primary hover:bg-bg-elevated",

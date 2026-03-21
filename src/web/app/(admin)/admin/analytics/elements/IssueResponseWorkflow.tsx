@@ -103,14 +103,14 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
       </h2>
 
       {!issue ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           Select an issue from the queue to take action
         </p>
       ) : (
         <>
           {/* Selected issue info */}
           <div className="mb-4 rounded-control border border-border bg-bg-elevated px-3 py-2">
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-body-default font-medium text-text-primary">
               {issue.title}
             </p>
             <p className="mt-0.5 font-mono text-xs text-text-faint">
@@ -120,14 +120,14 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
 
           {/* Success message */}
           {successMessage && (
-            <div className="mb-4 rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-sm text-accent">
+            <div className="mb-4 rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-body-default text-accent">
               {successMessage}
             </div>
           )}
 
           {/* Error message */}
           {error && (
-            <div className="mb-4 rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+            <div className="mb-4 rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
               {error}
             </div>
           )}
@@ -141,7 +141,7 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
                 resetState();
                 setActiveAction("respond");
               }}
-              className="flex w-full items-center gap-2 rounded-control border border-border bg-transparent px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
+              className="flex w-full items-center gap-2 rounded-control border border-border bg-transparent px-3 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
             >
               <MessageSquare size={14} />
               Respond to Reporter
@@ -154,7 +154,7 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
                 resetState();
                 setActiveAction("resolve");
               }}
-              className="flex w-full items-center gap-2 rounded-control border border-border bg-transparent px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
+              className="flex w-full items-center gap-2 rounded-control border border-border bg-transparent px-3 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
             >
               <CheckCircle size={14} />
               Resolve with Note
@@ -167,7 +167,7 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
                 resetState();
                 setActiveAction("escalate");
               }}
-              className="flex w-full items-center gap-2 rounded-control border border-alert/30 bg-transparent px-3 py-2 text-sm text-alert transition-colors hover:bg-alert-dim disabled:opacity-30"
+              className="flex w-full items-center gap-2 rounded-control border border-alert/30 bg-transparent px-3 py-2 text-body-default text-alert transition-colors hover:bg-alert-dim disabled:opacity-30"
             >
               <AlertTriangle size={14} />
               Escalate to Platform
@@ -183,7 +183,7 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
               <textarea
                 placeholder="Type your response message..."
                 rows={3}
-                className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
               <div className="mt-2 flex justify-end gap-2">
                 <button
@@ -210,7 +210,7 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
                 onChange={(e) => setResolveNote(e.target.value)}
                 placeholder="Describe how this issue was resolved..."
                 rows={3}
-                className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
               <div className="mt-2 flex justify-end gap-2">
                 <button
@@ -239,7 +239,7 @@ export function IssueResponseWorkflow({ issue }: IssueResponseWorkflowProps) {
               <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.06em] text-text-faint">
                 Escalate to Platform
               </p>
-              <p className="mb-3 text-sm text-text-muted">
+              <p className="mb-3 text-body-default text-text-muted">
                 This will escalate the issue to the platform operations team.
                 Select the severity level for escalation.
               </p>

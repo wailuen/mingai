@@ -133,13 +133,13 @@ function TestResultsPanel({ results }: TestResultsPanelProps) {
     <div className="mt-4 rounded-card border border-border bg-bg-base p-4 space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <CheckCircle2 size={14} className="text-accent" />
-        <span className="text-[13px] font-semibold text-text-primary">
+        <span className="text-body-default font-semibold text-text-primary">
           Test Results ({results.length} prompt{results.length !== 1 ? "s" : ""}
           )
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-body-default">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-3 text-left text-label-nav uppercase text-text-faint font-medium">
@@ -178,7 +178,7 @@ function TestResultsPanel({ results }: TestResultsPanelProps) {
           </tbody>
         </table>
       </div>
-      <p className="text-[12px] text-accent font-medium pt-1">
+      <p className="text-body-default text-accent font-medium pt-1">
         All {results.length} test{results.length !== 1 ? "s" : ""} passed —
         entry is ready to publish
       </p>
@@ -452,7 +452,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         {/* Deprecated notice — read-only banner */}
         {isDeprecated && (
           <div className="mb-4 rounded-control border border-border bg-bg-elevated px-3 py-2.5">
-            <p className="text-[12px] text-text-faint">
+            <p className="text-body-default text-text-faint">
               This profile is deprecated. Fields are shown in read-only mode. No
               status changes are possible.
             </p>
@@ -476,7 +476,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               required
               maxLength={200}
               placeholder="e.g. GPT-4o Standard"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -490,7 +490,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               onChange={(e) =>
                 updateField("provider", e.target.value as LLMLibraryProvider)
               }
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none"
             >
               {PROVIDERS.map((p) => (
                 <option key={p.value} value={p.value}>
@@ -512,9 +512,9 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               required
               maxLength={255}
               placeholder="e.g. agentic-worker"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
-            <p className="mt-1 text-[10px] text-text-faint">
+            <p className="mt-1 text-[11px] text-text-faint">
               Must match deployment name exactly
             </p>
           </div>
@@ -562,7 +562,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 Price / 1K Tokens In
               </label>
               <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
-                <span className="flex items-center rounded-l-control border-r border-border bg-bg-base px-2.5 font-mono text-sm text-text-faint select-none">
+                <span className="flex items-center rounded-l-control border-r border-border bg-bg-base px-2.5 font-mono text-body-default text-text-faint select-none">
                   $
                 </span>
                 <input
@@ -573,7 +573,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                     updateField("pricing_per_1k_tokens_in", e.target.value)
                   }
                   placeholder="0.000150"
-                  className="min-w-0 flex-1 rounded-r-control bg-transparent px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                  className="min-w-0 flex-1 rounded-r-control bg-transparent px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:outline-none"
                 />
               </div>
             </div>
@@ -582,7 +582,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 Price / 1K Tokens Out
               </label>
               <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
-                <span className="flex items-center rounded-l-control border-r border-border bg-bg-base px-2.5 font-mono text-sm text-text-faint select-none">
+                <span className="flex items-center rounded-l-control border-r border-border bg-bg-base px-2.5 font-mono text-body-default text-text-faint select-none">
                   $
                 </span>
                 <input
@@ -593,14 +593,14 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                     updateField("pricing_per_1k_tokens_out", e.target.value)
                   }
                   placeholder="0.000600"
-                  className="min-w-0 flex-1 rounded-r-control bg-transparent px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                  className="min-w-0 flex-1 rounded-r-control bg-transparent px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
           {/* Recommended toggle */}
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated">
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated">
             <input
               type="checkbox"
               checked={form.is_recommended}
@@ -633,7 +633,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   onChange={(e) => updateField("endpoint_url", e.target.value)}
                   maxLength={512}
                   placeholder="https://ai-xxx.cognitiveservices.azure.com/"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
             )}
@@ -654,7 +654,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                       : "Enter API key"
                   }
                   autoComplete="new-password"
-                  className="min-w-0 flex-1 rounded-l-control bg-transparent px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                  className="min-w-0 flex-1 rounded-l-control bg-transparent px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:outline-none"
                 />
                 <button
                   type="button"
@@ -667,7 +667,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 </button>
               </div>
               {isEditing && entry.key_present && (
-                <p className="mt-1 text-[10px] text-text-faint">
+                <p className="mt-1 text-[11px] text-text-faint">
                   Leave blank to keep the existing key
                 </p>
               )}
@@ -685,7 +685,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   onChange={(e) => updateField("api_version", e.target.value)}
                   maxLength={64}
                   placeholder="2024-12-01-preview"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
             )}
@@ -711,7 +711,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               </button>
             </div>
             {showPreview ? (
-              <div className="prose-invert min-h-[120px] rounded-control border border-border bg-bg-elevated p-3 text-sm text-text-primary">
+              <div className="prose-invert min-h-[120px] rounded-control border border-border bg-bg-elevated p-3 text-body-default text-text-primary">
                 {form.best_practices_md ? (
                   <MarkdownPreview content={form.best_practices_md} />
                 ) : (
@@ -726,7 +726,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 }
                 rows={5}
                 placeholder="Usage guidelines, recommended parameters, limitations..."
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
             )}
           </div>
@@ -737,7 +737,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
           {/* Test error */}
           {testError && (
             <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2.5">
-              <p className="text-[12px] text-alert">{testError}</p>
+              <p className="text-body-default text-alert">{testError}</p>
             </div>
           )}
         </div>
@@ -745,7 +745,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         {/* Session-expired warning */}
         {sessionExpired && (
           <div className="mt-3 rounded-control border border-warn/40 bg-warn-dim px-3 py-2.5">
-            <p className="text-[12px] text-warn">
+            <p className="text-body-default text-warn">
               Your session expired. Please copy your form data, log in again,
               and re-enter it.
             </p>
@@ -754,7 +754,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
 
         {/* Mutation error (not shown when session-expired banner is active) */}
         {mutationError && !sessionExpired && (
-          <p className="mt-4 text-sm text-alert">
+          <p className="mt-4 text-body-default text-alert">
             {mutationError.message ?? "Operation failed."}
           </p>
         )}
@@ -768,7 +768,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 type="button"
                 onClick={() => setShowDeprecateConfirm(true)}
                 disabled={isPending}
-                className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-alert/40 hover:bg-alert-dim hover:text-alert disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-alert/40 hover:bg-alert-dim hover:text-alert disabled:opacity-40"
               >
                 <Archive size={14} />
                 Deprecate
@@ -781,7 +781,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
             >
               {isDeprecated ? "Close" : "Cancel"}
             </button>
@@ -803,7 +803,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                             ? `Last tested ${formatDate(entry.last_test_passed_at)}`
                             : "Run connectivity test"
                     }
-                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
                   >
                     {testMutation.isPending ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -825,7 +825,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                         ? "Run the connectivity test before publishing"
                         : undefined
                     }
-                    className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+                    className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
                   >
                     {publishMutation.isPending || updateMutation.isPending ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -839,7 +839,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 <button
                   type="submit"
                   disabled={!canSave || isPending}
-                  className="flex items-center gap-1.5 rounded-control border border-accent px-4 py-1.5 text-sm font-semibold text-accent transition-opacity hover:bg-accent-dim disabled:opacity-40"
+                  className="flex items-center gap-1.5 rounded-control border border-accent px-4 py-1.5 text-body-default font-semibold text-accent transition-opacity hover:bg-accent-dim disabled:opacity-40"
                 >
                   {(updateMutation.isPending && !publishMutation.isPending) ||
                   createMutation.isPending ? (
@@ -858,11 +858,11 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             <div className="mx-6 w-full max-w-sm rounded-card border border-border bg-bg-elevated p-5">
               <div className="mb-3 flex items-center gap-2">
                 <Archive size={16} className="text-text-muted" />
-                <h3 className="text-[14px] font-semibold text-text-primary">
+                <h3 className="text-section-heading font-semibold text-text-primary">
                   Deprecate profile?
                 </h3>
               </div>
-              <p className="mb-1 text-[13px] text-text-muted">
+              <p className="mb-1 text-body-default text-text-muted">
                 {tenantCount > 0 ? (
                   <>
                     <span className="font-mono text-text-primary">
@@ -880,14 +880,14 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   {tenantAssignments.map((t) => (
                     <li
                       key={t.tenant_id}
-                      className="font-mono text-[11px] text-text-faint"
+                      className="font-mono text-data-value text-text-faint"
                     >
                       {t.tenant_name}
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mb-4 text-[12px] text-text-faint">
+              <p className="mb-4 text-body-default text-text-faint">
                 Existing assignments are preserved. No new tenants can be
                 assigned to a deprecated profile.
               </p>
@@ -896,7 +896,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   type="button"
                   onClick={() => setShowDeprecateConfirm(false)}
                   disabled={deprecateMutation.isPending}
-                  className="rounded-control border border-border px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+                  className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
                 >
                   Cancel
                 </button>
@@ -904,7 +904,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   type="button"
                   onClick={handleDeprecate}
                   disabled={deprecateMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-alert/40 hover:bg-alert-dim hover:text-alert disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-alert/40 hover:bg-alert-dim hover:text-alert disabled:opacity-40"
                 >
                   {deprecateMutation.isPending ? (
                     <Loader2 size={12} className="animate-spin" />
@@ -929,14 +929,14 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
 function MarkdownPreview({ content }: { content: string }) {
   const lines = content.split("\n");
   return (
-    <div className="space-y-1 text-[13px] leading-relaxed text-text-primary">
+    <div className="space-y-1 text-body-default leading-relaxed text-text-primary">
       {lines.map((line, i) => {
         const trimmed = line.trim();
         if (trimmed.startsWith("### ")) {
           return (
             <p
               key={i}
-              className="mt-2 text-[13px] font-semibold text-text-primary"
+              className="mt-2 text-body-default font-semibold text-text-primary"
             >
               {trimmed.slice(4)}
             </p>
@@ -944,7 +944,7 @@ function MarkdownPreview({ content }: { content: string }) {
         }
         if (trimmed.startsWith("## ")) {
           return (
-            <p key={i} className="mt-2 text-[14px] font-bold text-text-primary">
+            <p key={i} className="mt-2 text-section-heading font-bold text-text-primary">
               {trimmed.slice(3)}
             </p>
           );

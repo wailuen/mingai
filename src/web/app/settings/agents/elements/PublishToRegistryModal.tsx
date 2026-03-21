@@ -202,7 +202,7 @@ export function PublishToRegistryModal({
                 value={a2aEndpoint}
                 onChange={(e) => setA2aEndpoint(e.target.value)}
                 placeholder="https://your-agent.example.com/a2a"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
               />
               <p className="mt-1 text-[11px] text-text-faint">
                 The HTTPS endpoint that accepts A2A protocol requests.
@@ -220,7 +220,7 @@ export function PublishToRegistryModal({
                 value={healthCheckUrl}
                 onChange={(e) => setHealthCheckUrl(e.target.value)}
                 placeholder="https://your-agent.example.com/health"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
               />
             </div>
 

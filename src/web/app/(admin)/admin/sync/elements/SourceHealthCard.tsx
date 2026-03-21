@@ -73,7 +73,7 @@ export function SourceHealthCard({
       </div>
 
       {/* Row 2: Site URL */}
-      <p className="mt-2 truncate font-mono text-sm text-text-muted">
+      <p className="mt-2 truncate font-mono text-body-default text-text-muted">
         {integration.site_url}
       </p>
 

@@ -57,13 +57,13 @@ export function AddMemberDialog({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          <p className="text-sm text-text-muted">
+          <p className="text-body-default text-text-muted">
             Add a user to{" "}
             <span className="font-medium text-text-primary">{teamName}</span>
           </p>
 
           {error && (
-            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
               {error}
             </div>
           )}
@@ -77,7 +77,7 @@ export function AddMemberDialog({
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               placeholder="Enter user ID or email"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               autoFocus
             />
             <p className="mt-1 text-xs text-text-faint">
@@ -91,7 +91,7 @@ export function AddMemberDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
@@ -99,7 +99,7 @@ export function AddMemberDialog({
             type="button"
             onClick={handleSubmit}
             disabled={!userId.trim() || addMutation.isPending}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
           >
             {addMutation.isPending && (
               <Loader2 size={14} className="animate-spin" />

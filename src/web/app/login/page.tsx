@@ -44,7 +44,7 @@ export default function LoginPage() {
             m
           </div>
           <h1 className="text-page-title text-text-primary">mingai</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Enterprise RAG Platform
           </p>
         </div>
@@ -65,7 +65,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="sarah@acmecorp.com"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
             />
           </div>
 
@@ -83,12 +83,12 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
             />
           </div>
 
           {error && (
-            <div className="rounded-control border border-alert-ring bg-alert-dim px-3 py-2 text-sm text-alert">
+            <div className="rounded-control border border-alert-ring bg-alert-dim px-3 py-2 text-body-default text-alert">
               {error}
             </div>
           )}
@@ -96,7 +96,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-bg-base transition-colors hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-control bg-accent px-4 py-2.5 text-body-default font-semibold text-bg-base transition-colors hover:opacity-90 disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

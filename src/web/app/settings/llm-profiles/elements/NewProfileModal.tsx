@@ -93,7 +93,7 @@ export function NewProfileModal({ onClose }: NewProfileModalProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Production Models"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
             </div>
 
@@ -106,7 +106,7 @@ export function NewProfileModal({ onClose }: NewProfileModalProps) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe the purpose of this profile..."
                 rows={2}
-                className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
             </div>
 
@@ -133,7 +133,7 @@ export function NewProfileModal({ onClose }: NewProfileModalProps) {
               </div>
             </div>
 
-            {error && <p className="text-sm text-alert">{error}</p>}
+            {error && <p className="text-body-default text-alert">{error}</p>}
           </div>
         </div>
 
@@ -141,14 +141,14 @@ export function NewProfileModal({ onClose }: NewProfileModalProps) {
         <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
           <button
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={!canSubmit || submitting}
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
           >
             {submitting ? "Creating..." : "Create Profile"}
           </button>

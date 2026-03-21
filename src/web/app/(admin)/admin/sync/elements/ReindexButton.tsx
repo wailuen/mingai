@@ -71,7 +71,7 @@ export function ReindexButton({
               Confirm Re-index
             </h3>
 
-            <p className="mt-3 text-sm text-text-muted">
+            <p className="mt-3 text-body-default text-text-muted">
               This will re-embed{" "}
               <span className="font-mono font-medium text-text-primary">
                 {documentCount.toLocaleString()}
@@ -86,7 +86,7 @@ export function ReindexButton({
               <button
                 type="button"
                 onClick={() => setShowDialog(false)}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
               >
                 Cancel
               </button>
@@ -94,7 +94,7 @@ export function ReindexButton({
                 type="button"
                 onClick={() => mutation.mutate()}
                 disabled={mutation.isPending}
-                className="flex items-center gap-1.5 rounded-control bg-alert px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-30"
+                className="flex items-center gap-1.5 rounded-control bg-alert px-3 py-1.5 text-body-default font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-30"
               >
                 {mutation.isPending && (
                   <Loader2 size={14} className="animate-spin" />

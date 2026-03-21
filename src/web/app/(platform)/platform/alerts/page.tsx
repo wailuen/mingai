@@ -41,7 +41,7 @@ function AlertsContent({
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load alerts: {error.message}
       </p>
     );
@@ -85,7 +85,7 @@ export default function AlertCenterPage() {
               <UnacknowledgedBadge />
             </ErrorBoundary>
           </div>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Monitor and manage platform alerts and threshold breaches
           </p>
         </div>

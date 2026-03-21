@@ -37,7 +37,7 @@ export function RequestInfoDialog({ issue, onClose }: RequestInfoDialogProps) {
       <div className="w-full max-w-[480px] rounded-card border border-border bg-bg-surface">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h3 className="text-sm font-semibold text-text-primary">
+          <h3 className="text-body-default font-semibold text-text-primary">
             Request Information
           </h3>
           <button
@@ -72,7 +72,7 @@ export function RequestInfoDialog({ issue, onClose }: RequestInfoDialogProps) {
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
             placeholder="What additional information do you need from the reporter?"
-            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder-text-faint transition-colors focus:border-accent focus:outline-none"
+            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder-text-faint transition-colors focus:border-accent focus:outline-none"
           />
 
           {/* Error */}

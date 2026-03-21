@@ -55,7 +55,7 @@ export function LowConfidenceList({
       </h2>
 
       {items.length === 0 ? (
-        <p className="text-sm text-text-muted">
+        <p className="text-body-default text-text-muted">
           No low-confidence responses found. Your knowledge base is
           well-covered!
         </p>
@@ -81,13 +81,13 @@ export function LowConfidenceList({
                   key={item.message_id}
                   className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
-                  <td className="py-3 pr-4 text-[13px] font-medium text-text-primary">
+                  <td className="py-3 pr-4 text-body-default font-medium text-text-primary">
                     {truncate(item.query_text, 80)}
                   </td>
-                  <td className="py-3 pr-4 font-mono text-[13px] text-alert">
+                  <td className="py-3 pr-4 font-mono text-data-value text-alert">
                     {(item.retrieval_confidence * 100).toFixed(0)}%
                   </td>
-                  <td className="hidden py-3 font-mono text-[13px] text-text-muted sm:table-cell">
+                  <td className="hidden py-3 font-mono text-data-value text-text-muted sm:table-cell">
                     {formatDate(item.created_at)}
                   </td>
                 </tr>

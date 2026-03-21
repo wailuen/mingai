@@ -36,7 +36,7 @@ export function UpgradeNotificationBanner({
     <div className="mt-4 flex items-center justify-between rounded-control border border-warn bg-warn-dim px-4 py-2.5">
       <div className="flex items-center gap-2.5">
         <ArrowUpCircle size={16} className="text-warn" />
-        <span className="text-sm text-text-primary">
+        <span className="text-body-default text-text-primary">
           Template v{latestVersion} available. Your deployed agent uses v
           {currentVersion}.
         </span>

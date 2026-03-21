@@ -26,9 +26,9 @@ export function AgentDeployForm({
   const [step, setStep] = useState(1);
   const totalSteps = 2;
   const [name, setName] = useState(template.name);
-  const [variableValues, setVariableValues] = useState<
-    Record<string, string>
-  >({});
+  const [variableValues, setVariableValues] = useState<Record<string, string>>(
+    {},
+  );
   const [kbSelections, setKbSelections] = useState<KBSelection[]>([]);
   const deployMutation = useDeployFromLibrary();
 
@@ -110,7 +110,7 @@ export function AgentDeployForm({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -138,7 +138,7 @@ export function AgentDeployForm({
                                 [v.name]: e.target.value,
                               })
                             }
-                            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+                            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary focus:border-accent focus:outline-none"
                           >
                             <option value="">Select...</option>
                             {v.options.map((opt) => (
@@ -158,7 +158,7 @@ export function AgentDeployForm({
                               })
                             }
                             placeholder={`Enter ${v.label || v.name}`}
-                            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                           />
                         )}
                       </div>
@@ -186,7 +186,7 @@ export function AgentDeployForm({
         {/* Error */}
         {deployMutation.isError && (
           <div className="px-6 pb-3">
-            <p className="text-sm text-alert">
+            <p className="text-body-default text-alert">
               {deployMutation.error?.message ?? "Deployment failed."}
             </p>
           </div>
@@ -199,7 +199,7 @@ export function AgentDeployForm({
               <button
                 type="button"
                 onClick={() => setStep(step - 1)}
-                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
               >
                 <ArrowLeft size={14} />
                 Back
@@ -213,7 +213,7 @@ export function AgentDeployForm({
                 type="button"
                 onClick={() => setStep(step + 1)}
                 disabled={!canProceedStep1}
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
               >
                 Next
                 <ArrowRight size={14} />
@@ -223,7 +223,7 @@ export function AgentDeployForm({
                 type="button"
                 onClick={handleDeploy}
                 disabled={deployMutation.isPending}
-                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {deployMutation.isPending ? (
                   <Loader2 size={14} className="animate-spin" />

@@ -57,7 +57,7 @@ export function IssueDetailPanel({ issueId, onClose }: IssueDetailPanelProps) {
             {data && (
               <div className="flex items-center gap-2 mb-1.5">
                 <IssueSeverityBadge severity={data.severity} />
-                <span className="font-mono text-[11px] text-text-faint">
+                <span className="font-mono text-data-value text-text-faint">
                   {data.status.toUpperCase().replace("_", " ")}
                 </span>
               </div>
@@ -79,7 +79,7 @@ export function IssueDetailPanel({ issueId, onClose }: IssueDetailPanelProps) {
         <div className="flex-1 overflow-y-auto">
           {error && (
             <div className="p-5">
-              <p className="text-sm text-alert">
+              <p className="text-body-default text-alert">
                 Failed to load issue details: {error.message}
               </p>
             </div>
@@ -94,7 +94,7 @@ export function IssueDetailPanel({ issueId, onClose }: IssueDetailPanelProps) {
                 <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-text-faint">
                   Description
                 </h3>
-                <p className="text-[13px] leading-relaxed text-text-primary">
+                <p className="text-body-default leading-relaxed text-text-primary">
                   {data.description}
                 </p>
               </section>
@@ -127,7 +127,7 @@ export function IssueDetailPanel({ issueId, onClose }: IssueDetailPanelProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-text-faint">Tenant</span>
-                    <span className="text-[13px] font-medium text-text-primary">
+                    <span className="text-body-default font-medium text-text-primary">
                       {data.tenant_name}
                     </span>
                   </div>
@@ -140,7 +140,7 @@ export function IssueDetailPanel({ issueId, onClose }: IssueDetailPanelProps) {
                   AI Assessment
                 </h3>
                 <div className="rounded-card bg-bg-elevated p-4">
-                  <p className="text-[13px] leading-relaxed text-text-muted">
+                  <p className="text-body-default leading-relaxed text-text-muted">
                     {data.ai_assessment}
                   </p>
                 </div>
@@ -154,8 +154,8 @@ export function IssueDetailPanel({ issueId, onClose }: IssueDetailPanelProps) {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                    <span className="text-[12px] text-text-muted">Created</span>
-                    <span className="font-mono text-[11px] text-text-faint">
+                    <span className="text-body-default text-text-muted">Created</span>
+                    <span className="font-mono text-data-value text-text-faint">
                       {formatDate(data.created_at)}
                     </span>
                   </div>

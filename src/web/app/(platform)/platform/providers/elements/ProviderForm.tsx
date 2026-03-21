@@ -86,7 +86,7 @@ interface TestChipProps {
 function TestChip({ success, latencyMs, errorMsg }: TestChipProps) {
   if (success) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-badge bg-accent-dim px-2.5 py-1 font-mono text-[11px] text-accent">
+      <span className="inline-flex items-center gap-1.5 rounded-badge bg-accent-dim px-2.5 py-1 font-mono text-data-value text-accent">
         <CheckCircle2 size={11} />
         OK · {latencyMs}ms
       </span>
@@ -94,7 +94,7 @@ function TestChip({ success, latencyMs, errorMsg }: TestChipProps) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-badge bg-alert-dim px-2.5 py-1 font-mono text-[11px] text-alert"
+      className="inline-flex items-center gap-1.5 rounded-badge bg-alert-dim px-2.5 py-1 font-mono text-data-value text-alert"
       title={errorMsg ?? undefined}
     >
       <AlertCircle size={11} />
@@ -334,7 +334,7 @@ export function ProviderForm({
                   required
                   maxLength={200}
                   placeholder="e.g. Azure Production"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -349,7 +349,7 @@ export function ProviderForm({
                     updateStep1("provider_type", e.target.value as ProviderType)
                   }
                   disabled={isEditing}
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary transition-colors focus:border-accent focus:outline-none disabled:opacity-60"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none disabled:opacity-60"
                 >
                   {PROVIDER_TYPES.map((pt) => (
                     <option key={pt.value} value={pt.value}>
@@ -358,7 +358,7 @@ export function ProviderForm({
                   ))}
                 </select>
                 {isEditing && (
-                  <p className="mt-1 text-[10px] text-text-faint">
+                  <p className="mt-1 text-[11px] text-text-faint">
                     Provider type cannot be changed after creation.
                   </p>
                 )}
@@ -376,7 +376,7 @@ export function ProviderForm({
                     onChange={(e) => updateStep1("endpoint", e.target.value)}
                     required
                     placeholder="https://your-resource.openai.azure.com/"
-                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                   />
                 </div>
               )}
@@ -392,7 +392,7 @@ export function ProviderForm({
                     value={step1.api_version}
                     onChange={(e) => updateStep1("api_version", e.target.value)}
                     placeholder="2024-02-01"
-                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                   />
                 </div>
               )}
@@ -413,9 +413,9 @@ export function ProviderForm({
                       ? "Leave blank to keep existing key"
                       : "Enter API key"
                   }
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
-                <p className="mt-1 text-[10px] text-text-faint">
+                <p className="mt-1 text-[11px] text-text-faint">
                   Stored encrypted. Never returned in API responses.
                 </p>
               </div>
@@ -430,13 +430,13 @@ export function ProviderForm({
                   onChange={(e) => updateStep1("description", e.target.value)}
                   rows={2}
                   placeholder="Optional notes about this provider"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
 
               {/* Default toggle — create mode only (or always in edit mode for changing) */}
               {(showDefaultToggle || isEditing) && (
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated">
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated">
                   <input
                     type="checkbox"
                     checked={step1.is_default}
@@ -466,7 +466,7 @@ export function ProviderForm({
         {/* Error */}
         {mutationError && (
           <div className="mx-6 mt-2 rounded-control border border-alert-ring bg-alert-dim px-3 py-2">
-            <p className="text-[12px] text-alert">{mutationError.message}</p>
+            <p className="text-body-default text-alert">{mutationError.message}</p>
           </div>
         )}
 
@@ -480,7 +480,7 @@ export function ProviderForm({
                   type="button"
                   onClick={handleTestConnectivity}
                   disabled={testMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-40"
                 >
                   {testMutation.isPending ? (
                     <Loader2 size={12} className="animate-spin" />
@@ -502,7 +502,7 @@ export function ProviderForm({
               <button
                 type="button"
                 onClick={handleBack}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
               >
                 Back
               </button>
@@ -511,7 +511,7 @@ export function ProviderForm({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
             >
               Cancel
             </button>
@@ -521,7 +521,7 @@ export function ProviderForm({
                 type="button"
                 onClick={handleNext}
                 disabled={!canAdvanceStep1}
-                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 Next
               </button>
@@ -532,7 +532,7 @@ export function ProviderForm({
                 disabled={
                   isPending || (isEditing ? !canSubmitEdit : !canAdvanceStep1)
                 }
-                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {isPending && <Loader2 size={14} className="animate-spin" />}
                 {isEditing ? "Save Changes" : "Create Provider"}

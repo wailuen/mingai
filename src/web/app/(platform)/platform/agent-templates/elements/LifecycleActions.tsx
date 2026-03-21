@@ -85,7 +85,7 @@ export function LifecycleActions({
                 onChange={(e) => setChangelog(e.target.value)}
                 placeholder="Describe what changed in this version..."
                 rows={3}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
               />
             </div>
           )}
@@ -96,7 +96,7 @@ export function LifecycleActions({
               publishMutation.isPending ||
               (showChangelogInput && !changelog.trim())
             }
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
           >
             {publishMutation.isPending && (
               <Loader2 size={14} className="animate-spin" />
@@ -120,7 +120,7 @@ export function LifecycleActions({
             type="button"
             onClick={handleDeprecate}
             disabled={deprecateMutation.isPending}
-            className="flex items-center gap-1.5 rounded-control border border-alert/30 px-4 py-1.5 text-sm text-alert transition-colors hover:bg-alert-dim disabled:opacity-30"
+            className="flex items-center gap-1.5 rounded-control border border-alert/30 px-4 py-1.5 text-body-default text-alert transition-colors hover:bg-alert-dim disabled:opacity-30"
           >
             {deprecateMutation.isPending && (
               <Loader2 size={14} className="animate-spin" />

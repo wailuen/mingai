@@ -87,7 +87,7 @@ function InlineToast({
         <div
           key={t.id}
           className={cn(
-            "flex items-center gap-2.5 rounded-card border px-4 py-3 text-[13px]",
+            "flex items-center gap-2.5 rounded-card border px-4 py-3 text-body-default",
             t.variant === "success"
               ? "border-accent-ring bg-bg-surface text-text-primary"
               : "border-alert-ring bg-bg-surface text-text-primary",
@@ -278,7 +278,7 @@ export function ProviderList() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load providers: {error.message}
       </p>
     );
@@ -318,7 +318,7 @@ export function ProviderList() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-3.5 py-12 text-center text-sm text-text-faint"
+                    className="px-3.5 py-12 text-center text-body-default text-text-faint"
                   >
                     No providers configured. Add your first provider to get
                     started.
@@ -336,7 +336,7 @@ export function ProviderList() {
                     className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                   >
                     <td className="px-3.5 py-3">
-                      <span className="text-[13px] font-medium text-text-primary">
+                      <span className="text-body-default font-medium text-text-primary">
                         {p.display_name}
                       </span>
                       {p.description && (
@@ -356,17 +356,17 @@ export function ProviderList() {
                     </td>
                     <td className="hidden px-3.5 py-3 sm:table-cell">
                       {p.is_default ? (
-                        <span className="font-mono text-[11px] text-accent">
+                        <span className="font-mono text-data-value text-accent">
                           default
                         </span>
                       ) : (
-                        <span className="font-mono text-[11px] text-text-faint">
+                        <span className="font-mono text-data-value text-text-faint">
                           —
                         </span>
                       )}
                     </td>
                     <td className="hidden px-3.5 py-3 sm:table-cell">
-                      <span className="font-mono text-[12px] text-text-muted">
+                      <span className="font-mono text-data-value text-text-muted">
                         {slotCount} / 6
                       </span>
                     </td>
@@ -389,7 +389,7 @@ export function ProviderList() {
 
         {providers.length > 0 && (
           <div className="border-t border-border px-5 py-2.5">
-            <p className="font-mono text-[11px] text-text-faint">
+            <p className="font-mono text-data-value text-text-faint">
               {providers.length} provider{providers.length !== 1 ? "s" : ""}
             </p>
           </div>

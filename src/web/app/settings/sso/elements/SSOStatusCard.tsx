@@ -84,13 +84,13 @@ export function SSOStatusCard({
       <div className="mt-4 flex gap-2">
         <button
           onClick={onTest}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary"
         >
           Test SSO
         </button>
         <button
           onClick={onReconfigure}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary"
         >
           Reconfigure
         </button>
@@ -114,7 +114,7 @@ function DetailRow({
         {label}
       </dt>
       <dd
-        className={`truncate text-sm text-text-muted ${mono ? "font-mono" : ""}`}
+        className={`truncate text-body-default text-text-muted ${mono ? "font-mono" : ""}`}
         title={value}
       >
         {value}

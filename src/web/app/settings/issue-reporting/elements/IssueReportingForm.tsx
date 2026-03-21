@@ -134,7 +134,7 @@ export function IssueReportingForm() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load issue reporting settings: {error.message}
       </p>
     );
@@ -145,7 +145,7 @@ export function IssueReportingForm() {
       {/* Enable toggle */}
       <div className="flex items-center justify-between rounded-card border border-border bg-bg-surface p-5">
         <div>
-          <p className="text-sm font-medium text-text-primary">
+          <p className="text-body-default font-medium text-text-primary">
             Enable Issue Reporting
           </p>
           <p className="mt-1 text-xs text-text-muted">
@@ -163,7 +163,7 @@ export function IssueReportingForm() {
 
       {/* Notify email */}
       <div className="rounded-card border border-border bg-bg-surface p-5">
-        <label className="block text-sm font-medium text-text-primary">
+        <label className="block text-body-default font-medium text-text-primary">
           Notification Email
         </label>
         <p className="mt-0.5 text-xs text-text-muted">
@@ -175,7 +175,7 @@ export function IssueReportingForm() {
           onChange={(e) => setLocal({ ...local, notify_email: e.target.value })}
           placeholder="admin@company.com"
           className={cn(
-            "mt-2 w-full rounded-control border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring",
+            "mt-2 w-full rounded-control border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring",
             emailError ? "border-alert" : "border-border",
           )}
         />
@@ -185,7 +185,7 @@ export function IssueReportingForm() {
       {/* Auto-escalate P0 */}
       <div className="flex items-center justify-between rounded-card border border-border bg-bg-surface p-5">
         <div>
-          <p className="text-sm font-medium text-text-primary">
+          <p className="text-body-default font-medium text-text-primary">
             Auto-escalate P0 Issues
           </p>
           <p className="mt-1 text-xs text-text-muted">
@@ -204,7 +204,7 @@ export function IssueReportingForm() {
       {/* Auto-escalate P1 */}
       <div className="flex items-center justify-between rounded-card border border-border bg-bg-surface p-5">
         <div>
-          <p className="text-sm font-medium text-text-primary">
+          <p className="text-body-default font-medium text-text-primary">
             Auto-escalate P1 Issues
           </p>
           <p className="mt-1 text-xs text-text-muted">
@@ -223,7 +223,7 @@ export function IssueReportingForm() {
       {/* Escalation threshold hours */}
       {showEscalationThreshold && (
         <div className="rounded-card border border-border bg-bg-surface p-5">
-          <label className="block text-sm font-medium text-text-primary">
+          <label className="block text-body-default font-medium text-text-primary">
             Escalation Threshold (hours)
           </label>
           <p className="mt-0.5 text-xs text-text-muted">
@@ -240,14 +240,14 @@ export function IssueReportingForm() {
                 escalation_threshold_hours: parseInt(e.target.value, 10) || 1,
               })
             }
-            className="mt-2 w-32 rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+            className="mt-2 w-32 rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
           />
         </div>
       )}
 
       {/* Slack webhook */}
       <div className="rounded-card border border-border bg-bg-surface p-5">
-        <label className="block text-sm font-medium text-text-primary">
+        <label className="block text-body-default font-medium text-text-primary">
           Slack Webhook URL
           <span className="ml-1 text-xs font-normal text-text-faint">
             (optional)
@@ -264,7 +264,7 @@ export function IssueReportingForm() {
           }
           placeholder="https://hooks.slack.com/services/..."
           className={cn(
-            "mt-2 w-full rounded-control border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring",
+            "mt-2 w-full rounded-control border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring",
             webhookError ? "border-alert" : "border-border",
           )}
         />
@@ -280,7 +280,7 @@ export function IssueReportingForm() {
           onClick={handleSave}
           disabled={updateMutation.isPending}
           className={cn(
-            "rounded-control bg-accent px-5 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90",
+            "rounded-control bg-accent px-5 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90",
             updateMutation.isPending && "opacity-50",
           )}
         >

@@ -47,7 +47,7 @@ export function VersionHistory({ templateId }: VersionHistoryProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load versions: {error.message}
       </p>
     );
@@ -55,7 +55,7 @@ export function VersionHistory({ templateId }: VersionHistoryProps) {
 
   if (!versions || versions.length === 0) {
     return (
-      <p className="text-sm text-text-faint">No version history available.</p>
+      <p className="text-body-default text-text-faint">No version history available.</p>
     );
   }
 
@@ -90,7 +90,7 @@ export function VersionHistory({ templateId }: VersionHistoryProps) {
               {version.changelog && (
                 <p className="text-xs text-text-muted">{version.changelog}</p>
               )}
-              <p className="mt-1 font-mono text-[11px] text-text-faint">
+              <p className="mt-1 font-mono text-data-value text-text-faint">
                 {formatDateTime(version.created_at)}
               </p>
             </div>

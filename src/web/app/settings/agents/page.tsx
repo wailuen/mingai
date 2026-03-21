@@ -55,13 +55,13 @@ export default function AgentsPage() {
       <div className="p-7">
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Agents</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             AI agents deployed in your workspace
           </p>
         </div>
 
         {error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load agents: {String(error)}
           </p>
         )}
@@ -79,7 +79,7 @@ export default function AgentsPage() {
 
         {!isPending && agents.length === 0 && !error && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-sm text-text-faint">
+            <p className="text-body-default text-text-faint">
               No agents deployed yet. Contact your platform administrator to
               deploy agents.
             </p>
@@ -126,36 +126,36 @@ export default function AgentsPage() {
                     >
                       <td className="px-4 py-3">
                         <div>
-                          <p className="text-[13px] font-medium text-text-primary">
+                          <p className="text-body-default font-medium text-text-primary">
                             {agent.name}
                           </p>
-                          <p className="mt-0.5 line-clamp-1 text-[12px] text-text-faint">
+                          <p className="mt-0.5 line-clamp-1 text-body-default text-text-faint">
                             {agent.description}
                           </p>
                         </div>
                       </td>
                       <td className="hidden px-4 py-3 sm:table-cell">
-                        <span className="rounded-badge border border-border bg-bg-elevated px-2 py-0.5 font-mono text-[11px] text-text-muted">
+                        <span className="rounded-badge border border-border bg-bg-elevated px-2 py-0.5 font-mono text-data-value text-text-muted">
                           {agent.category}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className={cn(
-                            "rounded-badge px-2 py-0.5 font-mono text-[11px] uppercase",
+                            "rounded-badge px-2 py-0.5 font-mono text-data-value uppercase",
                             statusColor(agent.status),
                           )}
                         >
                           {agent.status}
                         </span>
                       </td>
-                      <td className="hidden px-4 py-3 font-mono text-[13px] text-text-muted md:table-cell">
+                      <td className="hidden px-4 py-3 font-mono text-data-value text-text-muted md:table-cell">
                         v{agent.version}
                       </td>
-                      <td className="hidden px-4 py-3 font-mono text-[13px] text-text-muted md:table-cell">
+                      <td className="hidden px-4 py-3 font-mono text-data-value text-text-muted md:table-cell">
                         {agent.user_count}
                       </td>
-                      <td className="hidden px-4 py-3 font-mono text-[13px] text-text-muted md:table-cell">
+                      <td className="hidden px-4 py-3 font-mono text-data-value text-text-muted md:table-cell">
                         {agent.satisfaction_rate != null
                           ? `${Math.round(agent.satisfaction_rate * 100)}%`
                           : "—"}

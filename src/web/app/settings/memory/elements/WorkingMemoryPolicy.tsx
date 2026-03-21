@@ -41,7 +41,7 @@ export function WorkingMemoryPolicy({
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-body-default font-medium text-text-primary">
               Enable working memory
             </p>
             <p className="mt-1 text-xs text-text-muted">
@@ -77,7 +77,7 @@ export function WorkingMemoryPolicy({
           }}
         >
           <div className="flex items-center gap-3">
-            <label htmlFor="ttl-select" className="text-sm text-text-muted">
+            <label htmlFor="ttl-select" className="text-body-default text-text-muted">
               Retain for
             </label>
             <select
@@ -85,7 +85,7 @@ export function WorkingMemoryPolicy({
               value={ttlDays}
               onChange={(e) => onTtlChange(Number(e.target.value))}
               disabled={saving || !enabled}
-              className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 font-mono text-sm text-text-primary transition-colors focus:border-accent focus:outline-none disabled:opacity-50"
+              className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 font-mono text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none disabled:opacity-50"
             >
               {TTL_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>

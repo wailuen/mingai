@@ -214,7 +214,7 @@ export function IssueHeatmap({ data, className }: IssueHeatmapProps) {
             transform: "translate(-50%, -100%)",
           }}
         >
-          <p className="font-mono text-[11px] text-text-primary">
+          <p className="font-mono text-data-value text-text-primary">
             {tooltip.count} issue{tooltip.count !== 1 ? "s" : ""}
           </p>
           <p className="font-mono text-[10px] text-text-faint">

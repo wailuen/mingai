@@ -21,7 +21,7 @@ function CacheSummarySection({ period }: { period: CachePeriod }) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load cache summary: {error.message}
       </p>
     );
@@ -34,7 +34,7 @@ function CacheSummarySection({ period }: { period: CachePeriod }) {
   if (!data) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-12 text-center">
-        <p className="text-sm text-text-muted">
+        <p className="text-body-default text-text-muted">
           No cache data available yet. Cache analytics will appear here once the
           system starts processing queries.
         </p>
@@ -58,7 +58,7 @@ export default function TenantCacheAnalyticsPage() {
         {/* Page header */}
         <div>
           <h1 className="text-page-title text-text-primary">Cache Analytics</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Monitor semantic cache performance, hit rates, and cost savings
           </p>
         </div>

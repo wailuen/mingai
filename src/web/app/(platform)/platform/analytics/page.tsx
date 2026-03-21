@@ -34,7 +34,7 @@ export default function PlatformAnalyticsPage() {
             <BarChart3 size={18} className="text-accent" />
             <h1 className="text-page-title text-text-primary">Analytics</h1>
           </div>
-          <p className="text-sm text-text-muted">
+          <p className="text-body-default text-text-muted">
             Platform-wide intelligence across all tenants.
           </p>
         </div>
@@ -54,7 +54,7 @@ export default function PlatformAnalyticsPage() {
                 <h2 className="mb-1 text-section-heading text-text-primary">
                   {section.title}
                 </h2>
-                <p className="text-sm text-text-muted">{section.description}</p>
+                <p className="text-body-default text-text-muted">{section.description}</p>
               </Link>
             );
           })}

@@ -65,7 +65,7 @@ export function AssignDialog({ count, onConfirm, onClose }: AssignDialogProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="engineer@company.com"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               required
             />
           </div>
@@ -74,14 +74,14 @@ export function AssignDialog({ count, onConfirm, onClose }: AssignDialogProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-control border border-border px-4 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              className="rounded-control border border-border px-4 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!email.trim()}
-              className="rounded-control border border-accent/30 bg-accent-dim px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-bg-base disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-control border border-accent/30 bg-accent-dim px-4 py-2 text-body-default font-medium text-accent transition-colors hover:bg-accent hover:text-bg-base disabled:cursor-not-allowed disabled:opacity-40"
             >
               Assign
             </button>

@@ -54,9 +54,9 @@ function SignalRow({ label, value, status = "neutral" }: SignalRowProps) {
     <div className="flex items-center justify-between py-2.5">
       <div className="flex items-center gap-2">
         <Icon size={13} className={cn(iconColor)} aria-hidden="true" />
-        <span className="text-[13px] text-text-muted">{label}</span>
+        <span className="text-body-default text-text-muted">{label}</span>
       </div>
-      <span className="font-mono text-[13px] text-text-primary">{value}</span>
+      <span className="font-mono text-data-value text-text-primary">{value}</span>
     </div>
   );
 }
@@ -109,7 +109,7 @@ export function SchedulerSignalsCard() {
       )}
 
       {isError && (
-        <p className="text-sm text-alert">Failed to load scheduler signals.</p>
+        <p className="text-body-default text-alert">Failed to load scheduler signals.</p>
       )}
 
       {!isPending && !isError && data && (

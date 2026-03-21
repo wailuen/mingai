@@ -194,7 +194,7 @@ export function TemplateAuthoringForm({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. HR Policy Assistant"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -208,7 +208,7 @@ export function TemplateAuthoringForm({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief description of what this template does"
               rows={2}
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -220,7 +220,7 @@ export function TemplateAuthoringForm({
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary focus:border-accent focus:outline-none"
             >
               {CATEGORY_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>
@@ -245,7 +245,7 @@ export function TemplateAuthoringForm({
               </button>
             </div>
             {showPreview ? (
-              <div className="min-h-[160px] rounded-control border border-border bg-bg-elevated p-3 text-sm leading-relaxed text-text-primary">
+              <div className="min-h-[160px] rounded-control border border-border bg-bg-elevated p-3 text-body-default leading-relaxed text-text-primary">
                 {renderPromptWithHighlights(systemPrompt)}
               </div>
             ) : (
@@ -254,7 +254,7 @@ export function TemplateAuthoringForm({
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 placeholder="You are an assistant that helps with {{topic}}. Use {{tone}} tone."
                 rows={7}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
               />
             )}
             <p className="mt-1 text-[11px] text-text-faint">
@@ -338,7 +338,7 @@ export function TemplateAuthoringForm({
                 min={0}
                 max={1}
                 step={0.05}
-                className="w-32 rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary focus:border-accent focus:outline-none"
+                className="w-32 rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary focus:border-accent focus:outline-none"
               />
             </div>
           </div>
@@ -371,7 +371,7 @@ export function TemplateAuthoringForm({
             type="button"
             onClick={handleSaveDraft}
             disabled={!canSave || isPending}
-            className="rounded-control border border-border px-4 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
+            className="rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
           >
             {isPending ? "Saving..." : "Save Draft"}
           </button>

@@ -94,7 +94,7 @@ export function TeamForm({ team, onClose }: TeamFormProps) {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           {error && (
-            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
               {error}
             </div>
           )}
@@ -112,7 +112,7 @@ export function TeamForm({ team, onClose }: TeamFormProps) {
               }
               maxLength={MAX_NAME_LENGTH}
               placeholder="e.g. Finance Team"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -129,7 +129,7 @@ export function TeamForm({ team, onClose }: TeamFormProps) {
               maxLength={MAX_DESCRIPTION_LENGTH}
               placeholder="Brief description of the team..."
               rows={3}
-              className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
             <div className="mt-1 flex justify-end">
               <span className="font-mono text-xs text-text-faint">
@@ -144,7 +144,7 @@ export function TeamForm({ team, onClose }: TeamFormProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
@@ -152,7 +152,7 @@ export function TeamForm({ team, onClose }: TeamFormProps) {
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
           >
             {isPending ? "Saving..." : "Save"}
           </button>

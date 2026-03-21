@@ -59,7 +59,7 @@ export function TenantTable({ searchQuery }: TenantTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load tenants: {error.message}
       </p>
     );
@@ -112,7 +112,7 @@ export function TenantTable({ searchQuery }: TenantTableProps) {
                     <div className="flex h-12 w-12 items-center justify-center rounded-card bg-bg-elevated">
                       <Building2 size={24} className="text-text-faint" />
                     </div>
-                    <p className="text-sm font-medium text-text-muted">
+                    <p className="text-body-default font-medium text-text-muted">
                       No tenants found
                     </p>
                     <p className="text-xs text-text-faint">
@@ -130,11 +130,11 @@ export function TenantTable({ searchQuery }: TenantTableProps) {
                   onClick={() => setSelectedTenantId(tenant.id)}
                   className="cursor-pointer border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
-                  <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+                  <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
                     {tenant.name}
                   </td>
                   <td className="px-3.5 py-3">
-                    <span className="rounded-badge border border-border bg-bg-elevated px-2 py-0.5 font-mono text-[11px] text-text-muted">
+                    <span className="rounded-badge border border-border bg-bg-elevated px-2 py-0.5 font-mono text-data-value text-text-muted">
                       {tenant.plan}
                     </span>
                   </td>
@@ -151,7 +151,7 @@ export function TenantTable({ searchQuery }: TenantTableProps) {
                   <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
                     {tenant.slug}
                   </td>
-                  <td className="px-3.5 py-3 text-sm text-text-muted">
+                  <td className="px-3.5 py-3 text-body-default text-text-muted">
                     {tenant.primary_contact_email || "\u2014"}
                   </td>
                   <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">

@@ -52,14 +52,14 @@ export default function AgentTemplatesPage() {
             <h1 className="text-page-title text-text-primary">
               Agent Templates
             </h1>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-1 text-body-default text-text-muted">
               Manage agent templates and publish across tenants
             </p>
           </div>
           <button
             type="button"
             onClick={handleCreate}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={16} />
             New Template

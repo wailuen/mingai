@@ -49,7 +49,7 @@ export function SeverityOverrideDialog({
       <div className="w-full max-w-[480px] rounded-card border border-border bg-bg-surface">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h3 className="text-sm font-semibold text-text-primary">
+          <h3 className="text-body-default font-semibold text-text-primary">
             Override Severity
           </h3>
           <button
@@ -72,7 +72,7 @@ export function SeverityOverrideDialog({
           <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-faint">
             Current Severity
           </p>
-          <p className="mb-4 font-mono text-sm text-text-primary">
+          <p className="mb-4 font-mono text-body-default text-text-primary">
             {issue.severity}
           </p>
 
@@ -110,7 +110,7 @@ export function SeverityOverrideDialog({
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             placeholder="Explain why this severity change is needed..."
-            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder-text-faint transition-colors focus:border-accent focus:outline-none"
+            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder-text-faint transition-colors focus:border-accent focus:outline-none"
           />
 
           {/* Error */}

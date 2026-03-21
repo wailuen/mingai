@@ -52,34 +52,34 @@ export default function SSOPage() {
         {/* Page header */}
         <div>
           <h1 className="text-page-title text-text-primary">Single Sign-On</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Configure SAML or OIDC authentication for your workspace
           </p>
         </div>
 
         <ErrorBoundary>
           {isPending && (
-            <div className="flex items-center gap-2 text-sm text-text-muted">
+            <div className="flex items-center gap-2 text-body-default text-text-muted">
               <Loader2 size={14} className="animate-spin" />
               Loading SSO configuration...
             </div>
           )}
 
           {error && (
-            <p className="text-sm text-alert">
+            <p className="text-body-default text-alert">
               Failed to load SSO config: {error.message}
             </p>
           )}
 
           {!isPending && !error && !isConfigured && !showWizard && (
             <div className="rounded-card border border-border-faint bg-bg-surface p-8 text-center">
-              <p className="mb-4 text-sm text-text-muted">
+              <p className="mb-4 text-body-default text-text-muted">
                 SSO is not configured. Set up SAML or OIDC to enable single
                 sign-on for your workspace.
               </p>
               <button
                 onClick={() => setShowWizard(true)}
-                className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+                className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
               >
                 Configure SSO
               </button>

@@ -73,7 +73,7 @@ export function TemplatePreviewModal({
           <h3 className="mb-2 text-label-nav uppercase text-text-faint">
             System Prompt
           </h3>
-          <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-card bg-bg-elevated p-4 font-mono text-sm text-text-muted">
+          <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-card bg-bg-elevated p-4 font-mono text-data-value text-text-muted">
             {template.system_prompt}
           </div>
         </div>
@@ -107,7 +107,7 @@ export function TemplatePreviewModal({
               {variables.map((v) => (
                 <li
                   key={v}
-                  className="flex items-center gap-1.5 text-sm text-text-muted"
+                  className="flex items-center gap-1.5 text-body-default text-text-muted"
                 >
                   <span className="text-text-faint">&bull;</span>
                   <code className="font-mono text-xs text-text-primary">
@@ -123,7 +123,7 @@ export function TemplatePreviewModal({
         <div className="flex justify-end">
           <button
             onClick={() => onDeploy(template)}
-            className="rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             Deploy &rarr;
           </button>

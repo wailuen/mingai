@@ -108,7 +108,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Engineering Docs"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -121,7 +121,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                   value={folderId}
                   onChange={(e) => setFolderId(e.target.value)}
                   placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74O"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
                 <p className="mt-1 text-xs text-text-faint">
                   Found in the Google Drive folder URL after /folders/
@@ -137,7 +137,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                   value={serviceAccountEmail}
                   onChange={(e) => setServiceAccountEmail(e.target.value)}
                   placeholder="mingai-sa@project-id.iam.gserviceaccount.com"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
                 <p className="mt-1 text-xs text-text-faint">
                   The Google Cloud service account that has read access to the
@@ -151,7 +151,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
           {step === 2 && (
             <div className="space-y-4">
               <div className="rounded-card bg-bg-elevated p-4">
-                <p className="text-sm text-text-muted">
+                <p className="text-body-default text-text-muted">
                   Your service account JSON key must be stored in your
                   organization&apos;s vault. Enter the vault reference path
                   below.
@@ -167,7 +167,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                   value={credentialRef}
                   onChange={(e) => setCredentialRef(e.target.value)}
                   placeholder="vault://secrets/google-drive/service-account-key"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
                 <p className="mt-1 text-xs text-text-faint">
                   The vault path where the service account JSON key is stored
@@ -179,7 +179,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
           {/* Step 3: Review */}
           {step === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Review the details below and confirm the connection.
               </p>
 
@@ -189,13 +189,13 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Name
                     </dt>
-                    <dd className="text-sm text-text-primary">{name}</dd>
+                    <dd className="text-body-default text-text-primary">{name}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Folder ID
                     </dt>
-                    <dd className="font-mono text-sm text-text-muted">
+                    <dd className="font-mono text-body-default text-text-muted">
                       {folderId}
                     </dd>
                   </div>
@@ -203,7 +203,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Service Account
                     </dt>
-                    <dd className="font-mono text-sm text-text-muted">
+                    <dd className="font-mono text-body-default text-text-muted">
                       {serviceAccountEmail}
                     </dd>
                   </div>
@@ -211,7 +211,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Credential Ref
                     </dt>
-                    <dd className="font-mono text-sm text-text-muted">
+                    <dd className="font-mono text-body-default text-text-muted">
                       {credentialRef}
                     </dd>
                   </div>
@@ -239,7 +239,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                 type="button"
                 onClick={handleBack}
                 disabled={connectMutation.isPending}
-                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
               >
                 <ChevronLeft size={14} />
                 Back
@@ -252,7 +252,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
               >
                 Cancel
               </button>
@@ -266,7 +266,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                   (step === 1 && !canProceedStep1) ||
                   (step === 2 && !canProceedStep2)
                 }
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 Next
                 <ChevronRight size={14} />
@@ -278,7 +278,7 @@ export function GoogleDriveWizard({ onClose }: GoogleDriveWizardProps) {
                 type="button"
                 onClick={handleConnect}
                 disabled={connectMutation.isPending}
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 {connectMutation.isPending ? (
                   "Connecting..."

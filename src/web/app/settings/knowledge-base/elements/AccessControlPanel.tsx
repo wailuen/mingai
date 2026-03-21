@@ -214,7 +214,7 @@ export function AccessControlPanel({ kbId }: AccessControlPanelProps) {
   if (isError) {
     return (
       <div className="rounded-card border border-alert/30 bg-alert-dim p-5">
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load access control settings.
         </p>
       </div>
@@ -271,7 +271,7 @@ export function AccessControlPanel({ kbId }: AccessControlPanelProps) {
                     )}
                   </span>
                   <span
-                    className={`text-sm font-medium ${
+                    className={`text-body-default font-medium ${
                       isActive ? "text-text-primary" : "text-text-muted"
                     }`}
                   >
@@ -357,7 +357,7 @@ export function AccessControlPanel({ kbId }: AccessControlPanelProps) {
                       }
                       maxLength={100}
                       placeholder="Search users by name or email..."
-                      className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                      className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                     />
                   </div>
 
@@ -382,7 +382,7 @@ export function AccessControlPanel({ kbId }: AccessControlPanelProps) {
                             key={user.id}
                             disabled={alreadyAdded}
                             onClick={() => addUser(user)}
-                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-body-default transition-colors ${
                               alreadyAdded
                                 ? "text-text-faint opacity-50"
                                 : "text-text-primary hover:bg-bg-elevated"
@@ -412,7 +412,7 @@ export function AccessControlPanel({ kbId }: AccessControlPanelProps) {
           type="button"
           disabled={!isDirty || updateMutation.isPending}
           onClick={handleSave}
-          className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+          className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
         >
           {updateMutation.isPending ? "Saving..." : "Save Changes"}
         </button>

@@ -75,7 +75,7 @@ export function GitHubIssueButton({
           setShowDialog(true);
         }}
         className={cn(
-          "flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-[13px] transition-colors",
+          "flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-body-default transition-colors",
           isLinked
             ? "cursor-default border-accent-ring bg-accent-dim text-accent"
             : "border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:text-text-primary",
@@ -129,7 +129,7 @@ export function GitHubIssueButton({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -141,7 +141,7 @@ export function GitHubIssueButton({
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   rows={6}
-                  className="w-full resize-y rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full resize-y rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -161,7 +161,7 @@ export function GitHubIssueButton({
               <button
                 type="button"
                 onClick={() => setShowDialog(false)}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
               >
                 Cancel
               </button>
@@ -169,7 +169,7 @@ export function GitHubIssueButton({
                 type="button"
                 onClick={() => createMutation.mutate()}
                 disabled={createMutation.isPending || !title.trim()}
-                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 <GitHubIcon size={14} />
                 {createMutation.isPending ? "Creating..." : "Create Issue"}

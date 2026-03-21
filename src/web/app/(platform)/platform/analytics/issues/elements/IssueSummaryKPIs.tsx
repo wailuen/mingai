@@ -78,7 +78,7 @@ export function IssueSummaryKPIs({ period }: IssueSummaryKPIsProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load issue summary: {error.message}
       </p>
     );

@@ -18,7 +18,7 @@ export function TopHitPatterns({ patterns }: TopHitPatternsProps) {
   if (top10.length === 0) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-8 text-center">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No cached query patterns recorded yet. Patterns will appear here as
           the cache starts serving repeated queries.
         </p>
@@ -57,7 +57,7 @@ export function TopHitPatterns({ patterns }: TopHitPatternsProps) {
                   className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
                   <td
-                    className="px-3.5 py-3 text-[13px] text-text-primary"
+                    className="px-3.5 py-3 text-body-default text-text-primary"
                     title={p.pattern}
                   >
                     {truncate(p.pattern, 60)}

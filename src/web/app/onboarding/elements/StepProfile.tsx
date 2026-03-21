@@ -20,7 +20,7 @@ export function StepProfile({ onNext, onBack }: StepProfileProps) {
         <h2 className="text-section-heading text-text-primary">
           Set Up Your Profile
         </h2>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-1 text-body-default text-text-muted">
           Tell us a bit about yourself so we can personalize your experience.
         </p>
       </div>
@@ -35,7 +35,7 @@ export function StepProfile({ onNext, onBack }: StepProfileProps) {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your name"
-            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
           />
         </div>
 
@@ -50,14 +50,14 @@ export function StepProfile({ onNext, onBack }: StepProfileProps) {
       <div className="flex justify-between pt-2">
         <button
           onClick={onBack}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
         >
           Back
         </button>
         <button
           onClick={onNext}
           disabled={!canProceed}
-          className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+          className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
         >
           Next
         </button>

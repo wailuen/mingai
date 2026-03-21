@@ -174,7 +174,7 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
                 onChange={(e) => updateField("tenant_id", e.target.value)}
                 required
                 placeholder="UUID of the tenant"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
             </div>
           )}
@@ -191,7 +191,7 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
               required
               maxLength={200}
               placeholder="e.g. Standard, Premium, Enterprise"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -207,7 +207,7 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
               required
               maxLength={100}
               placeholder="e.g. azure_openai, openai, anthropic"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -224,9 +224,9 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
                 required
                 maxLength={255}
                 placeholder="e.g. gpt-4o"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
-              <p className="mt-1 text-[10px] text-text-faint">
+              <p className="mt-1 text-[11px] text-text-faint">
                 Must match deployment name exactly
               </p>
             </div>
@@ -242,9 +242,9 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
                 required
                 maxLength={255}
                 placeholder="e.g. gpt-4o-mini"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
-              <p className="mt-1 text-[10px] text-text-faint">
+              <p className="mt-1 text-[11px] text-text-faint">
                 Must match deployment name exactly
               </p>
             </div>
@@ -261,9 +261,9 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
               required
               maxLength={255}
               placeholder="e.g. text-embedding-3-small"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
-            <p className="mt-1 text-[10px] text-text-faint">
+            <p className="mt-1 text-[11px] text-text-faint">
               Must match deployment name exactly
             </p>
           </div>
@@ -279,7 +279,7 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
               onChange={(e) => updateField("endpoint_url", e.target.value)}
               maxLength={500}
               placeholder="https://your-resource.openai.azure.com/"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -293,15 +293,15 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
               onChange={(e) => updateField("api_key_ref", e.target.value)}
               maxLength={500}
               placeholder="vault://secret/path or env var name"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
-            <p className="mt-1 text-[10px] text-text-faint">
+            <p className="mt-1 text-[11px] text-text-faint">
               Reference to secret store, never the raw key
             </p>
           </div>
 
           {/* Default toggle */}
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated">
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-control px-3 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated">
             <input
               type="checkbox"
               checked={form.is_default}
@@ -314,7 +314,7 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
 
         {/* Error */}
         {mutationError && (
-          <p className="mt-4 text-sm text-alert">
+          <p className="mt-4 text-body-default text-alert">
             {mutationError.message ?? "Operation failed."}
           </p>
         )}
@@ -324,14 +324,14 @@ export function ProfileForm({ profile, onClose, onSaved }: ProfileFormProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit || isPending}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {isPending && <Loader2 size={14} className="animate-spin" />}
             {isEditing ? "Save Changes" : "Create Profile"}

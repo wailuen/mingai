@@ -16,7 +16,7 @@ export function IssuesByTenantTable({ period }: IssuesByTenantTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load tenant issue stats: {error.message}
       </p>
     );
@@ -56,7 +56,7 @@ export function IssuesByTenantTable({ period }: IssuesByTenantTableProps) {
               <tr>
                 <td
                   colSpan={4}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No tenant issue data available for this period.
                 </td>
@@ -67,15 +67,15 @@ export function IssuesByTenantTable({ period }: IssuesByTenantTableProps) {
                   key={stat.tenant_name}
                   className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
-                  <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+                  <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
                     {stat.tenant_name}
                   </td>
-                  <td className="px-3.5 py-3 text-right font-mono text-sm text-text-primary">
+                  <td className="px-3.5 py-3 text-right font-mono text-body-default text-text-primary">
                     {stat.total}
                   </td>
                   <td
                     className={cn(
-                      "px-3.5 py-3 text-right font-mono text-sm",
+                      "px-3.5 py-3 text-right font-mono text-body-default",
                       stat.open > 0 ? "text-warn" : "text-text-muted",
                     )}
                   >
@@ -83,7 +83,7 @@ export function IssuesByTenantTable({ period }: IssuesByTenantTableProps) {
                   </td>
                   <td
                     className={cn(
-                      "px-3.5 py-3 text-right font-mono text-sm",
+                      "px-3.5 py-3 text-right font-mono text-body-default",
                       stat.p0_count > 0 ? "text-alert" : "text-text-muted",
                     )}
                   >

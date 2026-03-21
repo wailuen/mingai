@@ -17,7 +17,7 @@ export function CredentialExpiryBanner({
 
   return (
     <div className="flex items-center justify-between rounded-card border border-warn bg-warn-dim p-4">
-      <p className="text-sm text-text-primary">
+      <p className="text-body-default text-text-primary">
         <span className="font-semibold">{integrationName}</span> credentials
         expire in{" "}
         <span className="font-mono font-medium">{daysUntilExpiry}</span>{" "}

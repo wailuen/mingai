@@ -73,7 +73,7 @@ export default function JobHistoryPage() {
               {runningCount > 0 && (
                 <span className="flex items-center gap-1.5 rounded-badge border border-accent-ring bg-accent-dim px-2 py-0.5">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                  <span className="font-mono text-[12px] text-accent">
+                  <span className="font-mono text-data-value text-accent">
                     {runningCount} running
                   </span>
                 </span>
@@ -101,7 +101,7 @@ export default function JobHistoryPage() {
               />
             </div>
           </div>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Background job execution log — runs, durations, and errors across
             all pods
           </p>
@@ -109,7 +109,7 @@ export default function JobHistoryPage() {
 
         {notification && (
           <div
-            className={`mb-4 rounded-control border px-4 py-2.5 text-sm ${
+            className={`mb-4 rounded-control border px-4 py-2.5 text-body-default ${
               notification.kind === "success"
                 ? "border-accent-ring bg-accent-dim text-accent"
                 : "border-alert/30 bg-alert/10 text-alert"

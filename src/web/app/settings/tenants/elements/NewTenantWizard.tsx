@@ -100,7 +100,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
                   value={name}
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder="Acme Corp"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
@@ -112,7 +112,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
                   placeholder="acme-corp"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
                 <p className="mt-1 text-[11px] text-text-faint">
                   URL-safe identifier. Auto-generated from name.
@@ -127,7 +127,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   placeholder="admin@acmecorp.com"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
@@ -154,7 +154,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-text-primary">
+              <h3 className="text-body-default font-medium text-text-primary">
                 Confirm Tenant Details
               </h3>
               <div className="rounded-card border border-border bg-bg-elevated p-4">
@@ -165,7 +165,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
                   <ConfirmRow label="Contact" value={contactEmail} />
                 </div>
               </div>
-              {error && <p className="text-sm text-alert">{error}</p>}
+              {error && <p className="text-body-default text-alert">{error}</p>}
             </div>
           )}
         </div>
@@ -174,7 +174,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
         <div className="flex justify-between border-t border-border px-5 py-3">
           <button
             onClick={() => (step === 1 ? onClose() : setStep(1))}
-            className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             {step === 2 && <ChevronLeft size={14} />}
             {step === 1 ? "Cancel" : "Back"}
@@ -183,7 +183,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
             <button
               onClick={() => setStep(2)}
               disabled={!canProceed}
-              className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+              className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
             >
               Next
               <ChevronRight size={14} />
@@ -192,7 +192,7 @@ export function NewTenantWizard({ onClose }: NewTenantWizardProps) {
             <button
               onClick={handleCreate}
               disabled={submitting}
-              className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+              className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
             >
               {submitting ? "Creating..." : "Create Tenant"}
             </button>
@@ -216,7 +216,7 @@ function ConfirmRow({
     <div className="flex items-center justify-between">
       <span className="text-xs text-text-faint">{label}</span>
       <span
-        className={`text-sm text-text-primary ${mono ? "font-mono text-data-value" : ""}`}
+        className={`text-body-default text-text-primary ${mono ? "font-mono text-data-value" : ""}`}
       >
         {value}
       </span>

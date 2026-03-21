@@ -52,7 +52,7 @@ export function AuditLogTable({
 }: AuditLogTableProps) {
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load audit log: {error.message}
       </p>
     );
@@ -97,7 +97,7 @@ export function AuditLogTable({
               <tr>
                 <td
                   colSpan={7}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No audit events match the current filters. Adjust your
                   criteria or wait for new activity to be recorded.
@@ -114,25 +114,25 @@ export function AuditLogTable({
                   {formatTimestamp(event.timestamp)}
                 </td>
                 <td className="px-3.5 py-3">
-                  <div className="text-[13px] font-medium text-text-primary">
+                  <div className="text-body-default font-medium text-text-primary">
                     {event.actor_email}
                   </div>
                   <div className="text-[11px] text-text-faint">
                     {(event.actor_type ?? "").replace("_", " ")}
                   </div>
                 </td>
-                <td className="px-3.5 py-3 text-[13px] text-text-primary">
+                <td className="px-3.5 py-3 text-body-default text-text-primary">
                   {event.action}
                 </td>
                 <td className="px-3.5 py-3">
-                  <span className="text-[13px] text-text-muted">
+                  <span className="text-body-default text-text-muted">
                     {event.resource_type}
                   </span>
-                  <span className="ml-1 font-mono text-[11px] text-text-faint">
+                  <span className="ml-1 font-mono text-data-value text-text-faint">
                     {event.resource_id}
                   </span>
                 </td>
-                <td className="px-3.5 py-3 text-[13px] text-text-muted">
+                <td className="px-3.5 py-3 text-body-default text-text-muted">
                   {event.tenant_name}
                 </td>
                 <td className="px-3.5 py-3">
@@ -159,7 +159,7 @@ export function AuditLogTable({
       {/* Pagination */}
       {data && data.total > 0 && (
         <div className="flex items-center justify-between border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             Showing {startIdx}&ndash;{endIdx} of {data.total}
           </p>
           <div className="flex items-center gap-2">
@@ -168,7 +168,7 @@ export function AuditLogTable({
               disabled={page <= 1}
               onClick={() => onPageChange(page - 1)}
               className={cn(
-                "rounded-control border border-border px-3 py-1 text-[12px] text-text-muted transition-colors",
+                "rounded-control border border-border px-3 py-1 text-body-default text-text-muted transition-colors",
                 page <= 1
                   ? "cursor-not-allowed opacity-40"
                   : "hover:bg-bg-elevated hover:text-text-primary",
@@ -176,7 +176,7 @@ export function AuditLogTable({
             >
               Prev
             </button>
-            <span className="font-mono text-[11px] text-text-faint">
+            <span className="font-mono text-data-value text-text-faint">
               {page} / {data.total_pages}
             </span>
             <button
@@ -184,7 +184,7 @@ export function AuditLogTable({
               disabled={page >= data.total_pages}
               onClick={() => onPageChange(page + 1)}
               className={cn(
-                "rounded-control border border-border px-3 py-1 text-[12px] text-text-muted transition-colors",
+                "rounded-control border border-border px-3 py-1 text-body-default text-text-muted transition-colors",
                 page >= data.total_pages
                   ? "cursor-not-allowed opacity-40"
                   : "hover:bg-bg-elevated hover:text-text-primary",

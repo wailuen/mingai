@@ -132,7 +132,7 @@ export function SlotMappingGrid({
 
   return (
     <div className="space-y-3">
-      <p className="text-[12px] text-text-muted">
+      <p className="text-body-default text-text-muted">
         Enter the deployment or model name for each slot. Leave blank to skip.
         Greyed-out slots are not supported by this provider.
       </p>
@@ -149,7 +149,7 @@ export function SlotMappingGrid({
             title={!supported ? `Not supported by ${providerType}` : undefined}
           >
             <div className="w-36 flex-shrink-0">
-              <p className="text-[13px] font-medium text-text-primary">
+              <p className="text-body-default font-medium text-text-primary">
                 {label}
               </p>
               <p className="text-[11px] text-text-faint">{description}</p>
@@ -163,7 +163,7 @@ export function SlotMappingGrid({
                 supported ? `e.g. ${key}-deployment` : "Not supported"
               }
               className={cn(
-                "flex-1 rounded-control border border-border bg-bg-base px-2.5 py-1.5 font-mono text-[12px] text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none",
+                "flex-1 rounded-control border border-border bg-bg-base px-2.5 py-1.5 font-mono text-data-value text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none",
                 !supported && "cursor-not-allowed",
               )}
             />

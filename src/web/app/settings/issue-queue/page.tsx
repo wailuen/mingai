@@ -92,7 +92,7 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load issues: {error.message}
       </p>
     );
@@ -134,7 +134,7 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
                   <div className="flex h-12 w-12 items-center justify-center rounded-card bg-bg-elevated">
                     <AlertCircle size={24} className="text-text-faint" />
                   </div>
-                  <p className="text-sm font-medium text-text-muted">
+                  <p className="text-body-default font-medium text-text-muted">
                     No issues found
                   </p>
                   <p className="text-xs text-text-faint">
@@ -154,14 +154,14 @@ function IssueQueueTable({ statusFilter }: { statusFilter: StatusFilter }) {
                 <td className="px-3.5 py-3">
                   <span
                     className={cn(
-                      "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-[11px] font-medium",
+                      "inline-block rounded-badge border px-1.5 py-0.5 font-mono text-data-value font-medium",
                       severityBadgeClass(issue.severity),
                     )}
                   >
                     {issue.severity}
                   </span>
                 </td>
-                <td className="px-3.5 py-3 text-sm font-medium text-text-primary">
+                <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
                   {issue.title}
                 </td>
                 <td className="hidden px-3.5 py-3 text-xs text-text-muted sm:table-cell">
@@ -194,7 +194,7 @@ export default function IssueQueuePage() {
       <div className="p-4 sm:p-7">
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Issue Queue</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             View and manage issues reported by your users
           </p>
         </div>

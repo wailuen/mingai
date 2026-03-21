@@ -61,7 +61,7 @@ const columns = [
   columnHelper.accessor("title", {
     header: "Title",
     cell: (info) => (
-      <span className="text-sm font-medium text-text-primary">
+      <span className="text-body-default font-medium text-text-primary">
         {info.getValue()}
       </span>
     ),
@@ -69,7 +69,7 @@ const columns = [
   columnHelper.accessor("report_count", {
     header: "Reports",
     cell: (info) => (
-      <span className="font-mono text-sm text-text-primary">
+      <span className="font-mono text-body-default text-text-primary">
         {info.getValue().toLocaleString()}
       </span>
     ),
@@ -78,7 +78,7 @@ const columns = [
   columnHelper.accessor("tenant_count", {
     header: "Tenants",
     cell: (info) => (
-      <span className="font-mono text-sm text-text-primary">
+      <span className="font-mono text-body-default text-text-primary">
         {info.getValue()}
       </span>
     ),
@@ -124,7 +124,7 @@ export function TopBugsTable({ period }: TopBugsTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load top bugs: {error.message}
       </p>
     );
@@ -173,7 +173,7 @@ export function TopBugsTable({ period }: TopBugsTableProps) {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No bug data available for this period.
                 </td>

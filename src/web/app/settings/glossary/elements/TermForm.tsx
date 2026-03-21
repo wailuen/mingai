@@ -137,7 +137,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
-            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+            <div className="rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
               {error}
             </div>
           )}
@@ -154,7 +154,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
               onChange={(e) => setTermValue(e.target.value.slice(0, 100))}
               maxLength={100}
               placeholder="e.g. API"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -169,7 +169,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
               onChange={handleDefinitionChange}
               placeholder="Provide a clear definition for the AI to use..."
               rows={3}
-              className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full resize-none rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
             <div className="mt-1 flex justify-end">
               <span className={cn("font-mono text-xs", charCountColor)}>
@@ -207,7 +207,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
                 placeholder={
                   aliases.length === 0 ? "Type and press Enter or comma..." : ""
                 }
-                className="min-w-[120px] flex-1 border-none bg-transparent py-0.5 text-sm text-text-primary placeholder:text-text-faint focus:outline-none"
+                className="min-w-[120px] flex-1 border-none bg-transparent py-0.5 text-body-default text-text-primary placeholder:text-text-faint focus:outline-none"
               />
             </div>
             <p className="mt-1 text-xs text-text-faint">
@@ -221,7 +221,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
@@ -229,7 +229,7 @@ export function TermForm({ term, onClose, prefillTerm }: TermFormProps) {
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
           >
             {isPending ? "Saving..." : "Save"}
           </button>

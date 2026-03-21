@@ -64,7 +64,7 @@ export function RunNowButton({ onNotify }: RunNowButtonProps) {
           <select
             value={selectedJob}
             onChange={handleSelectChange}
-            className="rounded-control border border-border bg-bg-elevated px-2 py-1.5 font-mono text-[12px] text-text-primary focus:border-accent-ring focus:outline-none"
+            className="rounded-control border border-border bg-bg-elevated px-2 py-1.5 font-mono text-data-value text-text-primary focus:border-accent-ring focus:outline-none"
           >
             {KNOWN_JOB_NAMES.map((name) => (
               <option key={name} value={name}>
@@ -94,24 +94,24 @@ export function RunNowButton({ onNotify }: RunNowButtonProps) {
             <h2 className="mb-2 text-section-heading text-text-primary">
               Trigger job?
             </h2>
-            <p className="mb-1 text-[13px] text-text-muted">
+            <p className="mb-1 text-body-default text-text-muted">
               This will start a new run of:
             </p>
-            <p className="mb-5 font-mono text-[13px] text-accent">
+            <p className="mb-5 font-mono text-data-value text-accent">
               {selectedJob}
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setPhase("select")}
                 disabled={triggerJob.isPending}
-                className="rounded-control border border-border bg-transparent px-4 py-2 text-sm text-text-muted transition-colors hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-control border border-border bg-transparent px-4 py-2 text-body-default text-text-muted transition-colors hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={triggerJob.isPending}
-                className="rounded-control bg-accent px-4 py-2 text-sm font-medium text-bg-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-control bg-accent px-4 py-2 text-body-default font-medium text-bg-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {triggerJob.isPending ? "Triggering…" : "Trigger"}
               </button>

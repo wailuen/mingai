@@ -27,7 +27,7 @@ function SeverityChip({ severity, count, colorClass, bgClass }: SeverityChipProp
         bgClass,
       )}
     >
-      <span className={cn("font-mono text-[14px] font-medium", colorClass)}>
+      <span className={cn("font-mono text-data-value font-medium", colorClass)}>
         {count}
       </span>
       <span className={cn("text-[11px] font-medium uppercase tracking-wider", colorClass)}>
@@ -63,7 +63,7 @@ export function AlertSummary({ className }: AlertSummaryProps) {
   if (error) {
     return (
       <div className={cn("rounded-card border border-border bg-bg-surface p-5", className)}>
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load alerts: {error.message}
         </p>
       </div>
@@ -92,7 +92,7 @@ export function AlertSummary({ className }: AlertSummaryProps) {
       </p>
 
       {allClear ? (
-        <p className="text-sm font-semibold text-accent">All Clear</p>
+        <p className="text-body-default font-semibold text-accent">All Clear</p>
       ) : (
         <div className="flex gap-2">
           <SeverityChip

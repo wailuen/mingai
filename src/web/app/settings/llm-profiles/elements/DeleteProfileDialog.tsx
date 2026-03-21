@@ -52,27 +52,27 @@ export function DeleteProfileDialog({
         </div>
 
         <div className="p-5">
-          <p className="text-sm text-text-muted">
+          <p className="text-body-default text-text-muted">
             Are you sure you want to delete{" "}
             <span className="font-medium text-text-primary">
               {profile.name}
             </span>
             ? This action cannot be undone.
           </p>
-          {error && <p className="mt-3 text-sm text-alert">{error}</p>}
+          {error && <p className="mt-3 text-body-default text-alert">{error}</p>}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
           <button
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="rounded-control border border-alert/30 bg-alert-dim px-4 py-1.5 text-sm font-semibold text-alert transition-opacity disabled:opacity-50"
+            className="rounded-control border border-alert/30 bg-alert-dim px-4 py-1.5 text-body-default font-semibold text-alert transition-opacity disabled:opacity-50"
           >
             {deleting ? "Deleting..." : "Delete"}
           </button>

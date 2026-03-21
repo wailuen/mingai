@@ -45,7 +45,7 @@ function DeleteConfirmPopover({
 }) {
   return (
     <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-card border border-border bg-bg-surface p-3">
-      <p className="mb-3 text-sm text-text-primary">
+      <p className="mb-3 text-body-default text-text-primary">
         Delete <span className="font-semibold">{termName}</span>? This cannot be
         undone.
       </p>
@@ -103,7 +103,7 @@ export function TermList({
     columnHelper.accessor("term", {
       header: "Term",
       cell: (info) => (
-        <span className="text-sm font-medium text-text-primary">
+        <span className="text-body-default font-medium text-text-primary">
           {info.getValue()}
         </span>
       ),
@@ -115,7 +115,7 @@ export function TermList({
         const val = info.getValue() ?? "";
         const truncated = val.length > 60 ? `${val.slice(0, 60)}...` : val;
         return (
-          <span className="text-sm text-text-muted" title={val}>
+          <span className="text-body-default text-text-muted" title={val}>
             {truncated || "\u2014"}
           </span>
         );
@@ -243,7 +243,7 @@ export function TermList({
             <tr>
               <td
                 colSpan={6}
-                className="px-3.5 py-12 text-center text-sm text-text-faint"
+                className="px-3.5 py-12 text-center text-body-default text-text-faint"
               >
                 No glossary terms yet. Add your first term or import from CSV.
               </td>

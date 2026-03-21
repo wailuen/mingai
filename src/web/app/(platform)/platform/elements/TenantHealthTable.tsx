@@ -15,14 +15,14 @@ import { LineChart, Line } from "recharts";
 
 function HealthScoreBadge({ score }: { score: number | null }) {
   if (score === null) {
-    return <span className="font-mono text-[13px] text-text-faint">--</span>;
+    return <span className="font-mono text-data-value text-text-faint">--</span>;
   }
 
   const colorClass =
     score >= 70 ? "text-accent" : score >= 50 ? "text-warn" : "text-alert";
 
   return (
-    <span className={cn("font-mono text-[13px] font-medium", colorClass)}>
+    <span className={cn("font-mono text-data-value font-medium", colorClass)}>
       {Math.round(score)}
     </span>
   );
@@ -123,7 +123,7 @@ function SkeletonRow() {
 function TenantRow({ tenant }: { tenant: AtRiskTenant }) {
   return (
     <tr className="border-b border-border-faint transition-colors hover:bg-accent-dim">
-      <td className="px-3.5 py-3 text-[13px] font-medium text-text-primary">
+      <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
         {tenant.name}
       </td>
       <td className="px-3.5 py-3">
@@ -133,7 +133,7 @@ function TenantRow({ tenant }: { tenant: AtRiskTenant }) {
         <TrendSparkline tenantId={tenant.tenant_id} />
       </td>
       <td className="px-3.5 py-3">
-        <span className="font-mono text-[12px] text-text-muted">
+        <span className="font-mono text-data-value text-text-muted">
           {tenant.weeks_at_risk} {tenant.weeks_at_risk === 1 ? "week" : "weeks"}
         </span>
       </td>
@@ -153,7 +153,7 @@ export function TenantHealthTable() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load at-risk tenants: {error.message}
       </p>
     );
@@ -198,7 +198,7 @@ export function TenantHealthTable() {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-3.5 py-8 text-center text-sm text-text-faint"
+                  className="px-3.5 py-8 text-center text-body-default text-text-faint"
                 >
                   No at-risk tenants
                 </td>

@@ -27,14 +27,14 @@ export default function ToolCatalogPage() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-page-title text-text-primary">Tool Catalog</h1>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-1 text-body-default text-text-muted">
               Register, monitor, and manage MCP tools
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowRegisterForm(true)}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={16} />
             Register Tool

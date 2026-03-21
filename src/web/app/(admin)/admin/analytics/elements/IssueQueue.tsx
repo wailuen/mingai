@@ -52,7 +52,7 @@ function statusBadge(status: Issue["status"]) {
   };
 
   return (
-    <span className={`text-[12px] font-medium ${colorMap[status]}`}>
+    <span className={`text-body-default font-medium ${colorMap[status]}`}>
       {labelMap[status]}
     </span>
   );
@@ -95,7 +95,7 @@ export function IssueQueue({
         <h2 className="mb-2 text-[15px] font-semibold text-text-primary">
           Issue Queue
         </h2>
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load issues: {error.message}
         </p>
       </div>
@@ -173,7 +173,7 @@ export function IssueQueue({
               <tr>
                 <td
                   colSpan={4}
-                  className="py-12 text-center text-sm text-text-faint"
+                  className="py-12 text-center text-body-default text-text-faint"
                 >
                   No issues found
                 </td>
@@ -188,11 +188,11 @@ export function IssueQueue({
                   }`}
                 >
                   <td className="py-3 pr-3">{severityBadge(issue.severity)}</td>
-                  <td className="py-3 pr-4 text-[13px] font-medium text-text-primary">
+                  <td className="py-3 pr-4 text-body-default font-medium text-text-primary">
                     {issue.title}
                   </td>
                   <td className="py-3 pr-4">{statusBadge(issue.status)}</td>
-                  <td className="hidden py-3 font-mono text-[12px] text-text-muted sm:table-cell">
+                  <td className="hidden py-3 font-mono text-data-value text-text-muted sm:table-cell">
                     {formatDate(issue.created_at)}
                   </td>
                 </tr>

@@ -40,7 +40,7 @@ function ChartTooltip({ active, payload, label }: CustomTooltipProps) {
       <p className="text-[11px] text-text-faint">
         {label ? formatDateLabel(label) : ""}
       </p>
-      <p className="font-mono text-sm font-medium text-text-primary">
+      <p className="font-mono text-body-default font-medium text-text-primary">
         {payload[0].value.toFixed(1)}%
       </p>
     </div>
@@ -64,7 +64,7 @@ export function MarginChart({ period }: MarginChartProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load margin trend: {error.message}
       </p>
     );
@@ -77,7 +77,7 @@ export function MarginChart({ period }: MarginChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-card border border-border bg-bg-surface">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No margin data available for this period
         </p>
       </div>

@@ -66,7 +66,7 @@ export function TenantLLMConfig({
 
       {/* Error state */}
       {error && (
-        <p className="text-sm text-alert">
+        <p className="text-body-default text-alert">
           Failed to load LLM config: {error.message}
         </p>
       )}
@@ -103,7 +103,7 @@ export function TenantLLMConfig({
             </span>
             {currentProfile ? (
               <span
-                className="relative cursor-default text-[13px] font-medium text-text-primary"
+                className="relative cursor-default text-body-default font-medium text-text-primary"
                 onMouseEnter={() => setHoveredProfile(currentProfile.id)}
                 onMouseLeave={() => setHoveredProfile(null)}
               >
@@ -120,7 +120,7 @@ export function TenantLLMConfig({
                 )}
               </span>
             ) : (
-              <span className="text-[13px] text-text-faint">
+              <span className="text-body-default text-text-faint">
                 {isByollm
                   ? "Tenant provides own keys"
                   : currentProfileId
@@ -136,7 +136,7 @@ export function TenantLLMConfig({
               <span className="text-label-nav uppercase text-text-faint">
                 Provider
               </span>
-              <span className="text-[13px] text-text-muted">
+              <span className="text-body-default text-text-muted">
                 {currentProfile.provider === "azure_openai"
                   ? "Azure OpenAI"
                   : currentProfile.provider === "openai_direct"

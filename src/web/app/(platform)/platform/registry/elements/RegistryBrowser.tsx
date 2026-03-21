@@ -83,7 +83,7 @@ export function RegistryBrowser() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search agents by name, description, or capability..."
-            className="w-full rounded-control border border-border bg-bg-elevated py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+            className="w-full rounded-control border border-border bg-bg-elevated py-2 pl-9 pr-3 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
           />
         </div>
 
@@ -98,7 +98,7 @@ export function RegistryBrowser() {
 
         {/* Error */}
         {error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load registry: {error.message}
           </p>
         )}
@@ -118,7 +118,7 @@ export function RegistryBrowser() {
         {/* Empty state */}
         {!isPending && agents.length === 0 && !error && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-sm text-text-faint">
+            <p className="text-body-default text-text-faint">
               No agents match the current filters
             </p>
             <button

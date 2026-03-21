@@ -95,7 +95,7 @@ export function SourceStatusCard({
             )}
           />
           <div className="min-w-0">
-            <span className="text-sm font-medium text-text-primary">
+            <span className="text-body-default font-medium text-text-primary">
               {label}
             </span>
             {/* Detail row — hidden on mobile, visible sm+ */}

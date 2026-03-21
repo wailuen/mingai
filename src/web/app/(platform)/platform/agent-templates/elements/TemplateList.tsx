@@ -101,7 +101,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
         accessorKey: "name",
         header: "Name",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
           </span>
         ),
@@ -111,7 +111,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
         accessorKey: "category",
         header: "Category",
         cell: (info) => (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-body-default text-text-muted">
             {info.getValue<string | null>() ?? "--"}
           </span>
         ),
@@ -144,7 +144,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
           const val = info.getValue<string | null>();
           if (!val) return <span className="text-text-faint">--</span>;
           return (
-            <span className="font-mono text-[11px] text-text-faint">
+            <span className="font-mono text-data-value text-text-faint">
               {new Date(val).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -193,7 +193,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load templates: {error.message}
       </p>
     );
@@ -234,7 +234,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No templates yet
                 </td>
@@ -260,7 +260,7 @@ export function TemplateList({ statusFilter, onEdit }: TemplateListProps) {
 
       {data && items.length > 0 && (
         <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             Showing {items.length} of {data.total} templates
           </p>
         </div>

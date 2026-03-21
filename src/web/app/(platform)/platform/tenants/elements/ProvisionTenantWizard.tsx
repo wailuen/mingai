@@ -122,7 +122,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                   value={name}
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder="Acme Corporation"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -135,7 +135,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                   value={slug}
                   onChange={(e) => setSlug(slugify(e.target.value))}
                   placeholder="acme-corporation"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-muted placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -150,7 +150,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                       type="button"
                       onClick={() => setPlan(option.value)}
                       className={cn(
-                        "rounded-control border px-4 py-2 text-sm transition-colors",
+                        "rounded-control border px-4 py-2 text-body-default transition-colors",
                         plan === option.value
                           ? "border-accent bg-accent-dim text-accent"
                           : "border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:text-text-primary",
@@ -171,7 +171,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   placeholder="admin@acme.com"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
             </div>
@@ -180,7 +180,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
           {/* Step 2: Configuration */}
           {step === 2 && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Optional configuration. These can be changed later in tenant
                 settings.
               </p>
@@ -192,7 +192,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                 <select
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary focus:border-accent focus:outline-none"
                 >
                   <option value="UTC">UTC</option>
                   <option value="America/New_York">Eastern Time (US)</option>
@@ -216,7 +216,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                   onChange={(e) => setMaxUsers(e.target.value)}
                   placeholder="50"
                   min={1}
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
               </div>
             </div>
@@ -225,7 +225,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
           {/* Step 3: Review */}
           {step === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 Review the details below and confirm provisioning.
               </p>
 
@@ -235,13 +235,13 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Name
                     </dt>
-                    <dd className="text-sm text-text-primary">{name}</dd>
+                    <dd className="text-body-default text-text-primary">{name}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Slug
                     </dt>
-                    <dd className="font-mono text-sm text-text-muted">
+                    <dd className="font-mono text-body-default text-text-muted">
                       {slug || slugify(name)}
                     </dd>
                   </div>
@@ -249,7 +249,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Plan
                     </dt>
-                    <dd className="font-mono text-sm capitalize text-text-primary">
+                    <dd className="font-mono text-body-default capitalize text-text-primary">
                       {plan}
                     </dd>
                   </div>
@@ -257,7 +257,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                     <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                       Contact
                     </dt>
-                    <dd className="font-mono text-sm text-text-muted">
+                    <dd className="font-mono text-body-default text-text-muted">
                       {contactEmail}
                     </dd>
                   </div>
@@ -266,7 +266,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                       <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                         Timezone
                       </dt>
-                      <dd className="font-mono text-sm text-text-muted">
+                      <dd className="font-mono text-body-default text-text-muted">
                         {timezone}
                       </dd>
                     </div>
@@ -276,7 +276,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                       <dt className="text-[11px] uppercase tracking-wider text-text-faint">
                         Max Users
                       </dt>
-                      <dd className="font-mono text-sm text-text-primary">
+                      <dd className="font-mono text-body-default text-text-primary">
                         {maxUsers}
                       </dd>
                     </div>
@@ -305,7 +305,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                 type="button"
                 onClick={handleBack}
                 disabled={createMutation.isPending}
-                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
               >
                 <ChevronLeft size={14} />
                 Back
@@ -318,7 +318,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
               >
                 Cancel
               </button>
@@ -329,7 +329,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                 type="button"
                 onClick={handleNext}
                 disabled={step === 1 && !canProceedStep1}
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 Next
                 <ChevronRight size={14} />
@@ -341,7 +341,7 @@ export function ProvisionTenantWizard({ onClose }: ProvisionTenantWizardProps) {
                 type="button"
                 onClick={handleProvision}
                 disabled={createMutation.isPending}
-                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 {createMutation.isPending ? (
                   "Provisioning..."

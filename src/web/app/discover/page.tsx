@@ -47,7 +47,7 @@ export default function DiscoverPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Agent Registry</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Discover AI agents for your workspace
           </p>
         </div>
@@ -63,7 +63,7 @@ export default function DiscoverPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search agents by name or description..."
-            className="w-full rounded-control border border-border bg-bg-elevated py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
+            className="w-full rounded-control border border-border bg-bg-elevated py-2 pl-9 pr-3 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-ring"
           />
         </div>
 
@@ -74,7 +74,7 @@ export default function DiscoverPage() {
 
         {/* Error state */}
         {error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load agents: {error.message}
           </p>
         )}
@@ -110,7 +110,7 @@ export default function DiscoverPage() {
         {/* Empty state */}
         {!isPending && agents && agents.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-sm text-text-faint">
+            <p className="text-body-default text-text-faint">
               No agents found matching your search
             </p>
           </div>

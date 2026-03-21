@@ -19,7 +19,7 @@ export default function PlatformDashboardPage() {
           <h1 className="text-page-title text-text-primary">
             Platform Dashboard
           </h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Overview of platform health and tenant activity
           </p>
         </div>

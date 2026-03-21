@@ -15,7 +15,7 @@ export function StillHappeningPrompt({ reportId }: StillHappeningPromptProps) {
   if (mutation.isSuccess) {
     return (
       <div className="mt-4 rounded-control border border-accent-ring bg-accent-dim px-4 py-3">
-        <p className="text-sm text-accent">
+        <p className="text-body-default text-accent">
           Regression reported. The team will investigate.
         </p>
       </div>
@@ -46,7 +46,7 @@ export function StillHappeningPrompt({ reportId }: StillHappeningPromptProps) {
             onChange={(e) => setComment(e.target.value)}
             placeholder="Describe what you're seeing..."
             rows={2}
-            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
           />
           {mutation.isError && (
             <p className="text-xs text-alert">

@@ -60,7 +60,7 @@ export function DailySavingsChart({ period }: DailySavingsChartProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load daily savings: {error.message}
       </p>
     );
@@ -73,7 +73,7 @@ export function DailySavingsChart({ period }: DailySavingsChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-8 text-center">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No daily savings data available for this period.
         </p>
       </div>

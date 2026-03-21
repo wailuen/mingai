@@ -25,10 +25,10 @@ function MissSignalRow({
 }) {
   return (
     <tr className="border-b border-border-faint transition-colors hover:bg-accent-dim">
-      <td className="px-3.5 py-3 font-mono text-sm text-text-primary">
+      <td className="px-3.5 py-3 font-mono text-body-default text-text-primary">
         {signal.term}
       </td>
-      <td className="px-3.5 py-3 font-mono text-sm text-accent">
+      <td className="px-3.5 py-3 font-mono text-body-default text-accent">
         {signal.occurrence_count}
       </td>
       <td className="px-3.5 py-3 font-mono text-xs text-text-muted">
@@ -68,7 +68,7 @@ export function MissSignalsPanel({ onAddTerm }: MissSignalsPanelProps) {
           <Loader2 size={20} className="animate-spin text-text-faint" />
         </div>
       ) : items.length === 0 ? (
-        <p className="py-8 text-center text-sm text-text-faint">
+        <p className="py-8 text-center text-body-default text-text-faint">
           No miss signals yet. Come back after your first conversations.
         </p>
       ) : (

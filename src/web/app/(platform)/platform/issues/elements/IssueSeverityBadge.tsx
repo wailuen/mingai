@@ -19,7 +19,7 @@ export function IssueSeverityBadge({ severity }: IssueSeverityBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-block rounded-control border px-2 py-0.5 font-mono text-[11px] uppercase",
+        "inline-block rounded-control border px-2 py-0.5 font-mono text-data-value uppercase",
         SEVERITY_STYLES[severity],
       )}
     >

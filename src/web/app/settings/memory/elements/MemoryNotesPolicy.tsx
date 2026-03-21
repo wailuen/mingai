@@ -34,7 +34,7 @@ export function MemoryNotesPolicy({
         {/* Main toggle */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-body-default font-medium text-text-primary">
               Enable memory notes
             </p>
             <p className="mt-1 text-xs text-text-muted">
@@ -72,7 +72,7 @@ export function MemoryNotesPolicy({
           <div className="ml-6 border-l border-border-faint pl-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-text-primary">
+                <p className="text-body-default font-medium text-text-primary">
                   Auto-extract from conversations
                 </p>
                 <p className="mt-1 text-xs text-text-muted">

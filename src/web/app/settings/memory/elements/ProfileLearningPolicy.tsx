@@ -29,14 +29,14 @@ export function ProfileLearningPolicy({
 
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-text-primary">
+          <p className="text-body-default font-medium text-text-primary">
             Enable profile learning workspace-wide
           </p>
           <p className="mt-1 text-xs text-text-muted">
             When enabled, the AI learns from each user&apos;s communication
             style and preferences to provide more personalized responses.
           </p>
-          <span className="mt-2 inline-block text-[10px] text-text-faint">
+          <span className="mt-2 inline-block text-[11px] text-text-faint">
             Default: On
           </span>
         </div>

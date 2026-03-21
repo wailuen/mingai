@@ -36,7 +36,7 @@ export function SLAAdherence({ period }: SLAAdherenceProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load SLA data: {error.message}
       </p>
     );
@@ -54,7 +54,7 @@ export function SLAAdherence({ period }: SLAAdherenceProps) {
           <Skeleton className="mx-auto mt-4 h-4 w-32" />
         </div>
       ) : !data ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No SLA data available for this period.
         </p>
       ) : (
@@ -106,7 +106,7 @@ export function SLAAdherence({ period }: SLAAdherenceProps) {
           {/* Summary stats */}
           <div className="mt-5 grid grid-cols-3 gap-4 text-center">
             <div>
-              <p className="font-mono text-sm text-text-primary">
+              <p className="font-mono text-body-default text-text-primary">
                 {data.target_pct}%
               </p>
               <p className="mt-0.5 text-[11px] uppercase tracking-wider text-text-faint">
@@ -114,7 +114,7 @@ export function SLAAdherence({ period }: SLAAdherenceProps) {
               </p>
             </div>
             <div>
-              <p className="font-mono text-sm text-accent">
+              <p className="font-mono text-body-default text-accent">
                 {data.resolved_in_sla}
               </p>
               <p className="mt-0.5 text-[11px] uppercase tracking-wider text-text-faint">
@@ -122,7 +122,7 @@ export function SLAAdherence({ period }: SLAAdherenceProps) {
               </p>
             </div>
             <div>
-              <p className="font-mono text-sm text-alert">
+              <p className="font-mono text-body-default text-alert">
                 {data.resolved_out_sla}
               </p>
               <p className="mt-0.5 text-[11px] uppercase tracking-wider text-text-faint">

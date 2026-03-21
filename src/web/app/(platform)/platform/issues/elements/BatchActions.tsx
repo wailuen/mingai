@@ -47,7 +47,7 @@ export function BatchActions({
       <span className="font-mono text-data-value font-medium text-accent">
         {selectedCount}
       </span>
-      <span className="text-[13px] text-text-muted">selected</span>
+      <span className="text-body-default text-text-muted">selected</span>
 
       {/* Divider */}
       <div className="h-5 w-px bg-border" />
@@ -56,7 +56,7 @@ export function BatchActions({
       <button
         type="button"
         onClick={onAssign}
-        className="flex items-center gap-1.5 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary"
+        className="flex items-center gap-1.5 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary"
       >
         <UserCheck size={14} />
         Assign to me
@@ -64,20 +64,20 @@ export function BatchActions({
 
       {showConfirm ? (
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-warn">
+          <span className="text-body-default text-warn">
             Resolve {selectedCount} issue{selectedCount !== 1 ? "s" : ""}?
           </span>
           <button
             type="button"
             onClick={handleConfirmResolve}
-            className="rounded-control bg-accent px-3 py-1 text-[12px] font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="rounded-control bg-accent px-3 py-1 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             Confirm
           </button>
           <button
             type="button"
             onClick={handleCancelResolve}
-            className="rounded-control border border-border px-3 py-1 text-[12px] text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
@@ -86,7 +86,7 @@ export function BatchActions({
         <button
           type="button"
           onClick={handleResolveClick}
-          className="flex items-center gap-1.5 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary"
+          className="flex items-center gap-1.5 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary"
         >
           <CheckCircle size={14} />
           Mark Resolved
@@ -96,7 +96,7 @@ export function BatchActions({
       <button
         type="button"
         onClick={onExport}
-        className="flex items-center gap-1.5 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary"
+        className="flex items-center gap-1.5 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary"
       >
         <Download size={14} />
         Export CSV
@@ -109,7 +109,7 @@ export function BatchActions({
       <button
         type="button"
         onClick={onClear}
-        className="flex items-center gap-1 rounded-control px-2 py-1 text-[12px] text-text-faint transition-colors hover:bg-bg-elevated hover:text-text-muted"
+        className="flex items-center gap-1 rounded-control px-2 py-1 text-body-default text-text-faint transition-colors hover:bg-bg-elevated hover:text-text-muted"
       >
         <X size={12} />
         Clear

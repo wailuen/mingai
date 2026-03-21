@@ -144,7 +144,7 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="user@company.com"
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
@@ -156,7 +156,7 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
                   onChange={(e) =>
                     setRole(e.target.value as "viewer" | "tenant_admin")
                   }
-                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none"
                 >
                   <option value="viewer">User</option>
                   <option value="tenant_admin">Admin</option>
@@ -165,7 +165,7 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <div className="space-y-4">
-              <label className="block cursor-pointer rounded-control border border-dashed border-border px-4 py-6 text-center text-sm text-text-faint transition-colors hover:border-accent-ring hover:bg-bg-elevated">
+              <label className="block cursor-pointer rounded-control border border-dashed border-border px-4 py-6 text-center text-body-default text-text-faint transition-colors hover:border-accent-ring hover:bg-bg-elevated">
                 <Upload size={20} className="mx-auto mb-2" />
                 {csvRows.length > 0
                   ? `${csvRows.length} rows parsed`
@@ -234,7 +234,7 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
         <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
           <button
             onClick={onClose}
-            className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+            className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
           >
             Cancel
           </button>
@@ -245,7 +245,7 @@ export function UserInviteModal({ onClose }: { onClose: () => void }) {
               (mode === "single" && !email.trim()) ||
               (mode === "csv" && validCount === 0)
             }
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
           >
             {submitting
               ? "Sending..."

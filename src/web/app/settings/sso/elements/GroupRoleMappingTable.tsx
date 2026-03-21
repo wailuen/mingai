@@ -141,7 +141,7 @@ export function GroupRoleMappingTable() {
 
   if (isPending) {
     return (
-      <div className="flex items-center gap-2 text-sm text-text-muted">
+      <div className="flex items-center gap-2 text-body-default text-text-muted">
         <Loader2 size={14} className="animate-spin" />
         Loading group mappings...
       </div>
@@ -150,7 +150,7 @@ export function GroupRoleMappingTable() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load group mappings: {error.message}
       </p>
     );
@@ -286,12 +286,12 @@ export function GroupRoleMappingTable() {
             }
           }}
           placeholder="IdP group name (e.g. finance-team)"
-          className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-primary placeholder:text-text-faint focus:outline-none focus:ring-1 focus:ring-accent-ring"
+          className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary placeholder:text-text-faint focus:outline-none focus:ring-1 focus:ring-accent-ring"
         />
         <select
           value={newRole}
           onChange={(e) => setNewRole(e.target.value as GroupRole)}
-          className="rounded-control border border-border bg-bg-elevated px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-ring"
+          className="rounded-control border border-border bg-bg-elevated px-2 py-1.5 text-body-default text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-ring"
         >
           {MAPPING_ROLE_OPTIONS.map((r) => (
             <option key={r} value={r}>
@@ -329,7 +329,7 @@ export function GroupRoleMappingTable() {
           type="button"
           onClick={handleSave}
           disabled={!isDirty || updateMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="inline-flex items-center gap-2 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {updateMutation.isPending && (
             <Loader2 size={13} className="animate-spin" />

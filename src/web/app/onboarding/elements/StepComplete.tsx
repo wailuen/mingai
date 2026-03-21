@@ -28,7 +28,7 @@ export function StepComplete({ onBack }: StepCompleteProps) {
       <h2 className="text-page-title text-text-primary">
         You&apos;re all set!
       </h2>
-      <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">
+      <p className="mt-2 max-w-md text-body-default leading-relaxed text-text-muted">
         Your workspace is ready. Start exploring your AI agents, connect
         knowledge sources, and invite your team as you go.
       </p>
@@ -46,14 +46,14 @@ export function StepComplete({ onBack }: StepCompleteProps) {
       <div className="mt-8 flex items-center gap-3">
         <button
           onClick={onBack}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
         >
           Back
         </button>
         <button
           onClick={handleComplete}
           disabled={completeMutation.isPending}
-          className="inline-flex items-center gap-1.5 rounded-control bg-accent px-6 py-2 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+          className="inline-flex items-center gap-1.5 rounded-control bg-accent px-6 py-2 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
         >
           {completeMutation.isPending && (
             <Loader2 size={14} className="animate-spin" />

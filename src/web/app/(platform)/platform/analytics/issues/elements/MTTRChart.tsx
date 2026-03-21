@@ -75,7 +75,7 @@ export function MTTRChart({ period }: MTTRChartProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load MTTR data: {error.message}
       </p>
     );
@@ -92,7 +92,7 @@ export function MTTRChart({ period }: MTTRChartProps) {
           <Skeleton className="h-[260px] w-full" />
         </div>
       ) : !data || data.length === 0 ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No MTTR data available for this period.
         </p>
       ) : (

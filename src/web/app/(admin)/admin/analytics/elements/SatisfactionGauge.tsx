@@ -32,7 +32,9 @@ export function SatisfactionGauge({ data, isPending }: SatisfactionGaugeProps) {
     const count = data.total_ratings ?? 0;
     return (
       <div className="rounded-card border border-border-faint bg-bg-surface p-6">
-        <p className="text-sm font-medium text-text-muted">Collecting data…</p>
+        <p className="text-body-default font-medium text-text-muted">
+          Collecting data…
+        </p>
         <p className="mt-1 text-xs text-text-faint">
           {count} rating{count !== 1 ? "s" : ""} so far — 50+ needed for a
           reliable score.
@@ -49,7 +51,7 @@ export function SatisfactionGauge({ data, isPending }: SatisfactionGaugeProps) {
   if (!hasData) {
     return (
       <div className="rounded-card border border-border-faint bg-bg-surface p-6">
-        <p className="text-sm text-text-muted">
+        <p className="text-body-default text-text-muted">
           Not enough data. Analytics available after 50 rated responses.
         </p>
       </div>

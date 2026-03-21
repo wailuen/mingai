@@ -102,7 +102,7 @@ function ToolUsageAnalytics({ tool }: { tool: Tool }) {
           <p className="text-[11px] uppercase tracking-wider text-text-faint">
             Invocations
           </p>
-          <p className="mt-1 font-mono text-sm text-text-primary">
+          <p className="mt-1 font-mono text-body-default text-text-primary">
             {tool.invocation_count.toLocaleString()}
           </p>
         </div>
@@ -112,7 +112,7 @@ function ToolUsageAnalytics({ tool }: { tool: Tool }) {
           </p>
           <p
             className={cn(
-              "mt-1 font-mono text-sm",
+              "mt-1 font-mono text-body-default",
               tool.error_rate_pct > 5 ? "text-alert" : "text-text-primary",
             )}
           >
@@ -123,7 +123,7 @@ function ToolUsageAnalytics({ tool }: { tool: Tool }) {
           <p className="text-[11px] uppercase tracking-wider text-text-faint">
             P50 Latency
           </p>
-          <p className="mt-1 font-mono text-sm text-text-primary">
+          <p className="mt-1 font-mono text-body-default text-text-primary">
             {tool.p50_latency_ms}ms
           </p>
         </div>
@@ -183,7 +183,7 @@ export function ToolList({ onView }: ToolListProps) {
         accessorKey: "name",
         header: "Name",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
           </span>
         ),
@@ -193,7 +193,7 @@ export function ToolList({ onView }: ToolListProps) {
         accessorKey: "provider",
         header: "Provider",
         cell: (info) => (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-body-default text-text-muted">
             {info.getValue<string>()}
           </span>
         ),
@@ -290,7 +290,7 @@ export function ToolList({ onView }: ToolListProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load tools: {error.message}
       </p>
     );
@@ -331,7 +331,7 @@ export function ToolList({ onView }: ToolListProps) {
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No tools registered yet
                 </td>
@@ -371,7 +371,7 @@ export function ToolList({ onView }: ToolListProps) {
 
       {data && data.length > 0 && (
         <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             {data.length} tool{data.length !== 1 ? "s" : ""} registered
           </p>
         </div>

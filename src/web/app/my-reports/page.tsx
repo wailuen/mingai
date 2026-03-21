@@ -34,7 +34,7 @@ export default function MyReportsPage() {
           {/* Error state */}
           {isError && (
             <div className="rounded-card border border-alert-dim bg-alert-dim px-5 py-4">
-              <p className="text-sm text-alert">
+              <p className="text-body-default text-alert">
                 Failed to load reports. Please try again later.
               </p>
             </div>

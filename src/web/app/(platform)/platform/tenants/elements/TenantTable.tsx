@@ -94,7 +94,7 @@ export function TenantTable() {
         accessorKey: "name",
         header: "Name",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
           </span>
         ),
@@ -161,7 +161,7 @@ export function TenantTable() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load tenants: {error.message}
       </p>
     );
@@ -202,7 +202,7 @@ export function TenantTable() {
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No tenants found. Create your first tenant to get started.
                 </td>
@@ -228,7 +228,7 @@ export function TenantTable() {
       {/* Pagination info */}
       {data && data.total > 0 && (
         <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             Showing {data.items.length} of {data.total} tenants
           </p>
         </div>

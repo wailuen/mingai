@@ -47,7 +47,7 @@ function CacheAnalyticsContent() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load cache analytics: {error.message}
       </p>
     );
@@ -65,7 +65,7 @@ function CacheAnalyticsContent() {
   if (!data) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-12 text-center">
-        <p className="text-sm text-text-muted">
+        <p className="text-body-default text-text-muted">
           No cache data available yet. Cache analytics will appear here once the
           system starts processing queries.
         </p>
@@ -91,7 +91,7 @@ export default function CacheAnalyticsPage() {
       <div className="p-7">
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Cache Analytics</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Monitor cache performance and query patterns
           </p>
         </div>

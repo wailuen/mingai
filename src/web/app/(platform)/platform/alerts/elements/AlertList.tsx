@@ -46,7 +46,7 @@ function AlertCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-text-primary">
+            <span className="text-body-default font-semibold text-text-primary">
               {alert.type}
             </span>
             <span
@@ -62,7 +62,7 @@ function AlertCard({
               {alert.severity}
             </span>
           </div>
-          <p className="mt-1 text-[13px] text-text-muted">{alert.message}</p>
+          <p className="mt-1 text-body-default text-text-muted">{alert.message}</p>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-text-faint">
             <span>{alert.tenant_name}</span>
             <span className="font-mono">{formatTime(alert.created_at)}</span>
@@ -79,7 +79,7 @@ function AlertCard({
               type="button"
               disabled={acknowledge.isPending}
               onClick={() => acknowledge.mutate(alert.id)}
-              className="rounded-control border border-border px-3 py-1 text-[12px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-50"
+              className="rounded-control border border-border px-3 py-1 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-50"
             >
               {acknowledge.isPending ? "..." : "Acknowledge"}
             </button>
@@ -87,7 +87,7 @@ function AlertCard({
           <button
             type="button"
             onClick={onConfigure}
-            className="rounded-control border border-border px-3 py-1 text-[12px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+            className="rounded-control border border-border px-3 py-1 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
           >
             Configure
           </button>
@@ -104,7 +104,7 @@ export function AlertList({ alerts, onConfigureAlert }: AlertListProps) {
   if (alerts.length === 0) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-12 text-center">
-        <p className="text-sm text-text-muted">
+        <p className="text-body-default text-text-muted">
           No alerts at this time. The system will generate alerts when
           configured thresholds are breached.
         </p>

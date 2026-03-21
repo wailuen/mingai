@@ -47,7 +47,7 @@ export default function MemoryPolicyPage() {
     return (
       <AppShell>
         <div className="p-7">
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load memory policy settings.
           </p>
         </div>
@@ -61,7 +61,7 @@ export default function MemoryPolicyPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Memory Settings</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Configure how AI memory and learning works across your workspace
           </p>
         </div>

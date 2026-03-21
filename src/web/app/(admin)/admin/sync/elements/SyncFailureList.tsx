@@ -26,7 +26,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
 
   if (isPending) {
     return (
-      <div className="flex items-center gap-2 text-sm text-text-muted">
+      <div className="flex items-center gap-2 text-body-default text-text-muted">
         <Loader2 size={14} className="animate-spin" />
         Loading sync failures...
       </div>
@@ -35,7 +35,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load sync failures: {error.message}
       </p>
     );
@@ -57,7 +57,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
       {failures.length === 0 && (
         <div className="flex flex-col items-center gap-2 rounded-card border border-border-faint bg-bg-surface p-8 text-center">
           <CheckCircle size={28} className="text-accent" />
-          <p className="text-sm text-text-muted">
+          <p className="text-body-default text-text-muted">
             No sync failures — all integrations healthy
           </p>
         </div>

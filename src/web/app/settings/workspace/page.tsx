@@ -152,7 +152,7 @@ export default function WorkspaceSettingsPage() {
           </div>
           <div className="flex items-center gap-2">
             {saved && (
-              <span className="flex items-center gap-1 text-sm text-accent">
+              <span className="flex items-center gap-1 text-body-default text-accent">
                 <CheckCircle2 size={14} />
                 Saved
               </span>
@@ -160,7 +160,7 @@ export default function WorkspaceSettingsPage() {
             <button
               onClick={handleSave}
               disabled={saving || !dirty}
-              className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+              className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
             >
               <Save size={14} />
               {saving ? "Saving..." : "Save Changes"}
@@ -182,7 +182,7 @@ export default function WorkspaceSettingsPage() {
                   updateField("tenant_name", e.target.value.slice(0, 100))
                 }
                 maxLength={100}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none"
               />
               <div className="mt-1 flex items-center justify-between">
                 <span className="text-xs text-text-faint">
@@ -215,7 +215,7 @@ export default function WorkspaceSettingsPage() {
               <label className="mb-1.5 block text-label-nav uppercase tracking-wider text-text-faint">
                 Current Plan
               </label>
-              <span className="inline-block rounded-badge border border-accent/30 bg-accent/10 px-3 py-1 font-mono text-sm font-medium text-accent">
+              <span className="inline-block rounded-badge border border-accent/30 bg-accent/10 px-3 py-1 font-mono text-body-default font-medium text-accent">
                 {form.plan || "Standard"}
               </span>
             </div>
@@ -250,7 +250,7 @@ export default function WorkspaceSettingsPage() {
               <select
                 value={form.locale}
                 onChange={(e) => updateField("locale", e.target.value)}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none"
               >
                 {SUPPORTED_LOCALES.map((loc) => (
                   <option key={loc.value} value={loc.value}>
@@ -270,7 +270,7 @@ export default function WorkspaceSettingsPage() {
                 onChange={(e) => updateField("welcome_message", e.target.value)}
                 rows={3}
                 placeholder="Good morning! What would you like to know today?"
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               />
             </div>
 
@@ -291,7 +291,7 @@ export default function WorkspaceSettingsPage() {
                   }
                   className="flex-1"
                 />
-                <span className="font-mono text-sm text-text-primary">
+                <span className="font-mono text-body-default text-text-primary">
                   {form.system_prompt_budget}
                 </span>
               </div>

@@ -29,7 +29,7 @@ export function AgentCard({
       </div>
 
       {/* Description */}
-      <p className="mb-3 line-clamp-2 text-sm text-text-muted">
+      <p className="mb-3 line-clamp-2 text-body-default text-text-muted">
         {agent.description}
       </p>
 

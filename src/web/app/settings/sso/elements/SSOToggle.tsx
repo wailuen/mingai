@@ -53,7 +53,7 @@ export function SSOToggle() {
 
   if (isPending) {
     return (
-      <div className="flex items-center gap-2 text-sm text-text-muted">
+      <div className="flex items-center gap-2 text-body-default text-text-muted">
         <Loader2 size={14} className="animate-spin" />
         Loading SSO status...
       </div>
@@ -62,7 +62,7 @@ export function SSOToggle() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load SSO status: {error.message}
       </p>
     );
@@ -104,7 +104,7 @@ export function SSOToggle() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="text-section-heading text-text-primary">SSO Status</h3>
-          <p className="mt-1 text-[13px] text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             SSO is currently{" "}
             <span
               className={
@@ -164,7 +164,7 @@ export function SSOToggle() {
             className="inline-flex items-center rounded-badge border border-border bg-bg-elevated px-2 py-0.5"
             title={data.auth0_connection_id}
           >
-            <span className="font-mono text-[11px] text-text-muted">
+            <span className="font-mono text-data-value text-text-muted">
               {data.auth0_connection_id}
             </span>
           </span>

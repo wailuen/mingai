@@ -33,7 +33,7 @@ export function TopQueriesTable({ period }: TopQueriesTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load top queries: {error.message}
       </p>
     );
@@ -46,7 +46,7 @@ export function TopQueriesTable({ period }: TopQueriesTableProps) {
   if (!data || data.length === 0) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-8 text-center">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No cached query patterns recorded yet.
         </p>
       </div>

@@ -31,7 +31,7 @@ export function ReportDetail({ reportId }: ReportDetailProps) {
   if (isError || !report) {
     return (
       <div className="px-4 py-4">
-        <p className="text-sm text-alert">Failed to load report details.</p>
+        <p className="text-body-default text-alert">Failed to load report details.</p>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function ReportDetail({ reportId }: ReportDetailProps) {
           href={report.github_issue_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-accent transition-colors hover:underline"
+          className="mb-3 inline-flex items-center gap-1.5 text-body-default text-accent transition-colors hover:underline"
         >
           <ExternalLink size={13} />
           View on GitHub

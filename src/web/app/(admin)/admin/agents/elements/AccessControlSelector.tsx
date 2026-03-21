@@ -178,7 +178,7 @@ export function AccessControlSelector({
                   )}
                 </span>
                 <span
-                  className={`text-sm font-medium ${
+                  className={`text-body-default font-medium ${
                     isActive ? "text-text-primary" : "text-text-muted"
                   }`}
                 >
@@ -263,7 +263,7 @@ export function AccessControlSelector({
                     onBlur={handleSearchBlur}
                     maxLength={100}
                     placeholder="Search users by name or email..."
-                    className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                    className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                   />
                 </div>
 
@@ -290,7 +290,7 @@ export function AccessControlSelector({
                           key={user.id}
                           disabled={alreadyAdded}
                           onClick={() => addUser(user)}
-                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-body-default transition-colors ${
                             alreadyAdded
                               ? "text-text-faint opacity-50"
                               : "text-text-primary hover:bg-bg-elevated"

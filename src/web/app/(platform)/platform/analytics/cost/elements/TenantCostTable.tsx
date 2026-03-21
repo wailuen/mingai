@@ -146,7 +146,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
         accessorKey: "tenant_name",
         header: "Tenant",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
           </span>
         ),
@@ -156,7 +156,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
         accessorKey: "plan",
         header: "Plan",
         cell: (info) => (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-body-default text-text-muted">
             {info.getValue<string>()}
           </span>
         ),
@@ -241,7 +241,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load tenant costs: {error.message}
       </p>
     );
@@ -299,7 +299,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No tenant cost data available for this period.
                 </td>
@@ -325,7 +325,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
       {/* Footer */}
       {data && data.length > 0 && (
         <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             {data.length} tenant{data.length !== 1 ? "s" : ""}
           </p>
         </div>

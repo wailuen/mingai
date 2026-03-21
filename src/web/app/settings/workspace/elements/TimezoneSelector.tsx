@@ -62,7 +62,7 @@ export function TimezoneSelector({ value, onChange }: TimezoneSelectorProps) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-left text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
+        className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-left text-body-default text-text-primary transition-colors focus:border-accent focus:outline-none"
       >
         {value || "Select timezone..."}
       </button>
@@ -77,13 +77,13 @@ export function TimezoneSelector({ value, onChange }: TimezoneSelectorProps) {
                 placeholder="Search timezones..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 autoFocus
               />
             </div>
             <div className="max-h-48 overflow-y-auto p-1">
               {filtered.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-text-faint">
+                <div className="px-3 py-2 text-body-default text-text-faint">
                   No timezones found
                 </div>
               ) : (
@@ -95,7 +95,7 @@ export function TimezoneSelector({ value, onChange }: TimezoneSelectorProps) {
                       setOpen(false);
                       setSearch("");
                     }}
-                    className={`w-full rounded-control px-3 py-1.5 text-left text-sm transition-colors ${
+                    className={`w-full rounded-control px-3 py-1.5 text-left text-body-default transition-colors ${
                       tz === value
                         ? "bg-accent-dim text-accent"
                         : "text-text-muted hover:bg-bg-elevated hover:text-text-primary"

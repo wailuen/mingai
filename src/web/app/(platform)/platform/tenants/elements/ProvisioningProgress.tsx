@@ -203,7 +203,7 @@ export function ProvisioningProgress({
             <div className="flex min-h-[28px] items-center gap-2 pb-6">
               <span
                 className={cn(
-                  "text-[13px] font-medium",
+                  "text-body-default font-medium",
                   step.status === "done" && "text-text-primary",
                   step.status === "active" && "text-accent",
                   step.status === "failed" && "text-alert",

@@ -34,7 +34,7 @@ export default function TenantDetailPage({
         {/* Back link */}
         <Link
           href="/platform/tenants"
-          className="mb-5 inline-flex items-center gap-1.5 text-sm text-text-muted transition-colors hover:text-text-primary"
+          className="mb-5 inline-flex items-center gap-1.5 text-body-default text-text-muted transition-colors hover:text-text-primary"
         >
           <ArrowLeft size={14} />
           Back to Tenants
@@ -45,7 +45,7 @@ export default function TenantDetailPage({
 
         {/* Error state */}
         {error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load tenant: {error.message}
           </p>
         )}

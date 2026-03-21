@@ -193,7 +193,7 @@ export function BulkImportDialog({ onClose }: BulkImportDialogProps) {
                     dragOver ? "text-accent" : "text-text-faint",
                   )}
                 />
-                <p className="text-sm text-text-muted">
+                <p className="text-body-default text-text-muted">
                   Drop a CSV file here, or click to browse
                 </p>
                 <p className="mt-1 text-xs text-text-faint">
@@ -262,13 +262,13 @@ export function BulkImportDialog({ onClose }: BulkImportDialogProps) {
                   <tbody>
                     {parsedRows.slice(0, 5).map((row, i) => (
                       <tr key={i} className="border-b border-border-faint">
-                        <td className="px-3 py-1.5 text-sm text-text-primary">
+                        <td className="px-3 py-1.5 text-body-default text-text-primary">
                           {row.term || "\u2014"}
                         </td>
-                        <td className="px-3 py-1.5 text-sm text-text-muted">
+                        <td className="px-3 py-1.5 text-body-default text-text-muted">
                           {row.full_form || "\u2014"}
                         </td>
-                        <td className="max-w-[200px] truncate px-3 py-1.5 text-sm text-text-muted">
+                        <td className="max-w-[200px] truncate px-3 py-1.5 text-body-default text-text-muted">
                           {row.definition || "\u2014"}
                         </td>
                         <td className="px-3 py-1.5 text-xs">
@@ -296,14 +296,14 @@ export function BulkImportDialog({ onClose }: BulkImportDialogProps) {
               )}
 
               <div className="space-y-1">
-                <p className="text-sm text-text-primary">
+                <p className="text-body-default text-text-primary">
                   <span className="font-mono text-accent">
                     {result.imported}
                   </span>{" "}
                   terms imported
                 </p>
                 {result.skipped > 0 && (
-                  <p className="text-sm text-text-muted">
+                  <p className="text-body-default text-text-muted">
                     <span className="font-mono">{result.skipped}</span> skipped
                     (duplicates)
                   </p>
@@ -331,7 +331,7 @@ export function BulkImportDialog({ onClose }: BulkImportDialogProps) {
           {step === "upload" && (
             <button
               onClick={onClose}
-              className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+              className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
             >
               Cancel
             </button>
@@ -345,14 +345,14 @@ export function BulkImportDialog({ onClose }: BulkImportDialogProps) {
                   setParsedRows([]);
                   setSelectedFile(null);
                 }}
-                className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+                className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
               >
                 Back
               </button>
               <button
                 onClick={handleImport}
                 disabled={validCount === 0 || importMutation.isPending}
-                className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+                className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
               >
                 {importMutation.isPending
                   ? "Importing..."
@@ -364,7 +364,7 @@ export function BulkImportDialog({ onClose }: BulkImportDialogProps) {
           {step === "result" && (
             <button
               onClick={onClose}
-              className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+              className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
             >
               Close
             </button>

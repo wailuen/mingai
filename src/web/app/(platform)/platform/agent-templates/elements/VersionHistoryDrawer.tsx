@@ -81,7 +81,7 @@ export function VersionHistoryDrawer({
           type="button"
           onClick={handleCreateVersion}
           disabled={createVersionMutation.isPending}
-          className="flex w-full items-center justify-center gap-1.5 rounded-control border border-border px-4 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
+          className="flex w-full items-center justify-center gap-1.5 rounded-control border border-border px-4 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
         >
           {createVersionMutation.isPending ? (
             <Loader2 size={14} className="animate-spin" />
@@ -119,14 +119,14 @@ export function VersionHistoryDrawer({
 
         {/* Error state */}
         {error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load versions: {error.message}
           </p>
         )}
 
         {/* Empty state */}
         {versions && versions.length === 0 && (
-          <p className="text-sm text-text-faint">
+          <p className="text-body-default text-text-faint">
             No version history available.
           </p>
         )}
@@ -140,7 +140,7 @@ export function VersionHistoryDrawer({
                 className="rounded-control border border-border bg-bg-elevated p-3"
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-medium text-text-primary">
+                  <span className="font-mono text-body-default font-medium text-text-primary">
                     v{version.version}
                   </span>
                   <StatusBadge status={version.status} />
@@ -153,12 +153,12 @@ export function VersionHistoryDrawer({
                 )}
 
                 {version.system_prompt_preview && (
-                  <p className="mt-1 line-clamp-1 font-mono text-[11px] text-text-faint">
+                  <p className="mt-1 line-clamp-1 font-mono text-data-value text-text-faint">
                     {version.system_prompt_preview}
                   </p>
                 )}
 
-                <p className="mt-2 font-mono text-[11px] text-text-faint">
+                <p className="mt-2 font-mono text-data-value text-text-faint">
                   {formatDateTime(version.created_at)}
                 </p>
               </div>

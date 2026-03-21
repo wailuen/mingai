@@ -51,7 +51,7 @@ function RequestActions({ request }: { request: AccessRequestItem }) {
 
   if (request.status !== "pending") {
     return (
-      <span className="font-mono text-[11px] text-text-faint">
+      <span className="font-mono text-data-value text-text-faint">
         {request.admin_note ?? "\u2014"}
       </span>
     );
@@ -181,7 +181,7 @@ export function AccessRequestsTab() {
 
       {/* Error */}
       {error && (
-        <p className="mb-4 text-sm text-alert">
+        <p className="mb-4 text-body-default text-alert">
           Failed to load access requests: {error.message}
         </p>
       )}
@@ -223,7 +223,7 @@ export function AccessRequestsTab() {
               <tr>
                 <td
                   colSpan={7}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No access requests{" "}
                   {statusFilter !== "all"
@@ -242,11 +242,11 @@ export function AccessRequestsTab() {
                   <td className="px-3.5 py-3">
                     <div>
                       {req.requester_name && (
-                        <p className="text-[13px] font-medium text-text-primary">
+                        <p className="text-body-default font-medium text-text-primary">
                           {req.requester_name}
                         </p>
                       )}
-                      <p className="font-mono text-[11px] text-text-faint">
+                      <p className="font-mono text-data-value text-text-faint">
                         {req.requester_email ?? req.user_id}
                       </p>
                     </div>
@@ -254,7 +254,7 @@ export function AccessRequestsTab() {
 
                   {/* Resource */}
                   <td className="px-3.5 py-3">
-                    <span className="font-mono text-[12px] text-text-muted">
+                    <span className="font-mono text-data-value text-text-muted">
                       {req.resource_id.slice(0, 8)}&hellip;
                     </span>
                   </td>
@@ -274,7 +274,7 @@ export function AccessRequestsTab() {
                   {/* Justification — hidden on mobile */}
                   <td className="hidden px-3.5 py-3 sm:table-cell">
                     <span
-                      className="block max-w-[200px] truncate text-[13px] text-text-muted"
+                      className="block max-w-[200px] truncate text-body-default text-text-muted"
                       title={req.justification}
                     >
                       {req.justification || "\u2014"}
@@ -312,7 +312,7 @@ export function AccessRequestsTab() {
 
         {data && data.total > 0 && (
           <div className="border-t border-border px-4 py-2.5">
-            <p className="font-mono text-[11px] text-text-faint">
+            <p className="font-mono text-data-value text-text-faint">
               {data.total} total request{data.total !== 1 ? "s" : ""}
             </p>
           </div>

@@ -104,14 +104,14 @@ export function BulkAddMembers({
 
         {/* Success */}
         {successCount !== null && (
-          <div className="mx-5 mt-4 rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-sm text-accent">
+          <div className="mx-5 mt-4 rounded-control border border-accent/30 bg-accent-dim px-3 py-2 text-body-default text-accent">
             {successCount} member{successCount !== 1 ? "s" : ""} added
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="mx-5 mt-4 rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-sm text-alert">
+          <div className="mx-5 mt-4 rounded-control border border-alert/30 bg-alert-dim px-3 py-2 text-body-default text-alert">
             {error}
           </div>
         )}
@@ -148,7 +148,7 @@ export function BulkAddMembers({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or email..."
-              className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
               autoFocus
             />
           </div>
@@ -168,7 +168,7 @@ export function BulkAddMembers({
           ) : availableUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <Users size={24} className="mb-2 text-text-faint" />
-              <p className="text-sm text-text-faint">
+              <p className="text-body-default text-text-faint">
                 {search
                   ? "No matching users found"
                   : "All workspace users are already in this team"}
@@ -186,7 +186,7 @@ export function BulkAddMembers({
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-text-primary">
+                    <p className="truncate text-body-default font-medium text-text-primary">
                       {user.name}
                     </p>
                     <p className="truncate font-mono text-xs text-text-faint">
@@ -207,14 +207,14 @@ export function BulkAddMembers({
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+              className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={selectedUsers.length === 0 || bulkAddMutation.isPending}
-              className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+              className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
             >
               {bulkAddMutation.isPending && (
                 <Loader2 size={14} className="animate-spin" />

@@ -16,7 +16,7 @@ export function StepWelcome({ onNext }: StepWelcomeProps) {
       <h2 className="text-page-title text-text-primary">
         Welcome to {PRODUCT_NAME}
       </h2>
-      <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">
+      <p className="mt-2 max-w-md text-body-default leading-relaxed text-text-muted">
         Your AI-powered workspace for intelligent document retrieval,
         multi-agent collaboration, and streamlined workflows. Let us help you
         get set up.
@@ -24,7 +24,7 @@ export function StepWelcome({ onNext }: StepWelcomeProps) {
 
       <button
         onClick={onNext}
-        className="mt-8 rounded-control bg-accent px-6 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+        className="mt-8 rounded-control bg-accent px-6 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
       >
         Let&apos;s get started
       </button>

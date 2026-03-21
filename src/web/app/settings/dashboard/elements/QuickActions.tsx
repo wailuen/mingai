@@ -90,7 +90,7 @@ export function QuickActions() {
                 <Icon size={16} className="text-accent" />
               </div>
               <div>
-                <span className="block text-sm font-medium text-text-primary">
+                <span className="block text-body-default font-medium text-text-primary">
                   {action.label}
                 </span>
                 <span className="block text-xs text-text-faint">

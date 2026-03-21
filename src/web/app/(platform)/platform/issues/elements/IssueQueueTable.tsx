@@ -121,7 +121,7 @@ export function IssueQueueTable({
         accessorKey: "tenant_name",
         header: "Tenant",
         cell: (info) => (
-          <span className="text-[13px] font-medium text-text-primary">
+          <span className="text-body-default font-medium text-text-primary">
             {info.getValue<string>()}
           </span>
         ),
@@ -131,7 +131,7 @@ export function IssueQueueTable({
         accessorKey: "title",
         header: "Title",
         cell: (info) => (
-          <span className="text-[13px] text-text-primary">
+          <span className="text-body-default text-text-primary">
             {info.getValue<string>()}
           </span>
         ),
@@ -141,7 +141,7 @@ export function IssueQueueTable({
         accessorKey: "status",
         header: "Status",
         cell: (info) => (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-body-default text-text-muted">
             {statusLabel(info.getValue<string>())}
           </span>
         ),
@@ -151,7 +151,7 @@ export function IssueQueueTable({
         accessorKey: "ai_classification",
         header: "AI Classification",
         cell: (info) => (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-body-default text-text-muted">
             {info.getValue<string>()}
           </span>
         ),
@@ -182,7 +182,7 @@ export function IssueQueueTable({
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load issues: {error.message}
       </p>
     );
@@ -223,7 +223,7 @@ export function IssueQueueTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-sm text-text-faint"
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
                   No issues found matching the current filters.
                 </td>
@@ -249,7 +249,7 @@ export function IssueQueueTable({
 
       {data && data.length > 0 && (
         <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-[11px] text-text-faint">
+          <p className="font-mono text-data-value text-text-faint">
             {data.length} issue{data.length !== 1 ? "s" : ""}
           </p>
         </div>

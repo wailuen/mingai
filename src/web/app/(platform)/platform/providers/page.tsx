@@ -33,7 +33,7 @@ export default function ProvidersPage() {
             <h1 className="text-page-title text-text-primary">
               LLM Providers
             </h1>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-1 text-body-default text-text-muted">
               {providers.length > 0
                 ? `${providers.length} provider${providers.length !== 1 ? "s" : ""}`
                 : "Configure LLM provider credentials for the platform"}
@@ -42,7 +42,7 @@ export default function ProvidersPage() {
           <button
             type="button"
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={16} />
             Add Provider

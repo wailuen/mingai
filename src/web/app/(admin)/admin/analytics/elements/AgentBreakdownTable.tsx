@@ -87,7 +87,7 @@ export function AgentBreakdownTable() {
       </h2>
 
       {sorted.length === 0 ? (
-        <p className="text-sm text-text-muted">No agent data yet</p>
+        <p className="text-body-default text-text-muted">No agent data yet</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -125,15 +125,15 @@ export function AgentBreakdownTable() {
                   key={agent.agent_id}
                   className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
-                  <td className="py-3 pr-4 text-[13px] font-medium text-text-primary">
+                  <td className="py-3 pr-4 text-body-default font-medium text-text-primary">
                     {agent.agent_name}
                   </td>
                   <td
-                    className={`py-3 pr-4 font-mono text-[13px] ${satisfactionColor(agent.satisfaction_pct)}`}
+                    className={`py-3 pr-4 font-mono text-data-value ${satisfactionColor(agent.satisfaction_pct)}`}
                   >
                     {agent.satisfaction_pct.toFixed(1)}%
                   </td>
-                  <td className="py-3 pr-4 font-mono text-[13px] text-text-primary">
+                  <td className="py-3 pr-4 font-mono text-data-value text-text-primary">
                     {agent.total_ratings.toLocaleString()}
                   </td>
                   <td className="hidden py-3 sm:table-cell">

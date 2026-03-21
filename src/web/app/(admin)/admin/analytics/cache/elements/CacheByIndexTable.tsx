@@ -41,7 +41,7 @@ export function CacheByIndexTable({ period }: CacheByIndexTableProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load index breakdown: {error.message}
       </p>
     );
@@ -54,7 +54,7 @@ export function CacheByIndexTable({ period }: CacheByIndexTableProps) {
   if (!data || data.length === 0) {
     return (
       <div className="rounded-card border border-border bg-bg-surface p-8 text-center">
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No per-index cache data available for this period.
         </p>
       </div>

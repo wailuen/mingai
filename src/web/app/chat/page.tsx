@@ -78,7 +78,7 @@ export default function ChatPage() {
       <ErrorBoundary
         fallback={
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-alert">
+            <p className="text-body-default text-alert">
               Chat failed to load. Please refresh the page.
             </p>
           </div>

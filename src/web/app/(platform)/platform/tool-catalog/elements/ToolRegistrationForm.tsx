@@ -115,7 +115,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. SharePoint Reader"
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -130,7 +130,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
               onChange={(e) => setMcpEndpoint(e.target.value)}
               placeholder="https://tools.example.com/mcp"
               className={cn(
-                "w-full rounded-control border bg-bg-elevated px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-faint focus:outline-none",
+                "w-full rounded-control border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:outline-none",
                 !endpointValid
                   ? "border-alert focus:border-alert"
                   : "border-border focus:border-accent",
@@ -151,7 +151,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
             <select
               value={authType}
               onChange={(e) => setAuthType(e.target.value as AuthType)}
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary focus:border-accent focus:outline-none"
             >
               {AUTH_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -188,7 +188,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
                   <div>
                     <span
                       className={cn(
-                        "text-sm font-medium",
+                        "text-body-default font-medium",
                         safetyClass === opt.value
                           ? "text-text-primary"
                           : "text-text-muted",
@@ -222,7 +222,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
               onChange={(e) => setCapabilities(e.target.value)}
               placeholder="search documents, read files, query database"
               rows={3}
-              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
             />
             <p className="mt-1 text-[11px] text-text-faint">
               Comma-separated list of capabilities
@@ -246,7 +246,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-control border border-border px-4 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+            className="rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
           >
             Cancel
           </button>
@@ -254,7 +254,7 @@ export function ToolRegistrationForm({ onClose }: ToolRegistrationFormProps) {
             type="button"
             onClick={handleRegister}
             disabled={!canRegister || registerMutation.isPending}
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
           >
             {registerMutation.isPending ? "Registering..." : "Register & Test"}
           </button>

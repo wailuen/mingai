@@ -60,7 +60,7 @@ export default function GlossaryPage() {
         {/* Page header */}
         <div className="mb-1">
           <h1 className="text-page-title text-text-primary">Glossary</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Define terms to improve AI response accuracy
           </p>
         </div>
@@ -81,7 +81,7 @@ export default function GlossaryPage() {
                 setSearchInput(e.target.value);
                 setPagination((prev) => ({ ...prev, pageIndex: 0 }));
               }}
-              className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+              className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -92,7 +92,7 @@ export default function GlossaryPage() {
               setStatusFilter(e.target.value);
               setPagination((prev) => ({ ...prev, pageIndex: 0 }));
             }}
-            className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-muted transition-colors focus:border-accent focus:outline-none"
+            className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors focus:border-accent focus:outline-none"
           >
             <option value="">All Status</option>
             <option value="active">Active</option>
@@ -106,7 +106,7 @@ export default function GlossaryPage() {
           <button
             onClick={() => exportMutation.mutate()}
             disabled={exportMutation.isPending}
-            className="flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
+            className="flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
           >
             {exportMutation.isPending ? (
               <Loader2 size={14} className="animate-spin" />
@@ -119,7 +119,7 @@ export default function GlossaryPage() {
           {/* Import CSV */}
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+            className="flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
           >
             <Upload size={14} />
             Import CSV
@@ -131,7 +131,7 @@ export default function GlossaryPage() {
               setEditingTerm(null);
               setShowAddForm(true);
             }}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             <Plus size={14} />
             Add Term

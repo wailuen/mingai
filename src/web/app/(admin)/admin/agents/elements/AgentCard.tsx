@@ -37,7 +37,7 @@ export function AgentCard({ template, onPreview, onDeploy }: AgentCardProps) {
       )}
 
       {/* Description */}
-      <p className="line-clamp-2 text-sm leading-relaxed text-text-muted">
+      <p className="line-clamp-2 text-body-default leading-relaxed text-text-muted">
         {template.description ?? "No description available."}
       </p>
 
@@ -59,13 +59,13 @@ export function AgentCard({ template, onPreview, onDeploy }: AgentCardProps) {
       <div className="mt-auto flex items-center justify-between pt-1">
         <button
           onClick={() => onPreview(template)}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
         >
           Preview
         </button>
         <button
           onClick={() => onDeploy(template)}
-          className="rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+          className="rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
         >
           Deploy &rarr;
         </button>

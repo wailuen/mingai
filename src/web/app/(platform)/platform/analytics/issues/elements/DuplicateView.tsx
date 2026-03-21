@@ -31,7 +31,7 @@ function ClusterRow({ cluster }: { cluster: DuplicateCluster }) {
       >
         <ExpandIcon size={14} className="shrink-0 text-text-faint" />
 
-        <span className="flex-1 text-sm font-medium text-text-primary">
+        <span className="flex-1 text-body-default font-medium text-text-primary">
           {cluster.title}
         </span>
 
@@ -87,7 +87,7 @@ export function DuplicateView({ period }: DuplicateViewProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load duplicate clusters: {error.message}
       </p>
     );
@@ -106,7 +106,7 @@ export function DuplicateView({ period }: DuplicateViewProps) {
           ))}
         </div>
       ) : !clusters || clusters.length === 0 ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No duplicate clusters found for this period.
         </p>
       ) : (

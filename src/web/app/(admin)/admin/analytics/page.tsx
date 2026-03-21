@@ -39,19 +39,19 @@ export default function AnalyticsPage() {
         {/* Page header */}
         <div>
           <h1 className="text-page-title text-text-primary">Analytics</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Feedback monitoring and response quality insights
           </p>
         </div>
 
         {/* Error states */}
         {satisfaction.error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load satisfaction data: {satisfaction.error.message}
           </p>
         )}
         {lowConfidence.error && (
-          <p className="text-sm text-alert">
+          <p className="text-body-default text-alert">
             Failed to load low-confidence data: {lowConfidence.error.message}
           </p>
         )}

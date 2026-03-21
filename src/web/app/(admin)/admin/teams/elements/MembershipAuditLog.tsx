@@ -68,7 +68,7 @@ export function MembershipAuditLog({ teamId }: MembershipAuditLogProps) {
 
   if (error) {
     return (
-      <div className="py-4 text-center text-sm text-alert">
+      <div className="py-4 text-center text-body-default text-alert">
         Failed to load audit log: {error.message}
       </div>
     );
@@ -76,7 +76,7 @@ export function MembershipAuditLog({ teamId }: MembershipAuditLogProps) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-[13px] font-semibold text-text-primary">
+      <h3 className="text-body-default font-semibold text-text-primary">
         Membership Audit Log
       </h3>
 
@@ -110,7 +110,7 @@ export function MembershipAuditLog({ teamId }: MembershipAuditLogProps) {
               <tr>
                 <td
                   colSpan={5}
-                  className="py-8 text-center text-sm text-text-faint"
+                  className="py-8 text-center text-body-default text-text-faint"
                 >
                   No membership changes recorded
                 </td>
@@ -121,15 +121,15 @@ export function MembershipAuditLog({ teamId }: MembershipAuditLogProps) {
                   key={entry.id}
                   className="border-b border-border-faint transition-colors hover:bg-accent-dim"
                 >
-                  <td className="py-2.5 pr-3 font-mono text-[12px] text-text-muted">
+                  <td className="py-2.5 pr-3 font-mono text-data-value text-text-muted">
                     {formatTimestamp(entry.timestamp)}
                   </td>
-                  <td className="py-2.5 pr-3 text-[13px] text-text-primary">
+                  <td className="py-2.5 pr-3 text-body-default text-text-primary">
                     {entry.actor}
                   </td>
                   <td className="py-2.5 pr-3">{sourceBadge(entry.source)}</td>
                   <td className="py-2.5 pr-3">{actionBadge(entry.action)}</td>
-                  <td className="py-2.5 text-[13px] font-medium text-text-primary">
+                  <td className="py-2.5 text-body-default font-medium text-text-primary">
                     {entry.member_name}
                   </td>
                 </tr>

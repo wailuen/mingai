@@ -185,7 +185,7 @@ export function SharePointWizard({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => setStep(Math.max(1, step - 1))}
             disabled={step === 1}
-            className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
+            className="flex items-center gap-1 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
           >
             <ChevronLeft size={14} />
             Back
@@ -195,7 +195,7 @@ export function SharePointWizard({ onClose }: { onClose: () => void }) {
             <button
               onClick={() => setStep(step + 1)}
               disabled={!canProceed}
-              className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+              className="flex items-center gap-1 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
             >
               Next
               <ChevronRight size={14} />
@@ -204,7 +204,7 @@ export function SharePointWizard({ onClose }: { onClose: () => void }) {
             <button
               onClick={handleConnect}
               disabled={connecting || selectedSiteIds.size === 0}
-              className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity disabled:opacity-30"
+              className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity disabled:opacity-30"
             >
               {connecting ? "Connecting..." : "Connect"}
             </button>
@@ -221,12 +221,12 @@ export function SharePointWizard({ onClose }: { onClose: () => void }) {
 function PermissionInstructions() {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-text-muted">
+      <p className="text-body-default text-text-muted">
         Before connecting, you need to register an application in Azure AD with
         SharePoint permissions. Follow these steps:
       </p>
 
-      <ol className="space-y-3 text-sm">
+      <ol className="space-y-3 text-body-default">
         <li className="flex gap-3">
           <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-bg-elevated font-mono text-xs text-accent">
             1
@@ -305,7 +305,7 @@ function PermissionInstructions() {
         href="https://learn.microsoft.com/en-us/graph/auth-register-app-v2"
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-2 inline-flex items-center gap-1 text-sm text-accent transition-colors hover:underline"
+        className="mt-2 inline-flex items-center gap-1 text-body-default text-accent transition-colors hover:underline"
       >
         Microsoft documentation
         <ExternalLink size={12} />
@@ -343,7 +343,7 @@ function CredentialEntry({
           value={siteUrl}
           onChange={(e) => onSiteUrlChange(e.target.value)}
           placeholder="https://company.sharepoint.com"
-          className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+          className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
         />
       </div>
       <div>
@@ -367,7 +367,7 @@ function CredentialEntry({
           value={clientSecret}
           onChange={(e) => onClientSecretChange(e.target.value)}
           placeholder="Enter client secret"
-          className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
+          className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
         />
         <p className="mt-1 text-xs text-text-faint">
           Credentials are encrypted and stored securely. They will not be
@@ -394,14 +394,14 @@ function ConnectionTest({
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-text-muted">
+      <p className="text-body-default text-text-muted">
         Test the connection to verify your credentials are correct.
       </p>
 
       <button
         onClick={onTest}
         disabled={testing}
-        className="w-full rounded-control border border-border px-4 py-2.5 text-sm text-text-primary transition-colors hover:bg-bg-elevated"
+        className="w-full rounded-control border border-border px-4 py-2.5 text-body-default text-text-primary transition-colors hover:bg-bg-elevated"
       >
         {testing ? (
           <span className="flex items-center justify-center gap-2">
@@ -419,14 +419,14 @@ function ConnectionTest({
       </button>
 
       {testResult === "success" && (
-        <div className="flex items-center gap-2 rounded-control border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+        <div className="flex items-center gap-2 rounded-control border border-accent/30 bg-accent/10 px-3 py-2 text-body-default text-accent">
           <CheckCircle2 size={14} />
           Connected successfully
         </div>
       )}
 
       {testResult === "error" && (
-        <div className="flex items-center gap-2 rounded-control border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert">
+        <div className="flex items-center gap-2 rounded-control border border-alert/30 bg-alert/10 px-3 py-2 text-body-default text-alert">
           <AlertCircle size={14} />
           {testError}
         </div>
@@ -449,13 +449,13 @@ function SiteSelector({
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-text-muted">
+      <p className="text-body-default text-text-muted">
         Select the SharePoint sites to index. Documents from these sites will be
         available for search.
       </p>
 
       {sites.length === 0 ? (
-        <div className="rounded-control border border-border-faint px-4 py-6 text-center text-sm text-text-faint">
+        <div className="rounded-control border border-border-faint px-4 py-6 text-center text-body-default text-text-faint">
           No sites discovered. The connection test may need to be re-run.
         </div>
       ) : (
@@ -472,7 +472,7 @@ function SiteSelector({
                 className="h-4 w-4 rounded border-border accent-accent"
               />
               <div>
-                <span className="text-sm font-medium text-text-primary">
+                <span className="text-body-default font-medium text-text-primary">
                   {site.name}
                 </span>
                 <span className="ml-2 font-mono text-xs text-text-faint">

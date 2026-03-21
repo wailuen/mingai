@@ -55,7 +55,7 @@ export function CloseDuplicateDialog({
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <Copy size={15} className="text-text-muted" />
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-body-default font-semibold text-text-primary">
               Close as Duplicate
             </h3>
           </div>
@@ -84,7 +84,7 @@ export function CloseDuplicateDialog({
             value={duplicateOf}
             onChange={(e) => setDuplicateOf(e.target.value)}
             placeholder="Paste the original issue ID here"
-            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm font-mono text-text-primary placeholder-text-faint transition-colors focus:border-accent focus:outline-none"
+            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default font-mono text-text-primary placeholder-text-faint transition-colors focus:border-accent focus:outline-none"
           />
           {trimmed.length > 0 && !isValidUuid && (
             <p className="mt-1 text-xs text-alert">

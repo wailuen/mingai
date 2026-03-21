@@ -69,7 +69,7 @@ function ConnectModal({ agent, onClose }: ConnectModalProps) {
         <h3 className="mb-1 text-section-heading text-text-primary">
           Connect to {agent.name}
         </h3>
-        <p className="mb-4 text-sm text-text-muted">
+        <p className="mb-4 text-body-default text-text-muted">
           Initiate an A2A connection request to this agent.
         </p>
 
@@ -79,10 +79,10 @@ function ConnectModal({ agent, onClose }: ConnectModalProps) {
               <p className="text-xs font-medium text-accent">
                 Connection request sent
               </p>
-              <p className="mt-1 font-mono text-[10px] text-text-faint">
+              <p className="mt-1 font-mono text-data-value text-text-faint">
                 Transaction ID: {success.txn_id}
               </p>
-              <p className="font-mono text-[10px] text-text-faint">
+              <p className="font-mono text-data-value text-text-faint">
                 Status: {success.status}
               </p>
             </div>
@@ -220,7 +220,7 @@ export function HARAgentCard({ agent, onConnect }: HARAgentCardProps) {
       </div>
 
       {/* Description */}
-      <p className="mb-4 line-clamp-2 text-[13px] text-text-muted">
+      <p className="mb-4 line-clamp-2 text-body-default text-text-muted">
         {agent.description}
       </p>
 
@@ -244,7 +244,7 @@ export function HARAgentCard({ agent, onConnect }: HARAgentCardProps) {
         <div className="flex items-baseline gap-1">
           <span
             className={cn(
-              "font-mono text-sm font-medium",
+              "font-mono text-body-default font-medium",
               trustScoreColor(agent.trust_score),
             )}
           >

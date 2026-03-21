@@ -64,7 +64,7 @@ export function IssueActions({ issueId, onActionComplete }: IssueActionsProps) {
             value={closeNote}
             onChange={(e) => setCloseNote(e.target.value)}
             placeholder="Reason for closing..."
-            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+            className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
           />
         </div>
       )}

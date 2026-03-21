@@ -79,7 +79,7 @@ export function TrendChart({ period }: TrendChartProps) {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load trend data: {error.message}
       </p>
     );
@@ -96,7 +96,7 @@ export function TrendChart({ period }: TrendChartProps) {
           <Skeleton className="h-[280px] w-full" />
         </div>
       ) : !data || data.length === 0 ? (
-        <p className="text-sm text-text-faint">
+        <p className="text-body-default text-text-faint">
           No trend data available for this period.
         </p>
       ) : (

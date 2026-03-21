@@ -24,7 +24,7 @@ export default function CostAnalyticsPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Cost Analytics</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Cross-tenant cost breakdown, revenue, and margin analysis
           </p>
         </div>

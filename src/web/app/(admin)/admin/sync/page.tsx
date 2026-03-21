@@ -35,7 +35,7 @@ export default function SyncHealthPage() {
         {/* Page header */}
         <div>
           <h1 className="text-page-title text-text-primary">Sync Health</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Document source sync status and health
           </p>
         </div>
@@ -54,21 +54,21 @@ export default function SyncHealthPage() {
         {/* Source cards */}
         <ErrorBoundary>
           {isPending && (
-            <div className="flex items-center gap-2 text-sm text-text-muted">
+            <div className="flex items-center gap-2 text-body-default text-text-muted">
               <Loader2 size={14} className="animate-spin" />
               Loading integrations...
             </div>
           )}
 
           {error && (
-            <p className="text-sm text-alert">
+            <p className="text-body-default text-alert">
               Failed to load integrations: {error.message}
             </p>
           )}
 
           {!isPending && !error && integrations.length === 0 && (
             <div className="rounded-card border border-border-faint bg-bg-surface p-8 text-center">
-              <p className="text-sm text-text-muted">
+              <p className="text-body-default text-text-muted">
                 No document sources connected. Connect a SharePoint library to
                 get started.
               </p>

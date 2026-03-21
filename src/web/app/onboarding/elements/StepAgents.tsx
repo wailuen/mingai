@@ -42,7 +42,7 @@ export function StepAgents({ onNext, onBack, onSkip }: StepAgentsProps) {
         <h2 className="text-section-heading text-text-primary">
           Explore Your First Agent
         </h2>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-1 text-body-default text-text-muted">
           Try one of these pre-built agents to see what your AI workspace can
           do.
         </p>
@@ -55,7 +55,7 @@ export function StepAgents({ onNext, onBack, onSkip }: StepAgentsProps) {
             className="flex items-center justify-between rounded-card border border-border bg-bg-elevated p-4 transition-colors hover:border-accent-ring"
           >
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-text-primary">
+              <h3 className="text-body-default font-semibold text-text-primary">
                 {agent.name}
               </h3>
               <p className="mt-0.5 text-xs text-text-muted">
@@ -76,20 +76,20 @@ export function StepAgents({ onNext, onBack, onSkip }: StepAgentsProps) {
       <div className="flex justify-between pt-2">
         <button
           onClick={onBack}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
         >
           Back
         </button>
         <div className="flex items-center gap-3">
           <button
             onClick={onSkip ?? onNext}
-            className="text-sm text-text-faint transition-colors hover:text-text-muted"
+            className="text-body-default text-text-faint transition-colors hover:text-text-muted"
           >
             Skip this step
           </button>
           <button
             onClick={onNext}
-            className="rounded-control bg-accent px-4 py-1.5 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90"
+            className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
           >
             Next
           </button>

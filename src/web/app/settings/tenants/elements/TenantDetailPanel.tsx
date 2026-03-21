@@ -112,7 +112,7 @@ export function TenantDetailPanel({ tenant, onClose }: TenantDetailPanelProps) {
             </h3>
             <div className="rounded-card border border-border bg-bg-elevated p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-text-muted">
+                <span className="text-body-default text-text-muted">
                   Primary Contact
                 </span>
                 <span className="font-mono text-data-value text-text-primary">
@@ -128,7 +128,7 @@ export function TenantDetailPanel({ tenant, onClose }: TenantDetailPanelProps) {
               Quick Actions
             </h3>
             <div className="space-y-2">
-              <button className="flex w-full items-center gap-2 rounded-control border border-border px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary">
+              <button className="flex w-full items-center gap-2 rounded-control border border-border px-3 py-2 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary">
                 <Pencil size={14} />
                 Edit Tenant
               </button>
@@ -138,7 +138,7 @@ export function TenantDetailPanel({ tenant, onClose }: TenantDetailPanelProps) {
               <button
                 onClick={handleSuspendToggle}
                 disabled={suspending}
-                className="flex w-full items-center gap-2 rounded-control border border-alert/30 px-3 py-2 text-sm text-alert transition-colors hover:bg-alert-dim disabled:opacity-50"
+                className="flex w-full items-center gap-2 rounded-control border border-alert/30 px-3 py-2 text-body-default text-alert transition-colors hover:bg-alert-dim disabled:opacity-50"
               >
                 <Shield size={14} />
                 {suspending
@@ -172,7 +172,7 @@ function DetailRow({
       <span className="text-xs text-text-faint">{label}</span>
       <span
         className={cn(
-          "ml-auto text-sm text-text-primary",
+          "ml-auto text-body-default text-text-primary",
           mono && "font-mono text-data-value",
         )}
       >

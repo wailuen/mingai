@@ -37,7 +37,7 @@ export default function RegistryManagementPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-page-title text-text-primary">Agent Registry</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Browse the Human-Agent Registry or manage published workspace agents
           </p>
         </div>

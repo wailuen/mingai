@@ -27,7 +27,7 @@ export function AgentFilterBar({ selected, onSelect }: AgentFilterBarProps) {
           <button
             key={cat}
             onClick={() => onSelect(value)}
-            className={`rounded-control px-3 py-1.5 text-sm transition-colors ${
+            className={`rounded-control px-3 py-1.5 text-body-default transition-colors ${
               isActive
                 ? "border border-accent-ring bg-accent-dim text-text-primary"
                 : "border border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:bg-accent-dim hover:text-text-primary"

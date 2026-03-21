@@ -36,7 +36,7 @@ export function AlertConfigPanel({ alert, onClose }: AlertConfigPanelProps) {
             <h2 className="text-section-heading text-text-primary">
               Configure Alert
             </h2>
-            <p className="mt-0.5 text-[12px] text-text-muted">{alert.type}</p>
+            <p className="mt-0.5 text-body-default text-text-muted">{alert.type}</p>
           </div>
           <button
             type="button"
@@ -51,8 +51,8 @@ export function AlertConfigPanel({ alert, onClose }: AlertConfigPanelProps) {
         <div className="flex-1 overflow-y-auto p-5">
           {/* Alert info */}
           <div className="mb-6 rounded-card border border-border bg-bg-base p-4">
-            <p className="text-[13px] text-text-muted">{alert.message}</p>
-            <div className="mt-2 flex items-center gap-3 font-mono text-[11px] text-text-faint">
+            <p className="text-body-default text-text-muted">{alert.message}</p>
+            <div className="mt-2 flex items-center gap-3 font-mono text-data-value text-text-faint">
               <span>Tenant: {alert.tenant_name}</span>
               <span>Current: {alert.current_value}</span>
             </div>
@@ -70,7 +70,7 @@ export function AlertConfigPanel({ alert, onClose }: AlertConfigPanelProps) {
                 step="any"
                 value={threshold}
                 onChange={(e) => setThreshold(e.target.value)}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-[13px] text-text-primary outline-none transition-colors focus:border-accent-ring"
+                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-data-value text-text-primary outline-none transition-colors focus:border-accent-ring"
               />
             </div>
             <p className="text-[11px] text-text-faint">
@@ -85,7 +85,7 @@ export function AlertConfigPanel({ alert, onClose }: AlertConfigPanelProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-control border border-border px-4 py-1.5 text-[13px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              className="rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
             >
               Cancel
             </button>
@@ -93,7 +93,7 @@ export function AlertConfigPanel({ alert, onClose }: AlertConfigPanelProps) {
               type="button"
               onClick={handleSave}
               disabled={configure.isPending}
-              className="rounded-control bg-accent px-4 py-1.5 text-[13px] font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {configure.isPending ? "Saving..." : "Save"}
             </button>

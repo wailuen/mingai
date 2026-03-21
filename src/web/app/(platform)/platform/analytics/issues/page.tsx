@@ -72,7 +72,7 @@ export default function IssueAnalyticsPage() {
           <h1 className="text-page-title text-text-primary">
             Issues Analytics
           </h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 text-body-default text-text-muted">
             Cross-tenant issue metrics, SLA compliance, and severity trends
           </p>
         </div>

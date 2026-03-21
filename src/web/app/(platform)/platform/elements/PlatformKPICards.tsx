@@ -42,7 +42,7 @@ export function PlatformKPICards() {
 
   if (error) {
     return (
-      <p className="text-sm text-alert">
+      <p className="text-body-default text-alert">
         Failed to load dashboard stats: {error.message}
       </p>
     );

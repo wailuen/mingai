@@ -21,7 +21,7 @@ function TestResultCard({ result }: { result: TemplateTestResult }) {
         <span className="text-[11px] uppercase tracking-wider text-text-faint">
           Prompt
         </span>
-        <p className="mt-0.5 text-sm text-text-muted">{result.prompt}</p>
+        <p className="mt-0.5 text-body-default text-text-muted">{result.prompt}</p>
       </div>
 
       {/* Response */}
@@ -36,7 +36,7 @@ function TestResultCard({ result }: { result: TemplateTestResult }) {
             </span>
           </div>
         ) : (
-          <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
+          <p className="mt-0.5 whitespace-pre-wrap text-body-default leading-relaxed text-text-primary">
             {result.response}
           </p>
         )}
@@ -61,10 +61,10 @@ function TestResultCard({ result }: { result: TemplateTestResult }) {
 
       {/* Metrics row (DM Mono) */}
       <div className="flex items-center gap-4 border-t border-border-faint pt-2">
-        <span className="font-mono text-[11px] text-text-faint">
+        <span className="font-mono text-data-value text-text-faint">
           {result.tokens_in} in / {result.tokens_out} out tokens
         </span>
-        <span className="font-mono text-[11px] text-text-faint">
+        <span className="font-mono text-data-value text-text-faint">
           {result.latency_ms}ms
         </span>
       </div>
@@ -155,7 +155,7 @@ export function TestHarnessPanel({
                       })
                     }
                     placeholder={`Value for {{${v.name}}}`}
-                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                    className="w-full rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                   />
                 </div>
               ))}
@@ -176,7 +176,7 @@ export function TestHarnessPanel({
                   onChange={(e) => updatePrompt(index, e.target.value)}
                   placeholder={`Test prompt ${index + 1}...`}
                   rows={2}
-                  className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                  className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
                 />
                 {prompts.length > 1 && (
                   <button
@@ -207,7 +207,7 @@ export function TestHarnessPanel({
           type="button"
           onClick={handleRun}
           disabled={!hasValidPrompts || testMutation.isPending}
-          className="flex w-full items-center justify-center gap-1.5 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
+          className="flex w-full items-center justify-center gap-1.5 rounded-control bg-accent px-4 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90 disabled:opacity-30"
         >
           {testMutation.isPending ? (
             <>

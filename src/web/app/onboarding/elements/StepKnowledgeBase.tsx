@@ -20,7 +20,7 @@ export function StepKnowledgeBase({
         <h2 className="text-section-heading text-text-primary">
           Connect Your Knowledge Base
         </h2>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-1 text-body-default text-text-muted">
           Connect a document source so your AI agents can access your
           organization&apos;s knowledge.
         </p>
@@ -33,7 +33,7 @@ export function StepKnowledgeBase({
           className="rounded-card border border-border bg-bg-elevated p-4 text-left transition-colors hover:border-accent-ring hover:bg-accent-dim"
         >
           <Database size={20} className="mb-2 text-text-muted" />
-          <h3 className="text-sm font-semibold text-text-primary">
+          <h3 className="text-body-default font-semibold text-text-primary">
             Connect SharePoint
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-text-muted">
@@ -47,7 +47,7 @@ export function StepKnowledgeBase({
           className="rounded-card border border-border-faint bg-bg-elevated p-4 text-left transition-colors hover:border-accent-ring hover:bg-accent-dim"
         >
           <SkipForward size={20} className="mb-2 text-text-faint" />
-          <h3 className="text-sm font-semibold text-text-primary">
+          <h3 className="text-body-default font-semibold text-text-primary">
             Skip for now
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-text-muted">
@@ -59,13 +59,13 @@ export function StepKnowledgeBase({
       <div className="flex justify-between pt-2">
         <button
           onClick={onBack}
-          className="rounded-control border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-bg-elevated"
+          className="rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated"
         >
           Back
         </button>
         <button
           onClick={onSkip ?? onNext}
-          className="text-sm text-text-faint transition-colors hover:text-text-muted"
+          className="text-body-default text-text-faint transition-colors hover:text-text-muted"
         >
           Skip this step
         </button>
