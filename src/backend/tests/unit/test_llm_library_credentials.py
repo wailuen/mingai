@@ -974,3 +974,232 @@ class TestDeleteLLMLibraryEntry:
                 )
 
         assert exc_info.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# SSRF validation tests
+# ---------------------------------------------------------------------------
+
+
+class TestAssertEndpointSsrfSafe:
+    """_assert_endpoint_ssrf_safe blocks private/loopback/link-local IPs."""
+
+    def test_public_hostname_raises_no_error(self):
+        """A hostname that resolves to a public IP should pass (mocked)."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        # Mock socket.getaddrinfo to return a public IP
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("8.8.8.8", 0))]
+        ):
+            # Should not raise
+            _assert_endpoint_ssrf_safe("https://ai.cognitiveservices.azure.com/")
+
+    def test_loopback_ip_raises(self):
+        """127.x.x.x is blocked."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("127.0.0.1", 0))]
+        ):
+            with pytest.raises(ValueError, match="non-routable"):
+                _assert_endpoint_ssrf_safe("https://localhost/")
+
+    def test_private_rfc1918_raises(self):
+        """192.168.x.x is blocked."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("192.168.1.1", 0))]
+        ):
+            with pytest.raises(ValueError, match="non-routable"):
+                _assert_endpoint_ssrf_safe("https://internal.corp/")
+
+    def test_link_local_raises(self):
+        """169.254.x.x (Azure IMDS, AWS metadata) is blocked."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            return_value=[(None, None, None, None, ("169.254.169.254", 0))]
+        ):
+            with pytest.raises(ValueError, match="non-routable"):
+                _assert_endpoint_ssrf_safe("https://metadata.internal/")
+
+    def test_missing_hostname_raises(self):
+        """A URL with no hostname raises ValueError immediately."""
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+
+        with pytest.raises(ValueError, match="hostname"):
+            _assert_endpoint_ssrf_safe("https:///path")
+
+    def test_dns_failure_raises(self):
+        """Unresolvable hostname raises ValueError."""
+        from unittest.mock import patch
+        from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
+        import socket
+
+        with patch.object(
+            socket, "getaddrinfo",
+            side_effect=socket.gaierror("Name or service not known")
+        ):
+            with pytest.raises(ValueError, match="Cannot resolve"):
+                _assert_endpoint_ssrf_safe("https://does-not-exist.invalid/")
+
+
+# ---------------------------------------------------------------------------
+# model_name change triggers last_test_passed_at reset
+# ---------------------------------------------------------------------------
+
+
+class TestModelNameChangeResetsTest:
+    """model_name change must set credential_changed=True → clear last_test_passed_at."""
+
+    @pytest.mark.asyncio
+    async def test_model_name_change_on_published_entry_clears_test(self):
+        """Changing model_name on a Published entry must reset last_test_passed_at."""
+        from datetime import datetime, timezone
+        from app.modules.platform.llm_library.routes import (
+            LLMLibraryEntry,
+            UpdateLLMLibraryRequest,
+            update_llm_library_entry,
+        )
+
+        now = datetime(2026, 3, 21, tzinfo=timezone.utc)
+        existing_entry = LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="openai_direct",
+            model_name="gpt-4o",
+            display_name="My Entry",
+            plan_tier="Professional",
+            is_recommended=False,
+            status="Published",
+            key_present=True,
+            last_test_passed_at=now.isoformat(),
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+        updated_entry = LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="openai_direct",
+            model_name="gpt-4o-mini",
+            display_name="My Entry",
+            plan_tier="Professional",
+            is_recommended=False,
+            status="Published",
+            key_present=True,
+            last_test_passed_at=None,  # cleared after update
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+        mock_db.commit = AsyncMock()
+
+        captured_sql = []
+
+        async def capture_execute(sql, params=None):
+            captured_sql.append(str(sql))
+            return mock_result
+
+        mock_db.execute.side_effect = capture_execute
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            side_effect=[existing_entry, updated_entry],
+        ):
+            result = await update_llm_library_entry(
+                entry_id=TEST_ENTRY_ID,
+                request=UpdateLLMLibraryRequest(model_name="gpt-4o-mini"),
+                current_user=mock_user,
+                db=mock_db,
+            )
+
+        # last_test_passed_at = NULL must appear in the SQL
+        update_sql = " ".join(captured_sql)
+        assert "last_test_passed_at = NULL" in update_sql
+        assert result.last_test_passed_at is None
+
+    @pytest.mark.asyncio
+    async def test_same_model_name_does_not_clear_test(self):
+        """Updating model_name to the SAME value should NOT clear last_test_passed_at."""
+        from datetime import datetime, timezone
+        from app.modules.platform.llm_library.routes import (
+            LLMLibraryEntry,
+            UpdateLLMLibraryRequest,
+            update_llm_library_entry,
+        )
+
+        now = datetime(2026, 3, 21, tzinfo=timezone.utc)
+        existing_entry = LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="openai_direct",
+            model_name="gpt-4o",
+            display_name="My Entry",
+            plan_tier="Professional",
+            is_recommended=False,
+            status="Published",
+            key_present=True,
+            last_test_passed_at=now.isoformat(),
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+        updated_entry = LLMLibraryEntry(
+            id=TEST_ENTRY_ID,
+            provider="openai_direct",
+            model_name="gpt-4o",
+            display_name="New Display Name",
+            plan_tier="Professional",
+            is_recommended=False,
+            status="Published",
+            key_present=True,
+            last_test_passed_at=now.isoformat(),
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+        mock_db.commit = AsyncMock()
+
+        captured_sql = []
+
+        async def capture_execute(sql, params=None):
+            captured_sql.append(str(sql))
+            return mock_result
+
+        mock_db.execute.side_effect = capture_execute
+        mock_user = MagicMock()
+
+        with patch(
+            "app.modules.platform.llm_library.routes._get_entry",
+            side_effect=[existing_entry, updated_entry],
+        ):
+            await update_llm_library_entry(
+                entry_id=TEST_ENTRY_ID,
+                request=UpdateLLMLibraryRequest(
+                    model_name="gpt-4o",  # same model
+                    display_name="New Display Name",
+                ),
+                current_user=mock_user,
+                db=mock_db,
+            )
+
+        update_sql = " ".join(captured_sql)
+        # last_test_passed_at should NOT be cleared for same model name
+        assert "last_test_passed_at = NULL" not in update_sql

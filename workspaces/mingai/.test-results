@@ -1,10 +1,10 @@
-commit: 3898afb (LLM Library redesign — red team fixes)
-timestamp: 2026-03-21T15:00:00Z
+commit: c226122 (LLM Library redesign — security hardening, error surfacing)
+timestamp: 2026-03-21T16:00:00Z
 baseline_pass: 2838
 baseline_fail: 7
-final_pass: 2842
+final_pass: 2850
 final_fail: 7
-new_tests: 4
+new_tests: 12
 regressions: 0
 command: pytest tests/unit/ --ignore=tests/unit/test_azure_cost_job.py --ignore=tests/unit/test_embedding_service.py --tb=short -q
 
@@ -16,11 +16,20 @@ Notes:
     - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
     - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
     - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
-  - Red team fixes (this update):
+  - Red team fixes (cumulative across this session):
     - HIGH-1 (prev session): E2E LLM-C-007 test response shape fixed (tokens_in/tokens_out, no all_passed)
     - HIGH-2: Added DELETE /platform/llm-library/{id} endpoint (Draft-only delete)
       - routes.py: delete_llm_library_entry() — 204 for Draft, 409 for Published/Deprecated
       - E2E tests LLM-C-001–005, LLM-C-008: cleanup changed from POST /deprecate to DELETE
-      - test_llm_library_credentials.py: 4 new unit tests for DELETE endpoint
+      - test_llm_library_credentials.py: 4 unit tests for DELETE endpoint
       - 01-api-reference.md: DELETE endpoint documented
     - HIGH-3: LibraryForm.tsx handlePublish() — removed api_key re-send that cleared last_test_passed_at
+    - Security H1: model_name change now sets credential_changed = True (re-test required)
+      - test_llm_library_credentials.py: 2 new unit tests (TestModelNameChangeResetsTest)
+    - Security H2: Publish gate WHERE clause now atomically validates api_key_encrypted IS NOT NULL
+      AND last_test_passed_at IS NOT NULL (TOCTOU fix)
+    - Security H3: Added _assert_endpoint_ssrf_safe() — DNS-resolves endpoint_url and blocks
+      private/loopback/link-local/reserved IPs before connecting
+      - test_llm_library_credentials.py: 6 new unit tests (TestAssertEndpointSsrfSafe)
+    - Value V1: Test harness now surfaces actual provider error str(exc)[:500] in 502 response
+      instead of generic "check server logs" message

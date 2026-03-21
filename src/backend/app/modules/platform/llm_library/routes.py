@@ -26,11 +26,14 @@ Security invariants:
     - api_key plaintext is cleared immediately after encryption in create/update handlers
 """
 import asyncio
+import ipaddress
 import re
+import socket
 import time
 import uuid
 from decimal import Decimal
 from typing import Optional
+from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -509,6 +512,9 @@ async def update_llm_library_entry(
     if "model_name" in updates and "model_name" in _UPDATE_ALLOWLIST:
         set_parts.append("model_name = :model_name")
         params["model_name"] = updates["model_name"]
+        # model_name change silently routes tenants to a different model — require re-test
+        if updates["model_name"] != entry.model_name:
+            credential_changed = True
     if "plan_tier" in updates and "plan_tier" in _UPDATE_ALLOWLIST:
         set_parts.append("plan_tier = :plan_tier")
         params["plan_tier"] = updates["plan_tier"]
@@ -619,16 +625,21 @@ async def publish_llm_library_entry(
             detail="pricing_per_1k_tokens_in and pricing_per_1k_tokens_out must be set before publishing",
         )
 
+    # Atomic publish: WHERE clause re-checks all gate conditions so a concurrent
+    # PATCH that clears credentials or last_test_passed_at is caught at DB commit time.
     result = await db.execute(
         text(
             "UPDATE llm_library SET status = 'Published', updated_at = NOW() "
-            "WHERE id = :id AND status = 'Draft'"
+            "WHERE id = :id AND status = 'Draft' "
+            "AND api_key_encrypted IS NOT NULL "
+            "AND last_test_passed_at IS NOT NULL"
         ),
         {"id": entry_id},
     )
     if (result.rowcount or 0) == 0:
         raise HTTPException(
-            status_code=409, detail="Could not publish entry (concurrent modification?)"
+            status_code=409,
+            detail="Could not publish entry — credentials or test result were modified concurrently.",
         )
 
     await db.commit()
@@ -733,6 +744,32 @@ def _calculate_test_cost(
     return round(cost, 8)
 
 
+def _assert_endpoint_ssrf_safe(endpoint_url: str) -> None:
+    """
+    Resolve the hostname in endpoint_url and raise ValueError if it resolves to
+    a private, loopback, or link-local address (SSRF prevention).
+
+    Only called at test-time — at field-validation time DNS resolution is not possible.
+    """
+    parsed = urlparse(endpoint_url)
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"endpoint_url has no hostname: {endpoint_url!r}")
+    try:
+        resolved_ip = socket.getaddrinfo(hostname, None)[0][4][0]
+    except socket.gaierror as exc:
+        raise ValueError(f"Cannot resolve endpoint_url hostname {hostname!r}: {exc}") from exc
+    try:
+        addr = ipaddress.ip_address(resolved_ip)
+    except ValueError as exc:
+        raise ValueError(f"Invalid resolved IP {resolved_ip!r}: {exc}") from exc
+    if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        raise ValueError(
+            f"endpoint_url {hostname!r} resolves to a non-routable address "
+            f"({resolved_ip}) — SSRF blocked"
+        )
+
+
 async def _run_single_test_prompt(
     prompt: str,
     provider: str,
@@ -755,6 +792,8 @@ async def _run_single_test_prompt(
     if provider == "azure_openai":
         from openai import AsyncAzureOpenAI
 
+        if endpoint_url:
+            _assert_endpoint_ssrf_safe(endpoint_url)
         client = AsyncAzureOpenAI(
             azure_endpoint=endpoint_url,
             api_key=api_key,
@@ -883,15 +922,23 @@ async def test_llm_library_profile(
             status_code=504,
             detail=f"LLM test calls exceeded {_TEST_TIMEOUT_SECONDS}s timeout.",
         )
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
+        # Surface the provider's actual error message (e.g. "Deployment not found",
+        # "Invalid API version") so the admin can self-diagnose without server log access.
+        # Truncate to 500 chars to prevent response flooding. The decrypted key is cleared
+        # in the finally block below — LLM client exceptions do not embed API keys in their
+        # error messages; they appear only in HTTP request headers.
+        provider_error = str(exc)[:500]
         logger.warning(
             "llm_library_test_failed",
             entry_id=entry_id,
-            error=str(exc),
+            error=provider_error,
         )
         raise HTTPException(
             status_code=502,
-            detail="LLM call failed — check server logs for details",
+            detail=f"LLM call failed: {provider_error}",
         )
     finally:
         decrypted_key = ""  # ALWAYS clear decrypted key
