@@ -365,7 +365,7 @@ class TestDeployPublishedTemplate:
                 headers=_tenant_headers(),
                 json={"template_id": TEST_TEMPLATE_ID, "name": "My HR Agent"},
             )
-        # Should succeed (201) or at minimum NOT return 422 for deprecation
-        assert resp.status_code != 422 or "deprecated" not in resp.json().get(
-            "detail", ""
-        ).lower()
+        # All mocks return success — a published template must deploy with 201
+        assert resp.status_code == 201, (
+            f"Expected 201, got {resp.status_code}: {resp.json()}"
+        )

@@ -171,11 +171,26 @@ class GuardrailsSchema(BaseModel):
             )
         for pattern in rule.get("patterns", []):
             try:
-                re.compile(pattern)
+                compiled = re.compile(pattern)
             except re.error as exc:
                 raise ValueError(
                     f"Invalid regex pattern '{pattern}': {exc}"
                 ) from exc
+            # ReDoS guard: run the compiled pattern against a known catastrophic
+            # backtracking input (30 'a' chars + 'b' — triggers exponential
+            # backtracking in patterns like (a+)+ or (a*)*). Use a thread with
+            # a 50ms timeout. Any legitimate pattern completes in microseconds.
+            import concurrent.futures as _cf
+            _REDOS_TEST = "a" * 30 + "b"
+            with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
+                _fut = _pool.submit(compiled.search, _REDOS_TEST)
+                try:
+                    _fut.result(timeout=0.05)
+                except _cf.TimeoutError:
+                    raise ValueError(
+                        f"Regex pattern '{pattern}' exhibits catastrophic backtracking "
+                        "(ReDoS). Simplify the pattern to avoid nested quantifiers."
+                    )
         return rule
 
 

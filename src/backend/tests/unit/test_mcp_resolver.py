@@ -155,6 +155,59 @@ async def test_non_existent_tool_caches_none_sentinel_and_returns_none():
 
 
 # ---------------------------------------------------------------------------
+# get_mcp_tool_config — Redis ConnectionError fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_redis_connection_error_falls_through_to_db():
+    """
+    When Redis raises ConnectionError on get(), the function falls through to
+    the DB and returns the config — Redis failure must never break tool resolution.
+    """
+    import redis as redis_lib
+    from app.modules.chat.mcp_resolver import get_mcp_tool_config
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(side_effect=redis_lib.exceptions.ConnectionError("Redis unreachable"))
+    redis.setex = AsyncMock()  # write may also fail; that's handled separately
+
+    db_row = (_TOOL_ID, "My Tool", "https://tool.example.com", "none", None)
+    db = _make_db(row=db_row)
+
+    result = await get_mcp_tool_config(_TOOL_ID, _TENANT_ID, redis, db)
+
+    # DB fallback succeeds — result is correct despite Redis being down
+    assert result is not None
+    assert result["id"] == _TOOL_ID
+    db.execute.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_redis_connection_error_on_write_still_returns_config():
+    """
+    When Redis raises ConnectionError on setex() (cache write), the function
+    still returns the config from DB — Redis write failure must not suppress result.
+    """
+    import redis as redis_lib
+    from app.modules.chat.mcp_resolver import get_mcp_tool_config
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=None)  # cache miss
+    redis.setex = AsyncMock(
+        side_effect=redis_lib.exceptions.ConnectionError("Redis unreachable")
+    )
+
+    db_row = (_TOOL_ID, "Slack", "https://slack.example.com", "oauth2", None)
+    db = _make_db(row=db_row)
+
+    result = await get_mcp_tool_config(_TOOL_ID, _TENANT_ID, redis, db)
+
+    assert result is not None
+    assert result["name"] == "Slack"
+
+
+# ---------------------------------------------------------------------------
 # invalidate_mcp_tool_cache
 # ---------------------------------------------------------------------------
 

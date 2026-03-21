@@ -62,25 +62,40 @@ def _is_private_ip(ip_str: str) -> bool:
 
 
 def _validate_ssrf_safe_url(url: str) -> None:
-    """RULE A2A-04: DNS resolution must happen on EVERY outbound HTTP call.
+    """RULE A2A-04: Validate URL does not target internal/private infrastructure.
 
-    This function MUST be called immediately before every external HTTP request,
-    not just at registration time. DNS rebinding attacks work by having the DNS
-    record resolve to a safe IP at registration time, then changing the IP to a
-    private address before the actual request. Pre-flight DNS checks are NOT
-    sufficient — they must be per-request.
+    For registration-time validation only (no HTTP request follows).
+    For outbound HTTP requests, use _resolve_ssrf_safe_url() instead — it
+    pins DNS to prevent rebinding between validation and request time.
 
     Import from app.modules.registry.a2a_routing — never reimplement inline.
     Reference: CWE-918 (SSRF), OWASP Testing Guide OTG-INPVAL-019.
 
-    Validate that a URL does not target internal/private infrastructure.
-
     Raises ValueError if the URL is SSRF-unsafe:
     - Hostname resolves to a private/reserved IP range
     - Hostname is localhost or a known metadata endpoint pattern
+    """
+    _resolve_ssrf_safe_url(url)  # validation-only call; return value discarded
 
-    This is a defence-in-depth check applied before outbound HTTP requests
-    in the A2A routing and health-check pipelines.
+
+def _resolve_ssrf_safe_url(url: str) -> tuple:
+    """RULE A2A-04 (DNS-pinned): Validate and resolve URL in a single DNS pass.
+
+    Eliminates the TOCTOU window between _validate_ssrf_safe_url() and the
+    actual httpx request. httpx would re-resolve DNS independently; an attacker
+    can serve a safe IP at validation time then flip the DNS record to a private
+    IP for the actual request (DNS rebinding, CWE-918).
+
+    This function resolves once, validates the result, and returns the URL with
+    the hostname substituted by the resolved IP. The caller MUST:
+      1. Use the returned safe_url for the HTTP request (no further DNS lookup)
+      2. Pass the returned host_header as the HTTP Host header
+
+    Returns:
+        (safe_url, host_header) — safe_url has the IP in place of the hostname;
+        host_header is the original hostname for the Host header.
+
+    Raises ValueError if the URL is SSRF-unsafe.
     """
     try:
         parsed = urllib.parse.urlparse(url)
@@ -91,19 +106,7 @@ def _validate_ssrf_safe_url(url: str) -> None:
     if not hostname:
         raise ValueError("URL has no hostname.")
 
-    # Reject explicit IP literals in blocked ranges immediately
-    try:
-        addr = ipaddress.ip_address(hostname)
-        if _is_private_ip(str(addr)):
-            raise ValueError(
-                f"A2A endpoint hostname '{hostname}' resolves to a "
-                "blocked private/reserved IP address."
-            )
-        return  # Numeric IP that is public — allow
-    except ValueError as exc:
-        # Re-raise our own SSRF error, not the ip_address() parse error
-        if "blocked private" in str(exc):
-            raise
+    port = parsed.port
 
     # Reject well-known internal hostnames without DNS resolution
     _blocked_hostnames = {
@@ -117,11 +120,25 @@ def _validate_ssrf_safe_url(url: str) -> None:
             f"A2A endpoint hostname '{hostname}' targets a blocked internal endpoint."
         )
 
-    # Resolve hostname and validate the resulting IP(s)
+    # Reject explicit IP literals in blocked ranges immediately
+    try:
+        addr = ipaddress.ip_address(hostname)
+        if _is_private_ip(str(addr)):
+            raise ValueError(
+                f"A2A endpoint hostname '{hostname}' resolves to a "
+                "blocked private/reserved IP address."
+            )
+        # Already an IP literal — no rebinding possible; return as-is
+        return url, hostname
+    except ValueError as exc:
+        if "blocked private" in str(exc):
+            raise
+        # Not an IP literal — resolve hostname below
+
+    # Single DNS resolution — validate ALL returned IPs, then pin to first
     try:
         resolved = socket.getaddrinfo(hostname, None)
     except socket.gaierror:
-        # If DNS resolution fails, fail closed
         raise ValueError(f"A2A endpoint hostname '{hostname}' could not be resolved.")
 
     for _fam, _typ, _proto, _canon, sockaddr in resolved:
@@ -131,6 +148,19 @@ def _validate_ssrf_safe_url(url: str) -> None:
                 f"A2A endpoint hostname '{hostname}' resolves to private IP "
                 f"'{ip_str}' — SSRF protection blocked this request."
             )
+
+    # Pin to the first validated IP — httpx will use this IP directly (no re-resolution)
+    pinned_ip = resolved[0][4][0]
+    ip_addr = ipaddress.ip_address(pinned_ip)
+    if ip_addr.version == 6:
+        netloc = f"[{pinned_ip}]"
+    else:
+        netloc = pinned_ip
+    if port:
+        netloc = f"{netloc}:{port}"
+
+    safe_url = urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+    return safe_url, hostname
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +219,10 @@ async def route_message(
             f"Agent '{agent_id_str}' not found or has no a2a_endpoint configured."
         )
 
-    # SSRF protection: validate endpoint does not target internal infrastructure
-    _validate_ssrf_safe_url(endpoint)
+    # SSRF protection: validate AND pin DNS to prevent rebinding between check
+    # and request. _resolve_ssrf_safe_url returns the URL with the hostname
+    # replaced by the resolved IP — httpx uses the IP directly (no re-resolution).
+    _safe_endpoint, _host_header = _resolve_ssrf_safe_url(endpoint)
 
     # Fetch transaction row to get initiator_agent_id for signing
     txn_result = await session.execute(
@@ -225,9 +257,14 @@ async def route_message(
         try:
             async with httpx.AsyncClient(timeout=_A2A_TIMEOUT_SECONDS) as client:
                 response = await client.post(
-                    endpoint,
+                    _safe_endpoint,
                     content=json.dumps(signed_payload),
-                    headers={"Content-Type": _A2A_CONTENT_TYPE},
+                    headers={
+                        "Content-Type": _A2A_CONTENT_TYPE,
+                        # Host header preserves the original domain for TLS SNI and
+                        # virtual-host routing, since the URL uses the resolved IP.
+                        "Host": _host_header,
+                    },
                 )
                 last_status_code = response.status_code
 
