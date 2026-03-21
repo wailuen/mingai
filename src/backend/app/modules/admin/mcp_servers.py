@@ -21,7 +21,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_tenant_admin
+from app.core.redis_client import get_redis
 from app.core.session import get_async_session
+from app.modules.chat.mcp_resolver import invalidate_mcp_tool_cache
 
 logger = structlog.get_logger()
 
@@ -146,6 +148,9 @@ async def create_mcp_server(
 
     await db.commit()
 
+    redis = get_redis()
+    await invalidate_mcp_tool_cache(current_user.tenant_id, server_id, redis)
+
     logger.info(
         "mcp_server_created",
         server_id=server_id,
@@ -222,6 +227,9 @@ async def delete_mcp_server(
         )
 
     await db.commit()
+
+    redis = get_redis()
+    await invalidate_mcp_tool_cache(current_user.tenant_id, server_id, redis)
 
     logger.info(
         "mcp_server_deleted",

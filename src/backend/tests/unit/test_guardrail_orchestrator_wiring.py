@@ -71,7 +71,7 @@ def _make_base_mocks(guardrail_config=None, retrieval_confidence=0.88):
         return_value=("You are an assistant.", ["profile"])
     )
     prompt_builder._get_agent_prompt = AsyncMock(
-        return_value=("Agent prompt.", capabilities, [])
+        return_value=("Agent prompt.", capabilities, [], [])
     )
 
     persistence = AsyncMock()

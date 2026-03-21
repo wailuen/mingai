@@ -156,7 +156,7 @@ class TestGetAgentPromptKbIds:
                 )
                 async with factory() as db:
                     builder = SystemPromptBuilder()
-                    prompt, capabilities, kb_ids = await builder._get_agent_prompt(
+                    prompt, capabilities, kb_ids, _tool_ids = await builder._get_agent_prompt(
                         agent_id, tid, db
                     )
                 await engine.dispose()
@@ -194,7 +194,7 @@ class TestGetAgentPromptKbIds:
                 )
                 async with factory() as db:
                     builder = SystemPromptBuilder()
-                    prompt, capabilities, kb_ids = await builder._get_agent_prompt(
+                    prompt, capabilities, kb_ids, _tool_ids = await builder._get_agent_prompt(
                         agent_id, tid, db
                     )
                 await engine.dispose()

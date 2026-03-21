@@ -191,7 +191,7 @@ class SystemPromptBuilder:
         overhead = 0
 
         # Layer 0: Agent base prompt (from agent_cards table)
-        agent_prompt, _capabilities, _kb_ids = await self._get_agent_prompt(
+        agent_prompt, _capabilities, _kb_ids, _tool_ids = await self._get_agent_prompt(
             agent_id, tenant_id, db_session
         )
         layers.append(agent_prompt)
@@ -265,7 +265,7 @@ class SystemPromptBuilder:
 
     async def _get_agent_prompt(
         self, agent_id: str, tenant_id: str, db_session=None
-    ) -> tuple[str, dict, list[str]]:
+    ) -> tuple[str, dict, list[str], list[str]]:
         """
         Load agent's base system prompt and capabilities from the agent_cards table.
 
@@ -275,9 +275,11 @@ class SystemPromptBuilder:
         or no DB session is available.
 
         Returns:
-            Tuple of (system_prompt, capabilities_dict, kb_ids_list).
+            Tuple of (system_prompt, capabilities_dict, kb_ids_list, tool_ids_list).
             kb_ids_list is extracted from capabilities["kb_ids"] for use by
             VectorSearchService in Stage 4 fan-out.
+            tool_ids_list is extracted from capabilities["tool_ids"] for use by
+            ToolResolver in Stage 3.5 tool configuration resolution.
         """
         import uuid as _uuid
 
@@ -289,7 +291,7 @@ class SystemPromptBuilder:
                 agent_id=agent_id,
                 reason="no db_session — using default platform prompt",
             )
-            return self._DEFAULT_AGENT_PROMPT, {}, []
+            return self._DEFAULT_AGENT_PROMPT, {}, [], []
 
         # Validate agent_id is a UUID before querying (agent_cards uses UUID PK)
         try:
@@ -300,7 +302,7 @@ class SystemPromptBuilder:
                 agent_id=agent_id,
                 reason="agent_id is not a UUID — using default platform prompt",
             )
-            return self._DEFAULT_AGENT_PROMPT, {}, []
+            return self._DEFAULT_AGENT_PROMPT, {}, [], []
 
         try:
             result = await db_session.execute(
@@ -319,7 +321,7 @@ class SystemPromptBuilder:
                 tenant_id=tenant_id,
                 error=str(exc),
             )
-            return self._DEFAULT_AGENT_PROMPT, {}, []
+            return self._DEFAULT_AGENT_PROMPT, {}, [], []
 
         if row is None:
             logger.debug(
@@ -328,7 +330,7 @@ class SystemPromptBuilder:
                 tenant_id=tenant_id,
                 reason="no active agent_card found — using default platform prompt",
             )
-            return self._DEFAULT_AGENT_PROMPT, {}, []
+            return self._DEFAULT_AGENT_PROMPT, {}, [], []
 
         system_prompt = row[0] or self._DEFAULT_AGENT_PROMPT
         raw_capabilities = row[1]
@@ -348,14 +350,21 @@ class SystemPromptBuilder:
         raw_kb_ids = capabilities.get("kb_ids", []) if capabilities else []
         kb_ids: list[str] = [str(k) for k in raw_kb_ids if k] if isinstance(raw_kb_ids, list) else []
 
+        # Extract tool_ids list for Stage 3.5 tool configuration resolution (ATA-029)
+        raw_tool_ids = capabilities.get("tool_ids", []) if capabilities else []
+        tool_ids: list[str] = (
+            [str(t) for t in raw_tool_ids if t] if isinstance(raw_tool_ids, list) else []
+        )
+
         logger.info(
             "agent_prompt_loaded",
             agent_id=agent_id,
             tenant_id=tenant_id,
             prompt_length=len(system_prompt),
             kb_ids_count=len(kb_ids),
+            tool_ids_count=len(tool_ids),
         )
-        return system_prompt, capabilities, kb_ids
+        return system_prompt, capabilities, kb_ids, tool_ids
 
     def _platform_base(self) -> str:
         """Layer 1: Universal platform standards."""
@@ -459,3 +468,22 @@ class SystemPromptBuilder:
         if len(text) <= max_chars:
             return text
         return text[:max_chars].rsplit(" ", 1)[0] + "..."
+
+    @staticmethod
+    def build_tool_context(resolved_tools) -> str:
+        """
+        Build tool context block for system prompt injection (ATA-030).
+
+        Args:
+            resolved_tools: List of ResolvedTool instances from ToolResolver.
+
+        Returns:
+            Multi-line string describing available tools, or empty string if
+            resolved_tools is empty.
+        """
+        if not resolved_tools:
+            return ""
+        lines = ["Available tools:"]
+        for tool in resolved_tools:
+            lines.append(f"- {tool.name}: {tool.source}, status={tool.status}")
+        return "\n".join(lines)

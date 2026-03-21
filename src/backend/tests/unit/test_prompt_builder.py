@@ -39,7 +39,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("You are an HR assistant.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("You are an HR assistant.", {}, [], []))
 
         prompt, layers_active = await builder.build(
             agent_id="hr-bot",
@@ -61,7 +61,7 @@ class TestSystemPromptBuild:
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
         builder._get_agent_prompt = AsyncMock(
-            return_value=("You are an HR Policy Assistant.", {}, [])
+            return_value=("You are an HR Policy Assistant.", {}, [], [])
         )
 
         prompt, _ = await builder.build(
@@ -82,7 +82,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent base.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent base.", {}, [], []))
 
         prompt, _ = await builder.build(
             agent_id="a1",
@@ -102,7 +102,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         _, layers_active = await builder.build(
             agent_id="a1",
@@ -122,7 +122,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         _, layers_active = await builder.build(
             agent_id="a1",
@@ -145,7 +145,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         _, layers_active = await builder.build(
             agent_id="a1",
@@ -165,7 +165,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         _, layers_active = await builder.build(
             agent_id="a1",
@@ -185,7 +185,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         _, layers_active = await builder.build(
             agent_id="a1",
@@ -205,7 +205,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         _, layers_active = await builder.build(
             agent_id="a1",
@@ -229,7 +229,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         prompt, _ = await builder.build(
             agent_id="a1",
@@ -250,7 +250,7 @@ class TestSystemPromptBuild:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent base prompt.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent base prompt.", {}, [], []))
 
         prompt, _ = await builder.build(
             agent_id="a1",
@@ -312,7 +312,7 @@ class TestAgentPromptFallback:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder()
-        result, _, _ = await builder._get_agent_prompt("agent-1", "tenant-1", None)
+        result, _, _, _ = await builder._get_agent_prompt("agent-1", "tenant-1", None)
         assert result == SystemPromptBuilder._DEFAULT_AGENT_PROMPT
 
     @pytest.mark.asyncio
@@ -322,7 +322,7 @@ class TestAgentPromptFallback:
 
         mock_db = AsyncMock()
         builder = SystemPromptBuilder()
-        result, _, _ = await builder._get_agent_prompt("not-a-uuid", "t1", mock_db)
+        result, _, _, _ = await builder._get_agent_prompt("not-a-uuid", "t1", mock_db)
         assert result == SystemPromptBuilder._DEFAULT_AGENT_PROMPT
         mock_db.execute.assert_not_called()
 
@@ -340,7 +340,7 @@ class TestAgentPromptFallback:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         builder = SystemPromptBuilder()
-        result, _, _ = await builder._get_agent_prompt(
+        result, _, _, _ = await builder._get_agent_prompt(
             "00000000-0000-0000-0000-000000000001", "t1", mock_db
         )
         assert result == SystemPromptBuilder._DEFAULT_AGENT_PROMPT
@@ -359,7 +359,7 @@ class TestAgentPromptFallback:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         builder = SystemPromptBuilder()
-        result, _, _ = await builder._get_agent_prompt(
+        result, _, _, _ = await builder._get_agent_prompt(
             "00000000-0000-0000-0000-000000000001", "t1", mock_db
         )
         assert result == "Custom agent system prompt."
@@ -375,7 +375,7 @@ class TestRagBudget:
         from app.modules.chat.vector_search import SearchResult
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         # Provide org_context to consume overhead
         result = SearchResult(
@@ -404,7 +404,7 @@ class TestRagBudget:
         from app.modules.chat.prompt_builder import SystemPromptBuilder
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         prompt, _ = await builder.build(
             agent_id="a1",
@@ -424,7 +424,7 @@ class TestRagBudget:
         from app.modules.chat.vector_search import SearchResult
 
         builder = SystemPromptBuilder.__new__(SystemPromptBuilder)
-        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+        builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
         result = SearchResult(
             title="Test",

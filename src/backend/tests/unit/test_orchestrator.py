@@ -78,7 +78,7 @@ def _make_mock_services():
             ["profile", "org_context"],
         )
     )
-    prompt_builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, []))
+    prompt_builder._get_agent_prompt = AsyncMock(return_value=("Agent.", {}, [], []))
 
     persistence = AsyncMock()
     persistence.save_exchange = AsyncMock(return_value=("msg-123", "conv-456"))

@@ -392,6 +392,25 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("doc_sync_scheduler_startup_failed", error=str(exc))
 
+    # ATA-036: Start credential health check job (fires daily at 05:30 UTC).
+    _credential_health_task = None
+    try:
+        from app.modules.platform.credential_health import (
+            run_credential_health_scheduler,
+        )
+
+        _credential_health_task = asyncio.create_task(
+            run_credential_health_scheduler()
+        )
+        logger.info(
+            "credential_health_scheduler_started", schedule="daily at 05:30 UTC"
+        )
+    except Exception as exc:
+        logger.warning(
+            "credential_health_scheduler_startup_failed",
+            error=str(exc),
+        )
+
     logger.info("application_started")
 
     # ------------------------------------------------------------------
@@ -519,6 +538,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("doc_sync_scheduler_stopped")
+
+    if _credential_health_task is not None and not _credential_health_task.done():
+        _credential_health_task.cancel()
+        try:
+            await _credential_health_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("credential_health_scheduler_stopped")
 
     if _glossary_warmup_task is not None and not _glossary_warmup_task.done():
         _glossary_warmup_task.cancel()

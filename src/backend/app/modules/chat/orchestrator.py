@@ -297,13 +297,23 @@ class ChatOrchestrationService:
         yield {"event": "status", "data": {"stage": "vector_search"}}
 
         # Load agent prompt early to get kb_ids for fan-out search and guardrail config
-        _stage4_agent_prompt, _stage4_capabilities, agent_kb_ids = (
+        _stage4_agent_prompt, _stage4_capabilities, agent_kb_ids, agent_tool_ids = (
             await self._prompt_builder._get_agent_prompt(
                 agent_id=agent_id,
                 tenant_id=tenant_id,
                 db_session=self._db_session,
             )
         )
+
+        # Stage 3.5: Resolve tool configurations (ATA-030)
+        from app.modules.chat.tool_resolver import ToolResolver
+
+        resolved_tools: list = []
+        if agent_tool_ids and self._db_session is not None:
+            _tool_resolver = ToolResolver(
+                db=self._db_session, tenant_id=str(tenant_id)
+            )
+            resolved_tools = await _tool_resolver.resolve(agent_tool_ids)
 
         # Extract guardrail config from capabilities (ATA-019/020)
         from app.modules.chat.guardrails import (
@@ -472,10 +482,17 @@ class ChatOrchestrationService:
             db_session=self._db_session,
         )
 
+        # Append tool context block to system prompt (ATA-030)
+        if resolved_tools:
+            tool_context = self._prompt_builder.build_tool_context(resolved_tools)
+            if tool_context:
+                system_prompt = system_prompt + "\n\n" + tool_context
+
         logger.info(
             "stage_6_prompt",
             layers_active=layers_active,
             prompt_length=len(system_prompt),
+            tool_count=len(resolved_tools),
             tenant_id=tenant_id,
         )
 
