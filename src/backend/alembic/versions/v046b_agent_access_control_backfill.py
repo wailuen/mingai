@@ -6,6 +6,24 @@ Uses explicit ARRAY[]::VARCHAR[] and ARRAY[]::UUID[] casts for safety.
 Note: Do NOT inject default guardrails object for existing agents —
 guardrail key absence is correct and prevents latency regression.
 
+V1 latency regression lesson: injecting {"max_response_length": 0} caused
+_has_active_guardrails() to return True for ALL agents, adding 1-2s buffering
+to every chat request. Guardrail key must remain ABSENT for existing agents.
+
+ATA-055 PRE-DEPLOY AUDIT (run BEFORE deploying ATA-019 / Stage 7b):
+Run the following query to identify agents whose max_response_length will
+start truncating responses after Stage 7b goes live. Confirm each is intentional
+before deploying:
+
+    SELECT id, capabilities->'guardrails' AS guardrails
+    FROM agent_cards
+    WHERE capabilities->'guardrails' IS NOT NULL
+      AND (capabilities->'guardrails'->>'max_response_length')::int > 0;
+
+Any agent with max_response_length > 0 will start truncating responses after
+ATA-019 deploys. If this is unintentional, UPDATE agent_cards SET
+capabilities = capabilities #- '{guardrails}' WHERE id = :id before deploying.
+
 Revision ID: 046b
 Revises: 046a
 """

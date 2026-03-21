@@ -8,7 +8,7 @@
 **Related research**: `workspaces/mingai/01-analysis/01-research/49-agent-template-a2a-gap-analysis.md`, `50-agent-template-requirements.md`, `51-agent-template-coc-analysis.md`, `52-agent-template-implementation-approach.md`
 **Related value audit**: `workspaces/mingai/01-analysis/16-agent-template-value-audit/01-enterprise-buyer-perspective.md`, `02-ux-design-spec.md`
 **UX flows**: `workspaces/mingai/03-user-flows/23-agent-template-flows.md`
-**Status**: IN PROGRESS — Phase A+B COMPLETE (commits e3e2fcb, 8e5dd50). Phase C (ATA-028–047) is next. ATA-057 deferred until Phase A verified in staging.
+**Status**: IN PROGRESS — Phase A+B COMPLETE (commits e3e2fcb, 8e5dd50). Phase C backend COMPLETE (commit 1fca7ec). COC rules ATA-048–055 COMPLETE. Frontend ATA-037–047 remaining. ATA-057 deferred.
 
 ---
 
@@ -967,7 +967,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-028: Create `app/modules/chat/tool_resolver.py` — `ToolResolver`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — closes Gap 2 (tool_ids never read at chat time)
 **Sprint**: 5 (Week 7–8)
 **Effort**: 3h
@@ -997,7 +997,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-029: `_get_agent_prompt()` Extended to Return `tool_ids`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — wires tool_ids out of capabilities in same DB round-trip
 **Sprint**: 5 (Week 7–8)
 **Effort**: 1h
@@ -1023,7 +1023,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-030: Wire `ToolResolver` into Orchestrator and Prompt Builder
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — closes tool_ids gap in chat pipeline
 **Sprint**: 5 (Week 7–8)
 **Effort**: 2h
@@ -1051,7 +1051,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-031: Integration Tests — Tool Resolver
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1
 **Sprint**: 5 (Week 7–8)
 **Effort**: 2h
@@ -1080,7 +1080,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-032: Create `app/modules/chat/mcp_resolver.py` — `MCPToolResolver`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — closes MCP caching gap (Gap 4)
 **Sprint**: 6 (Week 8)
 **Effort**: 3h
@@ -1109,7 +1109,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-033: Cache Invalidation on MCP Server CRUD
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — prevents stale cache after admin action
 **Sprint**: 6 (Week 8)
 **Effort**: 1h
@@ -1135,7 +1135,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-034: Integration Tests — MCP Resolver
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1
 **Sprint**: 6 (Week 8)
 **Effort**: 2h
@@ -1163,7 +1163,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-035: v048 Migration — Tool Catalog RLS Update
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — required for ToolResolver to surface degraded tools
 **Sprint**: 5 (Week 7–8)
 **Effort**: 30m
@@ -1189,7 +1189,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-036: Credential Health Check Scheduled Job
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — closes Gap 8 (credential health monitoring)
 **Sprint**: 7 (Week 9)
 **Effort**: 4h
@@ -1521,7 +1521,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-048: RULE A2A-01 in Orchestrator Class Docstring
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P0 — prevents SOC 2 violation via guardrail placement drift
 **Sprint**: 3 (Week 4–5) — alongside ATA-019
 **Effort**: 15m
@@ -1545,7 +1545,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-049: RULE A2A-02 in GuardrailsSchema Docstring
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P0 — prevents false confidence that DB storage = enforcement
 **Sprint**: 4 (Week 6) — alongside ATA-022
 **Effort**: 10m
@@ -1568,7 +1568,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-050: RULE A2A-03 in `deploy_agent_template_db()` Docstring
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P0 — preserves 422 gate rationale for future sessions
 **Sprint**: 1 (Week 1–2) — alongside ATA-003
 **Effort**: 10m
@@ -1591,7 +1591,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-051: RULE A2A-04 in `_validate_ssrf_safe_url()`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P0 — prevents DNS rebinding SSRF
 **Sprint**: 3 (Week 4–5) — same as ATA-027
 **Effort**: 10m
@@ -1614,7 +1614,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-052: RULE A2A-05 in `run_daily_credential_health_check()`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — prevents duplicate vault notifications on multi-worker deploy
 **Sprint**: 7 (Week 9) — same as ATA-036
 **Effort**: 10m
@@ -1637,7 +1637,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-053: RULE A2A-06 in `_AGENT_UPDATE_SQL` Comment Block
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P0 — prevents cross-tenant RLS bypass via application layer
 **Sprint**: 1 (Week 1–2) — same as ATA-004
 **Effort**: 10m
@@ -1661,7 +1661,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-054: `TODO-SEMANTIC-CHECK` Comment in `OutputGuardrailChecker`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — prevents Bloomberg compliance gap from being forgotten
 **Sprint**: 3 (Week 4–5) — same as ATA-018
 **Effort**: 5m
@@ -1684,7 +1684,7 @@ These items encode institutional rules in code. They do not ship new functionali
 
 ### ATA-055: Pre-Deploy Audit Query Documented in v046b Migration
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P1 — prevents unintended truncation regressions when ATA-019 deploys
 **Sprint**: 2 (Week 3) — same as ATA-012
 **Effort**: 5m

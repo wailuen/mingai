@@ -153,6 +153,16 @@ class DeployAgentRequest(BaseModel):
 
 
 class GuardrailsSchema(BaseModel):
+    """
+    RULE A2A-02: Guardrail configuration stored in agent_cards.capabilities.
+
+    CRITICAL: Storing guardrails in this schema does nothing unless
+    ChatOrchestrationService reads and applies them on every request. Guardrail
+    config persisted to DB must be enforced at Stage 7b (OutputGuardrailChecker)
+    on every chat request. DB storage != enforcement. See guardrails.py Stage 7b
+    and orchestrator.py ChatOrchestrationService docstring for the enforcement path.
+    """
+
     blocked_topics: List[str] = Field(default_factory=list)
     confidence_threshold: float = Field(0.5, ge=0.0, le=1.0)
     max_response_length: int = Field(2000, ge=100, le=10000)

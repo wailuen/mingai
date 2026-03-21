@@ -18,6 +18,9 @@ Wires all AI services into a streaming SSE response pipeline:
              save_exchange(). Blocked responses are NEVER persisted.
              RULE A2A-01: The blocked LLM response text MUST NOT be stored
              anywhere. Only violation metadata is persisted.
+             CORRECT pipeline sequence: Stage 7 → Stage 7b (filter) → Stage 8 (persist filtered/canned text)
+             WRONG placement: post-Stage-8 (blocked content already in DB, SOC 2 violation)
+             The _write_guardrail_violation_audit() helper writes only metadata, never response text.
   Stage 8: Post-processing (persistence, memory update, profile learning)
 
 Memory fast path: "Remember that..." / "Remember:..." / "Please remember..." /
