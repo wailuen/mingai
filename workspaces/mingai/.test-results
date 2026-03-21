@@ -1,4 +1,4 @@
-commit: c226122 (LLM Library redesign — security hardening, error surfacing)
+commit: 3bf3312 (LLM Library redesign — security hardening, error surfacing)
 timestamp: 2026-03-21T16:00:00Z
 baseline_pass: 2838
 baseline_fail: 7
@@ -33,3 +33,7 @@ Notes:
       - test_llm_library_credentials.py: 6 new unit tests (TestAssertEndpointSsrfSafe)
     - Value V1: Test harness now surfaces actual provider error str(exc)[:500] in 502 response
       instead of generic "check server logs" message
+  - Frontend fix (post-test-suite):
+    - FE-BUG-1 (MEDIUM): LibraryForm.tsx useEffect split — testResults now cleared only on entry.id
+      change (switching entries), not on every re-fetch. Publish button now enables correctly
+      after test passes and React Query invalidation updates entry.last_test_passed_at.

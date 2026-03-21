@@ -228,10 +228,15 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   );
   const tenantCount = tenantAssignments?.length ?? 0;
 
+  // Reset test results only when switching to a different entry (or closing the form)
   useEffect(() => {
-    setForm(entry ? formFromEntry(entry) : EMPTY_FORM);
     setTestResults(null);
     setTestError(null);
+  }, [entry?.id]);
+
+  // Always sync form state when entry data updates (picks up last_test_passed_at, key_present, etc.)
+  useEffect(() => {
+    setForm(entry ? formFromEntry(entry) : EMPTY_FORM);
   }, [entry]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
