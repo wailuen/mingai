@@ -1,12 +1,12 @@
-commit: ba132bc85a2b644997a023b447f9ae51be582011
-timestamp: 2026-03-21T11:30:00Z
-baseline_pass: 2761
+commit: 8ebad86
+timestamp: 2026-03-21T12:00:00Z
+baseline_pass: 2768
 baseline_fail: 11
-final_pass: 2768
+final_pass: 2774
 final_fail: 11
-new_tests: 7
+new_tests: 6
 regressions: 0
-command: python -m pytest src/backend/tests/unit/ --ignore=src/backend/tests/unit/test_azure_cost_job.py -q --tb=line
+command: python -m pytest src/backend/tests/unit/ --ignore=src/backend/tests/unit/test_azure_cost_job.py -q --tb=short
 
 Notes:
   - Excluded test_azure_cost_job.py: error at collection (pre-existing env config issue)
@@ -16,10 +16,18 @@ Notes:
     - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
     - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
     - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
-  - New tests added this session (round 2 red team convergence):
+  - Round 2 security fixes (commit ba132bc):
+    - a2a_routing.py: _resolve_ssrf_safe_url() pins DNS to prevent rebinding TOCTOU (CWE-918)
+    - platform/routes.py: ReDoS guard in GuardrailsSchema.validate_rule() — 50ms timeout
+    - test_template_deprecation.py:369 — strengthened assertion from weak OR to assert 201
     - test_mcp_resolver.py (2 tests) — Redis ConnectionError fallback coverage
     - test_a2a_routing.py (5 tests) — _resolve_ssrf_safe_url DNS pinning regression tests
-  - Security fixes applied this session:
-    - a2a_routing.py: _resolve_ssrf_safe_url() pins DNS to prevent rebinding TOCTOU (CWE-918)
-    - platform/routes.py: ReDoS guard in GuardrailsSchema.validate_rule() — 50ms timeout on catastrophic backtracking test
-    - test_template_deprecation.py:369 — strengthened assertion from weak OR condition to assert 201
+  - Round 3 security fixes (commit 8ebad86):
+    - a2a_routing.py: Azure Wire Server (168.63.129.16) blocked, key zeroization via finally, follow_redirects=False
+    - orchestrator.py: _db_session=None → return False (fail-closed)
+    - guardrails.py: FilterResult exception sanitization + confidence 0.0 fail-closed
+    - credential_health.py: vault_path removed from WARNING log (schema leak)
+    - agents/routes.py: _VALID_CRED_KEY_RE moved to module scope
+    - test_credential_health.py (6 tests) — credential health check dedup/notification coverage
+    - test_credential_deploy_validation.py (4 tests) — path traversal regression tests
+    - test_agent_access_check.py — no-db-session test renamed + fail-closed assertion
