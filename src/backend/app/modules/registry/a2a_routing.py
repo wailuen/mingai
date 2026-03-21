@@ -273,7 +273,8 @@ async def route_message(
                 last_status_code = response.status_code
 
                 if response.status_code < 500:
-                    # Success or client error — do not retry
+                    # 2xx-3xx = real success; 4xx = client error (still terminal, don't retry).
+                    # success flag reflects whether the target accepted the message (S1).
                     await _log_routing_event(
                         transaction_id=txn_id_str,
                         tenant_id=tenant_id,
@@ -281,9 +282,10 @@ async def route_message(
                         target_agent_id=agent_id_str,
                         status_code=response.status_code,
                         attempt=attempt + 1,
-                        success=True,
+                        success=response.status_code < 400,
                         session=session,
                     )
+                    await session.commit()
                     logger.info(
                         "a2a_message_routed",
                         transaction_id=txn_id_str,
@@ -340,8 +342,9 @@ async def route_message(
         success=False,
         session=session,
     )
-
     await _abandon_transaction(txn_id_str, tenant_id, session)
+    # Single atomic commit for both the failure event and the ABANDONED state update (M2).
+    await session.commit()
 
     return {
         "status": "failed",
@@ -475,7 +478,7 @@ async def _log_routing_event(
                 "event_hash": event_hash,
             },
         )
-        await session.commit()
+        # Caller commits — do not commit here (M2: failure path needs atomic event+state update)
     except Exception as exc:
         logger.error(
             "a2a_routing_event_log_failed",
@@ -499,7 +502,7 @@ async def _abandon_transaction(
             ),
             {"txn_id": transaction_id, "tenant_id": tenant_id},
         )
-        await session.commit()
+        # Caller commits atomically with the event log insert (M2)
         logger.info(
             "a2a_transaction_abandoned_routing_failure",
             transaction_id=transaction_id,

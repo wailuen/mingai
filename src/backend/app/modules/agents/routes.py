@@ -185,6 +185,9 @@ class CreateAgentRequest(BaseModel):
     access_mode: Literal["workspace_wide", "role_restricted", "user_specific"] = Field(
         "workspace_wide"
     )
+    # Required when access_mode=role_restricted or user_specific (R5)
+    allowed_roles: List[str] = Field(default_factory=list)
+    allowed_user_ids: List[str] = Field(default_factory=list)
     status: Literal[
         "draft", "published", "unpublished", "active", "paused", "archived"
     ] = Field("draft")
@@ -445,8 +448,14 @@ async def deploy_agent_template_db(
     these values will be persisted and enforced at runtime.
     """
     agent_id = str(uuid.uuid4())
+    # Per ADR-01: kb_ids are stored inside the capabilities JSONB (no join table).
+    # Normalise capabilities to a dict so kb_ids, guardrails, and access_mode can
+    # all live in the same JSONB column — matching the Agent Studio path.
+    # If capabilities is a list (seed template format), wrap it.
+    if isinstance(capabilities, list):
+        capabilities = {"feature_tags": capabilities}
+    capabilities["kb_ids"] = kb_ids  # always set — may be [] for no-KB agents
     capabilities_json = json.dumps(capabilities)
-    kb_ids_json = json.dumps(kb_ids)
     await db.execute(
         text(
             "INSERT INTO agent_cards "
@@ -1002,6 +1011,8 @@ async def create_agent_studio_db(
     created_by: str,
     db: AsyncSession,
     access_mode: str = "workspace_wide",
+    allowed_roles: Optional[List[str]] = None,
+    allowed_user_ids: Optional[List[str]] = None,
 ) -> dict:
     """Insert a new agent_cards row for Agent Studio (API-070)."""
     agent_id = str(uuid.uuid4())
@@ -1044,8 +1055,8 @@ async def create_agent_studio_db(
             "agent_id": agent_id,
             "tenant_id": tenant_id,
             "visibility_mode": visibility_mode,
-            "allowed_roles": [],
-            "allowed_user_ids": [],
+            "allowed_roles": list(allowed_roles or []),
+            "allowed_user_ids": list(allowed_user_ids or []),
         },
     )
     await db.commit()
@@ -1541,6 +1552,8 @@ async def create_agent(
         created_by=current_user.id,
         db=session,
         access_mode=body.access_mode,
+        allowed_roles=body.allowed_roles,
+        allowed_user_ids=body.allowed_user_ids,
     )
     agent_id = result["id"]
     await insert_audit_log(

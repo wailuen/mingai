@@ -320,7 +320,12 @@ def test_max_retries_is_three():
 
 @pytest.mark.asyncio
 async def test_abandon_transaction_updates_state():
-    """_abandon_transaction executes UPDATE to ABANDONED state."""
+    """_abandon_transaction executes UPDATE to ABANDONED state.
+
+    Commit is intentionally NOT called inside _abandon_transaction — the caller
+    (route_message) issues a single atomic commit after both _log_routing_event
+    and _abandon_transaction complete (M2 fix).
+    """
     session = AsyncMock()
     result_mock = MagicMock()
     session.execute = AsyncMock(return_value=result_mock)
@@ -328,7 +333,8 @@ async def test_abandon_transaction_updates_state():
 
     await _abandon_transaction("txn-1", "tenant-1", session)
 
-    session.commit.assert_called_once()
+    # Helper executes the UPDATE but does NOT commit — caller owns the commit (M2).
+    session.commit.assert_not_called()
     call_sql = str(session.execute.call_args_list[0][0][0])
     assert "ABANDONED" in call_sql
 

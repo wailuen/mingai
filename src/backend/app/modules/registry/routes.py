@@ -1836,6 +1836,71 @@ async def receive_a2a_message(
             },
         )
 
+    # RULE A2A-07: Verify Ed25519 signature on inbound A2A messages.
+    # Fetch the sender's public_key from agent_cards. If the agent has a
+    # public key and the request includes a signature, verify it. If the
+    # agent has a public key but the signature is missing or invalid, reject
+    # the message (fail-closed). If the agent has no public key, allow the
+    # message but log a warning (transitional — agents deployed before AI-040
+    # may not have keys yet).
+    import json as _json
+
+    from app.modules.har.crypto import verify_signature
+
+    key_row_result = await session.execute(
+        text(
+            "SELECT public_key FROM agent_cards "
+            "WHERE id = :agent_id AND tenant_id = :tenant_id"
+        ),
+        {
+            "agent_id": body.sender_agent_id,
+            "tenant_id": current_user.tenant_id,
+        },
+    )
+    key_row = key_row_result.mappings().first()
+
+    if key_row is not None and key_row["public_key"]:
+        # Agent has a registered public key — signature MUST be present and valid.
+        if not body.signature:
+            logger.warning(
+                "a2a_inbound_missing_signature",
+                transaction_id=body.transaction_id,
+                sender_agent_id=body.sender_agent_id,
+                tenant_id=current_user.tenant_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Signature required: sender agent has a registered key.",
+            )
+        # Reconstruct canonical payload — must match _build_signed_envelope ordering.
+        canonical_envelope = {
+            "transaction_id": body.transaction_id,
+            "message_type": body.message_type,
+            "sender_agent_id": body.sender_agent_id,
+            "payload": body.payload,
+        }
+        canonical_bytes = _json.dumps(canonical_envelope, sort_keys=True).encode()
+        if not verify_signature(key_row["public_key"], canonical_bytes, body.signature):
+            logger.warning(
+                "a2a_inbound_invalid_signature",
+                transaction_id=body.transaction_id,
+                sender_agent_id=body.sender_agent_id,
+                tenant_id=current_user.tenant_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Signature verification failed.",
+            )
+    else:
+        # No public key registered — agent predates AI-040 keypair generation.
+        # Allow message but flag for ops review.
+        logger.warning(
+            "a2a_inbound_no_public_key_unsigned_accepted",
+            transaction_id=body.transaction_id,
+            sender_agent_id=body.sender_agent_id,
+            tenant_id=current_user.tenant_id,
+        )
+
     logger.info(
         "a2a_message_received",
         transaction_id=body.transaction_id,
