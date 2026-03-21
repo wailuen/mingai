@@ -1967,6 +1967,182 @@
       padding: 4px 10px; border-radius: var(--r-sm); border: 1px solid var(--accent-ring);
     }
     .report-success-sub { font-size: 12px; color: var(--text-muted); max-width: 320px; line-height: 1.6; }
+
+    /* ── ATA-037–047: NEW COMPONENT STYLES ───────────────────────── */
+
+    /* Template authoring sections */
+    .tmpl-section { margin-bottom: 24px; }
+    .tmpl-section-title { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border-faint); }
+    .tmpl-auth-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+    .tmpl-auth-table th { text-align: left; padding: 6px 10px; font-size: 10px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+    .tmpl-auth-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-faint); vertical-align: middle; }
+    .tmpl-auth-table tr:last-child td { border-bottom: none; }
+    .tmpl-auth-key { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .tmpl-add-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--accent); cursor: pointer; padding: 4px 0; background: none; border: none; font-family: 'Plus Jakarta Sans', sans-serif; }
+    .tmpl-add-btn:hover { opacity: .8; }
+
+    /* Chip input for capabilities */
+    .chip-input-wrap { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg-elevated); min-height: 38px; align-items: center; }
+    .chip-input-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 11px; color: var(--text-muted); }
+    .chip-input-tag-x { cursor: pointer; color: var(--text-faint); font-size: 12px; }
+    .chip-input-tag-x:hover { color: var(--alert); }
+    .chip-input-field { flex: 1; min-width: 80px; background: none; border: none; outline: none; font-size: 12px; color: var(--text-primary); font-family: 'Plus Jakarta Sans', sans-serif; }
+
+    /* Auth mode badges */
+    .auth-badge-none { font-size: 10px; padding: 2px 6px; border-radius: var(--r-sm); color: var(--text-faint); background: var(--bg-elevated); border: 1px solid var(--border); }
+    .auth-badge-tenant { font-size: 10px; padding: 2px 6px; border-radius: var(--r-sm); color: var(--warn); background: var(--warn-dim); border: 1px solid rgba(245,197,24,.3); }
+    .auth-badge-platform { font-size: 10px; padding: 2px 6px; border-radius: var(--r-sm); color: var(--alert); background: var(--alert-dim); border: 1px solid var(--alert-ring); }
+
+    /* Tool list in template authoring */
+    .tool-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--border); background: var(--bg-elevated); margin-bottom: 6px; }
+    .tool-class-badge-read { font-size: 9px; font-weight: 600; padding: 2px 5px; border-radius: var(--r-sm); background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-ring); letter-spacing: .03em; }
+    .tool-class-badge-write { font-size: 9px; font-weight: 600; padding: 2px 5px; border-radius: var(--r-sm); background: var(--warn-dim); color: var(--warn); border: 1px solid rgba(245,197,24,.3); letter-spacing: .03em; }
+    .tool-health-healthy { font-size: 10px; color: var(--accent); font-weight: 600; }
+    .tool-health-degraded { font-size: 10px; color: var(--warn); font-weight: 600; }
+    .tool-health-down { font-size: 10px; color: var(--alert); font-weight: 600; }
+
+    /* Publishing checklist */
+    .pub-checklist { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .pub-check-item { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .pub-check-icon-done { color: var(--accent); }
+    .pub-check-icon-pending { color: var(--text-faint); }
+
+    /* Wizard modal for deploy (ATA-038–041) */
+    .deploy-wizard-backdrop {
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(0,0,0,.6);
+      display: none; align-items: center; justify-content: center;
+    }
+    .deploy-wizard-backdrop.open { display: flex; }
+    .deploy-wizard-modal {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--r-lg); width: 640px; max-width: 95vw;
+      max-height: 90vh; display: flex; flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+      animation: msgIn 200ms ease;
+    }
+    .deploy-wiz-head {
+      padding: 18px 24px 0; flex-shrink: 0;
+    }
+    .deploy-wiz-head-row {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+    }
+    .deploy-wiz-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .deploy-wiz-step-label { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+    .deploy-wiz-progress-track {
+      height: 4px; background: var(--bg-elevated); border-radius: 2px; margin-bottom: 0;
+    }
+    .deploy-wiz-progress-fill {
+      height: 100%; background: var(--accent); border-radius: 2px; transition: width 220ms ease;
+    }
+    .deploy-wiz-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+    .deploy-wiz-foot {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+
+    /* Template cards in deploy wizard step 1 */
+    .tmpl-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .tmpl-select-card {
+      padding: 14px; border: 2px solid var(--border); border-radius: var(--r-lg);
+      background: var(--bg-elevated); cursor: pointer; transition: border-color 150ms, background 150ms;
+    }
+    .tmpl-select-card:hover { border-color: rgba(79,255,176,.3); }
+    .tmpl-select-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+    .tmpl-select-name { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
+    .tmpl-select-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 8px; }
+    .tmpl-select-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+
+    /* Connection test button states */
+    .conn-test-btn {
+      padding: 7px 14px; border-radius: var(--r); font-size: 12px; font-weight: 500;
+      cursor: pointer; border: 1px solid var(--border); background: var(--bg-elevated);
+      color: var(--text-muted); font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: var(--t); display: inline-flex; align-items: center; gap: 6px;
+    }
+    .conn-test-btn:hover { border-color: var(--accent-ring); color: var(--text-primary); }
+    .conn-test-btn.testing { border-color: var(--border); color: var(--text-faint); cursor: not-allowed; }
+    .conn-test-btn.passed { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+    .conn-test-btn.failed { border-color: var(--alert-ring); background: var(--alert-dim); color: var(--alert); }
+
+    /* Credential field row */
+    .cred-field-row { margin-bottom: 12px; }
+    .cred-field-key { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: lowercase; letter-spacing: .03em; margin-bottom: 4px; }
+    .cred-input-wrap { position: relative; }
+    .cred-input-wrap input { width: 100%; padding: 8px 36px 8px 12px; border-radius: var(--r); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; outline: none; }
+    .cred-input-wrap input:focus { border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-dim); }
+    .cred-eye-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: 14px; padding: 2px; }
+    .cred-eye-btn:hover { color: var(--text-muted); }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+
+    /* Agent detail panel (ATA-042) */
+    .agent-detail-panel {
+      position: fixed; top: 0; right: 0; height: 100%; width: 420px;
+      z-index: 510; background: var(--bg-surface); border-left: 1px solid var(--border);
+      overflow-y: auto; display: none; flex-direction: column;
+      box-shadow: -4px 0 24px rgba(0,0,0,.3);
+    }
+    .agent-detail-panel.open { display: flex; }
+    .adp-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .adp-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .adp-section { padding: 14px 20px; border-bottom: 1px solid var(--border-faint); }
+    .adp-section-label { font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 10px; }
+    .adp-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: var(--text-primary); }
+    .adp-key { font-size: 11px; color: var(--text-faint); min-width: 80px; }
+    .adp-val { font-size: 13px; color: var(--text-primary); flex: 1; }
+    .adp-val-mono { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .cred-ok { color: var(--accent); font-size: 12px; }
+    .cred-missing { color: var(--alert); font-size: 12px; }
+    .a2a-cap-chip { font-size: 10px; padding: 2px 7px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); }
+    .copy-btn { font-size: 10px; color: var(--text-faint); cursor: pointer; padding: 1px 5px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-elevated); }
+    .copy-btn:hover { border-color: var(--accent-ring); color: var(--accent); }
+
+    /* Update available banner (ATA-045) */
+    .update-banner {
+      border-top: 2px solid var(--warn); border-radius: 0 0 var(--r-lg) var(--r-lg);
+      padding: 7px 12px; display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--text-muted); background: var(--warn-dim);
+      margin: 0 -18px -18px; margin-top: 10px;
+    }
+    .update-banner-text { flex: 1; }
+    .update-banner-btn { font-size: 11px; padding: 3px 8px; border-radius: var(--r-sm); border: 1px solid rgba(245,197,24,.4); background: transparent; color: var(--warn); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
+    .update-banner-btn:hover { background: var(--warn-dim); }
+
+    /* Version diff modal (ATA-045) */
+    .diff-old { font-size: 11px; color: var(--text-faint); background: var(--bg-elevated); padding: 6px 8px; border-radius: var(--r-sm); border-left: 2px solid var(--border); margin-bottom: 4px; }
+    .diff-new { font-size: 11px; color: var(--text-primary); background: var(--accent-dim); padding: 6px 8px; border-radius: var(--r-sm); border-left: 2px solid var(--accent); }
+    .diff-add { font-size: 11px; color: var(--accent); padding: 3px 0; }
+    .diff-add::before { content: '+ '; font-weight: 700; }
+    .diff-remove { font-size: 11px; color: var(--alert); padding: 3px 0; }
+    .diff-remove::before { content: '− '; font-weight: 700; }
+
+    /* Guardrail compliance table (ATA-046/047) */
+    .compliance-action-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: var(--r-sm); }
+    .ca-block { background: var(--alert-dim); color: var(--alert); border: 1px solid var(--alert-ring); }
+    .ca-redact { background: var(--warn-dim); color: var(--warn); border: 1px solid rgba(245,197,24,.3); }
+    .ca-warn { background: var(--bg-elevated); color: var(--text-faint); border: 1px solid var(--border); }
+    .compliance-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .compliance-date-input { font-family: 'DM Mono', monospace; font-size: 11px; padding: 5px 8px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); outline: none; width: 110px; }
+    .compliance-date-input:focus { border-color: var(--accent-ring); }
+    .compliance-filter-sep { font-size: 11px; color: var(--text-faint); }
+    .export-btn { margin-left: auto; font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: var(--r); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; gap: 5px; }
+    .export-btn:hover { border-color: var(--accent-ring); color: var(--text-primary); }
+
+    /* Reconfigure slide panel (ATA-043) */
+    .reconfig-panel {
+      position: fixed; top: 0; right: 0; height: 100%; width: 440px;
+      z-index: 520; background: var(--bg-surface); border-left: 1px solid var(--border);
+      overflow-y: auto; display: none; flex-direction: column;
+      box-shadow: -4px 0 24px rgba(0,0,0,.35);
+    }
+    .reconfig-panel.open { display: flex; }
+
+    /* Deploy success card */
+    .deploy-success-card { padding: 20px 24px; text-align: center; }
+    .deploy-success-agent-card { background: var(--bg-elevated); border: 1px solid var(--accent-ring); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; text-align: left; }
   </style>
 </head>
 <body>
@@ -2735,6 +2911,9 @@
         <div class="admin-nav-item" id="pa-nav-tools" onclick="showPAPanel('tools')">
           <span class="admin-nav-icon">⟳</span>Tool Catalog
         </div>
+        <div class="admin-nav-item" id="pa-nav-guardrail-compliance" onclick="showPAPanel('guardrail-compliance')">
+          <span class="admin-nav-icon">⊟</span>Guardrail Compliance
+        </div>
         <div class="admin-nav-section">Finance</div>
         <div class="admin-nav-item" id="pa-nav-cost" onclick="showPAPanel('cost')">
           <span class="admin-nav-icon">$</span>Cost Analytics
@@ -3389,21 +3568,24 @@
         <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;color:var(--text-primary)">Agent Templates</div>
         <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Platform-managed templates deployed by tenant admins</div>
       </div>
-      <button class="ta-btn-primary" style="font-size:12px;padding:7px 16px">+ New Template</button>
+      <button class="ta-btn-primary" style="font-size:12px;padding:7px 16px" onclick="openTemplateEditor()">+ New Template</button>
     </div>
 
     <!-- Info banner -->
     <div style="background:var(--accent-dim);border:1px solid var(--accent-ring);border-radius:var(--r-lg);padding:12px 18px;margin-bottom:20px;display:flex;align-items:center;gap:10px">
       <span style="font-size:14px;color:var(--accent)">&#9733;</span>
-      <span style="font-size:13px;color:var(--text-primary)">Most adopted: <strong>Customer Support Agent</strong> &middot; <span style="font-family:'DM Mono',monospace">18</span> tenants &middot; <span style="font-family:'DM Mono',monospace;color:var(--accent)">89%</span> avg satisfaction across deployments</span>
+      <span style="font-size:13px;color:var(--text-primary)">Most adopted: <strong>HR Assistant</strong> &middot; <span style="font-family:'DM Mono',monospace">11</span> tenants &middot; <span style="font-family:'DM Mono',monospace;color:var(--accent)">82%</span> avg satisfaction across deployments</span>
     </div>
 
-    <div class="admin-card" style="padding:0;overflow:hidden">
+    <!-- Template Catalog Table (ATA-037 extended) -->
+    <div class="admin-card" style="padding:0;overflow:hidden;margin-bottom:28px">
       <table class="admin-table">
         <thead>
           <tr>
             <th>Template</th>
             <th>Category</th>
+            <th>Auth Mode</th>
+            <th>Plan Required</th>
             <th>Version</th>
             <th>Tenants Using</th>
             <th>Avg Satisfaction</th>
@@ -3413,62 +3595,317 @@
         </thead>
         <tbody>
           <tr>
-            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">HR Policy Assistant</td>
+            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">HR Assistant</td>
             <td style="font-size:12px;color:var(--text-muted)">HR</td>
-            <td style="font-family:'DM Mono',monospace">v2</td>
+            <td><span class="auth-badge-none">None</span></td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">—</td>
+            <td style="font-family:'DM Mono',monospace">v2.1.0</td>
             <td style="font-family:'DM Mono',monospace">11</td>
             <td style="font-family:'DM Mono',monospace;color:var(--accent)">82%</td>
             <td><span class="status-badge status-active">Published</span></td>
-            <td><span class="row-action">Edit</span></td>
+            <td><span class="row-action" onclick="openTemplateEditor('hr')">Edit</span></td>
           </tr>
           <tr>
-            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">Financial Analyst</td>
+            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">Finance Analyst</td>
             <td style="font-size:12px;color:var(--text-muted)">Finance</td>
-            <td style="font-family:'DM Mono',monospace">v3</td>
+            <td><span class="auth-badge-tenant">Tenant Creds</span></td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--warn)">Professional</td>
+            <td style="font-family:'DM Mono',monospace">v3.0.0</td>
             <td style="font-family:'DM Mono',monospace">8</td>
             <td style="font-family:'DM Mono',monospace;color:var(--warn)">74% &#9888;</td>
             <td><span class="status-badge status-active">Published</span></td>
-            <td><span class="row-action">Edit</span></td>
-          </tr>
-          <tr>
-            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">Customer Support Agent</td>
-            <td style="font-size:12px;color:var(--text-muted)">Support</td>
-            <td style="font-family:'DM Mono',monospace">v1</td>
-            <td style="font-family:'DM Mono',monospace">18</td>
-            <td style="font-family:'DM Mono',monospace;color:var(--accent)">89%</td>
-            <td><span class="status-badge status-active">Published</span></td>
-            <td><span class="row-action">Edit</span></td>
+            <td><span class="row-action" onclick="openTemplateEditor('finance')">Edit</span></td>
           </tr>
           <tr>
             <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">IT Helpdesk</td>
             <td style="font-size:12px;color:var(--text-muted)">IT</td>
-            <td style="font-family:'DM Mono',monospace">v1</td>
+            <td><span class="auth-badge-none">None</span></td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">—</td>
+            <td style="font-family:'DM Mono',monospace">v1.2.0</td>
             <td style="font-family:'DM Mono',monospace">6</td>
             <td style="font-family:'DM Mono',monospace;color:var(--accent)">81%</td>
             <td><span class="status-badge status-active">Published</span></td>
-            <td><span class="row-action">Edit</span></td>
+            <td><span class="row-action" onclick="openTemplateEditor('it')">Edit</span></td>
           </tr>
           <tr>
-            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">Procurement Assistant</td>
+            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">Procurement Agent</td>
             <td style="font-size:12px;color:var(--text-muted)">Finance</td>
-            <td style="font-family:'DM Mono',monospace">v2</td>
+            <td><span class="auth-badge-tenant">Tenant Creds</span></td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--accent)">Enterprise</td>
+            <td style="font-family:'DM Mono',monospace">v2.0.0</td>
             <td style="font-family:'DM Mono',monospace">5</td>
             <td style="font-family:'DM Mono',monospace;color:var(--warn)">77%</td>
             <td><span class="status-badge status-active">Published</span></td>
-            <td><span class="row-action">Edit</span></td>
+            <td><span class="row-action" onclick="openTemplateEditor('procurement')">Edit</span></td>
           </tr>
-          <tr>
-            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-primary)">Legal Document Reviewer</td>
-            <td style="font-size:12px;color:var(--text-muted)">Legal</td>
-            <td style="font-family:'DM Mono',monospace">v1</td>
-            <td style="font-family:'DM Mono',monospace">0</td>
+          <tr style="opacity:.55">
+            <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text-muted)">Legal Document Reviewer</td>
+            <td style="font-size:12px;color:var(--text-faint)">Legal</td>
+            <td><span class="auth-badge-none">None</span></td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">—</td>
+            <td style="font-family:'DM Mono',monospace;color:var(--text-faint)">v0.1.0</td>
+            <td style="font-family:'DM Mono',monospace;color:var(--text-faint)">0</td>
             <td style="color:var(--text-faint)">&mdash;</td>
             <td><span class="status-badge status-suspended">Draft</span></td>
-            <td><span class="row-action" style="color:var(--accent)">Publish</span></td>
+            <td><span style="font-size:11px;color:var(--text-faint);cursor:pointer;padding:3px 8px;border:1px solid var(--border);border-radius:var(--r-sm)">View</span></td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- ATA-037: Template Editor (slide-in style, shown inline for prototype) -->
+    <div id="templateEditorPanel" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--text-primary)" id="tmplEditorTitle">Edit Template: Finance Analyst</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:2px">Template ID: <span style="font-family:'DM Mono',monospace">tmpl_finance_analyst_v3</span></div>
+        </div>
+        <button class="ta-btn-ghost" onclick="closeTemplateEditor()" style="font-size:12px">✕ Close</button>
+      </div>
+
+      <!-- Section 1: Identity (pre-existing, abbreviated) -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px">
+        <div class="tmpl-section-title">1 — Identity</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Name</label>
+            <input class="form-input" type="text" value="Finance Analyst">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Category</label>
+            <select class="form-select"><option>Finance</option><option>HR</option><option>IT</option><option>Operations</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: System Prompt (pre-existing, abbreviated) -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px">
+        <div class="tmpl-section-title">2 — System Prompt &amp; Guardrails</div>
+        <textarea class="form-textarea" rows="4" style="font-size:12px">You are a finance assistant for the tenant's finance team. Answer questions about financial policies, budgets, and reporting. Only cite verified documents from the connected knowledge bases.</textarea>
+      </div>
+
+      <!-- ATA-037 Section 3: Authentication -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px">
+        <div class="tmpl-section-title">3 — Authentication</div>
+        <div style="margin-bottom:12px">
+          <label class="form-label">Auth Mode</label>
+          <div>
+            <div class="radio-option" id="tmpl-auth-none" onclick="setTmplAuthMode('none')">
+              <div class="radio-dot"></div>
+              <div>
+                <div style="font-size:13px;font-weight:500;color:var(--text-primary)">None</div>
+                <div style="font-size:11px;color:var(--text-faint)">No credentials required — agent connects via platform service account</div>
+              </div>
+            </div>
+            <div class="radio-option selected" id="tmpl-auth-tenant" onclick="setTmplAuthMode('tenant')">
+              <div class="radio-dot" style="border-color:var(--accent);background:var(--accent)"><div style="width:6px;height:6px;border-radius:50%;background:#0C0E14"></div></div>
+              <div>
+                <div style="font-size:13px;font-weight:500;color:var(--text-primary)">Tenant Credentials</div>
+                <div style="font-size:11px;color:var(--text-faint)">Tenant admin provides credentials at deploy time</div>
+              </div>
+            </div>
+            <div class="radio-option" id="tmpl-auth-platform" onclick="setTmplAuthMode('platform')">
+              <div class="radio-dot"></div>
+              <div>
+                <div style="font-size:13px;font-weight:500;color:var(--text-primary)">Platform Credentials</div>
+                <div style="font-size:11px;color:var(--text-faint)">Platform-level credentials injected automatically</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Credential schema table (shown when auth_mode != none) -->
+        <div id="tmpl-cred-schema">
+          <div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:8px">Credential Schema</div>
+          <table class="tmpl-auth-table">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Label</th>
+                <th>Type</th>
+                <th>Sensitive</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tmpl-cred-tbody">
+              <tr>
+                <td><span class="tmpl-auth-key">sharepoint_client_id</span></td>
+                <td><input class="form-input" type="text" value="SharePoint Client ID" style="padding:4px 8px;font-size:12px"></td>
+                <td>
+                  <select class="form-select" style="padding:4px 8px;font-size:11px">
+                    <option>string</option><option>url</option><option>oauth2</option>
+                  </select>
+                </td>
+                <td style="text-align:center"><span style="color:var(--text-faint);cursor:pointer;font-size:15px" title="Toggle sensitive">👁</span></td>
+                <td><span style="color:var(--alert);cursor:pointer;font-size:13px" onclick="this.closest('tr').remove()">✕</span></td>
+              </tr>
+              <tr>
+                <td><span class="tmpl-auth-key">sharepoint_client_secret</span></td>
+                <td><input class="form-input" type="text" value="SharePoint Client Secret" style="padding:4px 8px;font-size:12px"></td>
+                <td>
+                  <select class="form-select" style="padding:4px 8px;font-size:11px">
+                    <option>string</option><option>url</option><option>oauth2</option>
+                  </select>
+                </td>
+                <td style="text-align:center"><span style="color:var(--accent);cursor:pointer;font-size:15px" title="Sensitive — hidden">🔒</span></td>
+                <td><span style="color:var(--alert);cursor:pointer;font-size:13px" onclick="this.closest('tr').remove()">✕</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="tmpl-add-btn" onclick="addCredField()">+ Add Credential Field</button>
+        </div>
+      </div>
+
+      <!-- ATA-037 Section 4: Plan & Access Gate -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px">
+        <div class="tmpl-section-title">4 — Plan &amp; Access Gate</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Plan Required</label>
+            <select class="form-select">
+              <option>None</option>
+              <option>Starter</option>
+              <option selected>Professional</option>
+              <option>Enterprise</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">Capabilities (what this agent can do)</label>
+          <div class="chip-input-wrap" id="caps-input-wrap">
+            <span class="chip-input-tag">financial reporting<span class="chip-input-tag-x" onclick="removeChip(this)">×</span></span>
+            <span class="chip-input-tag">budget analysis<span class="chip-input-tag-x" onclick="removeChip(this)">×</span></span>
+            <span class="chip-input-tag">invoice processing<span class="chip-input-tag-x" onclick="removeChip(this)">×</span></span>
+            <input class="chip-input-field" type="text" placeholder="Add capability…" onkeydown="addChipOnEnter(event,'caps-input-wrap')">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Cannot Do (restrictions)</label>
+          <div class="chip-input-wrap" id="cannot-input-wrap">
+            <span class="chip-input-tag">HR queries<span class="chip-input-tag-x" onclick="removeChip(this)">×</span></span>
+            <span class="chip-input-tag">personnel decisions<span class="chip-input-tag-x" onclick="removeChip(this)">×</span></span>
+            <input class="chip-input-field" type="text" placeholder="Add restriction…" onkeydown="addChipOnEnter(event,'cannot-input-wrap')">
+          </div>
+        </div>
+      </div>
+
+      <!-- ATA-037 Section 5: Tool Assignments -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px">
+        <div class="tmpl-section-title">5 — Tool Assignments</div>
+        <div class="tool-row">
+          <input type="checkbox" checked style="accent-color:var(--accent)">
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">SharePoint Search</span>
+          <span class="tool-class-badge-read">Read-Only</span>
+          <span class="tool-health-healthy">● Healthy</span>
+        </div>
+        <div class="tool-row">
+          <input type="checkbox" checked style="accent-color:var(--accent)">
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">Jira Ticket Creator</span>
+          <span class="tool-class-badge-write">⚡ Write</span>
+          <span class="tool-health-healthy">● Healthy</span>
+        </div>
+        <div class="tool-row">
+          <input type="checkbox" style="accent-color:var(--accent)">
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">Confluence Docs</span>
+          <span class="tool-class-badge-read">Read-Only</span>
+          <span class="tool-health-degraded">⚠ Degraded</span>
+        </div>
+        <div class="tool-row">
+          <input type="checkbox" style="accent-color:var(--accent)">
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">Slack Notifier</span>
+          <span class="tool-class-badge-write">⚡ Write</span>
+          <span class="tool-health-down">✕ Down</span>
+        </div>
+      </div>
+
+      <!-- ATA-037 Section 6: KB Binding -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px">
+        <div class="tmpl-section-title">6 — KB Binding</div>
+        <div class="kb-select-item checked">
+          <span style="color:var(--accent);font-size:14px">&#9745;</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">HR SharePoint</div>
+            <div style="font-size:11px;color:var(--text-faint)">SharePoint Finance Portal / HR</div>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2,081 docs</span>
+        </div>
+        <div class="kb-select-item checked">
+          <span style="color:var(--accent);font-size:14px">&#9745;</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">Finance OneDrive</div>
+            <div style="font-size:11px;color:var(--text-faint)">OneDrive Finance / Reports</div>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">943 docs</span>
+        </div>
+        <div class="kb-select-item">
+          <span style="color:var(--text-faint);font-size:14px">&#9744;</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500;color:var(--text-muted)">IT Confluence</div>
+            <div style="font-size:11px;color:var(--text-faint)">Confluence IT / Knowledge Base</div>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">1,247 docs</span>
+        </div>
+      </div>
+
+      <!-- ATA-044: Publishing Flow -->
+      <div class="admin-card tmpl-section" style="margin-bottom:16px" id="tmpl-publish-section">
+        <div class="tmpl-section-title">7 — Publish</div>
+        <!-- Pre-publish checklist -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Pre-publish checklist</div>
+          <div class="pub-checklist">
+            <div class="pub-check-item">
+              <span class="pub-check-icon-done">✓</span>
+              <span style="font-size:11px;color:var(--text-muted)">All required identity fields filled</span>
+            </div>
+            <div class="pub-check-item">
+              <span class="pub-check-icon-done">✓</span>
+              <span style="font-size:11px;color:var(--text-muted)">Credential schema has at least one field</span>
+            </div>
+            <div class="pub-check-item">
+              <span class="pub-check-icon-done">✓</span>
+              <span style="font-size:11px;color:var(--text-muted)">System prompt defined</span>
+            </div>
+            <div class="pub-check-item">
+              <span class="pub-check-icon-pending">○</span>
+              <span style="font-size:11px;color:var(--text-faint)">Guardrail config valid — no active rule conflicts</span>
+            </div>
+          </div>
+        </div>
+        <!-- Version label -->
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:8px">Version Label</div>
+          <div style="display:flex;gap:8px">
+            <div class="radio-option" style="flex:1;padding:8px 12px;margin-bottom:0" id="pub-ver-patch" onclick="setPubVersion('patch')">
+              <div class="radio-dot"></div>
+              <div><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Patch</div><div style="font-size:10px;color:var(--text-faint)">bug fixes only</div></div>
+            </div>
+            <div class="radio-option selected" style="flex:1;padding:8px 12px;margin-bottom:0" id="pub-ver-minor" onclick="setPubVersion('minor')">
+              <div class="radio-dot" style="border-color:var(--accent);background:var(--accent)"><div style="width:6px;height:6px;border-radius:50%;background:#0C0E14"></div></div>
+              <div><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Minor</div><div style="font-size:10px;color:var(--text-faint)">new capabilities</div></div>
+            </div>
+            <div class="radio-option" style="flex:1;padding:8px 12px;margin-bottom:0" id="pub-ver-major" onclick="setPubVersion('major')">
+              <div class="radio-dot"></div>
+              <div><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Major</div><div style="font-size:10px;color:var(--text-faint)">breaking changes</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- Change summary -->
+        <div class="form-group" style="margin-bottom:14px">
+          <label class="form-label">Change Summary <span style="font-size:10px;color:var(--text-faint)">(max 500 chars)</span></label>
+          <textarea class="form-textarea" rows="3" maxlength="500" placeholder="Describe what changed in this version…">Added SharePoint credential schema. Updated system prompt to handle multi-currency queries. Improved confidence threshold handling.</textarea>
+        </div>
+        <!-- Publish button -->
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="ta-btn-primary" style="font-size:13px;padding:8px 24px" onclick="publishTemplate()">Publish v3.1.0</button>
+          <button class="ta-btn-ghost" style="font-size:12px;padding:7px 14px">Save Draft</button>
+        </div>
+        <!-- Success state (hidden by default) -->
+        <div id="tmpl-publish-success" style="display:none;margin-top:12px;padding:10px 14px;background:var(--accent-dim);border:1px solid var(--accent-ring);border-radius:var(--r);font-size:12px;color:var(--accent)">
+          ✓ Template published as <span style="font-family:'DM Mono',monospace">v3.1.0</span> — visible to all tenant admins
+        </div>
+      </div>
+
+    </div><!-- /templateEditorPanel -->
 
   </div><!-- /pa-panel-templates -->
 
@@ -4091,6 +4528,104 @@
 
   </div><!-- /pa-panel-cost -->
 
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- ATA-046: PLATFORM GUARDRAIL COMPLIANCE                         -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="admin-panel" id="pa-panel-guardrail-compliance">
+
+    <div class="admin-section-header" style="margin-bottom:20px">
+      <div>
+        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;color:var(--text-primary)">Guardrail Compliance</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Cross-tenant guardrail trigger log &mdash; violation metadata only, no user identity or conversation content</div>
+      </div>
+    </div>
+
+    <!-- Filter row -->
+    <div class="compliance-filter-row">
+      <span style="font-size:11px;color:var(--text-faint);font-weight:500;text-transform:uppercase;letter-spacing:.05em">Date Range</span>
+      <input class="compliance-date-input" type="text" value="2026-03-01">
+      <span class="compliance-filter-sep">→</span>
+      <input class="compliance-date-input" type="text" value="2026-03-21">
+      <span class="compliance-filter-sep" style="margin-left:8px">Rule</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px;background:var(--accent-dim);border-color:var(--accent-ring);color:var(--accent)">All</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">keyword_block</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">confidence</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">max_length</span>
+      <span class="compliance-filter-sep" style="margin-left:8px">Action</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px;background:var(--accent-dim);border-color:var(--accent-ring);color:var(--accent)">All</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">Block</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">Redact</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">Warn</span>
+      <span class="compliance-filter-sep" style="margin-left:8px">Tenant</span>
+      <select class="form-select" style="width:160px;font-size:11px;padding:5px 8px">
+        <option>All Tenants</option>
+        <option>Acme Corp</option>
+        <option>Vertex Finance</option>
+        <option>Initech</option>
+        <option>Global Logistics Ltd</option>
+      </select>
+      <button class="export-btn">⬇ Export CSV</button>
+    </div>
+
+    <div class="admin-card" style="padding:0;overflow:hidden">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Rule Triggered</th>
+            <th>Action</th>
+            <th>Agent Name</th>
+            <th>Conversation ID</th>
+            <th>Tenant</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-21 09:14:22</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">keyword_block — competitor_pricing</td>
+            <td><span class="compliance-action-badge ca-block">Block</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Finance Analyst</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_a3f9c21d</td>
+            <td style="font-size:12px;color:var(--text-muted)">Acme Corp</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-21 08:52:07</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">confidence — below_threshold (0.41)</td>
+            <td><span class="compliance-action-badge ca-redact">Redact</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">HR Assistant</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_b7e12a44</td>
+            <td style="font-size:12px;color:var(--text-muted)">Vertex Finance</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-20 16:33:45</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">max_length — exceeded 500 words</td>
+            <td><span class="compliance-action-badge ca-warn">Warn</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">IT Helpdesk</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_c9d88f02</td>
+            <td style="font-size:12px;color:var(--text-muted)">Initech</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-20 14:11:09</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">keyword_block — personnel_decision</td>
+            <td><span class="compliance-action-badge ca-block">Block</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Procurement Agent</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_d2a44c18</td>
+            <td style="font-size:12px;color:var(--text-muted)">Global Logistics Ltd</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-19 11:58:33</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">confidence — below_threshold (0.38)</td>
+            <td><span class="compliance-action-badge ca-redact">Redact</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Finance Analyst</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_e5b91d77</td>
+            <td style="font-size:12px;color:var(--text-muted)">Acme Corp</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /pa-panel-guardrail-compliance -->
+
 </div><!-- /admin-content -->
       <!-- ══ PLATFORM ADMIN PANELS END ══ -->
     </div><!-- /admin-layout -->
@@ -4126,6 +4661,9 @@
         <div class="admin-nav-item" id="ta-nav-issues" onclick="showTAPanel('issues')">
           <span class="admin-nav-icon">⚑</span>Issues
           <span class="admin-badge admin-badge-warn">2</span>
+        </div>
+        <div class="admin-nav-item" id="ta-nav-guardrail-compliance" onclick="showTAPanel('guardrail-compliance')">
+          <span class="admin-nav-icon">⊟</span>Guardrail Compliance
         </div>
         <div class="admin-nav-item" id="ta-nav-settings" onclick="showTAPanel('settings')">
           <span class="admin-nav-icon">⚙</span>Settings
@@ -4499,33 +5037,45 @@
 
     <div style="display:flex;gap:8px;margin-bottom:20px">
       <span class="admin-section-action" onclick="showAgentLibrary()">Browse Library</span>
+      <button class="ta-btn-primary" onclick="openDeployWizard()" style="font-size:11px;padding:4px 12px">Deploy from Template</button>
       <button class="ta-btn-ghost" onclick="showTAAgentStudio()">+ Custom Agent</button>
     </div>
 
     <div class="agent-grid-ta">
 
-      <!-- Finance Analyst -->
-      <div class="agent-card-ta">
-        <div class="agent-ta-header">
-          <div class="agent-ta-icon">&#9830;</div>
-          <div>
-            <div class="agent-ta-name">Finance Analyst</div>
-            <div class="agent-ta-version">Template v3 &middot; Deployed Jan 2026</div>
+      <!-- Finance Analyst (ATA-042/045: detail panel + update banner) -->
+      <div class="agent-card-ta" style="overflow:hidden;padding-bottom:0">
+        <div style="padding:18px 18px 12px">
+          <div class="agent-ta-header">
+            <div class="agent-ta-icon">&#9830;</div>
+            <div>
+              <div class="agent-ta-name">Finance Analyst</div>
+              <div class="agent-ta-version">Template v3.0.0 &middot; Deployed Jan 2026</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--text-faint);padding:2px 6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-elevated)">2 KBs</span>
+            <span style="font-size:11px;color:var(--text-faint);padding:2px 6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-elevated)">1 tool</span>
+            <span style="font-size:11px;color:var(--accent);padding:2px 6px;border:1px solid var(--accent-ring);border-radius:var(--r-sm);background:var(--accent-dim)">✓ Credentials</span>
+          </div>
+          <div class="agent-sat">
+            <div class="sat-bar" style="flex:1"><div class="health-fill sat-fill-mid" style="width:74%"></div></div>
+            <span class="sat-val" style="color:var(--warn)">74%</span>
+          </div>
+          <div class="agent-ta-stats">
+            <span>156 rated responses</span>
+            <span style="color:var(--alert)">&#8595; &minus;5% this week</span>
+          </div>
+          <div class="agent-ta-actions">
+            <button class="ta-btn-ghost">Analytics</button>
+            <button class="ta-btn-ghost" onclick="openAgentDetailPanel()">Detail</button>
+            <button class="ta-btn-primary">Test Chat</button>
           </div>
         </div>
-        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;color:var(--text-faint);margin-bottom:10px">Finance Documents &middot; SharePoint</div>
-        <div class="agent-sat">
-          <div class="sat-bar" style="flex:1"><div class="health-fill sat-fill-mid" style="width:74%"></div></div>
-          <span class="sat-val" style="color:var(--warn)">74%</span>
-        </div>
-        <div class="agent-ta-stats">
-          <span>156 rated responses</span>
-          <span style="color:var(--alert)">&#8595; &minus;5% this week</span>
-        </div>
-        <div class="agent-ta-actions">
-          <button class="ta-btn-ghost">Analytics</button>
-          <button class="ta-btn-ghost">Configure</button>
-          <button class="ta-btn-primary">Test Chat</button>
+        <!-- ATA-045: Update available banner -->
+        <div class="update-banner">
+          <span class="update-banner-text">🔄 Template update available — v4.0.0</span>
+          <button class="update-banner-btn" onclick="openVersionDiffModal()">View Changes</button>
         </div>
       </div>
 
@@ -4535,10 +5085,12 @@
           <div class="agent-ta-icon">&#8857;</div>
           <div>
             <div class="agent-ta-name">Acme HR Helper</div>
-            <div class="agent-ta-version">Template v2 &middot; Deployed Feb 2026</div>
+            <div class="agent-ta-version">Template v2.1.0 &middot; Deployed Feb 2026</div>
           </div>
         </div>
-        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;color:var(--text-faint);margin-bottom:10px">HR Policies &middot; SharePoint</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text-faint);padding:2px 6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-elevated)">1 KB</span>
+        </div>
         <div class="agent-sat">
           <div class="sat-bar" style="flex:1"><div class="health-fill sat-fill-hi" style="width:89%"></div></div>
           <span class="sat-val" style="color:var(--accent)">89%</span>
@@ -4549,7 +5101,7 @@
         </div>
         <div class="agent-ta-actions">
           <button class="ta-btn-ghost">Analytics</button>
-          <button class="ta-btn-ghost">Configure</button>
+          <button class="ta-btn-ghost" onclick="openAgentDetailPanel()">Detail</button>
           <button class="ta-btn-primary">Test Chat</button>
         </div>
       </div>
@@ -5348,12 +5900,546 @@
 
     </div><!-- /issue reporting tab -->
 
-  </div>
+  </div><!-- /ta-panel-settings -->
 
-</div>
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- ATA-047: TENANT GUARDRAIL COMPLIANCE                        -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="admin-panel" id="ta-panel-guardrail-compliance">
+
+    <div style="margin-bottom:20px">
+      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;color:var(--text-primary)">Guardrail Compliance</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Guardrail trigger log for your workspace &mdash; violation metadata only, no user identity or conversation content</div>
+    </div>
+
+    <!-- Filter row (no tenant filter for TA) -->
+    <div class="compliance-filter-row">
+      <span style="font-size:11px;color:var(--text-faint);font-weight:500;text-transform:uppercase;letter-spacing:.05em">Date Range</span>
+      <input class="compliance-date-input" type="text" value="2026-03-01">
+      <span class="compliance-filter-sep">→</span>
+      <input class="compliance-date-input" type="text" value="2026-03-21">
+      <span class="compliance-filter-sep" style="margin-left:8px">Rule</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px;background:var(--accent-dim);border-color:var(--accent-ring);color:var(--accent)">All</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">keyword_block</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">confidence</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">max_length</span>
+      <span class="compliance-filter-sep" style="margin-left:8px">Action</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px;background:var(--accent-dim);border-color:var(--accent-ring);color:var(--accent)">All</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">Block</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">Redact</span>
+      <span class="filter-chip" style="font-size:11px;padding:4px 10px">Warn</span>
+      <button class="export-btn">⬇ Export CSV</button>
+    </div>
+
+    <div class="admin-card" style="padding:0;overflow:hidden">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Rule Triggered</th>
+            <th>Action</th>
+            <th>Agent Name</th>
+            <th>Conversation ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-21 09:14:22</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">keyword_block — competitor_pricing</td>
+            <td><span class="compliance-action-badge ca-block">Block</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Finance Analyst</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_a3f9c21d</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-21 08:52:07</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">confidence — below_threshold (0.41)</td>
+            <td><span class="compliance-action-badge ca-redact">Redact</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Acme HR Helper</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_b7e12a44</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-20 14:11:09</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">keyword_block — personnel_decision</td>
+            <td><span class="compliance-action-badge ca-block">Block</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Procurement Assistant</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_d2a44c18</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-19 11:58:33</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">confidence — below_threshold (0.38)</td>
+            <td><span class="compliance-action-badge ca-redact">Redact</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Finance Analyst</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_e5b91d77</td>
+          </tr>
+          <tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2026-03-18 16:22:14</td>
+            <td style="font-size:13px;font-weight:500;color:var(--text-primary)">max_length — exceeded 500 words</td>
+            <td><span class="compliance-action-badge ca-warn">Warn</span></td>
+            <td style="font-size:13px;color:var(--text-primary);font-weight:500">Acme HR Helper</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">conv_f1c33b90</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /ta-panel-guardrail-compliance -->
+
       <!-- ══ TENANT ADMIN PANELS END ══ -->
     </div><!-- /admin-layout -->
   </div><!-- /tenantAdminApp -->
+
+  <!-- ══ ATA-038–041: DEPLOY WIZARD MODAL ════════════════════════ -->
+  <div class="deploy-wizard-backdrop" id="deployWizardBackdrop" onclick="closeDeployWizardOutside(event)">
+    <div class="deploy-wizard-modal" id="deployWizardModal">
+      <!-- Header -->
+      <div class="deploy-wiz-head">
+        <div class="deploy-wiz-head-row">
+          <div>
+            <div class="deploy-wiz-title">Deploy Agent from Template</div>
+            <div class="deploy-wiz-step-label" id="deployWizStepLabel">Step 1 of 4</div>
+          </div>
+          <button class="icon-btn" onclick="closeDeployWizard()" style="flex-shrink:0">✕</button>
+        </div>
+        <div class="deploy-wiz-progress-track">
+          <div class="deploy-wiz-progress-fill" id="deployWizProgress" style="width:25%"></div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="deploy-wiz-body">
+
+        <!-- STEP 1: Select Template (ATA-038) -->
+        <div id="dw-step-1">
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Select a Template</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:14px">Choose the base template for this agent deployment</div>
+
+          <!-- Search + filter chips -->
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <div style="flex:1;display:flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r);padding:7px 12px">
+              <span style="color:var(--text-faint);font-size:12px">⊕</span>
+              <input type="text" placeholder="Search templates…" style="flex:1;background:none;border:none;outline:none;font-size:12px;color:var(--text-primary);font-family:'Plus Jakarta Sans',sans-serif">
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+            <span class="filter-chip" style="font-size:11px;padding:3px 9px;background:var(--accent-dim);border-color:var(--accent-ring);color:var(--accent)">All</span>
+            <span class="filter-chip" style="font-size:11px;padding:3px 9px">HR</span>
+            <span class="filter-chip" style="font-size:11px;padding:3px 9px">Finance</span>
+            <span class="filter-chip" style="font-size:11px;padding:3px 9px">IT</span>
+            <span class="filter-chip" style="font-size:11px;padding:3px 9px">Custom</span>
+          </div>
+
+          <!-- Template grid -->
+          <div class="tmpl-select-grid" id="dw-template-grid">
+            <div class="tmpl-select-card" onclick="selectDeployTemplate(this,'none','HR Assistant','HR')" id="dw-tmpl-hr">
+              <div class="tmpl-select-name">HR Assistant</div>
+              <div class="tmpl-select-desc">Answers HR policy questions, leave requests, and benefits queries using connected HR documents.</div>
+              <div class="tmpl-select-badges">
+                <span class="auth-badge-none">No auth required</span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;padding:2px 6px;border-radius:var(--r-sm);background:var(--bg-surface);border:1px solid var(--border);color:var(--text-faint)">Any plan</span>
+              </div>
+            </div>
+            <div class="tmpl-select-card selected" onclick="selectDeployTemplate(this,'tenant_credentials','Finance Analyst','Finance')" id="dw-tmpl-finance">
+              <div class="tmpl-select-name">Finance Analyst</div>
+              <div class="tmpl-select-desc">Analyzes financial reports, budgets, and compliance documents. Requires SharePoint credentials.</div>
+              <div class="tmpl-select-badges">
+                <span class="auth-badge-tenant">Tenant Creds</span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;padding:2px 6px;border-radius:var(--r-sm);background:var(--warn-dim);border:1px solid rgba(245,197,24,.3);color:var(--warn)">Professional+</span>
+              </div>
+            </div>
+            <div class="tmpl-select-card" onclick="selectDeployTemplate(this,'none','IT Helpdesk','IT')" id="dw-tmpl-it">
+              <div class="tmpl-select-name">IT Helpdesk</div>
+              <div class="tmpl-select-desc">Handles IT support tickets, troubleshooting guides, and software request workflows.</div>
+              <div class="tmpl-select-badges">
+                <span class="auth-badge-none">No auth required</span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;padding:2px 6px;border-radius:var(--r-sm);background:var(--bg-surface);border:1px solid var(--border);color:var(--text-faint)">Any plan</span>
+              </div>
+            </div>
+            <div class="tmpl-select-card" onclick="selectDeployTemplate(this,'tenant_credentials','Procurement Agent','Finance')" id="dw-tmpl-procurement">
+              <div class="tmpl-select-name">Procurement Agent</div>
+              <div class="tmpl-select-desc">Manages vendor contracts, purchasing approvals, and procurement policy queries.</div>
+              <div class="tmpl-select-badges">
+                <span class="auth-badge-tenant">Tenant Creds</span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;padding:2px 6px;border-radius:var(--r-sm);background:var(--accent-dim);border:1px solid var(--accent-ring);color:var(--accent)">Enterprise</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: Credentials (ATA-039, conditional) -->
+        <div id="dw-step-2" style="display:none">
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Enter Credentials</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:16px">These credentials are stored encrypted and used only by this agent deployment</div>
+
+          <div class="cred-field-row">
+            <div class="cred-field-key">sharepoint_client_id</div>
+            <div class="cred-input-wrap">
+              <input type="text" placeholder="e.g. a1b2c3d4-e5f6-...">
+            </div>
+          </div>
+          <div class="cred-field-row">
+            <div class="cred-field-key">sharepoint_client_secret</div>
+            <div class="cred-input-wrap">
+              <input type="password" id="dw-secret-input" placeholder="Client secret">
+              <button class="cred-eye-btn" onclick="toggleCredEye('dw-secret-input', this)">👁</button>
+            </div>
+          </div>
+
+          <!-- Connection test -->
+          <div style="margin-top:16px">
+            <button class="conn-test-btn" id="dw-conn-test-btn" onclick="runConnectionTest()">
+              <span id="dw-conn-test-icon">⟳</span> Test Connection
+            </button>
+            <div id="dw-conn-test-result" style="margin-top:8px;font-size:11px;display:none"></div>
+          </div>
+        </div>
+
+        <!-- STEP 3: KB & Tools (ATA-040) -->
+        <div id="dw-step-3" style="display:none">
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Knowledge Bases &amp; Tools</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:16px">Select which knowledge bases and tools to bind to this agent</div>
+
+          <!-- KB selection -->
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Knowledge Bases</div>
+          <div class="kb-select-item checked">
+            <span style="color:var(--accent);font-size:14px">&#9745;</span>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500;color:var(--text-primary)">HR SharePoint</div>
+              <div style="font-size:11px;color:var(--text-faint)">SharePoint Finance Portal / HR</div>
+            </div>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">2,081 docs</span>
+          </div>
+          <div class="kb-select-item checked">
+            <span style="color:var(--accent);font-size:14px">&#9745;</span>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500;color:var(--text-primary)">Finance OneDrive</div>
+              <div style="font-size:11px;color:var(--text-faint)">OneDrive Finance / Reports</div>
+            </div>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">943 docs</span>
+          </div>
+          <div class="kb-select-item">
+            <span style="color:var(--text-faint);font-size:14px">&#9744;</span>
+            <div style="flex:1">
+              <div style="font-size:13px;color:var(--text-muted)">IT Confluence</div>
+              <div style="font-size:11px;color:var(--text-faint)">Not relevant to Finance Analyst</div>
+            </div>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint)">1,247 docs</span>
+          </div>
+
+          <!-- Search mode -->
+          <div style="margin-top:14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Search Mode</div>
+            <div style="display:flex;gap:8px">
+              <div class="radio-option selected" style="flex:1;padding:8px 12px;margin-bottom:0">
+                <div class="radio-dot" style="border-color:var(--accent);background:var(--accent)"><div style="width:6px;height:6px;border-radius:50%;background:#0C0E14"></div></div>
+                <div><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Parallel</div><div style="font-size:10px;color:var(--text-faint)">all KBs searched simultaneously</div></div>
+              </div>
+              <div class="radio-option" style="flex:1;padding:8px 12px;margin-bottom:0">
+                <div class="radio-dot"></div>
+                <div><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Priority Order</div><div style="font-size:10px;color:var(--text-faint)">KBs searched in ranked order</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tools subsection -->
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Tools</div>
+          <div class="tool-row">
+            <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">SharePoint Search</span>
+            <span class="tool-class-badge-read">Read-Only</span>
+            <span class="tool-health-healthy">● Healthy</span>
+            <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="tool-row">
+            <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">Confluence Docs</span>
+            <span class="tool-class-badge-read">Read-Only</span>
+            <span class="tool-health-degraded">⚠ Degraded</span>
+            <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="warn-box" style="margin-top:8px;margin-bottom:0">⚠ Confluence Docs is degraded. The agent will operate with limited functionality if enabled.</div>
+        </div>
+
+        <!-- STEP 4: Access & Limits (ATA-041) -->
+        <div id="dw-step-4" style="display:none">
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Access &amp; Rate Limits</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:16px">Configure who can use this agent and usage boundaries</div>
+
+          <!-- Access control -->
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Access Control</div>
+            <div class="radio-option selected" style="margin-bottom:6px;padding:10px 12px">
+              <div class="radio-dot" style="border-color:var(--accent);background:var(--accent)"><div style="width:6px;height:6px;border-radius:50%;background:#0C0E14"></div></div>
+              <div><div style="font-size:13px;font-weight:500;color:var(--text-primary)">All workspace users</div></div>
+            </div>
+            <div class="radio-option" style="margin-bottom:6px;padding:10px 12px">
+              <div class="radio-dot"></div>
+              <div><div style="font-size:13px;font-weight:500;color:var(--text-primary)">Specific roles</div><div style="font-size:11px;color:var(--text-faint)">Limit to users with certain roles</div></div>
+            </div>
+            <div class="radio-option" style="margin-bottom:0;padding:10px 12px">
+              <div class="radio-dot"></div>
+              <div><div style="font-size:13px;font-weight:500;color:var(--text-primary)">Specific users</div><div style="font-size:11px;color:var(--text-faint)">Search and invite individual users</div></div>
+            </div>
+          </div>
+
+          <!-- Rate limits -->
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Rate Limits</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label class="form-label">Tokens / Day</label>
+                <input class="form-input form-input-mono" type="text" value="50000">
+              </div>
+              <div>
+                <label class="form-label">Max Conversation Turns</label>
+                <input class="form-input form-input-mono" type="text" value="20">
+              </div>
+            </div>
+          </div>
+
+          <!-- Guardrails note (read-only for library templates) -->
+          <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r);font-size:12px;color:var(--text-muted)">
+            <span style="font-size:14px;flex-shrink:0">🔒</span>
+            <span>Guardrails managed by platform template — cannot be edited at deployment time</span>
+          </div>
+        </div>
+
+        <!-- STEP 5: Success state -->
+        <div id="dw-step-5" style="display:none">
+          <div class="deploy-success-card">
+            <div style="width:64px;height:64px;border-radius:50%;background:var(--accent-dim);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--accent);margin:0 auto 16px">✓</div>
+            <div style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Agent Deployed</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Finance Analyst is now live and accessible to your workspace users</div>
+            <div class="deploy-success-agent-card">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <div style="width:36px;height:36px;border-radius:10px;background:var(--accent-dim);border:1px solid var(--accent-ring);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--accent)">&#9830;</div>
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text-primary)">Finance Analyst</div>
+                  <div style="font-size:11px;color:var(--text-faint)">Template v3.0.0 &middot; Deployed just now</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <span style="font-size:11px;color:var(--text-faint);padding:2px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-elevated)">2 KBs</span>
+                <span style="font-size:11px;color:var(--text-faint);padding:2px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-elevated)">1 tool</span>
+                <span style="font-size:11px;color:var(--accent);padding:2px 7px;border:1px solid var(--accent-ring);border-radius:var(--r-sm);background:var(--accent-dim)">✓ Credentials verified</span>
+              </div>
+            </div>
+            <button class="ta-btn-primary" style="font-size:13px;padding:8px 24px" onclick="closeDeployWizard()">Go to Agents</button>
+          </div>
+        </div>
+
+      </div><!-- /deploy-wiz-body -->
+
+      <!-- Footer -->
+      <div class="deploy-wiz-foot" id="deployWizFoot">
+        <button class="wiz-btn wiz-btn-ghost" id="dw-back-btn" onclick="dwShowStep(dwCurrentStep - 1)" style="display:none">← Back</button>
+        <div style="flex:1"></div>
+        <button class="wiz-btn wiz-btn-primary" id="dw-next-btn" onclick="dwNextStep()">Next →</button>
+      </div>
+    </div><!-- /deploy-wizard-modal -->
+  </div><!-- /deploy-wizard-backdrop -->
+
+  <!-- ══ ATA-042: AGENT DETAIL PANEL ══════════════════════════════ -->
+  <div class="agent-detail-panel" id="agentDetailPanel">
+    <div class="adp-head">
+      <div>
+        <div class="adp-title" id="adp-agent-name">Finance Analyst</div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <span class="status-badge status-active">Live</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;padding:2px 6px;border-radius:var(--r-sm);background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-faint)">v3.0.0</span>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="closeAgentDetailPanel()">✕</button>
+    </div>
+
+    <div class="adp-section">
+      <div class="adp-section-label">KB Bindings</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div>
+          <div style="font-size:13px;color:var(--text-primary);font-weight:500">SharePoint — HR Documents</div>
+          <div style="font-size:11px;color:var(--text-faint)">SharePoint Finance Portal / HR &middot; 2,081 docs</div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:var(--text-primary);font-weight:500">Finance OneDrive</div>
+          <div style="font-size:11px;color:var(--text-faint)">OneDrive Finance / Reports &middot; 943 docs</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="adp-section">
+      <div class="adp-section-label">Tool Assignments</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;color:var(--text-primary);flex:1">SharePoint Search</span>
+          <span class="tool-health-healthy">● Healthy</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;color:var(--text-primary);flex:1">Confluence Docs</span>
+          <span class="tool-health-degraded">⚠ Degraded</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="adp-section">
+      <div class="adp-section-label">Guardrail Summary</div>
+      <div style="font-size:13px;color:var(--text-primary);margin-bottom:4px">3 rules active</div>
+      <div style="font-size:11px;color:var(--text-faint)">Last violation: <span style="font-family:'DM Mono',monospace">2026-03-21 09:14</span></div>
+    </div>
+
+    <div class="adp-section">
+      <div class="adp-section-label">Credential Status</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint);flex:1">sharepoint_client_id</span>
+          <span class="cred-ok">✓ Stored</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-faint);flex:1">sharepoint_client_secret</span>
+          <span class="cred-ok">✓ Stored</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="adp-section">
+      <div class="adp-section-label">A2A Metadata</div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:10px;color:var(--text-faint);margin-bottom:3px">Agent URL</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);word-break:break-all;flex:1">https://api.mingai.io/a2a/acme/finance-analyst-v3</span>
+          <button class="copy-btn" onclick="copyToClipboard('https://api.mingai.io/a2a/acme/finance-analyst-v3', this)">Copy</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        <span class="a2a-cap-chip">streaming</span>
+        <span class="a2a-cap-chip">a2a</span>
+        <span class="a2a-cap-chip">mcp</span>
+      </div>
+    </div>
+
+    <div style="padding:14px 20px">
+      <button class="ta-btn-ghost" style="font-size:12px;width:100%;text-align:center" onclick="openReconfigPanel()">Configure</button>
+    </div>
+  </div><!-- /agentDetailPanel -->
+
+  <!-- ══ ATA-043: AGENT RECONFIGURE PANEL ═════════════════════════ -->
+  <div class="reconfig-panel" id="reconfigPanel">
+    <div class="adp-head">
+      <div>
+        <div class="adp-title">Reconfigure Agent</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">Finance Analyst</div>
+      </div>
+      <button class="icon-btn" onclick="closeReconfigPanel()">✕</button>
+    </div>
+    <div style="padding:16px 20px;flex:1;overflow-y:auto">
+
+      <!-- KB Binding reconfigure -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Knowledge Base Bindings</div>
+        <div class="kb-select-item checked">
+          <span style="color:var(--accent);font-size:14px">&#9745;</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">HR SharePoint</div>
+            <div style="font-size:11px;color:var(--text-faint)">SharePoint Finance Portal / HR</div>
+          </div>
+        </div>
+        <div class="kb-select-item checked">
+          <span style="color:var(--accent);font-size:14px">&#9745;</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">Finance OneDrive</div>
+            <div style="font-size:11px;color:var(--text-faint)">OneDrive Finance / Reports</div>
+          </div>
+        </div>
+        <div class="kb-select-item">
+          <span style="color:var(--text-faint);font-size:14px">&#9744;</span>
+          <div style="flex:1">
+            <div style="font-size:13px;color:var(--text-muted)">IT Confluence</div>
+            <div style="font-size:11px;color:var(--text-faint)">Not currently bound</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool toggles -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Tool Assignments</div>
+        <div class="tool-row">
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">SharePoint Search</span>
+          <span class="tool-health-healthy">● Healthy</span>
+          <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="tool-row">
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">Confluence Docs</span>
+          <span class="tool-health-degraded">⚠ Degraded</span>
+          <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+
+      <!-- System prompt: read-only -->
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:600;color:var(--text-muted)">System Prompt</span>
+          <span style="font-size:14px">🔒</span>
+        </div>
+        <textarea class="form-textarea" rows="4" readonly style="font-size:11px;line-height:1.6;color:var(--text-faint);cursor:not-allowed;opacity:.7">You are a finance assistant for the tenant's finance team. Answer questions about financial policies, budgets, and reporting. Only cite verified documents from the connected knowledge bases.</textarea>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:4px">Managed by platform template — cannot be edited</div>
+      </div>
+
+      <!-- Guardrail rules: read-only -->
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Guardrail Rules</span>
+          <span style="font-size:14px">🔒</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="padding:8px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r);font-size:11px;color:var(--text-faint)">keyword_block: competitor_pricing, personnel_decisions, financial_forecasts</div>
+          <div style="padding:8px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r);font-size:11px;color:var(--text-faint)">confidence_threshold: 0.60 — redact below threshold</div>
+          <div style="padding:8px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r);font-size:11px;color:var(--text-faint)">max_length: 500 words — truncate and warn</div>
+        </div>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:4px">Managed by platform template — cannot be edited</div>
+      </div>
+
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+      <button class="wiz-btn wiz-btn-ghost" onclick="closeReconfigPanel()">Cancel</button>
+      <button class="wiz-btn wiz-btn-primary" onclick="saveReconfigChanges()">Save Changes</button>
+    </div>
+  </div><!-- /reconfigPanel -->
+
+  <!-- ══ ATA-045: VERSION DIFF MODAL ══════════════════════════════ -->
+  <div class="modal-backdrop" id="versionDiffBackdrop" onclick="closeDiffModalOutside(event)">
+    <div class="modal-box" style="max-width:640px">
+      <div class="modal-header">
+        <div class="modal-title">Template Update: v3.0.0 → v4.0.0</div>
+        <button class="modal-close" onclick="closeVersionDiffModal()">✕</button>
+      </div>
+      <div style="padding:20px 24px;overflow-y:auto">
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">System Prompt</div>
+          <div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">Previous version:</div>
+          <div class="diff-old">You are a finance assistant for the tenant's finance team. Answer questions about financial policies and budgets.</div>
+          <div style="font-size:10px;color:var(--text-faint);margin:4px 0">Updated to:</div>
+          <div class="diff-new">You are a finance assistant for the tenant's finance team. Answer questions about financial policies, budgets, and multi-currency reporting. Always confirm answers with document citations.</div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Guardrail Rules</div>
+          <div class="diff-add">keyword_block: financial_forecast_leak (new rule)</div>
+          <div class="diff-remove">max_length: 300 words (replaced)</div>
+          <div class="diff-add">max_length: 500 words (updated limit)</div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Tools</div>
+          <div class="diff-add">Jira Ticket Creator (newly required)</div>
+        </div>
+
+        <div style="font-size:12px;color:var(--text-faint);padding:10px 14px;background:var(--bg-elevated);border-radius:var(--r);border:1px solid var(--border)">
+          <strong style="color:var(--text-muted)">Change notes:</strong> Multi-currency support added. Guardrail updated to block financial forecast leakage. Jira integration required for escalation workflows.
+        </div>
+      </div>
+      <div class="modal-header" style="border-top:1px solid var(--border);border-bottom:none;justify-content:flex-end;gap:8px;padding:14px 24px">
+        <button class="wiz-btn wiz-btn-ghost" onclick="closeVersionDiffModal()">Dismiss for 7 days</button>
+        <button class="wiz-btn wiz-btn-primary" onclick="closeVersionDiffModal()">Accept &amp; Redeploy</button>
+      </div>
+    </div>
+  </div><!-- /versionDiffBackdrop -->
 
   <script>
     /* ── STATE ──────────────────────────────────────────────── */
@@ -6010,14 +7096,15 @@
 
     /* ── PLATFORM ADMIN PANELS ──────────────────────────────────── */
     const paPanelLabels = {
-      dashboard: ['Platform', 'Overview'],
-      tenants:   ['Platform', 'Tenants'],
-      issues:    ['Platform', 'Issue Queue'],
-      llm:       ['Platform', 'LLM Profiles'],
-      templates: ['Platform', 'Agent Templates'],
-      analytics: ['Platform', 'Analytics'],
-      tools:     ['Platform', 'Tool Catalog'],
-      cost:      ['Platform', 'Cost Analytics'],
+      dashboard:              ['Platform', 'Overview'],
+      tenants:                ['Platform', 'Tenants'],
+      issues:                 ['Platform', 'Issue Queue'],
+      llm:                    ['Platform', 'LLM Profiles'],
+      templates:              ['Platform', 'Agent Templates'],
+      analytics:              ['Platform', 'Analytics'],
+      tools:                  ['Platform', 'Tool Catalog'],
+      cost:                   ['Platform', 'Cost Analytics'],
+      'guardrail-compliance': ['Platform', 'Guardrail Compliance'],
     };
     function showPAPanel(panel) {
       document.querySelectorAll('#platformAdminApp .admin-panel').forEach(p => p.classList.remove('active'));
@@ -6032,15 +7119,16 @@
 
     /* ── TENANT ADMIN PANELS ────────────────────────────────────── */
     const taPanelLabels = {
-      dashboard:     ['Acme Corp', 'Dashboard'],
-      documents:     ['Acme Corp', 'Documents'],
-      users:         ['Acme Corp', 'Users'],
-      agents:        ['Acme Corp', 'Agents'],
-      'agent-studio':['Acme Corp', 'Agent Studio'],
-      glossary:      ['Acme Corp', 'Glossary'],
-      analytics:     ['Acme Corp', 'Analytics'],
-      issues:        ['Acme Corp', 'Issues'],
-      settings:      ['Acme Corp', 'Settings'],
+      dashboard:              ['Acme Corp', 'Dashboard'],
+      documents:              ['Acme Corp', 'Documents'],
+      users:                  ['Acme Corp', 'Users'],
+      agents:                 ['Acme Corp', 'Agents'],
+      'agent-studio':         ['Acme Corp', 'Agent Studio'],
+      glossary:               ['Acme Corp', 'Glossary'],
+      analytics:              ['Acme Corp', 'Analytics'],
+      issues:                 ['Acme Corp', 'Issues'],
+      settings:               ['Acme Corp', 'Settings'],
+      'guardrail-compliance': ['Acme Corp', 'Guardrail Compliance'],
     };
     function showTAAgentStudio() {
       showTAPanel('agent-studio');
@@ -6088,6 +7176,217 @@
       const lbl = taPanelLabels[panel] || ['Acme Corp', panel];
       document.getElementById('breadMain').textContent = lbl[0];
       document.getElementById('breadSub').textContent = lbl[1];
+    }
+
+    /* ── ATA-037: TEMPLATE EDITOR ───────────────────────────────── */
+    function openTemplateEditor(id) {
+      var panel = document.getElementById('templateEditorPanel');
+      panel.style.display = 'block';
+      var titleEl = document.getElementById('tmplEditorTitle');
+      var titles = { hr: 'Edit Template: HR Assistant', finance: 'Edit Template: Finance Analyst', it: 'Edit Template: IT Helpdesk', procurement: 'Edit Template: Procurement Agent' };
+      if (titleEl && id) titleEl.textContent = titles[id] || 'New Template';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function closeTemplateEditor() {
+      document.getElementById('templateEditorPanel').style.display = 'none';
+    }
+    function setTmplAuthMode(mode) {
+      ['none','tenant','platform'].forEach(function(m) {
+        var el = document.getElementById('tmpl-auth-' + m);
+        if (!el) return;
+        el.classList.toggle('selected', m === mode);
+        var dot = el.querySelector('.radio-dot');
+        if (dot) {
+          dot.style.borderColor = (m === mode) ? 'var(--accent)' : '';
+          dot.style.background = (m === mode) ? 'var(--accent)' : '';
+          if (m === mode && !dot.querySelector('div')) {
+            var inner = document.createElement('div');
+            inner.style.cssText = 'width:6px;height:6px;border-radius:50%;background:#0C0E14';
+            dot.appendChild(inner);
+          } else if (m !== mode) {
+            var inner2 = dot.querySelector('div');
+            if (inner2) inner2.remove();
+          }
+        }
+      });
+      var schema = document.getElementById('tmpl-cred-schema');
+      if (schema) schema.style.display = (mode === 'none') ? 'none' : 'block';
+    }
+    function addCredField() {
+      var tbody = document.getElementById('tmpl-cred-tbody');
+      if (!tbody) return;
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><span class="tmpl-auth-key">new_field</span></td>' +
+        '<td><input class="form-input" type="text" placeholder="Label" style="padding:4px 8px;font-size:12px"></td>' +
+        '<td><select class="form-select" style="padding:4px 8px;font-size:11px"><option>string</option><option>url</option><option>oauth2</option></select></td>' +
+        '<td style="text-align:center"><span style="color:var(--text-faint);cursor:pointer;font-size:15px">👁</span></td>' +
+        '<td><span style="color:var(--alert);cursor:pointer;font-size:13px" onclick="this.closest(\'tr\').remove()">✕</span></td>';
+      tbody.appendChild(tr);
+    }
+    function removeChip(x) {
+      x.closest('.chip-input-tag').remove();
+    }
+    function addChipOnEnter(e, wrapId) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var val = e.target.value.trim();
+      if (!val) return;
+      var wrap = document.getElementById(wrapId);
+      var chip = document.createElement('span');
+      chip.className = 'chip-input-tag';
+      chip.innerHTML = val + '<span class="chip-input-tag-x" onclick="removeChip(this)">×</span>';
+      wrap.insertBefore(chip, e.target);
+      e.target.value = '';
+    }
+    function setPubVersion(ver) {
+      ['patch','minor','major'].forEach(function(v) {
+        var el = document.getElementById('pub-ver-' + v);
+        if (!el) return;
+        el.classList.toggle('selected', v === ver);
+        var dot = el.querySelector('.radio-dot');
+        if (dot) {
+          dot.style.borderColor = (v === ver) ? 'var(--accent)' : '';
+          dot.style.background = (v === ver) ? 'var(--accent)' : '';
+          var inner = dot.querySelector('div');
+          if (v === ver && !inner) {
+            var i = document.createElement('div');
+            i.style.cssText = 'width:6px;height:6px;border-radius:50%;background:#0C0E14';
+            dot.appendChild(i);
+          } else if (v !== ver && inner) inner.remove();
+        }
+      });
+    }
+    function publishTemplate() {
+      var success = document.getElementById('tmpl-publish-success');
+      if (success) { success.style.display = 'block'; success.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    }
+
+    /* ── ATA-038–041: DEPLOY WIZARD ────────────────────────────── */
+    var dwCurrentStep = 1;
+    var dwTotalSteps = 4;
+    var dwSelectedAuthMode = 'tenant_credentials';
+
+    function openDeployWizard() {
+      dwCurrentStep = 1;
+      dwSelectedAuthMode = 'tenant_credentials';
+      dwTotalSteps = 4;
+      document.getElementById('deployWizardBackdrop').classList.add('open');
+      dwShowStep(1);
+    }
+    function closeDeployWizard() {
+      document.getElementById('deployWizardBackdrop').classList.remove('open');
+    }
+    function closeDeployWizardOutside(e) {
+      if (e.target === document.getElementById('deployWizardBackdrop')) closeDeployWizard();
+    }
+    function selectDeployTemplate(el, authMode, name, category) {
+      document.querySelectorAll('.tmpl-select-card').forEach(function(c) { c.classList.remove('selected'); });
+      el.classList.add('selected');
+      dwSelectedAuthMode = authMode;
+      dwTotalSteps = (authMode === 'none' || authMode === 'platform_credentials') ? 3 : 4;
+      document.getElementById('deployWizStepLabel').textContent = 'Step 1 of ' + dwTotalSteps;
+    }
+    function dwShowStep(n) {
+      dwCurrentStep = n;
+      var effectiveStep = n;
+      // When auth_mode has no credentials, step 2 maps to KB/Tools, step 3 maps to Access
+      var stepIds = ['dw-step-1', 'dw-step-2', 'dw-step-3', 'dw-step-4', 'dw-step-5'];
+      if (dwSelectedAuthMode === 'none' || dwSelectedAuthMode === 'platform_credentials') {
+        stepIds = ['dw-step-1', 'dw-step-3', 'dw-step-4', 'dw-step-5'];
+      }
+      stepIds.forEach(function(id, idx) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = (idx === n - 1) ? 'block' : 'none';
+      });
+      var isLast = (n === dwTotalSteps);
+      var isSuccess = (n > dwTotalSteps);
+      var nextBtn = document.getElementById('dw-next-btn');
+      var backBtn = document.getElementById('dw-back-btn');
+      var foot = document.getElementById('deployWizFoot');
+      if (isSuccess) {
+        if (foot) foot.style.display = 'none';
+        var s5 = document.getElementById('dw-step-5');
+        if (s5) s5.style.display = 'block';
+        stepIds.slice(0, -1).forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = 'none'; });
+        document.getElementById('deployWizStepLabel').textContent = 'Deployed';
+        document.getElementById('deployWizProgress').style.width = '100%';
+        return;
+      }
+      if (foot) foot.style.display = '';
+      document.getElementById('deployWizProgress').style.width = (n / dwTotalSteps * 100) + '%';
+      document.getElementById('deployWizStepLabel').textContent = 'Step ' + n + ' of ' + dwTotalSteps;
+      if (nextBtn) nextBtn.textContent = isLast ? 'Deploy Agent' : 'Next →';
+      if (backBtn) backBtn.style.display = (n === 1) ? 'none' : 'inline-block';
+    }
+    function dwNextStep() {
+      if (dwCurrentStep >= dwTotalSteps) {
+        dwShowStep(dwTotalSteps + 1);
+      } else {
+        dwShowStep(dwCurrentStep + 1);
+      }
+    }
+
+    /* ── ATA-039: CREDENTIAL TEST ───────────────────────────────── */
+    function toggleCredEye(inputId, btn) {
+      var inp = document.getElementById(inputId);
+      if (!inp) return;
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+    }
+    var connTestTimeout;
+    function runConnectionTest() {
+      var btn = document.getElementById('dw-conn-test-btn');
+      var result = document.getElementById('dw-conn-test-result');
+      var icon = document.getElementById('dw-conn-test-icon');
+      if (!btn) return;
+      btn.className = 'conn-test-btn testing';
+      btn.innerHTML = '<span class="spinner"></span> Validating…';
+      if (result) result.style.display = 'none';
+      clearTimeout(connTestTimeout);
+      connTestTimeout = setTimeout(function() {
+        btn.className = 'conn-test-btn passed';
+        btn.innerHTML = '✓ Connected';
+        if (result) { result.style.display = 'block'; result.style.color = 'var(--accent)'; result.textContent = 'Connected as sharepoint-svc@acme.onmicrosoft.com'; }
+      }, 1800);
+    }
+
+    /* ── ATA-042: AGENT DETAIL PANEL ────────────────────────────── */
+    function openAgentDetailPanel() {
+      document.getElementById('agentDetailPanel').classList.add('open');
+    }
+    function closeAgentDetailPanel() {
+      document.getElementById('agentDetailPanel').classList.remove('open');
+    }
+
+    /* ── ATA-043: RECONFIGURE PANEL ─────────────────────────────── */
+    function openReconfigPanel() {
+      document.getElementById('reconfigPanel').classList.add('open');
+    }
+    function closeReconfigPanel() {
+      document.getElementById('reconfigPanel').classList.remove('open');
+    }
+    function saveReconfigChanges() {
+      closeReconfigPanel();
+      closeAgentDetailPanel();
+    }
+
+    /* ── ATA-045: VERSION DIFF MODAL ────────────────────────────── */
+    function openVersionDiffModal() {
+      document.getElementById('versionDiffBackdrop').classList.add('open');
+    }
+    function closeVersionDiffModal() {
+      document.getElementById('versionDiffBackdrop').classList.remove('open');
+    }
+    function closeDiffModalOutside(e) {
+      if (e.target === document.getElementById('versionDiffBackdrop')) closeVersionDiffModal();
+    }
+
+    /* ── CLIPBOARD COPY ─────────────────────────────────────────── */
+    function copyToClipboard(text, btn) {
+      if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(function(){}); }
+      var orig = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(function() { btn.textContent = orig; }, 1200);
     }
 
     /* ── SCREEN 1: ONBOARDING WIZARD ───────────────────────────── */

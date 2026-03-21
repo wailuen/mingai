@@ -8,7 +8,7 @@
 **Related research**: `workspaces/mingai/01-analysis/01-research/49-agent-template-a2a-gap-analysis.md`, `50-agent-template-requirements.md`, `51-agent-template-coc-analysis.md`, `52-agent-template-implementation-approach.md`
 **Related value audit**: `workspaces/mingai/01-analysis/16-agent-template-value-audit/01-enterprise-buyer-perspective.md`, `02-ux-design-spec.md`
 **UX flows**: `workspaces/mingai/03-user-flows/23-agent-template-flows.md`
-**Status**: IN PROGRESS — Phase A+B COMPLETE (commits e3e2fcb, 8e5dd50). Phase C backend COMPLETE (commit 1fca7ec). COC rules ATA-048–055 COMPLETE. Frontend ATA-037–047 remaining. ATA-057 deferred.
+**Status**: IN PROGRESS — Phase A+B COMPLETE (commits e3e2fcb, 8e5dd50). Phase C backend COMPLETE (commit 1fca7ec). COC rules ATA-048–055 COMPLETE. Frontend ATA-037–047 COMPLETE. ATA-056 (production frontend) and ATA-057 (remove 422 gate) remaining. ATA-057 deferred pending Phase A staging verification.
 
 ---
 
@@ -1224,7 +1224,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-037: Platform Template Authoring UX — Sections 3–6
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2 — UX spec closure (doc 16/02 Section 2)
 **Sprint**: 8 (Week 9–10)
 **Effort**: 6h
@@ -1253,7 +1253,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-038: Tenant Deploy Wizard — Step 1: Select Template
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2 — UX spec closure (doc 16/02 Section 3)
 **Sprint**: 8 (Week 9–10)
 **Effort**: 2h
@@ -1279,7 +1279,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-039: Tenant Deploy Wizard — Step 2: Credentials (Conditional)
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 3h
@@ -1307,7 +1307,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-040: Tenant Deploy Wizard — Step 3: KB & Tools
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 3h
@@ -1334,7 +1334,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-041: Tenant Deploy Wizard — Step 4: Access & Limits
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 3h
@@ -1361,7 +1361,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-042: Agent Detail Panel — Post-Deploy Enhanced View
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 2h
@@ -1388,7 +1388,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-043: Agent Reconfigure Panel — Post-Deploy KB/Tool Changes
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 2h
@@ -1413,7 +1413,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-044: Platform Admin — Template Publishing Flow
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 2h
@@ -1439,7 +1439,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-045: Template Version Diff View for Tenants
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 2h
@@ -1465,7 +1465,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-046: Guardrail Compliance View — Platform Admin
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 3h
@@ -1491,7 +1491,7 @@ The following 6 rules must be embedded in code comments/docstrings — not docum
 
 ### ATA-047: Guardrail Compliance View — Tenant Admin
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] COMPLETE
 **Priority**: P2
 **Sprint**: 8 (Week 9–10)
 **Effort**: 2h
