@@ -269,11 +269,11 @@ async def test_list_public_agents_db_filters_active_and_public():
         offset=0,
         db=db,
     )
-    # Verify the WHERE clause includes active + is_public
+    # Verify the WHERE clause includes published + is_public
     count_call = db.execute.call_args_list[0]
     sql_str = str(count_call[0][0])
     assert "is_public = true" in sql_str
-    assert "status = 'active'" in sql_str
+    assert "status = 'published'" in sql_str
     assert result["total"] == 0
     assert result["items"] == []
 

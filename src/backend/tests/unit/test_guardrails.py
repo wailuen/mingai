@@ -724,3 +724,70 @@ class TestEdgeCases:
         result = await checker.check("Some text that could trigger a bad rule.")
         # Bad regex is skipped; should not raise and should pass cleanly
         assert result.passed is True
+
+
+# ---------------------------------------------------------------------------
+# GAP-2: _has_active_guardrails — NaN / Infinity guard tests
+# ---------------------------------------------------------------------------
+
+class TestHasActiveGuardrailsNanInf:
+    """GAP-2: NaN and Infinity values must NOT activate guardrails.
+
+    math.isfinite() in _has_active_guardrails prevents NaN/Inf from being
+    treated as a positive threshold — these tests guard against regression.
+    """
+
+    def test_confidence_threshold_nan_returns_false(self):
+        import math
+        assert _has_active_guardrails({"confidence_threshold": float("nan")}) is False
+
+    def test_confidence_threshold_positive_inf_returns_false(self):
+        assert _has_active_guardrails({"confidence_threshold": float("inf")}) is False
+
+    def test_confidence_threshold_negative_inf_returns_false(self):
+        assert _has_active_guardrails({"confidence_threshold": float("-inf")}) is False
+
+
+# ---------------------------------------------------------------------------
+# GAP-3: OutputGuardrailChecker — NaN / Infinity retrieval confidence
+# ---------------------------------------------------------------------------
+
+class TestOutputGuardrailCheckerNanInf:
+    """GAP-3: NaN and Infinity retrieval confidence values must fail-closed.
+
+    When retrieval_confidence is NaN or Infinity, the guard in check() at
+    lines 262-263 coerces it to 0.0, so any active confidence_threshold
+    triggers a block. These tests prevent regression on that path.
+    """
+
+    @pytest.mark.asyncio
+    async def test_nan_retrieval_confidence_with_threshold_blocks(self):
+        """NaN confidence treated as 0.0 → blocked when threshold > 0."""
+        import math
+        checker = _checker({"confidence_threshold": 0.5}, retrieval_confidence=float("nan"))
+        result = await checker.check("Some response text.")
+        assert result.passed is False
+        assert result.rule_id == "confidence_threshold"
+
+    @pytest.mark.asyncio
+    async def test_inf_retrieval_confidence_with_threshold_blocks(self):
+        """Infinity confidence treated as 0.0 → blocked when threshold > 0."""
+        checker = _checker({"confidence_threshold": 0.5}, retrieval_confidence=float("inf"))
+        result = await checker.check("Some response text.")
+        assert result.passed is False
+        assert result.rule_id == "confidence_threshold"
+
+    @pytest.mark.asyncio
+    async def test_negative_inf_retrieval_confidence_with_threshold_blocks(self):
+        """-Infinity confidence treated as 0.0 → blocked when threshold > 0."""
+        checker = _checker({"confidence_threshold": 0.5}, retrieval_confidence=float("-inf"))
+        result = await checker.check("Some response text.")
+        assert result.passed is False
+        assert result.rule_id == "confidence_threshold"
+
+    @pytest.mark.asyncio
+    async def test_nan_retrieval_confidence_no_threshold_passes(self):
+        """NaN confidence with no threshold → no block (threshold check skipped)."""
+        checker = _checker({"confidence_threshold": 0}, retrieval_confidence=float("nan"))
+        result = await checker.check("Some response text.")
+        assert result.passed is True

@@ -255,7 +255,7 @@ async def list_public_agents_db(
 ) -> dict:
     """List agent_cards where is_public=true and status='active'."""
     # Build WHERE clause fragments (hardcoded, no f-string user data)
-    where_parts = ["is_public = true", "status = 'active'"]
+    where_parts = ["is_public = true", "status = 'published'"]
     params: dict = {"limit": limit, "offset": offset}
 
     if query:
@@ -723,10 +723,20 @@ def _agent_row_to_dict(row) -> dict:
     if languages is None:
         languages = []
 
+    # Derive category from capabilities feature_tags or industries list.
+    caps_dict = capabilities if isinstance(capabilities, dict) else {}
+    feature_tags = caps_dict.get("feature_tags", []) if isinstance(caps_dict, dict) else []
+    category = (feature_tags[0] if feature_tags else None) or (industries[0] if industries else "")
+
     return {
+        # Primary key under two names: agent_id (canonical) + id (frontend alias)
         "agent_id": str(row["id"]),
+        "id": str(row["id"]),
         "tenant_id": str(row["tenant_id"]),
+        # publisher_tenant: frontend expects the owning tenant ID
+        "publisher_tenant": str(row["tenant_id"]),
         "name": row["name"],
+        "category": category,
         "description": row["description"],
         "status": row["status"],
         "is_public": row["is_public"],
@@ -737,7 +747,10 @@ def _agent_row_to_dict(row) -> dict:
         "health_check_url": row["health_check_url"],
         "public_key": row["public_key"],
         "trust_score": row["trust_score"] or _DEFAULT_TRUST_SCORE,
-        "capabilities": capabilities if isinstance(capabilities, list) else [],
+        # capabilities: include both list form (legacy) and dict form
+        "capabilities": capabilities if isinstance(capabilities, (list, dict)) else [],
+        # install_count: not yet tracked — default to 0
+        "install_count": 0,
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
     }
@@ -1032,6 +1045,65 @@ async def deregister_agent(
         agent_id=agent_id,
         tenant_id=current_user.tenant_id,
     )
+
+
+@router.post("/agents/{agent_id}/publish")
+async def publish_registry_agent(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-REG-01: Platform admin publishes an agent to the public registry.
+
+    Sets is_public=true and status='published' so the agent appears in
+    list_public_agents_db (Browse Registry filter: is_public=true, status='published').
+    The frontend RegistryStatus type uses 'published' as the active/visible state.
+    """
+    result = await session.execute(
+        text(
+            "UPDATE agent_cards SET is_public = true, status = 'published', updated_at = NOW() "
+            "WHERE id = :agent_id RETURNING id, name, status, is_public"
+        ),
+        {"agent_id": agent_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Registry agent '{agent_id}' not found.",
+        )
+    await session.commit()
+    logger.info("registry_agent_published", agent_id=agent_id)
+    return dict(row)
+
+
+@router.post("/agents/{agent_id}/unpublish")
+async def unpublish_registry_agent(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """PA-REG-02: Platform admin removes an agent from the public registry.
+
+    Sets is_public=false and status='draft' so the agent no longer appears
+    in Browse Registry (filter: is_public=true, status='active').
+    """
+    result = await session.execute(
+        text(
+            "UPDATE agent_cards SET is_public = false, status = 'draft', updated_at = NOW() "
+            "WHERE id = :agent_id RETURNING id, name, status, is_public"
+        ),
+        {"agent_id": agent_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Registry agent '{agent_id}' not found.",
+        )
+    await session.commit()
+    logger.info("registry_agent_unpublished", agent_id=agent_id)
+    return dict(row)
 
 
 @router.post("/transactions", status_code=status.HTTP_201_CREATED)

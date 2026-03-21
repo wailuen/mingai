@@ -223,7 +223,9 @@ async def route_message(
     # SSRF protection: validate AND pin DNS to prevent rebinding between check
     # and request. _resolve_ssrf_safe_url returns the URL with the hostname
     # replaced by the resolved IP — httpx uses the IP directly (no re-resolution).
-    _safe_endpoint, _host_header = _resolve_ssrf_safe_url(endpoint)
+    # S3: socket.getaddrinfo is blocking I/O — offload to executor to avoid
+    # stalling the event loop during DNS resolution.
+    _safe_endpoint, _host_header = await asyncio.to_thread(_resolve_ssrf_safe_url, endpoint)
 
     # Fetch transaction row to get initiator_agent_id for signing
     txn_result = await session.execute(
