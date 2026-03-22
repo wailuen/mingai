@@ -1,6 +1,6 @@
 ---
 name: mingai-frontend-specialist
-description: mingai frontend specialist for Next.js 14 App Router + React Query + Tailwind. Use when implementing or debugging frontend features, understanding the Obsidian Intelligence design system, KB access control UI, admin console responsive patterns, glossary hooks, SSE streaming, data tables with infinite scroll, responsive column hiding, tab filtering, or row-click interactions in the web app.
+description: mingai frontend specialist for Next.js 14 App Router + React Query + Tailwind. Use when implementing or debugging frontend features, understanding the Obsidian Intelligence design system, KB access control UI, admin console responsive patterns, glossary hooks, SSE streaming, data tables with infinite scroll, responsive column hiding, tab filtering, row-click interactions, LLM Profile v2 UI, Bedrock provider form, TemplateStudioPanel tab system, or PerformanceTab analytics.
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -42,6 +42,9 @@ lib/
                                    includes useInfiniteGlossaryTerms (infinite scroll)
     usePlatformDashboard.ts      — platform stats + useInfiniteTenants (infinite scroll)
     useInfiniteScrollSentinel.ts — IntersectionObserver hook for infinite scroll sentinel
+    usePlatformLLMProfiles.ts    — Platform admin: list/create/update/deprecate LLM profiles; useProfileList(), type PlatformProfile
+    useLLMProfileConfig.ts       — Tenant admin BYOLLM: useEffectiveProfile() reads current slot assignments
+    useLLMConfig.ts              — Tenant admin LLM config: GET /admin/llm-config + profile selection
     useAuth.ts, useChat.ts, useMyReports.ts
 components/
   layout/             — AppShell, Sidebar, Topbar
@@ -287,6 +290,94 @@ useEffect(() => {
 - **Action button inside clickable row without `e.stopPropagation()`** — triggers row click unintentionally
 - **`meta: { hideOnMobile: true }` (old binary pattern)** — use `meta: { hideBelow: "sm"|"md"|"lg" }` instead
 
+### TemplateStudioPanel — 5-Tab Pattern
+
+The agent template studio uses a typed tab union with a `TABS` array. Always extend this pattern when adding tabs:
+
+```typescript
+// src/web/app/(platform)/platform/agent-templates/elements/TemplateStudioPanel.tsx
+
+type StudioTab = "edit" | "test" | "instances" | "versions" | "performance";
+
+const TABS: { value: StudioTab; label: string }[] = [
+  { value: "edit", label: "Edit" },
+  { value: "test", label: "Test" },
+  { value: "instances", label: "Instances" },
+  { value: "versions", label: "Version History" },
+  { value: "performance", label: "Performance" },
+];
+
+const [activeTab, setActiveTab] = useState<StudioTab>("edit");
+
+// Tab render block (conditional rendering after tab nav):
+{activeTab === "performance" && template && (
+  <PerformanceTab templateId={template.id} />
+)}
+```
+
+**PerformanceTab** — `src/web/app/(platform)/platform/agent-templates/elements/PerformanceTab.tsx`
+
+- Queries `GET /api/v1/platform/agent-templates/{templateId}/analytics`
+- Returns `{ daily_metrics: DailyMetric[], tenant_count: number, top_failure_patterns: [...] }`
+- 4 KPI cards: Active Tenants, Sessions 30d, Avg Satisfaction, Guardrail Trigger Rate
+- Daily metrics table: 30 rows (most recent first), color-coded satisfaction/guardrail
+- Empty state: "No deployments yet" for templates with zero sessions
+- `staleTime: 5 * 60 * 1000` — performance data doesn't need real-time refresh
+
+### Platform Admin — LLM Profiles
+
+**Route**: `/platform/llm-profiles`
+**File**: `src/web/app/(platform)/platform/llm-profiles/page.tsx`
+**Hook**: `src/web/lib/hooks/usePlatformLLMProfiles.ts` — `useProfileList()`
+
+Profile creation follows a **2-step wizard**:
+- Step 1: `name` + `description` + `plan_tiers` (pill selectors: Starter/Professional/Enterprise)
+- Step 2: Slot assignment overview (Chat/Intent/Vision/Agent) — slots assigned after creation via detail panel
+
+**ProfileDetailPanel** slides in from right on row-click. Contains:
+- Slot assignment section with "Assign" buttons per slot
+- Plan tier pill display
+- "Set as Platform Default" action
+- "Deprecate this Profile" action (blocked if active tenants assigned)
+
+```typescript
+type ProfileSlot = "chat" | "intent" | "vision" | "agent";
+type ProfileStatus = "active" | "draft" | "deprecated";
+
+interface PlatformProfile {
+  id: string;
+  name: string;
+  description: string;
+  plan_tiers: string[];
+  status: ProfileStatus;
+  is_platform_default: boolean;
+  slots: Record<ProfileSlot, { library_id: string; model_name: string; provider: string } | null>;
+  tenant_count: number;
+}
+```
+
+### Tenant Admin — BYOLLM (LLM Profile Selection)
+
+**Route**: `/settings/llm-profile`
+**File**: `src/web/app/settings/llm-profile/page.tsx`
+**Hook**: `src/web/lib/hooks/useLLMProfileConfig.ts` — `useEffectiveProfile()`
+
+Three views based on tenant plan tier:
+- `StarterProfileView` — shows read-only platform-assigned profile
+- `ProfessionalProfileView` — shows current profile + "Select Profile" button
+- `EnterpriseProfileView` — shows current profile + slot-level override capability
+
+RBAC enforcement: `GET /api/v1/admin/llm-config` requires `tenant_admin` scope — platform admins will see "Tenant admin role required" error (correct behavior).
+
+### LLM Library — Bedrock Provider
+
+When `provider === "bedrock"` is selected in `LibraryForm.tsx`, the form adapts:
+- "Deployment Name" → **"Model ARN"** (placeholder: full Bedrock ARN)
+- "Endpoint URL" → **"Bedrock Base URL"** (placeholder: `https://bedrock-runtime.{region}.amazonaws.com`)
+- "API Key" → **"AWS Bearer Token"**
+
+Bedrock entries are excluded from the embed path — only chat/agent/intent slots.
+
 ## Backend API Contracts (frontend must match exactly)
 
 | Feature                  | Endpoint                                         | Method   | Auth         |
@@ -298,6 +389,13 @@ useEffect(() => {
 | Glossary history         | `/api/v1/glossary/{id}/history`                  | GET      | tenant_admin |
 | Glossary rollback        | `/api/v1/glossary/{id}/rollback`                 | POST     | tenant_admin |
 | Miss signals             | `/api/v1/glossary/miss-signals`                  | GET      | tenant_admin |
+| LLM config (tenant)      | `/api/v1/admin/llm-config`                       | GET      | tenant_admin |
+| BYOLLM profile select    | `/api/v1/admin/llm-config/select-profile`        | POST     | tenant_admin |
+| Platform profiles list   | `/api/v1/platform/llm-profiles`                  | GET      | platform     |
+| Platform profile create  | `/api/v1/platform/llm-profiles`                  | POST     | platform     |
+| Platform profile slots   | `/api/v1/platform/llm-profiles/{id}/slots`       | POST     | platform     |
+| Platform profile default | `/api/v1/platform/llm-profiles/{id}/set-default` | POST     | platform     |
+| Template analytics       | `/api/v1/platform/agent-templates/{id}/analytics`| GET      | platform     |
 
 ## Screen Coverage by Role
 
@@ -305,7 +403,7 @@ useEffect(() => {
 
 **Tenant Admin**: dashboard, agents (library), analytics, document stores (SharePoint + Google Drive + sync health), glossary (CRUD + miss signals + version history), knowledge-base (access control), teams, users (directory + bulk invite), workspace settings, SSO wizard, memory policy, issue queue, cost analytics
 
-**Platform Admin**: dashboard, tenants, LLM profiles, agent templates, tool catalog, registry, engineering issue queue, analytics, audit log
+**Platform Admin**: dashboard, tenants, LLM profiles (`/platform/llm-profiles` — 2-step wizard + slot assignment detail panel), LLM library (Bedrock provider support), agent templates (TemplateStudioPanel 5-tab: Edit/Test/Instances/Version History/Performance), tool catalog, registry, engineering issue queue, analytics, audit log
 
 **Not started (product-gated)**: Agent Studio (`/admin/agents/studio/`) — waiting on 5-10 persona interviews
 

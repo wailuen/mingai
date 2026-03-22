@@ -1,6 +1,6 @@
 ---
 name: mingai-backend-specialist
-description: mingai backend specialist with deep knowledge of the FastAPI+SQLAlchemy multi-tenant architecture. Use when implementing or debugging backend features, understanding RLS patterns, Redis key namespacing, JWT v2 auth, SSE streaming, HAR A2A protocol, glossary pipeline, or issue triage pipeline.
+description: mingai backend specialist with deep knowledge of the FastAPI+SQLAlchemy multi-tenant architecture. Use when implementing or debugging backend features, understanding RLS patterns, Redis key namespacing, JWT v2 auth, SSE streaming, HAR A2A protocol, glossary pipeline, issue triage pipeline, LLM Profile v2 slot routing, or AWS Bedrock provider integration.
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -55,7 +55,13 @@ app/modules/
     blur_service.py   — server-side screenshot blur (INFRA-019)
     blur_pipeline.py  — blur pipeline orchestration
     still_happening.py — still-happening signal handler
-  llm_profiles/       — LLM profile CRUD (slot→deployment mapping, stored in PostgreSQL)
+  llm_profiles/       — LLM Profile v2 (platform-managed + BYOLLM): profile CRUD, slot assignment (chat/intent/vision/agent), plan tier gating, deprecation, health monitoring
+  admin/
+    byollm.py         — POST /admin/llm-config/select-profile (tenant selects platform profile) — replaces old PATCH /admin/llm-config
+    llm_config.py     — GET /admin/llm-config (tenant reads current effective LLM config)
+  core/llm/
+    profile_resolver.py  — ProfileResolver: three-tier LRU→Redis→DB resolution; feature-flagged (LLM_PROFILE_SLOT_ROUTING=1)
+    instrumented_client.py — InstrumentedLLMClient: resolves provider at call time; supports azure_openai, openai_direct, anthropic, bedrock
   memory/             — conversation memory, team working memory, GDPR erasure
   notifications/
     publisher.py      — publish_notification() → Redis Pub/Sub + persistent DB insert
@@ -77,7 +83,7 @@ app/modules/
   admin/kb_access_control.py — GET/PATCH /admin/knowledge-base/{index_id}/access (TA-011/007)
 ```
 
-## Alembic Migrations (31 total, v001–v029)
+## Alembic Migrations (59 total, v001–v059)
 
 ```
 v001_initial_schema.py           — base schema (21 tables, _V001_TABLES frozen constant)
@@ -88,10 +94,16 @@ v005_agent_cards_studio_columns.py — studio columns on agent_cards
 v006_notifications_table.py      — notifications + RLS
 v007_registry_columns.py         — agent_cards: is_public, a2a_endpoint, transaction_types[], industries[]
 v008_disputes_table.py           — disputes table
-v009–v026                        — KB tables, analytics events, tool catalog, tenant_configs, etc.
-v027_kb_access_control.py        — kb_access_control(index_id, tenant_id, visibility_mode, allowed_roles[], allowed_user_ids[])
-v028_agent_access_control.py     — agent access control
-v029_access_requests.py          — access requests
+v009–v049                        — KB tables, analytics events, tool catalog, tenant_configs, agent studio, LLM library credentials
+v050_llm_profile_v2.py          — LLM Profile v2 full rebuild: llm_library extended (capabilities JSONB, health_status,
+                                   is_byollm, owner_tenant_id), llm_profiles rebuilt (chat/intent/vision/agent slot FKs,
+                                   is_platform_default, plan_tiers[]), llm_profile_history + llm_profile_audit_log created.
+                                   CRITICAL: llm_library.status values converted from Title Case → lowercase
+                                   ('Published'→'published', 'Draft'→'draft', 'Deprecated'→'deprecated', 'disabled' added)
+                                   RLS policy updated to match new lowercase: status = 'published'
+v051_add_bedrock_provider.py     — Expands llm_library provider CHECK from 3 to 4 values: adds 'bedrock'
+v052–v059                        — Agent studio skills, template extensions, template versions, seed data,
+                                   platform A2A columns, agent_cards.last_tested_at, studio fields, tool catalog description
 ```
 
 **CRITICAL**: v002 RLS policies use a frozen `_V001_TABLES` constant. When adding new tables, create a new migration that adds RLS to those tables separately — do NOT modify `_V001_TABLES`.
@@ -185,6 +197,51 @@ pipeline = DocumentIndexingPipeline()
 await pipeline.process_file(file_path, integration_id, tenant_id, db)
 ```
 
+### LLM Profile v2 — Slot-Based Routing
+
+**Slots**: `chat`, `intent`, `vision`, `agent` — each slot maps to an `llm_library` entry.
+
+**Resolution order** (ProfileResolver, `app/core/llm/profile_resolver.py`):
+1. In-process LRU (TTL=60s, max 1000 entries)
+2. Redis (key: `mingai:{tenant_id}:llm_profile`, TTL=300s)
+3. PostgreSQL precedence:
+   - Tenant's explicit `tenants.llm_profile_id` → fetch that profile's slot assignments
+   - Tenant's BYOLLM profile (`owner_tenant_id = tenant_id`)
+   - Platform default profile (`is_platform_default=true`, plan tier eligible)
+
+**Feature flag**: `LLM_PROFILE_SLOT_ROUTING=1` env var. When `0`/absent → ProfileResolver returns None → caller uses env/legacy `PRIMARY_MODEL`. Allows gradual rollout.
+
+**Bedrock provider** (BEDROCK-008 pattern):
+```python
+# Uses AsyncOpenAI with base_url override — NOT the boto3 SDK
+from openai import AsyncOpenAI
+client = AsyncOpenAI(
+    api_key=decrypted_key,                      # AWS bearer token
+    base_url=f"{endpoint_url.rstrip('/')}/v1",  # e.g. https://bedrock-runtime.us-east-1.amazonaws.com/v1
+)
+# Model ARN passed at call time (e.g. arn:aws:bedrock:us-east-1::foundation-model/...)
+# Bedrock is EXCLUDED from embed() path — falls back to azure_openai provider
+# decrypted_key = "" in finally block — same pattern as all providers
+```
+
+**SSRF guard**: `_assert_endpoint_ssrf_safe(endpoint_url)` MUST be called before building any Bedrock client. This blocks RFC-1918 IPs and `.internal` hostnames.
+
+**Provider constraint**: `llm_library.provider` CHECK = `('azure_openai', 'openai_direct', 'anthropic', 'bedrock')` (v051).
+
+**BYOLLM API** (tenant admin):
+- `POST /api/v1/admin/llm-config/select-profile` — tenant selects a platform-managed profile
+- `GET /api/v1/admin/llm-config` — tenant reads current effective config
+- `PATCH /admin/llm-config` **was REMOVED in LLM Profile v2** — do NOT reference it
+
+**Platform admin LLM Profile API**:
+- `GET /api/v1/platform/llm-profiles` — list all profiles
+- `POST /api/v1/platform/llm-profiles` — create profile
+- `GET /api/v1/platform/llm-profiles/{id}` — detail with slot assignments
+- `PATCH /api/v1/platform/llm-profiles/{id}` — update (name, description, plan tiers)
+- `POST /api/v1/platform/llm-profiles/{id}/slots` — assign slot (chat/intent/vision/agent)
+- `POST /api/v1/platform/llm-profiles/{id}/set-default` — mark as platform default
+- `DELETE /api/v1/platform/llm-profiles/{id}` — deprecate (blocks if active tenants assigned)
+
 ### SQL Injection Prevention
 
 - ORDER BY: use `_VALID_SORT_COLUMNS` allowlist, never f-string user input
@@ -227,6 +284,22 @@ Error details MUST NOT disclose caller scope/roles — use generic messages only
 12. Glossary rollback: term update + audit_log INSERT must commit in the same transaction (`commit=False` pattern in `update_glossary_term_db`)
 13. KB assignment: verify `kb_id` belongs to calling tenant via UNION ALL on `integrations.config->>'kb_id'` + `kb_access_control.index_id` — no `knowledge_bases` table exists
 14. `update_glossary_term_db`: always operate on `dict(updates)` copy — never mutate caller's dict
+15. `audit_log` column for metadata is **`details`** (JSONB) — NOT `metadata`. Use `CAST(:details AS jsonb)` in INSERT.
+16. Conversation table is **`messages`** — NOT `conversation_messages`. The old name does not exist.
+17. After v050: `llm_library.status` values are **lowercase** (`'published'`, `'draft'`, `'deprecated'`, `'disabled'`). Title Case (`'Published'`) no longer matches.
+18. Bedrock SSRF guard: call `_assert_endpoint_ssrf_safe(endpoint_url)` before constructing any `AsyncOpenAI` client for Bedrock — placement is in the `try` block before client instantiation.
+
+## Backend Startup
+
+The backend does NOT auto-load `.env` on startup — env vars must be exported to the shell before uvicorn:
+
+```bash
+cd src/backend
+set -a && source .env && set +a
+uvicorn app.main:app --host 0.0.0.0 --port 8022
+```
+
+**CORS**: `FRONTEND_URL` in `.env` must exactly match the frontend origin. If the frontend runs on `:3022`, set `FRONTEND_URL=http://localhost:3022`. A mismatch silently blocks all browser API calls (skeleton loading states that never resolve, no visible error).
 
 ## Test Structure
 
@@ -257,7 +330,25 @@ test_glossary_rollout_flag.py        — feature flag gating for glossary
 test_a2a_transaction_flow.py         — HAR A2A end-to-end
 test_har_a2a_integration.py          — HAR A2A integration
 test_audit_tamper_evidence.py        — signed event chain integrity
+test_guardrail_enforcement.py        — guardrail audit write + violation metadata
+test_tenant_config_cache.py          — TenantConfigService Redis cache TTL + invalidation
 ```
+
+### Integration Test Schema Pitfalls
+
+When writing integration tests that touch DB directly, these are the correct table/column names:
+
+| Wrong (will fail)           | Correct                      | Note                                    |
+|-----------------------------|------------------------------|-----------------------------------------|
+| `conversation_messages`     | `messages`                   | Table renamed in early migration        |
+| `audit_log.metadata`        | `audit_log.details`          | JSONB column is called `details`        |
+| `llm_library.status = 'Published'` | `status = 'published'`  | v050 lowercased all status values        |
+| `PATCH /admin/llm-config`   | `POST /admin/llm-config/select-profile` | Old endpoint removed in v2   |
+
+**FK chains to know** (teardown order matters):
+- `audit_log.user_id` → `users(id)` — delete `audit_log` rows BEFORE `users`
+- `conversations.user_id` → `users(id)` — test fixtures must insert a real user row
+- `agent_cards.created_by` → `users(id)` (nullable) — use NULL to avoid needing a user
 
 ## Security Rules
 
