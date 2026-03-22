@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { DiscoveryStatsWidget } from "@/components/registry/DiscoveryStatsWidget";
 import { PublishToRegistryModal } from "./elements/PublishToRegistryModal";
 import { AgentLibraryTab } from "./elements/AgentLibraryTab";
+import { TenantA2AAgentsTab } from "./elements/TenantA2AAgentsTab";
 
 interface Agent {
   id: string;
@@ -39,11 +40,12 @@ interface PublishTarget {
   description: string;
 }
 
-type TabId = "my-agents" | "library";
+type TabId = "my-agents" | "library" | "a2a";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "my-agents", label: "My Agents" },
   { id: "library", label: "Agent Library" },
+  { id: "a2a", label: "A2A Agents" },
 ];
 
 export default function AgentsPage() {
@@ -234,6 +236,9 @@ export default function AgentsPage() {
 
         {/* Agent Library tab */}
         {activeTab === "library" && <AgentLibraryTab />}
+
+        {/* A2A Agents tab */}
+        {activeTab === "a2a" && <TenantA2AAgentsTab />}
       </div>
 
       {/* Publish to Registry modal */}
