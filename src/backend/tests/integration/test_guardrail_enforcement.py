@@ -88,16 +88,16 @@ async def _create_test_tenant() -> str:
 
 async def _create_test_agent(tid: str, uid_placeholder: str) -> str:
     agent_id = str(uuid.uuid4())
+    # created_by is nullable — use NULL to avoid FK violation against non-existent user
     await _run_sql(
         "INSERT INTO agent_cards "
         "(id, tenant_id, name, description, system_prompt, capabilities, status, version, created_by) "
         "VALUES (:id, :tid, :name, 'Integration test', 'You are a test.', "
-        "'{}' ::jsonb, 'published', 1, :uid)",
+        "'{}' ::jsonb, 'published', 1, NULL)",
         {
             "id": agent_id,
             "tid": tid,
             "name": f"Guardrail Agent {agent_id[:8]}",
-            "uid": uid_placeholder,
         },
     )
     return agent_id
@@ -116,7 +116,7 @@ async def _create_test_conversation(tid: str, uid: str, agent_id: str) -> str:
 async def _cleanup_tenant(tid: str):
     tables = [
         "audit_log",
-        "conversation_messages",
+        "messages",
         "conversations",
         "agent_access_control",
         "agent_cards",
@@ -137,11 +137,23 @@ async def _cleanup_tenant(tid: str):
 
 @pytest.fixture(scope="module")
 def db_tenant():
-    """Create a tenant + agent once per module; clean up after all tests."""
+    """Create a tenant + real user + agent once per module; clean up after all tests."""
     tid = asyncio.run(_create_test_tenant())
-    uid_placeholder = str(uuid.uuid4())
-    agent_id = asyncio.run(_create_test_agent(tid, uid_placeholder))
-    yield tid, uid_placeholder, agent_id
+    uid = str(uuid.uuid4())
+    # Insert a real user so FK constraints on conversations.user_id are satisfied
+    asyncio.run(
+        _run_sql(
+            "INSERT INTO users (id, tenant_id, email, role, status) "
+            "VALUES (:id, :tid, :email, 'tenant_admin', 'active')",
+            {
+                "id": uid,
+                "tid": tid,
+                "email": f"guardrail-user-{uid[:8]}@guardrail-int.test",
+            },
+        )
+    )
+    agent_id = asyncio.run(_create_test_agent(tid, uid))
+    yield tid, uid, agent_id
     asyncio.run(_cleanup_tenant(tid))
 
 
@@ -446,7 +458,7 @@ class TestGuardrailAuditWrite:
         # Verify the row was inserted
         row = asyncio.run(
             _fetch_one(
-                "SELECT action, metadata "
+                "SELECT action, details "
                 "FROM audit_log "
                 "WHERE tenant_id = :tid AND resource_type = 'agent' AND resource_id = :agent_id "
                 "ORDER BY created_at DESC LIMIT 1",
@@ -456,8 +468,8 @@ class TestGuardrailAuditWrite:
         assert row is not None, "audit_log row must be inserted by _write_guardrail_violation_audit"
         assert row["action"] == "guardrail_violation"
 
-        # Deserialise metadata — may be a string or already a dict depending on driver
-        metadata = row["metadata"]
+        # Deserialise details — may be a string or already a dict depending on driver
+        metadata = row["details"]
         if isinstance(metadata, str):
             metadata = json.loads(metadata)
         assert isinstance(metadata, dict), "metadata must be a JSON object"
@@ -477,7 +489,7 @@ class TestGuardrailViolationsInMessageMetadata:
     def test_guardrail_violations_persisted_in_message_metadata(self, db_tenant):
         """
         save_exchange() called with guardrail_violations=[...] stores that list
-        in conversation_messages.metadata->>'guardrail_violations'.
+        in messages.metadata->>'guardrail_violations'.
         RULE A2A-01: Original blocked text is never stored.
         """
         _db_url()  # triggers skip if DATABASE_URL absent
@@ -523,12 +535,12 @@ class TestGuardrailViolationsInMessageMetadata:
         # Verify the message metadata contains guardrail_violations
         row = asyncio.run(
             _fetch_one(
-                "SELECT metadata FROM conversation_messages "
+                "SELECT metadata FROM messages "
                 "WHERE id = :msg_id AND tenant_id = :tid",
                 {"msg_id": msg_id, "tid": tid},
             )
         )
-        assert row is not None, "conversation_messages row must exist after save_exchange"
+        assert row is not None, "messages row must exist after save_exchange"
         metadata = row["metadata"]
         if isinstance(metadata, str):
             metadata = json.loads(metadata)
@@ -582,7 +594,7 @@ class TestGuardrailViolationsInMessageMetadata:
         msg_id, _ = asyncio.run(_run())
         row = asyncio.run(
             _fetch_one(
-                "SELECT metadata FROM conversation_messages "
+                "SELECT metadata FROM messages "
                 "WHERE id = :msg_id AND tenant_id = :tid",
                 {"msg_id": msg_id, "tid": tid},
             )

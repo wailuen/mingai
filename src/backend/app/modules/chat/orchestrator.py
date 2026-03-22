@@ -784,7 +784,7 @@ class ChatOrchestrationService:
             await self._db_session.execute(
                 sa.text(
                     """
-                    INSERT INTO audit_log (tenant_id, action, resource_type, resource_id, metadata, created_at)
+                    INSERT INTO audit_log (tenant_id, action, resource_type, resource_id, details, created_at)
                     VALUES (:tenant_id, 'guardrail_violation', 'agent', :agent_id, CAST(:metadata AS jsonb), NOW())
                     """
                 ),
