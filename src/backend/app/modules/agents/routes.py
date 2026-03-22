@@ -3586,3 +3586,604 @@ def _detect_breaking_changes(old: dict, new: dict) -> str:
 
     # Patch: metadata-only changes
     return "patch"
+
+
+# ---------------------------------------------------------------------------
+# TODO-20: Platform Admin Template Studio API
+# POST   /platform/agent-templates           — create template
+# PUT    /platform/agent-templates/{id}      — update with ETag concurrency
+# POST   /platform/agent-templates/{id}/publish  — publish + version record
+# GET    /platform/agent-templates/{id}/versions  — version history
+# GET    /platform/agent-templates/{id}/instances — tenant deployments
+# ---------------------------------------------------------------------------
+
+from app.core.dependencies import require_platform_admin  # noqa: E402 — already imported above
+
+platform_templates_router = APIRouter(
+    prefix="/platform/agent-templates",
+    tags=["platform-agent-templates"],
+)
+
+# Fields that may be set on create/update
+_VALID_TEMPLATE_TYPES = {
+    "rag", "skill_augmented", "tool_augmented", "credentialed", "registered_a2a"
+}
+_VALID_AUTH_MODES = {"none", "tenant_credentials", "platform_credentials"}
+_VALID_PLAN_TIERS = {"starter", "professional", "enterprise"}
+
+
+class PlatformTemplateCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=2000)
+    category: Optional[str] = Field(None, max_length=100)
+    avatar: Optional[str] = Field(None, max_length=500)
+    system_prompt: str = Field(..., min_length=1, max_length=2000)
+    auth_mode: str = Field("none", pattern="^(none|tenant_credentials|platform_credentials)$")
+    required_credentials: List[dict] = Field(default_factory=list)
+    plan_required: Optional[str] = Field(
+        None, pattern="^(starter|professional|enterprise)$"
+    )
+    capabilities: List[str] = Field(default_factory=list)
+    cannot_do: List[str] = Field(default_factory=list)
+    recommended_kb_categories: List[str] = Field(default_factory=list)
+    llm_policy: Optional[dict] = None
+    kb_policy: Optional[dict] = None
+    attached_skills: List[str] = Field(default_factory=list)
+    attached_tools: List[str] = Field(default_factory=list)
+    a2a_interface: Optional[dict] = None
+    template_type: str = Field(
+        "rag",
+        pattern="^(rag|skill_augmented|tool_augmented|credentialed|registered_a2a)$",
+    )
+    guardrails: Optional[List[dict]] = Field(default_factory=list)
+    # PA override for prompt validation bypass (writes audit log entry)
+    override_validation: bool = Field(False)
+    override_reason: Optional[str] = Field(None, max_length=500)
+
+
+class PlatformTemplateUpdateRequest(PlatformTemplateCreateRequest):
+    # All same fields as create; ETag is supplied via If-Match header
+    pass
+
+
+class PublishTemplateRequest(BaseModel):
+    version_label: str = Field(
+        ..., min_length=1, max_length=20,
+        description="Semver version label (e.g. '1.2.0')",
+    )
+    changelog: str = Field(..., min_length=1, max_length=4000)
+
+
+def _get_platform_tenant_id_required(current_user) -> str:
+    """Return PLATFORM_TENANT_ID, raising 503 if not configured."""
+    ptid = _get_platform_tenant_id()
+    if ptid is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Platform templates not available: PLATFORM_TENANT_ID is not configured.",
+        )
+    return ptid
+
+
+def _build_template_capabilities_json(body) -> str:
+    """Pack all template fields into the capabilities JSONB blob."""
+    cap: dict = {
+        "capabilities": body.capabilities or [],
+        "cannot_do": body.cannot_do or [],
+        "recommended_kb_categories": body.recommended_kb_categories or [],
+        "guardrails": body.guardrails or [],
+    }
+    if body.llm_policy is not None:
+        cap["llm_policy"] = body.llm_policy
+    if body.kb_policy is not None:
+        cap["kb_policy"] = body.kb_policy
+    return json.dumps(cap)
+
+
+def _template_etag(updated_at_str: str) -> str:
+    """Compute ETag from updated_at timestamp."""
+    return hashlib.sha256(str(updated_at_str).encode()).hexdigest()[:16]
+
+
+@platform_templates_router.post("", status_code=status.HTTP_201_CREATED)
+async def create_platform_template(
+    body: PlatformTemplateCreateRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-20: Create a new platform agent template.
+
+    Runs SystemPromptValidator on system_prompt. Returns ETag header.
+    Platform admin only.
+    """
+    from app.modules.agents.prompt_validator import validate_prompt, TEMPLATE_PROMPT_MAX_CHARS
+
+    ptid = _get_platform_tenant_id_required(current_user)
+
+    # Validate system_prompt (OWASP LLM Top 10 + 2000-char limit)
+    validation = validate_prompt(body.system_prompt, max_chars=TEMPLATE_PROMPT_MAX_CHARS)
+    if not validation.valid:
+        if body.override_validation and body.override_reason:
+            await insert_audit_log(
+                tenant_id=ptid,
+                user_id=current_user.id,
+                action="prompt_validation_override",
+                resource_type="agent_template",
+                resource_id="new",
+                details={
+                    "reason": body.override_reason,
+                    "blocked_patterns": validation.blocked_patterns,
+                },
+                db=session,
+            )
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=validation.reason or "Prompt failed validation",
+            )
+
+    template_id = str(uuid.uuid4())
+    capabilities_json = _build_template_capabilities_json(body)
+
+    await session.execute(
+        text(
+            "INSERT INTO agent_cards ("
+            "  id, tenant_id, name, description, category, avatar, system_prompt,"
+            "  capabilities, status, version, source, auth_mode, required_credentials,"
+            "  plan_required, template_type, llm_policy, kb_policy,"
+            "  attached_skills, attached_tools, a2a_interface, created_by"
+            ") VALUES ("
+            "  :id, :tenant_id, :name, :description, :category, :avatar, :system_prompt,"
+            "  CAST(:capabilities AS jsonb), 'draft', 1, 'platform',"
+            "  :auth_mode, CAST(:required_credentials AS jsonb), :plan_required,"
+            "  :template_type, CAST(:llm_policy AS jsonb), CAST(:kb_policy AS jsonb),"
+            "  CAST(:attached_skills AS jsonb), CAST(:attached_tools AS jsonb),"
+            "  CAST(:a2a_interface AS jsonb), :created_by"
+            ")"
+        ),
+        {
+            "id": template_id,
+            "tenant_id": ptid,
+            "name": body.name,
+            "description": body.description,
+            "category": body.category,
+            "avatar": body.avatar,
+            "system_prompt": body.system_prompt,
+            "capabilities": capabilities_json,
+            "auth_mode": body.auth_mode,
+            "required_credentials": json.dumps(body.required_credentials),
+            "plan_required": body.plan_required,
+            "template_type": body.template_type,
+            "llm_policy": json.dumps(
+                body.llm_policy or {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}}
+            ),
+            "kb_policy": json.dumps(
+                body.kb_policy or {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []}
+            ),
+            "attached_skills": json.dumps(body.attached_skills),
+            "attached_tools": json.dumps(body.attached_tools),
+            "a2a_interface": json.dumps(
+                body.a2a_interface or {"a2a_enabled": False, "operations": [], "auth_required": False}
+            ),
+            "created_by": current_user.id,
+        },
+    )
+    await session.commit()
+
+    # Fetch updated_at for ETag
+    ts_result = await session.execute(
+        text("SELECT updated_at FROM agent_cards WHERE id = :id"),
+        {"id": template_id},
+    )
+    ts_row = ts_result.mappings().first()
+    etag = _template_etag(str(ts_row["updated_at"])) if ts_row else template_id[:16]
+
+    await insert_audit_log(
+        tenant_id=ptid,
+        user_id=current_user.id,
+        action="platform_template_created",
+        resource_type="agent_template",
+        resource_id=template_id,
+        details={"name": body.name, "template_type": body.template_type},
+        db=session,
+    )
+    logger.info(
+        "platform_template_created",
+        template_id=template_id,
+        name=body.name,
+        admin_id=current_user.id,
+    )
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={"id": template_id, "status": "draft", "version": "1.0.0"},
+        status_code=201,
+        headers={"ETag": etag},
+    )
+
+
+@platform_templates_router.put("/{template_id}")
+async def update_platform_template(
+    template_id: str,
+    body: PlatformTemplateUpdateRequest,
+    if_match: Optional[str] = None,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-20: Update a platform agent template.
+
+    Requires If-Match header for optimistic concurrency — returns 409 if stale.
+    Runs SystemPromptValidator. Returns updated ETag.
+    """
+    from app.modules.agents.prompt_validator import validate_prompt, TEMPLATE_PROMPT_MAX_CHARS
+    from fastapi import Header
+
+    ptid = _get_platform_tenant_id_required(current_user)
+
+    # Validate UUID
+    if not _UUID_RE.match(template_id):
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Fetch existing template
+    existing_result = await session.execute(
+        text(
+            "SELECT id, updated_at, auth_mode, required_credentials, system_prompt, "
+            "guardrails, status "
+            "FROM agent_cards "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": template_id, "tenant_id": ptid},
+    )
+    existing = existing_result.mappings().first()
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+
+    # ETag / optimistic concurrency check
+    if if_match is not None:
+        current_etag = _template_etag(str(existing["updated_at"]))
+        # Strip quotes if present (HTTP spec)
+        client_etag = if_match.strip('"')
+        if client_etag != current_etag:
+            raise HTTPException(
+                status_code=409,
+                detail="Template was modified by another session. Refresh and try again.",
+            )
+
+    # Validate system_prompt
+    validation = validate_prompt(body.system_prompt, max_chars=TEMPLATE_PROMPT_MAX_CHARS)
+    if not validation.valid:
+        if body.override_validation and body.override_reason:
+            await insert_audit_log(
+                tenant_id=ptid,
+                user_id=current_user.id,
+                action="prompt_validation_override",
+                resource_type="agent_template",
+                resource_id=template_id,
+                details={"reason": body.override_reason, "blocked_patterns": validation.blocked_patterns},
+                db=session,
+            )
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=validation.reason or "Prompt failed validation",
+            )
+
+    capabilities_json = _build_template_capabilities_json(body)
+
+    await session.execute(
+        text(
+            "UPDATE agent_cards SET "
+            "  name = :name, description = :description, category = :category, "
+            "  avatar = :avatar, system_prompt = :system_prompt, "
+            "  capabilities = CAST(:capabilities AS jsonb), "
+            "  auth_mode = :auth_mode, "
+            "  required_credentials = CAST(:required_credentials AS jsonb), "
+            "  plan_required = :plan_required, "
+            "  template_type = :template_type, "
+            "  llm_policy = CAST(:llm_policy AS jsonb), "
+            "  kb_policy = CAST(:kb_policy AS jsonb), "
+            "  attached_skills = CAST(:attached_skills AS jsonb), "
+            "  attached_tools = CAST(:attached_tools AS jsonb), "
+            "  a2a_interface = CAST(:a2a_interface AS jsonb), "
+            "  updated_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {
+            "name": body.name,
+            "description": body.description,
+            "category": body.category,
+            "avatar": body.avatar,
+            "system_prompt": body.system_prompt,
+            "capabilities": capabilities_json,
+            "auth_mode": body.auth_mode,
+            "required_credentials": json.dumps(body.required_credentials),
+            "plan_required": body.plan_required,
+            "template_type": body.template_type,
+            "llm_policy": json.dumps(
+                body.llm_policy or {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}}
+            ),
+            "kb_policy": json.dumps(
+                body.kb_policy or {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []}
+            ),
+            "attached_skills": json.dumps(body.attached_skills),
+            "attached_tools": json.dumps(body.attached_tools),
+            "a2a_interface": json.dumps(
+                body.a2a_interface or {"a2a_enabled": False, "operations": [], "auth_required": False}
+            ),
+            "id": template_id,
+            "tenant_id": ptid,
+        },
+    )
+    await session.commit()
+
+    # Fetch new updated_at for ETag
+    ts_result = await session.execute(
+        text("SELECT updated_at FROM agent_cards WHERE id = :id"),
+        {"id": template_id},
+    )
+    ts_row = ts_result.mappings().first()
+    etag = _template_etag(str(ts_row["updated_at"])) if ts_row else template_id[:16]
+
+    await insert_audit_log(
+        tenant_id=ptid,
+        user_id=current_user.id,
+        action="platform_template_updated",
+        resource_type="agent_template",
+        resource_id=template_id,
+        details={"name": body.name},
+        db=session,
+    )
+    logger.info(
+        "platform_template_updated",
+        template_id=template_id,
+        admin_id=current_user.id,
+    )
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={"id": template_id, "status": existing["status"]},
+        headers={"ETag": etag},
+    )
+
+
+@platform_templates_router.post("/{template_id}/publish", status_code=status.HTTP_200_OK)
+async def publish_platform_template(
+    template_id: str,
+    body: PublishTemplateRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-20: Publish a platform agent template.
+
+    Required: version_label (semver) and changelog (non-empty).
+    Performs breaking-change detection against the last published snapshot.
+    Writes an agent_template_versions row and sets status = 'published'.
+    Returns the new ETag.
+    """
+    ptid = _get_platform_tenant_id_required(current_user)
+
+    if not _UUID_RE.match(template_id):
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    existing_result = await session.execute(
+        text(
+            "SELECT id, name, status, auth_mode, required_credentials, system_prompt, "
+            "guardrails, updated_at "
+            "FROM agent_cards "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": template_id, "tenant_id": ptid},
+    )
+    existing = existing_result.mappings().first()
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+
+    # Fetch last published snapshot for change detection
+    last_version_result = await session.execute(
+        text(
+            "SELECT snapshot FROM agent_template_versions "
+            "WHERE template_id = :tid ORDER BY published_at DESC LIMIT 1"
+        ),
+        {"tid": template_id},
+    )
+    last_version_row = last_version_result.mappings().first()
+
+    old_snapshot: dict = {}
+    if last_version_row and last_version_row["snapshot"]:
+        snap = last_version_row["snapshot"]
+        if isinstance(snap, str):
+            old_snapshot = json.loads(snap)
+        elif isinstance(snap, dict):
+            old_snapshot = snap
+
+    new_snapshot: dict = {
+        "auth_mode": existing["auth_mode"],
+        "required_credentials": existing["required_credentials"] or [],
+        "system_prompt": existing["system_prompt"],
+        "guardrails": existing["guardrails"],
+        "name": existing["name"],
+    }
+
+    change_type = _detect_breaking_changes(old_snapshot, new_snapshot)
+    is_initial = not old_snapshot
+
+    # Insert version record
+    version_id = str(uuid.uuid4())
+    await session.execute(
+        text(
+            "INSERT INTO agent_template_versions "
+            "  (id, template_id, version_label, change_type, changelog, published_by, snapshot) "
+            "VALUES "
+            "  (:id, :template_id, :version_label, :change_type, :changelog, :published_by, "
+            "   CAST(:snapshot AS jsonb))"
+        ),
+        {
+            "id": version_id,
+            "template_id": template_id,
+            "version_label": body.version_label,
+            "change_type": "initial" if is_initial else change_type,
+            "changelog": body.changelog,
+            "published_by": current_user.id,
+            "snapshot": json.dumps(new_snapshot),
+        },
+    )
+
+    # Update template status to published
+    await session.execute(
+        text(
+            "UPDATE agent_cards "
+            "SET status = 'published', version = version + 1, updated_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": template_id, "tenant_id": ptid},
+    )
+    await session.commit()
+
+    # New ETag
+    ts_result = await session.execute(
+        text("SELECT updated_at FROM agent_cards WHERE id = :id"),
+        {"id": template_id},
+    )
+    ts_row = ts_result.mappings().first()
+    etag = _template_etag(str(ts_row["updated_at"])) if ts_row else template_id[:16]
+
+    await insert_audit_log(
+        tenant_id=ptid,
+        user_id=current_user.id,
+        action="platform_template_published",
+        resource_type="agent_template",
+        resource_id=template_id,
+        details={
+            "version_label": body.version_label,
+            "change_type": "initial" if is_initial else change_type,
+        },
+        db=session,
+    )
+    logger.info(
+        "platform_template_published",
+        template_id=template_id,
+        version_label=body.version_label,
+        change_type=change_type,
+        admin_id=current_user.id,
+    )
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={
+            "id": template_id,
+            "status": "published",
+            "version_label": body.version_label,
+            "change_type": "initial" if is_initial else change_type,
+        },
+        headers={"ETag": etag},
+    )
+
+
+@platform_templates_router.get("/{template_id}/versions")
+async def get_platform_template_versions(
+    template_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-20: Return version history for a platform agent template.
+
+    Newest versions first. Includes version_label, change_type, changelog,
+    published_by (user_id), published_at, and snapshot (optional).
+    """
+    ptid = _get_platform_tenant_id_required(current_user)
+
+    if not _UUID_RE.match(template_id):
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Verify template belongs to platform tenant
+    exists_result = await session.execute(
+        text("SELECT 1 FROM agent_cards WHERE id = :id AND tenant_id = :tenant_id"),
+        {"id": template_id, "tenant_id": ptid},
+    )
+    if exists_result.first() is None:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+
+    rows_result = await session.execute(
+        text(
+            "SELECT id, version_label, change_type, changelog, published_by, published_at "
+            "FROM agent_template_versions "
+            "WHERE template_id = :template_id "
+            "ORDER BY published_at DESC"
+        ),
+        {"template_id": template_id},
+    )
+    versions = []
+    for row in rows_result.mappings():
+        versions.append(
+            {
+                "id": str(row["id"]),
+                "version_label": row["version_label"],
+                "change_type": row["change_type"],
+                "changelog": row["changelog"],
+                "published_by": str(row["published_by"]),
+                "published_at": str(row["published_at"]),
+            }
+        )
+
+    return {"template_id": template_id, "versions": versions, "total": len(versions)}
+
+
+@platform_templates_router.get("/{template_id}/instances")
+async def get_platform_template_instances(
+    template_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-20: Return tenant deployments of a platform agent template.
+
+    Security: returns ONLY tenant_name (not tenant_id), pinned_version,
+    status, and last_active_at. Never returns system_prompt, KB IDs,
+    credentials, or other tenant-specific data.
+    """
+    ptid = _get_platform_tenant_id_required(current_user)
+
+    if not _UUID_RE.match(template_id):
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Verify template belongs to platform tenant
+    exists_result = await session.execute(
+        text("SELECT 1 FROM agent_cards WHERE id = :id AND tenant_id = :tenant_id"),
+        {"id": template_id, "tenant_id": ptid},
+    )
+    if exists_result.first() is None:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+
+    # Join agent_cards (deployed instances) with tenants to get name only.
+    # Intentionally select tenant name, NOT tenant_id — data sovereignty.
+    rows_result = await session.execute(
+        text(
+            "SELECT "
+            "  t.name AS tenant_name, "
+            "  ac.template_version AS pinned_version, "
+            "  ac.status, "
+            "  ac.updated_at AS last_active_at "
+            "FROM agent_cards ac "
+            "JOIN tenants t ON t.id = ac.tenant_id "
+            "WHERE ac.template_id = :template_id "
+            "  AND ac.tenant_id != :platform_tenant_id "
+            "ORDER BY ac.updated_at DESC"
+        ),
+        {"template_id": template_id, "platform_tenant_id": ptid},
+    )
+    instances = []
+    for row in rows_result.mappings():
+        instances.append(
+            {
+                "tenant_name": row["tenant_name"],
+                "pinned_version": row["pinned_version"],
+                "status": row["status"],
+                "last_active_at": str(row["last_active_at"]) if row["last_active_at"] else None,
+            }
+        )
+
+    return {"template_id": template_id, "instances": instances, "total": len(instances)}

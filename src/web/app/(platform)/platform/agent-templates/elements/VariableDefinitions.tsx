@@ -10,9 +10,9 @@ interface VariableDefinitionsProps {
 
 const TYPE_OPTIONS: { value: AgentTemplateVariable["type"]; label: string }[] =
   [
-    { value: "text", label: "Text" },
+    { value: "string", label: "String" },
     { value: "number", label: "Number" },
-    { value: "select", label: "Select" },
+    { value: "boolean", label: "Boolean" },
   ];
 
 export function VariableDefinitions({
@@ -22,7 +22,7 @@ export function VariableDefinitions({
   function handleAdd() {
     onChange([
       ...variables,
-      { name: "", type: "text", label: "", required: false },
+      { name: "", type: "string", label: "", required: false },
     ]);
   }
 

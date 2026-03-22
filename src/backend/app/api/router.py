@@ -191,6 +191,11 @@ from app.modules.agents.platform_a2a_routes import router as platform_a2a_router
 
 router.include_router(platform_a2a_router)
 
+# Platform Agent Template Studio endpoints (TODO-20)
+from app.modules.agents.routes import platform_templates_router
+
+router.include_router(platform_templates_router)
+
 # HAR A2A transaction endpoints (AI-043 to AI-045)
 from app.modules.har.routes import router as har_router
 

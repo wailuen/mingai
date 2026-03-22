@@ -25,6 +25,7 @@ export function LifecycleActions({
   onClose,
 }: LifecycleActionsProps) {
   const [changelog, setChangelog] = useState("");
+  const [versionLabel, setVersionLabel] = useState("1.0.0");
   const [showChangelogInput, setShowChangelogInput] = useState(false);
   const publishMutation = usePublishAgentTemplate();
   const deprecateMutation = useDeprecateAgentTemplate();
@@ -42,6 +43,7 @@ export function LifecycleActions({
 
     await publishMutation.mutateAsync({
       id: template.id,
+      version_label: versionLabel.trim() || "1.0.0",
       changelog: changelog.trim(),
     });
     onClose();
@@ -76,17 +78,31 @@ export function LifecycleActions({
       {isDraft && (
         <div className="space-y-2">
           {showChangelogInput && (
-            <div>
-              <label className="mb-1 block text-[11px] text-text-muted">
-                Changelog (required for publishing)
-              </label>
-              <textarea
-                value={changelog}
-                onChange={(e) => setChangelog(e.target.value)}
-                placeholder="Describe what changed in this version..."
-                rows={3}
-                className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
-              />
+            <div className="space-y-2">
+              <div>
+                <label className="mb-1 block text-[11px] text-text-muted">
+                  Version Label
+                </label>
+                <input
+                  type="text"
+                  value={versionLabel}
+                  onChange={(e) => setVersionLabel(e.target.value)}
+                  placeholder="1.0.0"
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-text-muted">
+                  Changelog (required for publishing)
+                </label>
+                <textarea
+                  value={changelog}
+                  onChange={(e) => setChangelog(e.target.value)}
+                  placeholder="Describe what changed in this version..."
+                  rows={3}
+                  className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
+                />
+              </div>
             </div>
           )}
           <button

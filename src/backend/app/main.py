@@ -355,13 +355,8 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("llm_provider_seed_failed", error=str(exc))
 
-    # TA-020: Seed agent templates into agent_templates table on startup.
-    try:
-        from app.core.seeds import seed_agent_templates
-
-        await seed_agent_templates()
-    except Exception as exc:
-        logger.warning("agent_templates_seed_failed", error=str(exc))
+    # Agent template seeding disabled — templates are authored by platform admins
+    # via the Template Studio (TODO-20). No seed data on startup.
 
     # TODO-38: Start LLM library health check job (every 900s / 15 min).
     _llm_health_task = None

@@ -208,12 +208,29 @@ class CreateAgentTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
     category: Optional[str] = Field(None, max_length=100)
-    system_prompt: str = Field(..., min_length=1, max_length=100_000)
+    # system_prompt may be empty for draft saves; validation runs at publish time
+    system_prompt: str = Field("", max_length=100_000)
     variable_definitions: List[TemplateVariableDef] = Field(default_factory=list)
     guardrails: List[GuardrailRule] = Field(default_factory=list, max_length=50)
     confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     # ATA-022: structured guardrail configuration (validated by GuardrailsSchema)
     guardrails_config: Optional[GuardrailsSchema] = None
+    # TODO-20 studio extended fields — stored when agent_templates schema supports them
+    icon: Optional[str] = Field(None, max_length=500)
+    tags: List[str] = Field(default_factory=list)
+    auth_mode: str = Field("none", pattern="^(none|tenant_credentials|platform_credentials)$")
+    required_credentials: List[dict] = Field(default_factory=list)
+    plan_required: Optional[str] = Field(None, pattern="^(starter|professional|enterprise)$")
+    llm_policy: Optional[dict] = None
+    kb_policy: Optional[dict] = None
+    attached_skills: List[str] = Field(default_factory=list)
+    attached_tools: List[str] = Field(default_factory=list)
+    a2a_interface: Optional[dict] = None
+    template_type: str = Field("rag", pattern="^(rag|skill_augmented|tool_augmented|credentialed|registered_a2a)$")
+    citation_mode: Optional[str] = Field(None, pattern="^(inline|footnote|none)$")
+    max_response_length: Optional[int] = None
+    pii_masking_enabled: bool = False
+    credential_schema: List[dict] = Field(default_factory=list)
 
 
 class PatchAgentTemplateRequest(BaseModel):
@@ -255,30 +272,63 @@ async def _create_agent_template_db(
     created_by: str,
     db: AsyncSession,
 ) -> dict:
-    """PA-020: Insert a new Draft agent template into agent_templates."""
+    """PA-020 / TODO-20: Insert a new Draft agent template into agent_templates."""
     template_id = str(uuid.uuid4())
     variable_defs_json = json.dumps([v.model_dump() for v in body.variable_definitions])
     guardrails_json = json.dumps([g.model_dump() for g in body.guardrails])
+    credential_schema = getattr(body, "credential_schema", None) or []
+    required_credentials = getattr(body, "required_credentials", None) or credential_schema
 
     await db.execute(
         text(
             "INSERT INTO agent_templates "
-            "(id, name, description, category, system_prompt, variable_definitions, "
-            "guardrails, confidence_threshold, version, status, created_by) "
-            "VALUES (:id, :name, :description, :category, :system_prompt, "
+            "(id, name, description, category, icon, tags, system_prompt, variable_definitions, "
+            "guardrails, confidence_threshold, version, status, created_by, "
+            "auth_mode, required_credentials, plan_required, template_type, "
+            "llm_policy, kb_policy, attached_skills, attached_tools, a2a_interface, "
+            "citation_mode, max_response_length, pii_masking_enabled) "
+            "VALUES (:id, :name, :description, :category, :icon, CAST(:tags AS jsonb), "
+            ":system_prompt, "
             "CAST(:variable_definitions AS jsonb), CAST(:guardrails AS jsonb), "
-            ":confidence_threshold, 1, 'Draft', :created_by)"
+            ":confidence_threshold, 1, 'Draft', :created_by, "
+            ":auth_mode, CAST(:required_credentials AS jsonb), :plan_required, :template_type, "
+            "CAST(:llm_policy AS jsonb), CAST(:kb_policy AS jsonb), "
+            "CAST(:attached_skills AS jsonb), CAST(:attached_tools AS jsonb), "
+            "CAST(:a2a_interface AS jsonb), :citation_mode, :max_response_length, :pii_masking_enabled)"
         ),
         {
             "id": template_id,
             "name": body.name,
             "description": body.description,
             "category": body.category,
+            "icon": getattr(body, "icon", None),
+            "tags": json.dumps(getattr(body, "tags", []) or []),
             "system_prompt": body.system_prompt,
             "variable_definitions": variable_defs_json,
             "guardrails": guardrails_json,
             "confidence_threshold": body.confidence_threshold,
             "created_by": created_by,
+            "auth_mode": getattr(body, "auth_mode", "none") or "none",
+            "required_credentials": json.dumps(required_credentials),
+            "plan_required": getattr(body, "plan_required", None),
+            "template_type": getattr(body, "template_type", "rag") or "rag",
+            "llm_policy": json.dumps(
+                getattr(body, "llm_policy", None)
+                or {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}}
+            ),
+            "kb_policy": json.dumps(
+                getattr(body, "kb_policy", None)
+                or {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []}
+            ),
+            "attached_skills": json.dumps(getattr(body, "attached_skills", []) or []),
+            "attached_tools": json.dumps(getattr(body, "attached_tools", []) or []),
+            "a2a_interface": json.dumps(
+                getattr(body, "a2a_interface", None)
+                or {"a2a_enabled": False, "operations": [], "auth_required": False}
+            ),
+            "citation_mode": getattr(body, "citation_mode", None),
+            "max_response_length": getattr(body, "max_response_length", None),
+            "pii_masking_enabled": getattr(body, "pii_masking_enabled", False) or False,
         },
     )
     await db.commit()
@@ -287,12 +337,15 @@ async def _create_agent_template_db(
 
 
 async def _get_agent_template_db(template_id: str, db: AsyncSession) -> Optional[dict]:
-    """PA-020/022: Fetch a single agent template by ID from agent_templates."""
+    """PA-020/022 / TODO-20: Fetch a single agent template by ID from agent_templates."""
     result = await db.execute(
         text(
-            "SELECT id, name, description, category, system_prompt, "
+            "SELECT id, name, description, category, icon, tags, system_prompt, "
             "variable_definitions, guardrails, confidence_threshold, "
             "version, status, changelog, created_by, parent_id, "
+            "auth_mode, required_credentials, plan_required, template_type, "
+            "llm_policy, kb_policy, attached_skills, attached_tools, a2a_interface, "
+            "citation_mode, max_response_length, pii_masking_enabled, "
             "created_at, updated_at "
             "FROM agent_templates WHERE id = :id"
         ),
@@ -306,6 +359,8 @@ async def _get_agent_template_db(template_id: str, db: AsyncSession) -> Optional
         "name": row["name"],
         "description": row["description"],
         "category": row["category"],
+        "icon": row["icon"],
+        "tags": list(row["tags"]) if row["tags"] else [],
         "system_prompt": row["system_prompt"],
         "variable_definitions": row["variable_definitions"] or [],
         "guardrails": row["guardrails"] or [],
@@ -319,6 +374,18 @@ async def _get_agent_template_db(template_id: str, db: AsyncSession) -> Optional
         "changelog": row["changelog"],
         "created_by": str(row["created_by"]) if row["created_by"] else None,
         "parent_id": str(row["parent_id"]) if row["parent_id"] else None,
+        "auth_mode": row["auth_mode"] or "none",
+        "required_credentials": list(row["required_credentials"]) if row["required_credentials"] else [],
+        "plan_required": row["plan_required"],
+        "template_type": row["template_type"] or "rag",
+        "llm_policy": dict(row["llm_policy"]) if row["llm_policy"] else {},
+        "kb_policy": dict(row["kb_policy"]) if row["kb_policy"] else {},
+        "attached_skills": list(row["attached_skills"]) if row["attached_skills"] else [],
+        "attached_tools": list(row["attached_tools"]) if row["attached_tools"] else [],
+        "a2a_interface": dict(row["a2a_interface"]) if row["a2a_interface"] else {},
+        "citation_mode": row["citation_mode"],
+        "max_response_length": row["max_response_length"],
+        "pii_masking_enabled": bool(row["pii_masking_enabled"]),
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
     }

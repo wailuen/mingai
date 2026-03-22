@@ -76,7 +76,7 @@ function CacheAnalyticsContent() {
   return (
     <div className="space-y-6">
       <CacheKPICards stats={data} />
-      <TopHitPatterns patterns={data.top_hit_patterns} />
+      <TopHitPatterns patterns={data.top_hit_patterns ?? []} />
     </div>
   );
 }
