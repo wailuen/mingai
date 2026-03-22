@@ -19,6 +19,7 @@ import {
   Globe,
   Clock,
   RefreshCw,
+  Puzzle,
   type LucideIcon,
 } from "lucide-react";
 import type { JWTClaims } from "@/lib/auth";
@@ -61,6 +62,7 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
       { label: "Sync Health", href: "/admin/sync", icon: RefreshCw },
       { label: "Users", href: "/settings/users", icon: Users },
       { label: "Agents", href: "/admin/agents", icon: Bot },
+      { label: "Skills", href: "/settings/skills", icon: Puzzle },
       { label: "Glossary", href: "/settings/glossary", icon: BookOpen },
     ],
   },

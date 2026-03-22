@@ -137,6 +137,21 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 /**
+ * PUT helper
+ */
+export async function apiPut<T>(
+  path: string,
+  body: Record<string, unknown> | object,
+  opts: { skipRedirectOn401?: boolean } = {},
+): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "PUT",
+    body: JSON.stringify(body),
+    skipRedirectOn401: opts.skipRedirectOn401,
+  });
+}
+
+/**
  * DELETE helper
  */
 export async function apiDelete<T = void>(path: string): Promise<T> {
