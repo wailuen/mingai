@@ -6,6 +6,7 @@ import { useAgentTemplates } from "@/lib/hooks/useAgentTemplates";
 import type { AgentTemplate } from "@/lib/hooks/useAgentTemplates";
 import { AgentTemplateCard } from "./AgentTemplateCard";
 import { AgentTemplateDetailPanel } from "./AgentTemplateDetailPanel";
+import { AgentDeployWizard } from "@/components/agents/AgentDeployWizard";
 import { getStoredToken, decodeToken } from "@/lib/auth";
 
 function getTenantPlan(): string {
@@ -27,6 +28,9 @@ export function AgentLibraryTab({ onDeploy }: AgentLibraryTabProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [detailTemplate, setDetailTemplate] = useState<AgentTemplate | null>(
+    null,
+  );
+  const [deployTemplate, setDeployTemplate] = useState<AgentTemplate | null>(
     null,
   );
 
@@ -62,7 +66,7 @@ export function AgentLibraryTab({ onDeploy }: AgentLibraryTabProps) {
       if (onDeploy) {
         onDeploy(template);
       } else {
-        console.log("Deploy template:", template.id, template.name);
+        setDeployTemplate(template);
       }
     },
     [onDeploy],
@@ -176,11 +180,19 @@ export function AgentLibraryTab({ onDeploy }: AgentLibraryTabProps) {
           tenantPlan={tenantPlan}
           onClose={() => setDetailTemplate(null)}
           onDeploy={(t) => {
-            handleDeploy(t);
             setDetailTemplate(null);
+            handleDeploy(t);
           }}
         />
       )}
+
+      {/* Deploy wizard */}
+      <AgentDeployWizard
+        isOpen={deployTemplate !== null}
+        onClose={() => setDeployTemplate(null)}
+        templateId={deployTemplate?.id ?? null}
+        template={deployTemplate}
+      />
     </div>
   );
 }

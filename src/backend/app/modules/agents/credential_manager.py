@@ -442,3 +442,135 @@ class CredentialManager:
                 error_message=str(exc)[:200],
                 latency_ms=latency_ms,
             )
+
+
+# ---------------------------------------------------------------------------
+# TODO-15 module-level functions (deploy wizard)
+#
+# These functions operate via the AzureVaultClient / LocalDBVaultClient
+# (app.core.secrets) — the same backend used by _validate_and_store_credentials
+# in routes.py.  They are separate from the CredentialManager class above,
+# which uses the HashiCorp / Fernet backend.
+# ---------------------------------------------------------------------------
+
+
+async def store_credentials(
+    tenant_id: str,
+    agent_id: str,
+    credentials: dict,
+    schema: list,
+    vault_client=None,
+) -> None:
+    """Validate credential keys against schema, store each via VaultClient.
+
+    Vault path: {tenant_id}/agents/{agent_id}/{credential_key}
+
+    Unknown keys (not in schema) are skipped with a warning — never stored.
+    Credential values are NEVER logged.
+
+    Args:
+        tenant_id:    Tenant UUID string.
+        agent_id:     Agent UUID string (per-instance — two agents from the
+                      same template have different agent_ids and therefore
+                      completely isolated vault paths).
+        credentials:  Dict of {key: value} to store.
+        schema:       List of credential-schema dicts from the template's
+                      required_credentials field.  Each dict must contain "key".
+        vault_client: Optional pre-built VaultClient (injected in tests).
+                      Defaults to get_vault_client() when None.
+    """
+    if vault_client is None:
+        from app.core.secrets import get_vault_client as _get_vault_client
+
+        vault_client = _get_vault_client()
+
+    schema_keys = {s["key"] for s in (schema or [])}
+
+    for key, value in credentials.items():
+        if key not in schema_keys:
+            logger.warning(
+                "credential_store_unknown_key",
+                agent_id=agent_id,
+                key=key,
+                # value intentionally omitted
+            )
+            continue
+
+        vault_path = f"{tenant_id}/agents/{agent_id}/{key}"
+        # VaultClient.store_secret is synchronous.
+        vault_client.store_secret(vault_path, value)
+        # NEVER log value
+
+
+async def get_credential(
+    tenant_id: str,
+    agent_id: str,
+    credential_key: str,
+    vault_client=None,
+) -> "Optional[str]":
+    """Retrieve a single credential for runtime injection into tool calls.
+
+    Called by the Tool Executor at query time, not at agent load time.
+    Returns None if the credential cannot be retrieved (vault unavailable,
+    secret not found, etc.).
+
+    SECURITY: the returned value must NEVER be logged by callers.
+    """
+    if vault_client is None:
+        from app.core.secrets import get_vault_client as _get_vault_client
+
+        vault_client = _get_vault_client()
+
+    vault_path = f"{tenant_id}/agents/{agent_id}/{credential_key}"
+    try:
+        # VaultClient.get_secret is synchronous.
+        return vault_client.get_secret(vault_path)
+    except Exception:
+        logger.warning(
+            "credential_get_failed",
+            agent_id=agent_id,
+            key=credential_key,
+            # value intentionally omitted
+        )
+        return None
+
+
+async def test_credentials(
+    template_id: str,
+    credentials: dict,
+    timeout_seconds: int = 15,
+) -> CredentialTestResult:
+    """Run credential validation with a hard 15s timeout.
+
+    Currently performs a lightweight connectivity check (placeholder for Phase 3
+    which will call the real tool endpoint).  The timeout is enforced via
+    asyncio.wait_for so a hung downstream probe cannot block the wizard.
+
+    Phase 3 TODO: replace asyncio.sleep(0.1) with a real HTTP probe to the
+    template's tool endpoint using the supplied credentials.
+
+    Returns CredentialTestResult with passed=True on success, False on failure
+    or timeout, and latency_ms set in all cases.
+    """
+    import asyncio
+    import time
+
+    start = time.monotonic()
+    try:
+        # Lightweight placeholder — Phase 3 replaces with real endpoint probe.
+        await asyncio.wait_for(asyncio.sleep(0.1), timeout=timeout_seconds)
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return CredentialTestResult(passed=True, latency_ms=latency_ms)
+    except asyncio.TimeoutError:
+        return CredentialTestResult(
+            passed=False,
+            error_message="Credential test timed out after 15 seconds",
+            latency_ms=timeout_seconds * 1000,
+        )
+    except Exception as exc:
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return CredentialTestResult(
+            passed=False,
+            error_message=str(exc),
+            latency_ms=latency_ms,
+        )

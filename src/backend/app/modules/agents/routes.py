@@ -312,6 +312,11 @@ class DeployFromLibraryRequest(BaseModel):
         "workspace_wide"
     )
     credentials: Optional[Dict[str, str]] = None  # Required when auth_mode='tenant_credentials'
+    # TODO-15: Deploy wizard ACL + capabilities fields
+    allowed_roles: List[str] = Field(default_factory=list)
+    allowed_user_ids: List[str] = Field(default_factory=list)
+    kb_search_mode: Literal["parallel", "priority"] = Field("parallel")
+    rate_limit_per_minute: Optional[int] = Field(None, ge=1, le=1000)
 
 
 # ---------------------------------------------------------------------------
@@ -1437,14 +1442,27 @@ async def deploy_from_library_db(
     db: AsyncSession,
     access_mode: str = "workspace_wide",
     kb_ids: Optional[List[str]] = None,
+    allowed_roles: list = None,
+    allowed_user_ids: list = None,
+    kb_search_mode: str = "parallel",
+    rate_limit_per_minute: Optional[int] = None,
 ) -> dict:
     """Create a new published agent from a library or seed template (API-073)."""
     agent_id = str(uuid.uuid4())
+    # Normalise mutable defaults
+    if allowed_roles is None:
+        allowed_roles = []
+    if allowed_user_ids is None:
+        allowed_user_ids = []
     # Per ADR-01: kb_ids are stored inside the capabilities JSONB (no join table).
     # Normalise capabilities to a dict so kb_ids can coexist with feature_tags.
     if isinstance(capabilities, list):
         capabilities = {"feature_tags": capabilities}
     capabilities["kb_ids"] = list(kb_ids or [])
+    # TODO-15: store deploy-wizard settings inside capabilities JSONB
+    capabilities["kb_search_mode"] = kb_search_mode
+    if rate_limit_per_minute is not None:
+        capabilities["rate_limit_per_minute"] = rate_limit_per_minute
     capabilities_json = json.dumps(capabilities)
     await db.execute(
         text(
@@ -1487,8 +1505,8 @@ async def deploy_from_library_db(
             "agent_id": agent_id,
             "tenant_id": tenant_id,
             "visibility_mode": visibility_mode,
-            "allowed_roles": [],
-            "allowed_user_ids": [],
+            "allowed_roles": list(allowed_roles),
+            "allowed_user_ids": list(allowed_user_ids),
         },
     )
     # Commit agent + ACL together — keypair generation is best-effort after commit.
@@ -1994,6 +2012,10 @@ async def deploy_from_library(
         db=session,
         access_mode=body.access_mode,
         kb_ids=body.kb_ids,
+        allowed_roles=body.allowed_roles,
+        allowed_user_ids=body.allowed_user_ids,
+        kb_search_mode=body.kb_search_mode,
+        rate_limit_per_minute=body.rate_limit_per_minute,
     )
 
     # ATA-025: store credentials to vault (agent_id is now available after INSERT)
@@ -2020,7 +2042,58 @@ async def deploy_from_library(
         details={"template_id": template_id, "name": body.name},
         db=session,
     )
+    # TODO-15: best-effort cache invalidation so agent list caches are flushed
+    try:
+        import json as _json
+
+        from app.core.redis_client import build_redis_key, get_redis
+
+        _redis = get_redis()
+        cache_key = build_redis_key(
+            current_user.tenant_id, "cache-invalidate-agents"
+        )
+        await _redis.publish(
+            cache_key,
+            _json.dumps(
+                {
+                    "event": "agent_deployed",
+                    "agent_id": result["id"],
+                    "tenant_id": current_user.tenant_id,
+                }
+            ),
+        )
+    except Exception:
+        pass  # Cache invalidation is best-effort — do not block deploy success
     return result
+
+
+# ---------------------------------------------------------------------------
+# TODO-15: Test credentials endpoint (Step 4 of deploy wizard)
+# ---------------------------------------------------------------------------
+
+
+class TestCredentialsRequest(BaseModel):
+    template_id: str
+    credentials: Dict[str, str]
+
+
+@admin_router.post("/test-credentials")
+async def test_agent_credentials(
+    body: TestCredentialsRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+):
+    """Test credentials before deploy (Step 4 of wizard). 15s hard timeout."""
+    from app.modules.agents.credential_manager import test_credentials
+
+    result = await test_credentials(
+        template_id=body.template_id,
+        credentials=body.credentials,
+    )
+    return {
+        "passed": result.passed,
+        "error_message": result.error_message,
+        "latency_ms": result.latency_ms,
+    }
 
 
 # ---------------------------------------------------------------------------
