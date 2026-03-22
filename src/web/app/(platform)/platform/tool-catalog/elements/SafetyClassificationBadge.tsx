@@ -20,7 +20,10 @@ const SAFETY_STYLES: Record<SafetyClass, { className: string; label: string }> =
 export function SafetyClassificationBadge({
   safetyClass,
 }: SafetyClassificationBadgeProps) {
-  const style = SAFETY_STYLES[safetyClass];
+  const style = SAFETY_STYLES[safetyClass] ?? {
+    className: "bg-bg-elevated text-text-faint",
+    label: safetyClass ?? "Unknown",
+  };
 
   return (
     <span

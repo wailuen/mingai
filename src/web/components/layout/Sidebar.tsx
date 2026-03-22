@@ -117,6 +117,11 @@ const PLATFORM_ADMIN_SECTIONS: NavSection[] = [
         href: "/platform/agent-templates",
         icon: Bot,
       },
+      {
+        label: "Skills Library",
+        href: "/platform/skills-library",
+        icon: Puzzle,
+      },
       { label: "Analytics", href: "/platform/analytics", icon: BarChart3 },
       { label: "Tool Catalog", href: "/platform/tool-catalog", icon: Wrench },
       { label: "Registry", href: "/platform/registry", icon: Globe },
