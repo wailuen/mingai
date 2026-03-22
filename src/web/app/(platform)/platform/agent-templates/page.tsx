@@ -7,15 +7,17 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { TemplateList } from "./elements/TemplateList";
 import { TemplateStudioPanel } from "./elements/TemplateStudioPanel";
+import { PAA2ARegistryTab } from "./elements/PAA2ARegistryTab";
 import type { AgentTemplateAdmin } from "@/lib/hooks/useAgentTemplatesAdmin";
 
-type StatusTab = "all" | "published" | "draft" | "deprecated";
+type ActiveTab = "all" | "published" | "draft" | "deprecated" | "a2a-registry";
 
-const TABS: { value: StatusTab; label: string }[] = [
+const TABS: { value: ActiveTab; label: string }[] = [
   { value: "all", label: "All Templates" },
   { value: "published", label: "Published" },
   { value: "draft", label: "Draft" },
   { value: "deprecated", label: "Deprecated" },
+  { value: "a2a-registry", label: "A2A Registry" },
 ];
 
 /**
@@ -23,11 +25,11 @@ const TABS: { value: StatusTab; label: string }[] = [
  * Platform admin page for managing and authoring agent templates.
  */
 export default function AgentTemplatesPage() {
-  const [activeTab, setActiveTab] = useState<StatusTab>("all");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("all");
   // null = create mode, string = edit mode with template id
-  const [panelTemplateId, setPanelTemplateId] = useState<string | null | undefined>(
-    undefined,
-  );
+  const [panelTemplateId, setPanelTemplateId] = useState<
+    string | null | undefined
+  >(undefined);
 
   const panelOpen = panelTemplateId !== undefined;
 
@@ -85,10 +87,16 @@ export default function AgentTemplatesPage() {
           ))}
         </div>
 
-        {/* Template list */}
-        <ErrorBoundary>
-          <TemplateList statusFilter={activeTab} onEdit={handleEdit} />
-        </ErrorBoundary>
+        {/* Tab content */}
+        {activeTab === "a2a-registry" ? (
+          <ErrorBoundary>
+            <PAA2ARegistryTab />
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary>
+            <TemplateList statusFilter={activeTab} onEdit={handleEdit} />
+          </ErrorBoundary>
+        )}
       </div>
 
       {/* Studio panel — rendered outside the scrolling area so it overlays correctly */}
