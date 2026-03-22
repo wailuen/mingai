@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { useAgentTemplates } from "@/lib/hooks/useAgentTemplates";
@@ -10,6 +11,7 @@ import { AgentCard, AgentCardSkeleton } from "./elements/AgentCard";
 import { TemplatePreviewModal } from "./elements/TemplatePreviewModal";
 import { AgentDeployForm } from "./elements/AgentDeployForm";
 import { UpgradeNotificationBanner } from "./elements/UpgradeNotificationBanner";
+import { CustomAgentStudioPanel } from "@/components/agents/CustomAgentStudioPanel";
 
 /**
  * FE-035: Agent Library page (Tenant Admin).
@@ -23,6 +25,11 @@ export default function AgentsPage() {
   const [deployTemplate, setDeployTemplate] = useState<AgentTemplate | null>(
     null,
   );
+  // Custom Agent Studio panel state
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [editingStudioAgentId, setEditingStudioAgentId] = useState<
+    string | null
+  >(null);
 
   const { data, isPending, error } = useAgentTemplates(
     categoryFilter || undefined,
@@ -49,11 +56,24 @@ export default function AgentsPage() {
         </div>
 
         {/* Page header */}
-        <div className="mb-1">
-          <h1 className="text-page-title text-text-primary">Agent Library</h1>
-          <p className="mt-1 text-body-default text-text-muted">
-            Browse and deploy agent templates to your workspace
-          </p>
+        <div className="mb-1 flex items-start justify-between">
+          <div>
+            <h1 className="text-page-title text-text-primary">Agent Library</h1>
+            <p className="mt-1 text-body-default text-text-muted">
+              Browse and deploy agent templates to your workspace
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingStudioAgentId(null);
+              setStudioOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-2 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
+          >
+            <Plus size={14} />
+            New Custom Agent
+          </button>
         </div>
 
         {/* Upgrade banner (future) */}
@@ -98,6 +118,14 @@ export default function AgentsPage() {
                   template={template}
                   onPreview={setPreviewTemplate}
                   onDeploy={handleDeploy}
+                  onEdit={
+                    template.is_studio_template
+                      ? (t) => {
+                          setEditingStudioAgentId(t.id);
+                          setStudioOpen(true);
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -119,6 +147,21 @@ export default function AgentsPage() {
             template={deployTemplate}
             onClose={() => setDeployTemplate(null)}
             onDeployed={handleDeployed}
+          />
+        )}
+
+        {/* Custom Agent Studio panel */}
+        {studioOpen && (
+          <CustomAgentStudioPanel
+            agentId={editingStudioAgentId}
+            onClose={() => {
+              setStudioOpen(false);
+              setEditingStudioAgentId(null);
+            }}
+            onPublished={() => {
+              setStudioOpen(false);
+              setEditingStudioAgentId(null);
+            }}
           />
         )}
       </div>

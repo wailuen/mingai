@@ -6,9 +6,16 @@ interface AgentCardProps {
   template: AgentTemplate;
   onPreview: (template: AgentTemplate) => void;
   onDeploy: (template: AgentTemplate) => void;
+  /** If provided, renders an Edit button instead of Deploy for studio agents. */
+  onEdit?: (template: AgentTemplate) => void;
 }
 
-export function AgentCard({ template, onPreview, onDeploy }: AgentCardProps) {
+export function AgentCard({
+  template,
+  onPreview,
+  onDeploy,
+  onEdit,
+}: AgentCardProps) {
   return (
     <div className="flex flex-col gap-3 rounded-card border border-border bg-bg-surface p-5">
       {/* Header row */}
@@ -63,12 +70,21 @@ export function AgentCard({ template, onPreview, onDeploy }: AgentCardProps) {
         >
           Preview
         </button>
-        <button
-          onClick={() => onDeploy(template)}
-          className="rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
-        >
-          Deploy &rarr;
-        </button>
+        {onEdit ? (
+          <button
+            onClick={() => onEdit(template)}
+            className="rounded-control border border-accent bg-accent-dim px-3 py-1.5 text-body-default font-semibold text-accent transition-opacity hover:opacity-90"
+          >
+            Edit
+          </button>
+        ) : (
+          <button
+            onClick={() => onDeploy(template)}
+            className="rounded-control bg-accent px-3 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
+          >
+            Deploy &rarr;
+          </button>
+        )}
       </div>
     </div>
   );
