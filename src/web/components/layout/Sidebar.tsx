@@ -63,6 +63,7 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
       { label: "Users", href: "/settings/users", icon: Users },
       { label: "Agents", href: "/admin/agents", icon: Bot },
       { label: "Skills", href: "/settings/skills", icon: Puzzle },
+      { label: "Tools", href: "/settings/tools", icon: Wrench },
       { label: "Glossary", href: "/settings/glossary", icon: BookOpen },
     ],
   },
