@@ -42,7 +42,44 @@ export interface AgentTemplate {
   /** Auth mechanism required by this template. */
   auth_mode: "none" | "tenant_credentials" | "platform_credentials";
   /** Minimum plan required to deploy; null means no restriction. */
-  plan_required: "free" | "professional" | "enterprise" | null;
+  plan_required: "starter" | "professional" | "enterprise" | null;
+  // ----- Library/discovery fields -----
+  /** Classification of the template capability model. */
+  template_type?: "rag" | "skill_augmented" | "tool_augmented" | "credentialed" | "registered_a2a";
+  /** Emoji or URL icon for the template. */
+  icon?: string | null;
+  /** Searchable tags. */
+  tags?: string[];
+  /** Skills attached to this template. */
+  attached_skills?: Array<{ skill_id?: string; skill_name?: string; name?: string }>;
+  /** Tools attached to this template. */
+  attached_tools?: Array<{ tool_id?: string; tool_name?: string; name?: string }>;
+  /** Number of deployed instances of this template across the tenant. */
+  instance_count?: number;
+  /** Variable schema (new canonical field). */
+  variable_schema?: Array<{ name: string; type: string; required: boolean; description: string }>;
+  /** LLM policy settings. */
+  llm_policy?: {
+    tenant_can_override: boolean;
+    defaults?: { temperature?: number; max_tokens?: number };
+    required_model?: string | null;
+  };
+  /** Knowledge base policy. */
+  kb_policy?: {
+    ownership: string;
+    recommended_categories: string[];
+    required_kb_ids: string[];
+  };
+  /** A2A interface definition. */
+  a2a_interface?: { a2a_enabled: boolean; operations: unknown[]; auth_required: boolean };
+  /** Changelog entries. */
+  changelog?: unknown[];
+  /** Guardrails list. */
+  guardrails?: unknown[];
+  /** Whether this is a platform-level template. */
+  is_platform?: boolean;
+  /** Whether this was created in the Studio. */
+  is_studio_template?: boolean;
 }
 
 export interface AgentTemplatesResponse {
@@ -87,7 +124,7 @@ export interface DeployAgentPayload {
 const TEMPLATES_KEY = "agent-templates";
 
 export function useAgentTemplates(category?: string) {
-  const params = new URLSearchParams({ page: "1", page_size: "20" });
+  const params = new URLSearchParams({ page: "1", page_size: "50" });
   if (category) params.set("category", category);
 
   return useQuery({
@@ -96,6 +133,7 @@ export function useAgentTemplates(category?: string) {
       apiGet<AgentTemplatesResponse>(
         `/api/v1/agents/templates?${params.toString()}`,
       ),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 

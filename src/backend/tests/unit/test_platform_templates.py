@@ -30,7 +30,7 @@ _MOD = "app.modules.platform.routes"
 def _make_platform_token() -> str:
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": "platform-admin-001",
+        "sub": "00000000-0000-0000-0000-000000000001",
         "tenant_id": TEST_TENANT_ID,
         "roles": ["platform_admin"],
         "scope": "platform",
@@ -46,7 +46,7 @@ def _make_platform_token() -> str:
 def _make_tenant_token(plan: str = "professional") -> str:
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": "tenant-admin-001",
+        "sub": "00000000-0000-0000-0000-000000000002",
         "tenant_id": TEST_TENANT_ID,
         "roles": ["tenant_admin"],
         "scope": "tenant",
@@ -114,7 +114,7 @@ _MOCK_TEMPLATE = {
     "version": 1,
     "status": "Draft",
     "changelog": None,
-    "created_by": "platform-admin-001",
+    "created_by": "00000000-0000-0000-0000-000000000001",
     "created_at": "2026-03-16T00:00:00+00:00",
     "updated_at": "2026-03-16T00:00:00+00:00",
 }
@@ -147,14 +147,15 @@ class TestCreateAgentTemplate:
         )
         assert resp.status_code == 422
 
-    def test_rejects_empty_system_prompt(self, client, platform_headers):
+    def test_allows_empty_system_prompt_for_draft(self, client, platform_headers):
+        """TODO-20: Empty system_prompt is valid for draft saves; validation runs at publish time."""
         body = {**_VALID_CREATE_BODY, "system_prompt": ""}
         resp = client.post(
             "/api/v1/platform/agent-templates",
             json=body,
             headers=platform_headers,
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 201
 
     def test_rejects_reserved_variable_name(self, client, platform_headers):
         body = {

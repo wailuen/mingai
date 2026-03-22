@@ -56,6 +56,17 @@ SEED_TEMPLATES = [
         "status": "published",
         "is_seed": True,
         "version": 1,
+        "template_type": "rag",
+        "llm_policy": {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}},
+        "kb_policy": {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []},
+        "attached_skills": [],
+        "attached_tools": [],
+        "a2a_interface": {"a2a_enabled": False, "operations": [], "auth_required": False},
+        "plan_required": None,
+        "auth_mode": "none",
+        "instance_count": 0,
+        "icon": None,
+        "tags": [],
     },
     {
         "id": "seed-it",
@@ -67,6 +78,17 @@ SEED_TEMPLATES = [
         "status": "published",
         "is_seed": True,
         "version": 1,
+        "template_type": "rag",
+        "llm_policy": {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}},
+        "kb_policy": {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []},
+        "attached_skills": [],
+        "attached_tools": [],
+        "a2a_interface": {"a2a_enabled": False, "operations": [], "auth_required": False},
+        "plan_required": None,
+        "auth_mode": "none",
+        "instance_count": 0,
+        "icon": None,
+        "tags": [],
     },
     {
         "id": "seed-procurement",
@@ -78,6 +100,17 @@ SEED_TEMPLATES = [
         "status": "published",
         "is_seed": True,
         "version": 1,
+        "template_type": "rag",
+        "llm_policy": {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}},
+        "kb_policy": {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []},
+        "attached_skills": [],
+        "attached_tools": [],
+        "a2a_interface": {"a2a_enabled": False, "operations": [], "auth_required": False},
+        "plan_required": None,
+        "auth_mode": "none",
+        "instance_count": 0,
+        "icon": None,
+        "tags": [],
     },
     {
         "id": "seed-onboarding",
@@ -89,11 +122,54 @@ SEED_TEMPLATES = [
         "status": "published",
         "is_seed": True,
         "version": 1,
+        "template_type": "rag",
+        "llm_policy": {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}},
+        "kb_policy": {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []},
+        "attached_skills": [],
+        "attached_tools": [],
+        "a2a_interface": {"a2a_enabled": False, "operations": [], "auth_required": False},
+        "plan_required": None,
+        "auth_mode": "none",
+        "instance_count": 0,
+        "icon": None,
+        "tags": [],
     },
 ]
 
 # Index seed templates by id for fast lookup
 _SEED_BY_ID = {t["id"]: t for t in SEED_TEMPLATES}
+
+
+def _parse_jsonb(val, default):
+    """Safely coerce a JSONB column value to a Python object.
+
+    asyncpg returns JSONB as a dict/list already; psycopg2 returns it as a
+    str. This helper handles both and falls back to ``default`` on any error.
+    """
+    if val is None:
+        return default
+    if isinstance(val, (dict, list)):
+        return val
+    try:
+        return json.loads(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _extract_variable_schema(system_prompt: str) -> List[dict]:
+    """Return a schema list for all ``{{variable}}`` tokens in *system_prompt*.
+
+    Each token appears at most once in the result.  Tokens are returned in the
+    order they first appear in the prompt.
+    """
+    tokens = re.findall(r'\{\{(\w+)\}\}', system_prompt or "")
+    seen: set = set()
+    result = []
+    for token in tokens:
+        if token not in seen:
+            seen.add(token)
+            result.append({"name": token, "type": "string", "required": True, "description": ""})
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -577,13 +653,18 @@ async def list_platform_templates_db(
     rows_result = await db.execute(
         text(
             "SELECT id, name, description, system_prompt, capabilities, "
-            "status, version, category, created_at "
+            "status, version, category, created_at, "
+            "template_type, llm_policy, kb_policy, attached_skills, attached_tools, a2a_interface "
             "FROM agent_cards "
             f"WHERE tenant_id = :platform_tenant_id {status_condition} "  # noqa: S608
             "ORDER BY created_at DESC"
         ),
         params,
     )
+
+    _DEFAULT_LLM_POLICY = {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}}
+    _DEFAULT_KB_POLICY = {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []}
+    _DEFAULT_A2A_INTERFACE = {"a2a_enabled": False, "operations": [], "auth_required": False}
 
     items = []
     for row in rows_result.mappings():
@@ -638,6 +719,84 @@ async def list_platform_templates_db(
                 "plan_tiers": plan_tiers,
                 "adoption_count": adoption_count,
                 "created_at": str(row["created_at"]),
+                # TODO-14: rich card fields
+                "template_type": row["template_type"] or "rag",
+                "llm_policy": _parse_jsonb(row["llm_policy"], _DEFAULT_LLM_POLICY),
+                "kb_policy": _parse_jsonb(row["kb_policy"], _DEFAULT_KB_POLICY),
+                "attached_skills": _parse_jsonb(row["attached_skills"], []),
+                "attached_tools": _parse_jsonb(row["attached_tools"], []),
+                "a2a_interface": _parse_jsonb(row["a2a_interface"], _DEFAULT_A2A_INTERFACE),
+                "plan_required": capabilities.get("plan_required") if isinstance(capabilities, dict) else None,
+                "auth_mode": capabilities.get("auth_mode", "none") if isinstance(capabilities, dict) else "none",
+                "icon": None,
+                "tags": [],
+                "instance_count": adoption_count,
+            }
+        )
+    return items
+
+
+async def list_studio_templates_for_ta(
+    caller_plan: str,
+    caller_tenant_id: str,
+    db: AsyncSession,
+) -> List[dict]:
+    """TODO-14: Return Published agent_templates for TA catalog view.
+
+    These are templates authored via PA Template Studio (TODO-20).
+    All Published templates are returned regardless of plan_required — the
+    frontend renders a plan-gated lock for templates the caller cannot deploy.
+    """
+    _DEFAULT_LLM_POLICY = {"tenant_can_override": True, "defaults": {"temperature": 0.3, "max_tokens": 2000}}
+    _DEFAULT_KB_POLICY = {"ownership": "tenant_managed", "recommended_categories": [], "required_kb_ids": []}
+    _DEFAULT_A2A_INTERFACE = {"a2a_enabled": False, "operations": [], "auth_required": False}
+
+    result = await db.execute(
+        text(
+            "SELECT id, name, description, category, icon, tags, system_prompt, "
+            "template_type, llm_policy, kb_policy, attached_skills, attached_tools, "
+            "a2a_interface, plan_required, auth_mode, version, status, "
+            "confidence_threshold, guardrails "
+            "FROM agent_templates "
+            "WHERE status = 'Published' "
+            "ORDER BY created_at DESC"
+        )
+    )
+
+    items = []
+    for row in result.mappings():
+        # Count instances deployed by this tenant from this template
+        instance_result = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM agent_cards "
+                "WHERE template_id = :template_id AND tenant_id = :tenant_id"
+            ),
+            {"template_id": str(row["id"]), "tenant_id": caller_tenant_id},
+        )
+        instance_count = instance_result.scalar() or 0
+
+        items.append(
+            {
+                "id": str(row["id"]),
+                "name": row["name"],
+                "description": row["description"] or "",
+                "category": row["category"] or "Custom",
+                "icon": row["icon"],
+                "tags": _parse_jsonb(row["tags"], []),
+                "template_type": row["template_type"] or "rag",
+                "llm_policy": _parse_jsonb(row["llm_policy"], _DEFAULT_LLM_POLICY),
+                "kb_policy": _parse_jsonb(row["kb_policy"], _DEFAULT_KB_POLICY),
+                "attached_skills": _parse_jsonb(row["attached_skills"], []),
+                "attached_tools": _parse_jsonb(row["attached_tools"], []),
+                "a2a_interface": _parse_jsonb(row["a2a_interface"], _DEFAULT_A2A_INTERFACE),
+                "plan_required": row["plan_required"],
+                "auth_mode": row["auth_mode"] or "none",
+                "version": row["version"],
+                "status": row["status"],
+                "instance_count": instance_count,
+                "is_seed": False,
+                "is_platform": True,
+                "is_studio_template": True,
             }
         )
     return items
@@ -750,6 +909,19 @@ async def list_agent_templates(
             ]
         )
 
+    # 5. TODO-14: For tenant admins, include Published agent_templates from PA Template Studio
+    if not is_platform_admin and is_tenant_admin:
+        studio_items = await list_studio_templates_for_ta(
+            caller_plan=current_user.plan or "starter",
+            caller_tenant_id=current_user.tenant_id,
+            db=session,
+        )
+        # Deduplicate by name (case-insensitive) — studio templates take precedence
+        existing_names = {item["name"].lower() for item in all_items}
+        for item in studio_items:
+            if item["name"].lower() not in existing_names:
+                all_items.append(item)
+
     total = len(all_items)
 
     return {
@@ -767,9 +939,12 @@ async def get_agent_template(
     session: AsyncSession = Depends(get_async_session),
 ):
     """API-111: Get agent template detail by ID."""
-    # Check seed templates first
+    # Check seed templates first — enrich with variable_schema and changelog for detail panel
     if template_id in _SEED_BY_ID:
-        return _SEED_BY_ID[template_id]
+        seed = dict(_SEED_BY_ID[template_id])
+        seed["variable_schema"] = _extract_variable_schema(seed.get("system_prompt", ""))
+        seed["changelog"] = []
+        return seed
 
     # Fall back to DB lookup
     result = await get_agent_template_db(
