@@ -749,7 +749,7 @@ class ChatOrchestrationService:
             return bool(set(user_roles) & set(allowed_roles))
 
         if visibility_mode == "user_specific":
-            allowed_user_ids = list(row["allowed_user_ids"] or [])
+            allowed_user_ids = [str(x) for x in list(row["allowed_user_ids"] or [])]
             return user_id in allowed_user_ids
 
         # Unknown visibility_mode — fail closed and log

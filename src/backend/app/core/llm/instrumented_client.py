@@ -14,7 +14,7 @@ import asyncio
 import json
 import os
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 
 import structlog
 
@@ -24,6 +24,11 @@ from app.core.tenant_config_service import TenantConfigService
 logger = structlog.get_logger()
 
 _PRICING_CACHE_TTL = 3600  # 1 hour
+
+# SlotName type used by slot-aware resolution (TODO-31).
+# Embedding slots (doc_embedding, kb_embedding) are intentionally excluded —
+# changing embedding models requires full re-indexing and is managed separately.
+SlotName = Literal["chat", "intent", "vision", "agent"]
 
 
 class InstrumentedLLMClient:
@@ -52,6 +57,7 @@ class InstrumentedLLMClient:
         messages: list[dict],
         user_id: Optional[str] = None,
         conversation_id: Optional[str] = None,
+        slot: SlotName = "chat",
         **kwargs,
     ) -> CompletionResponse:
         """
@@ -63,12 +69,14 @@ class InstrumentedLLMClient:
             messages:        OpenAI-compatible messages list.
             user_id:         Optional user UUID for usage attribution.
             conversation_id: Optional conversation UUID for usage attribution.
+            slot:            LLM slot to route to ("chat", "intent", "vision", "agent").
+                             Defaults to "chat". Used when LLM_PROFILE_SLOT_ROUTING=1.
             **kwargs:        Forwarded to provider (temperature, max_tokens, etc.).
 
         Returns:
             CompletionResponse from the configured provider.
         """
-        adapter, model, model_source = await self._resolve_adapter(tenant_id)
+        adapter, model, model_source = await self._resolve_adapter(tenant_id, slot=slot)
 
         response = await adapter.complete(messages=messages, model=model, **kwargs)
 
@@ -93,6 +101,11 @@ class InstrumentedLLMClient:
     ) -> list[list[float]]:
         """
         Generate embeddings for a tenant, routing through the configured adapter.
+
+        # Embedding slots are platform-managed and excluded from llm_profiles.
+        # See plan doc 55 §4. Changing embedding models requires full re-indexing
+        # of all tenant documents, so they cannot be hot-swapped via profile updates.
+        # This method always uses env-var / llm_providers DB resolution (not slot routing).
 
         DB provider resolution (PVDR-005):
         1. Query default provider row from llm_providers
@@ -129,8 +142,8 @@ class InstrumentedLLMClient:
                     or os.environ.get("EMBEDDING_MODEL", "").strip()
                 )
 
-                if provider_type == "anthropic":
-                    # Anthropic doesn't support embeddings — fall back to azure/openai
+                if provider_type in ("anthropic", "bedrock"):
+                    # These providers don't support embeddings — fall back to azure/openai
                     (
                         embed_adapter,
                         embedding_model,
@@ -201,14 +214,27 @@ class InstrumentedLLMClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _resolve_adapter(self, tenant_id: str) -> tuple[LLMProvider, str, str]:
+    async def _resolve_adapter(
+        self, tenant_id: str, slot: SlotName = "chat"
+    ) -> tuple[LLMProvider, str, str]:
         """
         Resolve the LLM adapter, model name, and model_source for a tenant.
 
-        Priority:
+        When LLM_PROFILE_SLOT_ROUTING=1:
+          Uses ProfileResolver to load the tenant's active profile and routes
+          to the library entry assigned to `slot`. If the slot is unassigned,
+          falls back to legacy resolution (PVDR-004 / BYOLLM path).
+
+        When LLM_PROFILE_SLOT_ROUTING=0 (default):
+          Legacy resolution applies:
           1. If tenant has a provider_selection in tenant_configs, use that provider (PVDR-009)
           2. If BYOLLM mode, use BYOLLM adapter
           3. Otherwise library mode — query llm_providers DB (PVDR-004), env fallback
+
+        Args:
+            tenant_id: UUID string of the calling tenant.
+            slot:      Slot to resolve — "chat", "intent", "vision", or "agent".
+                       Embedding slots are excluded from profile routing.
 
         Returns:
             (adapter, model_name, model_source)
@@ -216,6 +242,68 @@ class InstrumentedLLMClient:
         Raises:
             ValueError: If configuration is missing or invalid.
         """
+        # ------------------------------------------------------------------
+        # Slot routing path (LLM_PROFILE_SLOT_ROUTING=1)
+        # ------------------------------------------------------------------
+        from app.core.llm.profile_resolver import ProfileResolver, _slot_routing_enabled
+
+        if _slot_routing_enabled():
+            logger.debug(
+                "instrumented_client_slot_routing_active",
+                tenant_id=tenant_id,
+                slot=slot,
+            )
+            # ProfileResolver is stateless — instantiate per-call (cheap)
+            resolver = ProfileResolver()
+            try:
+                from app.core.session import async_session_factory
+                async with async_session_factory() as db_session:
+                    resolved = await resolver.resolve(tenant_id, plan="", db=db_session)
+            except Exception as exc:
+                logger.warning(
+                    "instrumented_client_profile_resolver_failed",
+                    tenant_id=tenant_id,
+                    slot=slot,
+                    error=str(exc),
+                )
+                resolved = None
+
+            if resolved is not None:
+                resolved_slot = resolved.get_slot(slot)
+                if resolved_slot and resolved_slot.library_id:
+                    # Profile-based routing succeeded — use legacy DB lookup with this library_id
+                    logger.debug(
+                        "instrumented_client_profile_slot_resolved",
+                        tenant_id=tenant_id,
+                        slot=slot,
+                        library_id=resolved_slot.library_id,
+                        profile_id=resolved.profile_id,
+                    )
+                    return await self._resolve_library_adapter(resolved_slot.library_id)
+                else:
+                    logger.debug(
+                        "instrumented_client_profile_slot_unassigned_fallback",
+                        tenant_id=tenant_id,
+                        slot=slot,
+                    )
+                    # Fall through to legacy resolution
+            else:
+                logger.debug(
+                    "instrumented_client_no_profile_fallback",
+                    tenant_id=tenant_id,
+                    slot=slot,
+                )
+                # Fall through to legacy resolution
+        else:
+            logger.debug(
+                "instrumented_client_legacy_routing",
+                tenant_id=tenant_id,
+                slot=slot,
+            )
+
+        # ------------------------------------------------------------------
+        # Legacy resolution path
+        # ------------------------------------------------------------------
         llm_config = await self._config_svc.get(tenant_id, "llm_config")
 
         model_source = "library"
@@ -320,7 +408,7 @@ class InstrumentedLLMClient:
                             lib_result = await session.execute(
                                 sa_text(
                                     "SELECT model_name FROM llm_library "
-                                    "WHERE id = :id AND status = 'Published'"
+                                    "WHERE id = :id AND status = 'published'"
                                 ),
                                 {"id": llm_library_id},
                             )
@@ -361,10 +449,23 @@ class InstrumentedLLMClient:
                         from app.core.llm.openai_direct import OpenAIDirectProvider
 
                         adapter = OpenAIDirectProvider(api_key=decrypted_key)
+                    elif db_provider_type == "bedrock":
+                        # BEDROCK-008: Bedrock uses AsyncOpenAI with base_url override.
+                        # endpoint_url stored as db_endpoint; model ARN passed at call time.
+                        from openai import AsyncOpenAI
+
+                        from app.core.llm.openai_direct import OpenAIDirectProvider
+
+                        client = AsyncOpenAI(
+                            api_key=decrypted_key,
+                            base_url=f"{db_endpoint.rstrip('/')}/v1",
+                        )
+                        adapter = OpenAIDirectProvider(client=client)
                     else:
                         raise ValueError(
                             f"Provider type {db_provider_type!r} does not have a"
-                            " supported adapter. Supported types: azure_openai, openai."
+                            " supported adapter. Supported types: azure_openai, openai,"
+                            " bedrock."
                             " Configure a supported provider as default to enable chat."
                         )
                 finally:
@@ -402,7 +503,7 @@ class InstrumentedLLMClient:
                     result = await session.execute(
                         sa_text(
                             "SELECT model_name FROM llm_library "
-                            "WHERE id = :id AND status = 'Published'"
+                            "WHERE id = :id AND status = 'published'"
                         ),
                         {"id": llm_library_id},
                     )
@@ -699,6 +800,18 @@ class InstrumentedLLMClient:
             if price_in is None or price_out is None:
                 return None
 
+            # Guard against NaN/Inf from corrupted DB or env values — these
+            # would silently propagate through cost analytics as NaN.
+            import math as _math
+            if not _math.isfinite(price_in) or not _math.isfinite(price_out):
+                logger.warning(
+                    "cost_calculation_non_finite_price",
+                    model=model,
+                    price_in=price_in,
+                    price_out=price_out,
+                )
+                return None
+
             cost = (tokens_in / 1000.0 * price_in) + (tokens_out / 1000.0 * price_out)
             return round(cost, 8)
 
@@ -737,7 +850,7 @@ class InstrumentedLLMClient:
                     text(
                         "SELECT pricing_per_1k_tokens_in, pricing_per_1k_tokens_out "
                         "FROM llm_library "
-                        "WHERE model_name = :model AND status = 'Published' "
+                        "WHERE model_name = :model AND status = 'published' "
                         "LIMIT 1"
                     ),
                     {"model": model},

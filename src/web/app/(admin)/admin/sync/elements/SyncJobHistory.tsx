@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncJobs } from "@/lib/hooks/useSyncHealth";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -90,9 +91,12 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
           No sync jobs found for this source
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <ScrollableTableWrapper
+          maxHeight="none"
+          className="rounded-none border-0"
+        >
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-bg-surface">
               <tr className="border-b border-border-faint">
                 <th className="pb-2 pr-4 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
                   Job ID
@@ -131,7 +135,7 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableWrapper>
       )}
 
       {data && data.total > 10 && (

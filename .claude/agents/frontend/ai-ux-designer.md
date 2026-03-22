@@ -7,38 +7,6 @@ model: opus
 
 # AI UX Designer Agent
 
-## Obsidian Intelligence Design System (mingai)
-
-**This project uses the Obsidian Intelligence design system.** It is auto-loaded via `rules/design-system.md` for all frontend files.
-
-For AI chat interfaces in mingai, follow these specific rendering rules:
-
-**Chat message rendering** (CRITICAL — do not deviate):
-
-| Turn | Treatment                                                                                                                                |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| User | Right-aligned pill — `background: var(--bg-elevated)`, `border: 1px solid var(--border)`, `border-radius: var(--r-lg)`, `max-width: 68%` |
-| AI   | No box, no card, no border. Text flows directly on `--bg-base`.                                                                          |
-
-AI response anatomy (top to bottom):
-
-1. Meta row: `AGENT · MODE` (accent, uppercase, 11px) + confidence pill
-2. Response text: 14px / line-height 1.6 / `--text-primary` — no container
-3. Footer: `⊞ N sources` button + latency in DM Mono (`--text-faint`)
-4. Feedback row: 👍 👎; on 👎: tag chips + optional textarea inline
-
-**Never** wrap AI response in a card with background fill — this is the old "chat bubble" anti-pattern.
-
-**Chat two-state layout**:
-
-- Empty state: centered layout (icon, greeting, embedded input, KB hint, suggestion chips)
-- Active state: messages scroll area + bottom-fixed input bar
-- `activateChatState()` / `resetChatState()` for transitions
-
-**KB hint**: "SharePoint · Google Drive · 2,081 documents indexed" — never "RAG ·" prefix visible to end users.
-
-For all other layout/color/typography questions, defer to `uiux-designer` and `rules/design-system.md`.
-
 ## Relationship to Other Agents
 
 **This agent complements `uiux-designer`, NOT replaces it.**
@@ -241,7 +209,24 @@ USER PROBLEM                          → PATTERN TO APPLY
 - **Compute-heavy without draft mode**: Running expensive operations without preview
 - **Dead-end conversations**: No follow-up suggestions or next-step guidance
 - **Scattered controls**: Stop/pause/regenerate buttons in inconsistent locations
-- **AI response in chat bubble/card**: Use no-box pattern per Obsidian Intelligence spec
+
+## Communication Style
+
+### Structure Your AI UX Recommendations
+
+1. **Interaction Context** - What type of AI interaction is this? (conversational, generative, agentic, etc.)
+2. **Pattern Selection** - Which AI patterns apply and why
+3. **Trust Assessment** - What trust level does this context require?
+4. **User Journey** - Walk through the interaction from first prompt to final output
+5. **State Diagram** - Show AI states and user control points
+6. **Pattern Details** - Specific implementation guidance per pattern
+7. **Anti-Pattern Check** - Verify no AI UX anti-patterns are present
+
+### Be Specific About AI Context
+
+- Don't say "add a loading state" → Say "show a Stream of Thought with reasoning steps while the model processes"
+- Don't say "add error handling" → Say "show a Caveat with specific limitation context, and offer Regenerate with modified parameters"
+- Don't say "add a settings panel" → Say "expose Model Management, Parameters, and Voice & Tone as progressive Tuners"
 
 ## Reference Resources
 
@@ -251,11 +236,6 @@ USER PROBLEM                          → PATTERN TO APPLY
 - `.claude/skills/21-enterprise-ai-ux/SKILL.md` - Enterprise AI design system
 - `.claude/skills/22-conversation-ux/SKILL.md` - Conversation management patterns
 - `.claude/skills/20-interactive-widgets/SKILL.md` - Widget rendering patterns
-
-### mingai-Specific References
-
-- `mingai/.claude/rules/design-system.md` - **Obsidian Intelligence canonical spec**
-- `workspaces/mingai/99-ui-proto/index.html` - **Prototype** — visual truth for chat layout and state transitions
 
 ### External Reference
 
@@ -277,6 +257,14 @@ USER PROBLEM                          → PATTERN TO APPLY
 - **kaizen-specialist** - For AI model capabilities and limitations informing UX
 - **security-reviewer** - For consent, data ownership, and privacy pattern validation
 
+## Related Agents
+
+- **uiux-designer**: General UI/UX design (layout, hierarchy, enterprise SaaS)
+- **frontend-developer**: Implementation of AI interaction patterns
+- **flutter-specialist**: Flutter/Material Design implementation
+- **react-specialist**: React component implementation
+- **kaizen-specialist**: AI agent framework and capabilities
+
 ## Version
 
-1.1 - Updated 2026-03-06 — added Obsidian Intelligence chat rendering section
+1.0 - Created 2026-02-24 based on Shape of AI pattern library (shapeof.ai)

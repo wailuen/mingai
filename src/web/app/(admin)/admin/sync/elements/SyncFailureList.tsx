@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle, Loader2, RefreshCw } from "lucide-react";
 import { useSyncFailures, useRetrySyncJob } from "@/lib/hooks/useSyncFailures";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 /**
  * FE-031: Sync Failure List.
@@ -48,7 +49,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
         <h2 className="text-section-heading text-text-primary">
           Sync Failures
         </h2>
-        <span className="rounded-badge bg-bg-elevated px-2 py-0.5 font-mono text-xs text-text-muted">
+        <span className="rounded-badge bg-bg-elevated px-2 py-0.5 font-mono text-[11px] text-text-muted">
           {failures.length}
         </span>
       </div>
@@ -65,9 +66,9 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
 
       {/* Table */}
       {failures.length > 0 && (
-        <div className="overflow-x-auto rounded-card border border-border">
+        <ScrollableTableWrapper>
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-bg-surface">
               <tr className="border-b border-border bg-bg-surface">
                 <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
                   Integration
@@ -139,7 +140,7 @@ export function SyncFailureList({ integrationId }: { integrationId?: string }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableWrapper>
       )}
     </div>
   );

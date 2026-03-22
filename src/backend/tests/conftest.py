@@ -30,6 +30,12 @@ else:
     if env_path_example.exists():
         load_dotenv(env_path_example)
 
+# Signal to the app that we are running in test mode — disables background
+# scheduler tasks (like credential_health) that iterate over all tenants and
+# cause TestClient teardown timeouts when the test DB has accumulated many rows.
+import os as _os
+_os.environ.setdefault("TESTING", "1")
+
 
 @pytest.fixture
 def anyio_backend():

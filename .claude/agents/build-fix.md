@@ -2,7 +2,7 @@
 name: build-fix
 description: Fix build and type errors with minimal changes. Use when builds fail. NO architectural changes allowed.
 tools: Read, Write, Edit, Bash, Grep, Glob
-model: opus
+model: sonnet
 ---
 
 You fix build errors with the SMALLEST possible change. Your job is to make the build pass, not to improve the code.
@@ -106,5 +106,4 @@ Escalate to a different agent if:
 
 ## Full Documentation
 When this guidance is insufficient, consult:
-- `sdk-users/7-gold-standards/error-handling.md`
 - `.claude/skills/15-error-troubleshooting/`

@@ -12,6 +12,7 @@ import {
   type TenantIssueStatus,
 } from "@/lib/hooks/useEngineeringIssues";
 import { TableRowSkeleton } from "@/components/shared/LoadingState";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 // ---------------------------------------------------------------------------
 // Severity badge color map
@@ -138,9 +139,9 @@ export function IssueTable({ filters }: IssueTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-card border border-border">
+    <ScrollableTableWrapper>
       <table className="w-full">
-        <thead>
+        <thead className="sticky top-0 z-10 bg-bg-surface">
           <tr className="border-b border-border bg-bg-surface">
             <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
               Severity
@@ -186,7 +187,7 @@ export function IssueTable({ filters }: IssueTableProps) {
           )}
         </tbody>
       </table>
-    </div>
+    </ScrollableTableWrapper>
   );
 }
 

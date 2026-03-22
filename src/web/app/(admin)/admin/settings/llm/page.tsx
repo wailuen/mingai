@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Cpu } from "lucide-react";
+import { Cpu, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,6 +41,21 @@ export default function LLMSettingsPage() {
   return (
     <AppShell>
       <div className="p-4 sm:p-7">
+        {/* Deprecation banner */}
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-card border border-warn/30 bg-warn-dim px-4 py-3">
+          <p className="text-body-default text-warn">
+            This page is being replaced by{" "}
+            <span className="font-medium">Settings &rsaquo; LLM Profile</span>.
+          </p>
+          <Link
+            href="/settings/llm-profile"
+            className="flex flex-shrink-0 items-center gap-1 text-[11px] font-medium text-warn transition-opacity hover:opacity-80"
+          >
+            Go to LLM Profile
+            <ArrowRight size={12} />
+          </Link>
+        </div>
+
         {/* Desktop recommended banner for mobile */}
         <div className="mb-4 flex items-center gap-2 rounded-control border border-warn bg-warn-dim px-3 py-2 text-xs text-warn md:hidden">
           <span>

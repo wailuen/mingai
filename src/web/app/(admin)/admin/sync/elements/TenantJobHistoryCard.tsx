@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTenantJobHistory } from "@/lib/hooks/useTenantJobHistory";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import type { JobRunRow } from "@/lib/hooks/useTenantJobHistory";
 
 // ---------------------------------------------------------------------------
@@ -168,9 +169,21 @@ export function TenantJobHistoryCard() {
         </p>
       )}
 
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        maxHeight="none"
+        className="rounded-none border-0"
+        footer={
+          <div className="px-3.5 py-3 border-t border-border">
+            <span className="text-xs text-text-faint">
+              {totalCount > 0
+                ? `${offset + 1}–${Math.min(offset + ROWS_PER_PAGE, totalCount)} of ${totalCount}`
+                : "0 results"}
+            </span>
+          </div>
+        }
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
                 Job
@@ -231,32 +244,7 @@ export function TenantJobHistoryCard() {
             )}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination footer */}
-      <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-        <span className="text-xs text-text-faint">
-          {totalCount > 0
-            ? `${offset + 1}–${Math.min(offset + ROWS_PER_PAGE, totalCount)} of ${totalCount}`
-            : "0 results"}
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setOffset(Math.max(0, offset - ROWS_PER_PAGE))}
-            disabled={!hasPrev}
-            className="rounded-control border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ← Prev
-          </button>
-          <button
-            onClick={() => setOffset(offset + ROWS_PER_PAGE)}
-            disabled={!hasNext}
-            className="rounded-control border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Next →
-          </button>
-        </div>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

@@ -76,8 +76,9 @@ function AnthropicEmbeddingNote() {
     <div className="mt-3 flex items-start gap-2 rounded-control border border-border bg-bg-elevated px-3 py-2.5">
       <Info size={13} className="mt-0.5 flex-shrink-0 text-text-muted" />
       <p className="text-body-default text-text-muted">
-        This provider does not support embeddings. The platform will
-        automatically use an Azure OpenAI provider for document indexing.
+        Note: Anthropic and AWS Bedrock models do not support embeddings. A
+        separate Azure OpenAI or OpenAI Direct entry is required for document
+        indexing.
       </p>
     </div>
   );
@@ -118,6 +119,7 @@ function PlatformProviderSection({
   );
   const showEmbeddingNote =
     selectedProvider?.provider_type === "anthropic" ||
+    selectedProvider?.provider_type === "bedrock" ||
     (selectedProvider !== undefined &&
       !(selectedProvider.slots_available ?? []).includes("doc_embedding"));
 

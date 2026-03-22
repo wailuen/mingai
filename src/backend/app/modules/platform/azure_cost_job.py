@@ -52,6 +52,15 @@ _AZURE_COST_QUERY_URL_TPL = (
 # How many days back to query (Azure has a 24-48h reporting delay).
 _LOOKBACK_DAYS = 2
 
+# Scheduled run time (UTC) for the Azure cost job.
+_SCHEDULE_HOUR_UTC = 3
+_SCHEDULE_MINUTE_UTC = 45
+
+
+def _seconds_until_next_run() -> float:
+    """Return seconds until the next scheduled run at _SCHEDULE_HOUR_UTC:_SCHEDULE_MINUTE_UTC UTC."""
+    return seconds_until_utc(_SCHEDULE_HOUR_UTC, _SCHEDULE_MINUTE_UTC)
+
 # HTTP timeout for Azure API calls (seconds).
 _HTTP_TIMEOUT_SECONDS = 30.0
 
@@ -442,7 +451,7 @@ async def start_azure_cost_scheduler() -> None:
             # On subsequent iterations check_missed_job returns False (row exists).
             async with async_session_factory() as _db:
                 if await check_missed_job(
-                    _db, "azure_cost", scheduled_hour=3, scheduled_minute=45
+                    _db, "azure_cost", scheduled_hour=_SCHEDULE_HOUR_UTC, scheduled_minute=_SCHEDULE_MINUTE_UTC
                 ):
                     async with DistributedJobLock("azure_cost", ttl=1200) as _acquired:
                         if _acquired:
@@ -451,7 +460,7 @@ async def start_azure_cost_scheduler() -> None:
                                 ctx.records_processed = _days_processed or 0
                             logger.info("azure_cost_missed_job_recovered")
 
-            sleep_secs = seconds_until_utc(3, 45)
+            sleep_secs = _seconds_until_next_run()
             logger.debug(
                 "azure_cost_next_run_in",
                 seconds=round(sleep_secs, 0),

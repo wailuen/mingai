@@ -34,7 +34,7 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
 from jose import jwt
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -160,42 +160,46 @@ class GuardrailsSchema(BaseModel):
     max_response_length: Optional[int] = Field(default=None, ge=0, le=10000)
     rules: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=20)
 
-    @validator("rules", each_item=True)
-    def validate_rule(cls, rule: Dict[str, Any]) -> Dict[str, Any]:  # noqa: N805
-        rule_type = rule.get("type")
-        if rule_type not in _VALID_GUARDRAIL_RULE_TYPES:
-            raise ValueError(
-                f"Invalid rule type '{rule_type}'. "
-                f"Must be one of: {sorted(_VALID_GUARDRAIL_RULE_TYPES)}"
-            )
-        action = rule.get("action")
-        if action is not None and action not in _VALID_GUARDRAIL_ACTIONS:
-            raise ValueError(
-                f"Invalid action '{action}'. "
-                f"Must be one of: {sorted(_VALID_GUARDRAIL_ACTIONS)}"
-            )
-        for pattern in rule.get("patterns", []):
-            try:
-                compiled = re.compile(pattern)
-            except re.error as exc:
+    @field_validator("rules", mode="before")
+    @classmethod
+    def validate_rule(cls, v: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:  # noqa: N805
+        if v is None:
+            return v
+        for rule in v:
+            rule_type = rule.get("type")
+            if rule_type not in _VALID_GUARDRAIL_RULE_TYPES:
                 raise ValueError(
-                    f"Invalid regex pattern '{pattern}': {exc}"
-                ) from exc
-            # ReDoS guard: run the compiled pattern against _REDOS_TEST_STRING
-            # (30 'a' chars + 'b' — triggers exponential backtracking in patterns
-            # like (a+)+ or (a*)*). Thread pool with 50ms timeout. Legitimate
-            # patterns complete in microseconds. _cf and _REDOS_TEST_STRING are
-            # module-scope constants — never re-import or redefine inline.
-            with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
-                _fut = _pool.submit(compiled.search, _REDOS_TEST_STRING)
+                    f"Invalid rule type '{rule_type}'. "
+                    f"Must be one of: {sorted(_VALID_GUARDRAIL_RULE_TYPES)}"
+                )
+            action = rule.get("action")
+            if action is not None and action not in _VALID_GUARDRAIL_ACTIONS:
+                raise ValueError(
+                    f"Invalid action '{action}'. "
+                    f"Must be one of: {sorted(_VALID_GUARDRAIL_ACTIONS)}"
+                )
+            for pattern in rule.get("patterns", []):
                 try:
-                    _fut.result(timeout=0.05)
-                except _cf.TimeoutError:
+                    compiled = re.compile(pattern)
+                except re.error as exc:
                     raise ValueError(
-                        f"Regex pattern '{pattern}' exhibits catastrophic backtracking "
-                        "(ReDoS). Simplify the pattern to avoid nested quantifiers."
-                    )
-        return rule
+                        f"Invalid regex pattern '{pattern}': {exc}"
+                    ) from exc
+                # ReDoS guard: run the compiled pattern against _REDOS_TEST_STRING
+                # (30 'a' chars + 'b' — triggers exponential backtracking in patterns
+                # like (a+)+ or (a*)*). Thread pool with 50ms timeout. Legitimate
+                # patterns complete in microseconds. _cf and _REDOS_TEST_STRING are
+                # module-scope constants — never re-import or redefine inline.
+                with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
+                    _fut = _pool.submit(compiled.search, _REDOS_TEST_STRING)
+                    try:
+                        _fut.result(timeout=0.05)
+                    except _cf.TimeoutError:
+                        raise ValueError(
+                            f"Regex pattern '{pattern}' exhibits catastrophic backtracking "
+                            "(ReDoS). Simplify the pattern to avoid nested quantifiers."
+                        )
+        return v
 
 
 class CreateAgentTemplateRequest(BaseModel):
@@ -1890,6 +1894,189 @@ async def get_cost_analytics(
         "by_tenant": by_tenant,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Cost sub-routes: /cost/summary, /cost/tenants, /cost/margin-trend
+# These share the same data path as API-036 but return shapes matching the
+# frontend hooks in useCostAnalytics.ts.
+# ---------------------------------------------------------------------------
+
+_INFRA_COST_PER_TENANT_DAILY = float(
+    os.environ.get("INFRA_COST_PER_TENANT_DAILY_USD", "1.50")
+)
+
+
+@router.get("/platform/analytics/cost/summary", tags=["platform"])
+async def get_cost_summary(
+    period: str = Query("30d", description="Time period: 7d, 30d, or 90d"),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Return a single aggregated cost+revenue summary for the platform.
+
+    Response fields match the CostSummary interface in useCostAnalytics.ts:
+      total_llm_cost, total_infra_cost, total_revenue, gross_margin_pct, period
+
+    Auth: platform_admin scope required.
+    """
+    if period not in _ANALYTICS_PERIODS:
+        period = "30d"
+    days = _ANALYTICS_PERIODS[period]
+
+    by_tenant, platform_llm_total, platform_revenue_total = await get_cost_analytics_db(
+        days=days,
+        filter_tenant_id=None,
+        db=session,
+    )
+
+    # Infra cost: per-tenant daily constant × number of active tenants × days
+    tenant_count = len(by_tenant)
+    total_infra_cost = round(_INFRA_COST_PER_TENANT_DAILY * tenant_count * days, 4)
+
+    total_cost = platform_llm_total + total_infra_cost
+    gross_margin_pct: Optional[float] = None
+    if platform_revenue_total > 0:
+        gross_margin_pct = round(
+            ((platform_revenue_total - total_cost) / platform_revenue_total) * 100.0,
+            2,
+        )
+
+    logger.info(
+        "platform_cost_summary_fetched",
+        user_id=current_user.id,
+        period=period,
+        total_llm_cost=platform_llm_total,
+        total_infra_cost=total_infra_cost,
+        total_revenue=platform_revenue_total,
+    )
+
+    return {
+        "total_llm_cost": platform_llm_total,
+        "total_infra_cost": total_infra_cost,
+        "total_revenue": platform_revenue_total,
+        "gross_margin_pct": gross_margin_pct,
+        "period": period,
+    }
+
+
+@router.get("/platform/analytics/cost/tenants", tags=["platform"])
+async def get_cost_tenants(
+    period: str = Query("30d", description="Time period: 7d, 30d, or 90d"),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Return per-tenant cost breakdown for the platform cost analytics page.
+
+    Response fields match the TenantCost interface in useCostAnalytics.ts:
+      tenant_id, tenant_name, plan, tokens_consumed, llm_cost, infra_cost,
+      plan_revenue, gross_margin_pct
+
+    Auth: platform_admin scope required.
+    """
+    if period not in _ANALYTICS_PERIODS:
+        period = "30d"
+    days = _ANALYTICS_PERIODS[period]
+
+    by_tenant, _llm_total, _rev_total = await get_cost_analytics_db(
+        days=days,
+        filter_tenant_id=None,
+        db=session,
+    )
+
+    result = []
+    for t in by_tenant:
+        infra_cost = round(_INFRA_COST_PER_TENANT_DAILY * days, 4)
+        total_cost = t["llm_cost_usd"] + infra_cost
+        plan_revenue = round(
+            _PLAN_REVENUE_MONTHLY.get(t["plan"], 299.0) * days / 30.0, 4
+        )
+        gross_margin_pct: Optional[float] = None
+        if plan_revenue > 0:
+            gross_margin_pct = round(
+                ((plan_revenue - total_cost) / plan_revenue) * 100.0, 2
+            )
+        result.append(
+            {
+                "tenant_id": t["tenant_id"],
+                "tenant_name": t["name"],
+                "plan": t["plan"],
+                "tokens_consumed": t["tokens_in"] + t["tokens_out"],
+                "llm_cost": t["llm_cost_usd"],
+                "infra_cost": infra_cost,
+                "plan_revenue": plan_revenue,
+                "gross_margin_pct": gross_margin_pct,
+            }
+        )
+
+    logger.info(
+        "platform_cost_tenants_fetched",
+        user_id=current_user.id,
+        period=period,
+        tenant_count=len(result),
+    )
+
+    return result
+
+
+@router.get("/platform/analytics/cost/margin-trend", tags=["platform"])
+async def get_cost_margin_trend(
+    period: str = Query("30d", description="Time period: 7d, 30d, or 90d"),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Return daily gross margin time-series for the platform cost analytics page.
+
+    Pulls from cost_summary_daily (populated by the nightly cost job).
+    If no pre-computed rows exist, falls back to an empty list — the frontend
+    renders an empty chart rather than an error.
+
+    Response fields match the MarginPoint interface in useCostAnalytics.ts:
+      date (ISO date string), margin_pct
+
+    Auth: platform_admin scope required.
+    """
+    if period not in _ANALYTICS_PERIODS:
+        period = "30d"
+    days = _ANALYTICS_PERIODS[period]
+
+    # cost_summary_daily uses app.current_scope = 'platform' for RLS
+    await session.execute(
+        text("SELECT set_config('app.current_scope', 'platform', true)")
+    )
+
+    rows_result = await session.execute(
+        text(
+            """
+            SELECT
+                date,
+                COALESCE(gross_margin_pct, 0.0) AS margin_pct
+            FROM cost_summary_daily
+            WHERE date >= CURRENT_DATE - :days
+            GROUP BY date
+            ORDER BY date ASC
+            """
+        ),
+        {"days": days},
+    )
+    rows = rows_result.fetchall()
+
+    trend = [
+        {"date": str(row[0]), "margin_pct": float(row[1])}
+        for row in rows
+    ]
+
+    logger.info(
+        "platform_cost_margin_trend_fetched",
+        user_id=current_user.id,
+        period=period,
+        point_count=len(trend),
+    )
+
+    return trend
 
 
 # ---------------------------------------------------------------------------

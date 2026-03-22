@@ -838,9 +838,16 @@ class TestAgentTestChat:
                 session=db,
             )
 
-        # db.execute and db.commit must NOT have been called (no DB writes)
-        db.execute.assert_not_called()
-        db.commit.assert_not_called()
+        # db.execute IS called for last_tested_at update and audit log — that's correct.
+        # What must NOT happen is writes to conversations or messages tables.
+        call_sqls = [str(c.args[0]) for c in db.execute.call_args_list if c.args]
+        for sql in call_sqls:
+            assert "conversations" not in sql.lower(), (
+                "test_agent must not write to the conversations table"
+            )
+            assert "messages" not in sql.lower(), (
+                "test_agent must not write to the messages table"
+            )
 
     @pytest.mark.asyncio
     async def test_timeout_returns_504(self):

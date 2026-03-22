@@ -92,7 +92,7 @@ db = DataFlow("sqlite:///app.db", enable_wal=True)
 
 | Feature                | PostgreSQL      | MySQL                 | SQLite                       |
 | ---------------------- | --------------- | --------------------- | ---------------------------- |
-| **Driver**             | asyncpg         | aiomysql              | aiosqlite + custom pooling   |
+| **Driver**             | asyncpg         | aiomysql              | aiosqlite + AsyncSQLitePool  |
 | **Concurrency**        | Multi-writer    | Multi-writer (InnoDB) | Single-writer (WAL improves) |
 | **Multi-Instance**     | ✅ Safe         | ✅ Safe               | ⚠️ Not for concurrent writes |
 | **Setup**              | Requires server | Requires server       | Zero config                  |
@@ -240,7 +240,6 @@ The same workflow code works on all databases!
 
 ## Documentation
 
-- **Database Support**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#database-connection)
 - **Connection Config**: [dataflow-connection-config.md](dataflow-connection-config.md)
 
 <!-- Trigger Keywords: dataflow postgres, dataflow mysql, dataflow sqlite, database dialects, dataflow databases, database selection -->

@@ -26,14 +26,11 @@ Security invariants:
     - api_key plaintext is cleared immediately after encryption in create/update handlers
 """
 import asyncio
-import ipaddress
 import re
-import socket
 import time
 import uuid
 from decimal import Decimal
 from typing import Optional
-from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -42,6 +39,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_platform_admin
+from app.core.security.ssrf import SSRFBlockedError, resolve_and_pin_url_sync
 from app.core.session import get_async_session
 
 # Test harness constants (PA-002)
@@ -60,8 +58,8 @@ router = APIRouter(prefix="/platform/llm-library", tags=["platform-llm-library"]
 # Allowlists
 # ---------------------------------------------------------------------------
 
-_VALID_PROVIDERS = frozenset({"azure_openai", "openai_direct", "anthropic"})
-_VALID_STATUSES = frozenset({"Draft", "Published", "Deprecated"})
+_VALID_PROVIDERS = frozenset({"azure_openai", "openai_direct", "anthropic", "bedrock"})
+_VALID_STATUSES = frozenset({"draft", "published", "deprecated", "disabled"})
 _UPDATE_ALLOWLIST = frozenset(
     {
         "display_name",
@@ -87,7 +85,8 @@ _SELECT_COLUMNS = (
     "created_at, updated_at, "
     "endpoint_url, "
     "(api_key_encrypted IS NOT NULL) AS key_present, "
-    "api_key_last4, api_version, last_test_passed_at"
+    "api_key_last4, api_version, last_test_passed_at, "
+    "health_status, health_checked_at"
 )
 
 # api_version format: YYYY-MM-DD or YYYY-MM-DD-preview
@@ -101,7 +100,7 @@ _API_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(-preview)?$")
 
 class CreateLLMLibraryRequest(BaseModel):
     provider: str = Field(
-        ..., description="One of: azure_openai, openai_direct, anthropic"
+        ..., description="One of: azure_openai, openai_direct, anthropic, bedrock"
     )
     model_name: str = Field(..., max_length=200)
     display_name: str = Field(..., max_length=200)
@@ -111,7 +110,7 @@ class CreateLLMLibraryRequest(BaseModel):
     pricing_per_1k_tokens_in: Optional[Decimal] = Field(None, ge=0)
     pricing_per_1k_tokens_out: Optional[Decimal] = Field(None, ge=0)
     endpoint_url: Optional[str] = Field(
-        None, max_length=500, description="Required for azure_openai"
+        None, max_length=500, description="Required for azure_openai and bedrock"
     )
     api_key: Optional[str] = Field(
         None,
@@ -215,6 +214,8 @@ class LLMLibraryEntry(BaseModel):
     key_present: bool = False
     api_key_last4: Optional[str] = None
     last_test_passed_at: Optional[str] = None
+    health_status: Optional[str] = None
+    health_checked_at: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -256,7 +257,7 @@ class TenantAssignment(BaseModel):
 # DB helpers
 # ---------------------------------------------------------------------------
 
-# Column index map for _SELECT_COLUMNS (17 columns, 0-indexed):
+# Column index map for _SELECT_COLUMNS (19 columns, 0-indexed):
 #   0: id
 #   1: provider
 #   2: model_name
@@ -274,6 +275,8 @@ class TenantAssignment(BaseModel):
 #  14: api_key_last4
 #  15: api_version
 #  16: last_test_passed_at
+#  17: health_status
+#  18: health_checked_at
 
 
 def _row_to_entry(row) -> LLMLibraryEntry:
@@ -299,6 +302,8 @@ def _row_to_entry(row) -> LLMLibraryEntry:
         api_key_last4=row[14],
         api_version=row[15],
         last_test_passed_at=row[16].isoformat() if row[16] else None,
+        health_status=row[17],
+        health_checked_at=row[18].isoformat() if row[18] else None,
     )
 
 
@@ -343,6 +348,43 @@ async def _get_encrypted_key(entry_id: str, db: AsyncSession) -> Optional[bytes]
 # ---------------------------------------------------------------------------
 
 
+def _validate_bedrock_region_consistency(
+    provider: str,
+    endpoint_url: Optional[str],
+    model_name: Optional[str],
+) -> None:
+    """
+    Cross-validate Bedrock region in ARN vs endpoint_url.
+
+    Only fires when provider == 'bedrock', both fields are present,
+    and model_name looks like an ARN (starts with 'arn:aws:bedrock:').
+    Skips the check silently for non-ARN model IDs (short model names).
+    Raises HTTPException(422) on mismatch.
+    """
+    if provider != "bedrock":
+        return
+    if not endpoint_url or not model_name:
+        return
+    if not model_name.startswith("arn:aws:bedrock:"):
+        return
+    arn_parts = model_name.split(":")
+    if len(arn_parts) < 4:
+        return
+    arn_region = arn_parts[3]
+    url_parts = endpoint_url.replace("https://", "").split(".")
+    if len(url_parts) < 2:
+        return
+    url_region = url_parts[1]
+    if arn_region and url_region and arn_region != url_region:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Region mismatch: endpoint_url is '{url_region}' but "
+                f"model identifier is '{arn_region}'"
+            ),
+        )
+
+
 @router.post("", response_model=LLMLibraryEntry, status_code=status.HTTP_201_CREATED)
 async def create_llm_library_entry(
     request: CreateLLMLibraryRequest,
@@ -355,6 +397,11 @@ async def create_llm_library_entry(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"provider must be one of {sorted(_VALID_PROVIDERS)}",
         )
+
+    # BEDROCK-005: cross-validate region when both endpoint_url and ARN model_name present
+    _validate_bedrock_region_consistency(
+        request.provider, request.endpoint_url, request.model_name
+    )
 
     entry_id = str(uuid.uuid4())
 
@@ -380,7 +427,7 @@ async def create_llm_library_entry(
             "  endpoint_url, api_key_encrypted, api_key_last4, api_version"
             ") VALUES ("
             "  :id, :provider, :model_name, :display_name, :plan_tier, "
-            "  :is_recommended, 'Draft', :best_practices_md, "
+            "  :is_recommended, 'draft', :best_practices_md, "
             "  :pricing_in, :pricing_out, "
             "  :endpoint_url, :api_key_encrypted, :api_key_last4, :api_version"
             ")"
@@ -483,7 +530,7 @@ async def update_llm_library_entry(
     if entry is None:
         raise HTTPException(status_code=404, detail="LLM Library entry not found")
 
-    if entry.status == "Deprecated":
+    if entry.status in ("deprecated", "Deprecated"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Deprecated entries cannot be modified.",
@@ -492,6 +539,11 @@ async def update_llm_library_entry(
     updates = dict(request.model_dump(exclude_none=True))
     if not updates:
         return entry
+
+    # BEDROCK-005: cross-validate region when updating endpoint_url or model_name for Bedrock
+    new_endpoint = updates.get("endpoint_url", entry.endpoint_url)
+    new_model = updates.get("model_name", entry.model_name)
+    _validate_bedrock_region_consistency(entry.provider, new_endpoint, new_model)
 
     # Build parameterized SET clause from allowlist + explicit credential paths
     set_parts: list[str] = []
@@ -603,7 +655,7 @@ async def publish_llm_library_entry(
     if entry is None:
         raise HTTPException(status_code=404, detail="LLM Library entry not found")
 
-    if entry.status != "Draft":
+    if entry.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Only Draft entries can be published. Current status: {entry.status}",
@@ -616,6 +668,13 @@ async def publish_llm_library_entry(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Azure OpenAI entries require endpoint_url and api_version before publishing",
             )
+    elif entry.provider == "bedrock":
+        if not entry.endpoint_url:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Bedrock entries require endpoint_url (BEDROCK_BASE_URL)",
+            )
+        # api_version explicitly NOT required for bedrock
 
     # All providers require an API key
     if not entry.key_present:
@@ -645,8 +704,8 @@ async def publish_llm_library_entry(
     # PATCH that clears credentials or last_test_passed_at is caught at DB commit time.
     result = await db.execute(
         text(
-            "UPDATE llm_library SET status = 'Published', updated_at = NOW() "
-            "WHERE id = :id AND status = 'Draft' "
+            "UPDATE llm_library SET status = 'published', updated_at = NOW() "
+            "WHERE id = :id AND status = 'draft' "
             "AND api_key_encrypted IS NOT NULL "
             "AND last_test_passed_at IS NOT NULL"
         ),
@@ -681,7 +740,7 @@ async def deprecate_llm_library_entry(
     if entry is None:
         raise HTTPException(status_code=404, detail="LLM Library entry not found")
 
-    if entry.status != "Published":
+    if entry.status != "published":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Only Published entries can be deprecated. Current status: {entry.status}",
@@ -689,8 +748,8 @@ async def deprecate_llm_library_entry(
 
     result = await db.execute(
         text(
-            "UPDATE llm_library SET status = 'Deprecated', updated_at = NOW() "
-            "WHERE id = :id AND status = 'Published'"
+            "UPDATE llm_library SET status = 'deprecated', updated_at = NOW() "
+            "WHERE id = :id AND status = 'published'"
         ),
         {"id": entry_id},
     )
@@ -723,14 +782,14 @@ async def delete_llm_library_entry(
     if entry is None:
         raise HTTPException(status_code=404, detail="LLM Library entry not found")
 
-    if entry.status != "Draft":
+    if entry.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Only Draft entries can be deleted. Use deprecate for Published entries. Current status: {entry.status}",
         )
 
     await db.execute(
-        text("DELETE FROM llm_library WHERE id = :id AND status = 'Draft'"),
+        text("DELETE FROM llm_library WHERE id = :id AND status = 'draft'"),
         {"id": entry_id},
     )
     await db.commit()
@@ -761,29 +820,23 @@ def _calculate_test_cost(
 
 
 def _assert_endpoint_ssrf_safe(endpoint_url: str) -> None:
-    """
-    Resolve the hostname in endpoint_url and raise ValueError if it resolves to
-    a private, loopback, or link-local address (SSRF prevention).
+    """Validate endpoint_url against the shared SSRF blocklist and pin DNS.
+
+    Delegates to resolve_and_pin_url_sync() from app.core.security.ssrf —
+    the canonical shared SSRF module. Raises ValueError on any blocked address,
+    DNS failure, or malformed URL.
 
     Only called at test-time — at field-validation time DNS resolution is not possible.
+    The return value (pinned URL) is discarded here because Azure/OpenAI SDK clients
+    accept the original endpoint URL and handle DNS internally; the purpose of this
+    call is validation only (fail-closed before handing credentials to the SDK).
     """
-    parsed = urlparse(endpoint_url)
-    hostname = parsed.hostname
-    if not hostname:
-        raise ValueError(f"endpoint_url has no hostname: {endpoint_url!r}")
     try:
-        resolved_ip = socket.getaddrinfo(hostname, None)[0][4][0]
-    except socket.gaierror as exc:
-        raise ValueError(f"Cannot resolve endpoint_url hostname {hostname!r}: {exc}") from exc
-    try:
-        addr = ipaddress.ip_address(resolved_ip)
-    except ValueError as exc:
-        raise ValueError(f"Invalid resolved IP {resolved_ip!r}: {exc}") from exc
-    if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        resolve_and_pin_url_sync(endpoint_url)
+    except SSRFBlockedError as exc:
         raise ValueError(
-            f"endpoint_url {hostname!r} resolves to a non-routable address "
-            f"({resolved_ip}) — SSRF blocked"
-        )
+            f"endpoint_url is not permitted — SSRF blocked ({exc.code})"
+        ) from exc
 
 
 async def _run_single_test_prompt(
@@ -853,6 +906,28 @@ async def _run_single_test_prompt(
         tokens_out = msg.usage.output_tokens
         content = msg.content[0].text if msg.content else ""
 
+    elif provider == "bedrock":
+        # BEDROCK-006: Bedrock via OpenAI-compatible endpoint.
+        # base_url = {endpoint_url}/v1 — model ARN is passed at call time, NOT in base_url.
+        # SSRF check required before any outbound call.
+        from openai import AsyncOpenAI
+
+        if endpoint_url:
+            _assert_endpoint_ssrf_safe(endpoint_url)
+        client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=f"{endpoint_url.rstrip('/')}/v1",
+        )
+        resp = await client.chat.completions.create(
+            model=deployment_name,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        latency_ms = int((time.time() - start) * 1000)
+        usage = resp.usage
+        tokens_in = usage.prompt_tokens if usage else 0
+        tokens_out = usage.completion_tokens if usage else 0
+        content = resp.choices[0].message.content or ""
+
     else:
         raise ValueError(f"Unsupported provider for test harness: {provider!r}")
 
@@ -887,7 +962,7 @@ async def test_llm_library_profile(
     if entry is None:
         raise HTTPException(status_code=404, detail="LLM Library entry not found")
 
-    if entry.status == "Deprecated":
+    if entry.status in ("deprecated", "Deprecated"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot test a Deprecated entry.",

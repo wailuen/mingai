@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { TableRowSkeleton } from "@/components/shared/LoadingState";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import { useTeamAuditLog } from "@/lib/hooks/useTeams";
 
 interface MembershipAuditLogProps {
@@ -80,9 +81,19 @@ export function MembershipAuditLog({ teamId }: MembershipAuditLogProps) {
         Membership Audit Log
       </h3>
 
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        footer={
+          total > PAGE_SIZE ? (
+            <div className="flex items-center justify-between px-0 py-2 pt-2">
+              <span className="font-mono text-xs text-text-faint">
+                Page {page} of {totalPages}
+              </span>
+            </div>
+          ) : undefined
+        }
+      >
         <table className="w-full text-left">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
                 Time
@@ -137,32 +148,7 @@ export function MembershipAuditLog({ teamId }: MembershipAuditLogProps) {
             )}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination */}
-      {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between pt-2">
-          <span className="font-mono text-xs text-text-faint">
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page <= 1}
-              className="flex h-7 w-7 items-center justify-center rounded-control border border-border text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page >= totalPages}
-              className="flex h-7 w-7 items-center justify-center rounded-control border border-border text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+      </ScrollableTableWrapper>
     </div>
   );
 }

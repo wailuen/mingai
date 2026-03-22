@@ -9,6 +9,7 @@ import {
 import { TableRowSkeleton } from "@/components/shared/LoadingState";
 import { useTeams, useDeleteTeam, type Team } from "@/lib/hooks/useTeams";
 import { Pencil, Trash2 } from "lucide-react";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import { useState } from "react";
 
 interface TeamListProps {
@@ -84,7 +85,11 @@ export function TeamList({ onEdit, onSelect }: TeamListProps) {
       cell: (info) => {
         const val = info.getValue();
         if (!val)
-          return <span className="text-body-default text-text-faint">{"\u2014"}</span>;
+          return (
+            <span className="text-body-default text-text-faint">
+              {"\u2014"}
+            </span>
+          );
         const truncated = val.length > 60 ? `${val.slice(0, 60)}...` : val;
         return (
           <span className="text-body-default text-text-muted" title={val}>
@@ -161,9 +166,17 @@ export function TeamList({ onEdit, onSelect }: TeamListProps) {
   });
 
   return (
-    <div className="overflow-hidden rounded-card border border-border">
+    <ScrollableTableWrapper
+      footer={
+        <div className="flex items-center px-4 py-3">
+          <span className="font-mono text-xs text-text-faint">
+            {teams.length} total teams
+          </span>
+        </div>
+      }
+    >
       <table className="w-full">
-        <thead>
+        <thead className="sticky top-0 z-10 bg-bg-surface">
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-border">
               {headerGroup.headers.map((header) => (
@@ -210,13 +223,6 @@ export function TeamList({ onEdit, onSelect }: TeamListProps) {
           )}
         </tbody>
       </table>
-
-      {/* Footer count */}
-      <div className="flex items-center border-t border-border px-4 py-3">
-        <span className="font-mono text-xs text-text-faint">
-          {teams.length} total teams
-        </span>
-      </div>
-    </div>
+    </ScrollableTableWrapper>
   );
 }

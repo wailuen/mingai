@@ -31,7 +31,7 @@ def upgrade() -> None:
             "auth_mode",
             sa.String(32),
             nullable=False,
-            server_default="'none'",
+            server_default=sa.text("'none'"),
         ),
     )
     op.add_column(

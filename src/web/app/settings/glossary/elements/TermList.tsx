@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -9,26 +10,19 @@ import {
 import { TableRowSkeleton } from "@/components/shared/LoadingState";
 import { cn } from "@/lib/utils";
 import {
-  useGlossaryTerms,
+  useInfiniteGlossaryTerms,
   useDeleteTerm,
   type GlossaryTerm,
 } from "@/lib/hooks/useGlossary";
 import { VersionHistoryDrawer } from "./VersionHistoryDrawer";
 import { Pencil, Trash2, History } from "lucide-react";
 import { useState } from "react";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
+import { useInfiniteScrollSentinel } from "@/lib/hooks/useInfiniteScrollSentinel";
 
 interface TermListProps {
   searchQuery: string;
   statusFilter: string;
-  pagination: { pageIndex: number; pageSize: number };
-  onPaginationChange: (
-    updater:
-      | { pageIndex: number; pageSize: number }
-      | ((prev: { pageIndex: number; pageSize: number }) => {
-          pageIndex: number;
-          pageSize: number;
-        }),
-  ) => void;
   onEdit: (term: GlossaryTerm) => void;
 }
 
@@ -70,13 +64,7 @@ function DeleteConfirmPopover({
 
 const columnHelper = createColumnHelper<GlossaryTerm>();
 
-export function TermList({
-  searchQuery,
-  statusFilter,
-  pagination,
-  onPaginationChange,
-  onEdit,
-}: TermListProps) {
+export function TermList({ searchQuery, statusFilter, onEdit }: TermListProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [historyTerm, setHistoryTerm] = useState<{
     id: string;
@@ -84,14 +72,11 @@ export function TermList({
   } | null>(null);
   const deleteMutation = useDeleteTerm();
 
-  const { data, isLoading } = useGlossaryTerms(
-    pagination.pageIndex + 1,
-    searchQuery,
-    statusFilter,
-  );
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
+    useInfiniteGlossaryTerms(searchQuery, statusFilter);
 
-  const filteredItems = data?.items ?? [];
-  const totalPages = data ? Math.ceil(data.total / (data.page_size || 50)) : 1;
+  const rows = data?.pages.flatMap((p) => p.items) ?? [];
+  const total = data?.pages[0]?.total ?? 0;
 
   function handleDelete(id: string) {
     deleteMutation.mutate(id, {
@@ -195,125 +180,125 @@ export function TermList({
   ];
 
   const table = useReactTable({
-    data: filteredItems,
+    data: rows,
     columns,
-    pageCount: totalPages,
-    state: { pagination },
-    onPaginationChange,
-    manualPagination: true,
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const handleIntersect = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const sentinelRef = useInfiniteScrollSentinel(
+    handleIntersect,
+    hasNextPage && !isFetchingNextPage,
+  );
+
+  const footer = (
+    <div className="px-4 py-2.5">
+      <span className="font-mono text-xs text-text-faint">
+        {rows.length} of {total} terms
+      </span>
+    </div>
+  );
+
   return (
-    <div className="overflow-x-auto rounded-card border border-border">
-      <table className="w-full">
-        <thead>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="border-b border-border">
-              {headerGroup.headers.map((header) => {
-                const hideOnMobile = (
-                  header.column.columnDef.meta as
-                    | { hideOnMobile?: boolean }
-                    | undefined
-                )?.hideOnMobile;
-                return (
-                  <th
-                    key={header.id}
-                    className={cn(
-                      "px-3.5 py-3 text-left text-label-nav uppercase tracking-wider text-text-faint",
-                      hideOnMobile && "hidden sm:table-cell",
-                    )}
-                  >
-                    {flexRender(
-                      header.column.columnDef.header,
-                      header.getContext(),
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {isLoading ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <TableRowSkeleton key={i} columns={6} />
-            ))
-          ) : table.getRowModel().rows.length === 0 ? (
-            <tr>
-              <td
-                colSpan={6}
-                className="px-3.5 py-12 text-center text-body-default text-text-faint"
-              >
-                No glossary terms yet. Add your first term or import from CSV.
-              </td>
-            </tr>
-          ) : (
-            table.getRowModel().rows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-border-faint transition-colors hover:bg-accent-dim"
-              >
-                {row.getVisibleCells().map((cell) => {
+    <>
+      <ScrollableTableWrapper footer={footer}>
+        <table className="w-full">
+          <thead className="sticky top-0 z-10 bg-bg-surface">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="border-b border-border">
+                {headerGroup.headers.map((header) => {
                   const hideOnMobile = (
-                    cell.column.columnDef.meta as
+                    header.column.columnDef.meta as
                       | { hideOnMobile?: boolean }
                       | undefined
                   )?.hideOnMobile;
                   return (
-                    <td
-                      key={cell.id}
+                    <th
+                      key={header.id}
                       className={cn(
-                        "px-3.5 py-3",
+                        "px-3.5 py-3 text-left text-label-nav uppercase tracking-wider text-text-faint",
                         hideOnMobile && "hidden sm:table-cell",
                       )}
                     >
                       {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
+                        header.column.columnDef.header,
+                        header.getContext(),
                       )}
-                    </td>
+                    </th>
                   );
                 })}
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ))}
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRowSkeleton key={i} columns={5} />
+              ))
+            ) : rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
+                >
+                  No glossary terms yet. Add your first term or import from CSV.
+                </td>
+              </tr>
+            ) : (
+              <>
+                {table.getRowModel().rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-border-faint transition-colors hover:bg-accent-dim"
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const hideOnMobile = (
+                        cell.column.columnDef.meta as
+                          | { hideOnMobile?: boolean }
+                          | undefined
+                      )?.hideOnMobile;
+                      return (
+                        <td
+                          key={cell.id}
+                          className={cn(
+                            "px-3.5 py-3",
+                            hideOnMobile && "hidden sm:table-cell",
+                          )}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {/* Infinite scroll sentinel */}
+                <tr>
+                  <td colSpan={5} className="p-0">
+                    <div ref={sentinelRef} className="h-1" />
+                  </td>
+                </tr>
+                {isFetchingNextPage &&
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRowSkeleton key={`fetch-${i}`} columns={5} />
+                  ))}
+              </>
+            )}
+          </tbody>
+        </table>
+      </ScrollableTableWrapper>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between border-t border-border px-4 py-3">
-        <span className="font-mono text-xs text-text-faint">
-          {data?.total ?? 0} total terms
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="rounded-control border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
-          >
-            Previous
-          </button>
-          <span className="flex items-center px-2 font-mono text-xs text-text-faint">
-            Page {pagination.pageIndex + 1} of {totalPages}
-          </span>
-          <button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="rounded-control border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-bg-elevated disabled:opacity-30"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* Version History Drawer */}
       <VersionHistoryDrawer
         termId={historyTerm?.id ?? null}
         termName={historyTerm?.name ?? ""}
         isOpen={historyTerm !== null}
         onClose={() => setHistoryTerm(null)}
       />
-    </div>
+    </>
   );
 }

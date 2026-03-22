@@ -186,7 +186,7 @@ async def _async_create_llm_library_entry(
                 "  pricing_per_1k_tokens_in, pricing_per_1k_tokens_out"
                 ") VALUES ("
                 "  :id, 'azure_openai', :model_name, :model_name, 'professional', "
-                "  false, 'Published', :price_in, :price_out"
+                "  false, 'published', :price_in, :price_out"
                 ")"
             ),
             {

@@ -99,8 +99,8 @@ async def _insert_glossary_term(tenant_id: str, term: str, full_form: str):
     """Insert a glossary term for testing expansion."""
     await _run_sql(
         "INSERT INTO glossary_terms "
-        "(id, tenant_id, term, full_form, aliases, is_active) "
-        "VALUES (:id, :tenant_id, :term, :full_form, :aliases, true) "
+        "(id, tenant_id, term, full_form, aliases) "
+        "VALUES (:id, :tenant_id, :term, :full_form, :aliases) "
         "ON CONFLICT (tenant_id, term) DO NOTHING",
         {
             "id": str(uuid.uuid4()),

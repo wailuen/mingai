@@ -13,6 +13,7 @@ import {
   type TopBug,
 } from "@/lib/hooks/useIssueAnalytics";
 import { TableRowSkeleton } from "@/components/shared/LoadingState";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 // ---------------------------------------------------------------------------
 // Status badge styling
@@ -135,9 +136,9 @@ export function TopBugsTable({ period }: TopBugsTableProps) {
       <h2 className="mb-3 text-section-heading text-text-primary">
         Top Bugs by Report Volume
       </h2>
-      <div className="overflow-hidden rounded-card border border-border">
+      <ScrollableTableWrapper>
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr
                 key={headerGroup.id}
@@ -197,7 +198,7 @@ export function TopBugsTable({ period }: TopBugsTableProps) {
             )}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

@@ -79,6 +79,10 @@ class TestProvisioningWorkerHappyPath:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", {"CLOUD_PROVIDER": "local"}),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -120,6 +124,10 @@ class TestProvisioningWorkerHappyPath:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", {"CLOUD_PROVIDER": "local"}),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -154,6 +162,10 @@ class TestProvisioningWorkerIdempotency:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", {"CLOUD_PROVIDER": "local"}),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -191,6 +203,10 @@ class TestProvisioningWorkerRedisEvents:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", {"CLOUD_PROVIDER": "local"}),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -222,6 +238,10 @@ class TestProvisioningWorkerRedisEvents:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", {"CLOUD_PROVIDER": "local"}),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -255,6 +275,10 @@ class TestProvisioningWorkerStripeSkipped:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", env, clear=False),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -291,6 +315,10 @@ class TestProvisioningWorkerEmailSkipped:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", env, clear=False),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning
@@ -348,6 +376,10 @@ class TestProvisioningWorkerRollback:
                 return_value=session_ctx,
             ),
             patch("app.modules.tenants.worker.get_redis", return_value=redis),
+            patch(
+                "app.modules.tenants.worker._create_pgvector_index",
+                new_callable=AsyncMock,
+            ),
             patch.dict("os.environ", {"CLOUD_PROVIDER": "local"}),
         ):
             from app.modules.tenants.worker import run_tenant_provisioning

@@ -1,18 +1,18 @@
 ---
 name: template-test-integration
-description: "Generate Kailash integration test template (Tier 2). Use when requesting 'integration test template', 'Tier 2 test', 'real infrastructure test', 'NO MOCKING test', or 'integration test example'."
+description: "Generate Kailash integration test template (Tier 2). Use when requesting 'integration test template', 'Tier 2 test', 'real infrastructure test', 'real infrastructure recommended test', or 'integration test example'."
 ---
 
 # Integration Test Template (Tier 2)
 
-Integration test template with real Docker services (NO MOCKING policy).
+Integration test template with real Docker services (real infrastructure recommended policy).
 
 > **Skill Metadata**
 > Category: `cross-cutting` (code-generation)
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
 > Related Skills: [`test-3tier-strategy`](../../4-operations/testing/test-3tier-strategy.md), [`template-test-unit`](template-test-unit.md), [`template-test-e2e`](template-test-e2e.md)
-> Related Subagents: `testing-specialist` (NO MOCKING policy), `tdd-implementer`
+> Related Subagents: `testing-specialist` (real infrastructure recommended policy), `tdd-implementer`
 
 ## Quick Reference
 
@@ -106,7 +106,7 @@ result = {'valid': valid, 'data': data}
 
 ```bash
 # MUST run before integration tests
-./tests/utils/test-env up && ./tests/utils/test-env status
+docker compose up -d # Start test infrastructure
 ```
 
 ## Fixtures for Real Services
@@ -144,7 +144,7 @@ def cleanup_database(test_database_url):
     conn.close()
 ```
 
-## NO MOCKING Policy
+## real infrastructure recommended Policy
 
 ### ❌ FORBIDDEN in Tier 2
 ```python
@@ -175,7 +175,7 @@ def test_database_integration(test_database_url):
 - **Unit tests**: [`template-test-unit`](template-test-unit.md)
 - **E2E tests**: [`template-test-e2e`](template-test-e2e.md)
 - **Testing strategy**: [`test-3tier-strategy`](../../4-operations/testing/test-3tier-strategy.md)
-- **NO MOCKING policy**: [`gold-mocking-policy`](../../17-gold-standards/gold-mocking-policy.md)
+- **real infrastructure recommended policy**: [`gold-mocking-policy`](../../17-gold-standards/gold-mocking-policy.md)
 
 ## When to Escalate
 
@@ -192,14 +192,12 @@ Use `tdd-implementer` when:
 
 ### Primary Sources
 - **Testing Specialist**: [`.claude/agents/testing-specialist.md` (lines 178-209)](../../../../.claude/agents/testing-specialist.md#L178-L209)
-- **Test Organization**: [`sdk-users/3-development/testing/test-organization-policy.md`](../../../../sdk-users/3-development/testing/test-organization-policy.md)
-- **NO MOCKING**: [`sdk-users/7-gold-standards/mock-directives-for-testing.md`](../../../../sdk-users/7-gold-standards/mock-directives-for-testing.md)
 
 ## Quick Tips
 
 - 💡 **Real services**: Use Docker for databases, Redis, etc.
 - 💡 **<5 seconds**: Keep tests fast
-- 💡 **NO MOCKING**: Absolute rule for Tier 2
+- 💡 **real infrastructure recommended**: Absolute rule for Tier 2
 - 💡 **Cleanup**: Always clean test data before/after
 
-<!-- Trigger Keywords: integration test template, Tier 2 test, real infrastructure test, NO MOCKING test, integration test example, integration test boilerplate, Docker test template -->
+<!-- Trigger Keywords: integration test template, Tier 2 test, real infrastructure test, real infrastructure recommended test, integration test example, integration test boilerplate, Docker test template -->

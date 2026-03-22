@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Loader2, X, Plus } from "lucide-react";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import {
   useGroupSyncConfig,
   useUpdateGroupSyncConfig,
@@ -189,9 +190,12 @@ export function GroupSyncConfigPanel() {
         </h3>
 
         {Object.keys(groupRoleMapping).length > 0 && (
-          <div className="overflow-x-auto rounded-control border border-border">
+          <ScrollableTableWrapper
+            maxHeight="none"
+            className="rounded-control border border-border shadow-none"
+          >
             <table className="min-w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-bg-surface">
                 <tr className="border-b border-border">
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-text-faint">
                     Group
@@ -240,7 +244,7 @@ export function GroupSyncConfigPanel() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableTableWrapper>
         )}
 
         {Object.keys(groupRoleMapping).length === 0 && (

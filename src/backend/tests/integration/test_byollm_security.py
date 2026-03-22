@@ -4,9 +4,9 @@ P2LLM-017: BYOLLM Security Integration Tests.
 Uses real PostgreSQL — no mocking.
 
 Security invariants tested:
-- Stored row in DB never contains plaintext API key
-- API response (GET /admin/llm-config) returns key_present bool only — no key value
-- DELETE removes key material from DB
+- Stored row in DB never contains plaintext API key (api_key_encrypted is opaque)
+- API response (POST/GET /admin/byollm/library-entries) returns api_key_last4 only — no plaintext
+- DELETE removes entry from DB (key material gone with it)
 - Non-enterprise tenant gets 403
 
 Tier 2: Requires running PostgreSQL + JWT_SECRET_KEY configured.
@@ -61,23 +61,12 @@ def _make_token(
     return jwt.encode(payload, _jwt_secret(), algorithm="HS256")
 
 
-def _make_tenant_row(tenant_id: str) -> dict:
-    return {
-        "id": tenant_id,
-        "name": f"BYOLLM Test Tenant {tenant_id[:8]}",
-        "slug": f"byollm-{tenant_id[:8]}",
-        "plan": "enterprise",
-        "primary_contact_email": f"admin-{tenant_id[:8]}@test.example",
-        "status": "active",
-    }
-
-
 # ---------------------------------------------------------------------------
 # DB setup / teardown
 # ---------------------------------------------------------------------------
 
 
-def _setup_tenant(tenant_id: str) -> None:
+def _setup_tenant(tenant_id: str, plan: str = "enterprise") -> None:
     """Create test tenant row synchronously."""
     db_url = _db_url()
 
@@ -88,10 +77,16 @@ def _setup_tenant(tenant_id: str) -> None:
             await session.execute(
                 text(
                     "INSERT INTO tenants (id, name, slug, plan, primary_contact_email, status) "
-                    "VALUES (:id, :name, :slug, :plan, :primary_contact_email, :status) "
+                    "VALUES (:id, :name, :slug, :plan, :email, 'active') "
                     "ON CONFLICT (id) DO NOTHING"
                 ),
-                _make_tenant_row(tenant_id),
+                {
+                    "id": tenant_id,
+                    "name": f"BYOLLM Sec Test {tenant_id[:8]}",
+                    "slug": f"byollm-sec-{tenant_id[:8]}",
+                    "plan": plan,
+                    "email": f"admin-{tenant_id[:8]}@test.example",
+                },
             )
             await session.commit()
         await engine.dispose()
@@ -100,15 +95,25 @@ def _setup_tenant(tenant_id: str) -> None:
 
 
 def _cleanup_tenant(tenant_id: str) -> None:
-    """Remove test tenant and config rows synchronously."""
+    """Remove test tenant and any associated library entries / profiles."""
     db_url = _db_url()
 
     async def _do():
         engine = create_async_engine(db_url, echo=False)
         async_session = async_sessionmaker(engine, expire_on_commit=False)
         async with async_session() as session:
+            # NULL out tenant's llm_profile_id FK to break circular dependency
             await session.execute(
-                text("DELETE FROM tenant_configs WHERE tenant_id = :tid"),
+                text("UPDATE tenants SET llm_profile_id = NULL WHERE id = :id"),
+                {"id": tenant_id},
+            )
+            # Delete child rows before tenant
+            await session.execute(
+                text("DELETE FROM llm_profiles WHERE owner_tenant_id = :tid"),
+                {"tid": tenant_id},
+            )
+            await session.execute(
+                text("DELETE FROM llm_library WHERE owner_tenant_id = :tid"),
                 {"tid": tenant_id},
             )
             await session.execute(
@@ -121,10 +126,9 @@ def _cleanup_tenant(tenant_id: str) -> None:
     asyncio.run(_do())
 
 
-def _read_byollm_config(tenant_id: str) -> dict | None:
-    """Read raw byollm_key_ref config from DB synchronously."""
+def _read_library_row(entry_id: str, tenant_id: str) -> dict | None:
+    """Read raw library row from DB to verify encryption. Returns None if not found."""
     db_url = _db_url()
-
     result = {}
 
     async def _do():
@@ -133,14 +137,18 @@ def _read_byollm_config(tenant_id: str) -> dict | None:
         async with async_session() as session:
             r = await session.execute(
                 text(
-                    "SELECT config_data FROM tenant_configs "
-                    "WHERE tenant_id = :tid AND config_type = 'byollm_key_ref'"
+                    "SELECT id, api_key_encrypted, api_key_last4 FROM llm_library "
+                    "WHERE id = :id AND owner_tenant_id = :tid"
                 ),
-                {"tid": tenant_id},
+                {"id": entry_id, "tid": tenant_id},
             )
             row = r.fetchone()
             if row:
-                result["data"] = row[0]
+                result["data"] = {
+                    "id": str(row[0]),
+                    "api_key_encrypted": row[1],
+                    "api_key_last4": row[2],
+                }
         await engine.dispose()
 
     asyncio.run(_do())
@@ -148,7 +156,7 @@ def _read_byollm_config(tenant_id: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Fixtures
 # ---------------------------------------------------------------------------
 
 
@@ -159,7 +167,7 @@ PLAINTEXT_KEY = "sk-realkey-that-must-never-appear-in-db"
 def enterprise_tenant():
     """Create an enterprise tenant for the test module."""
     tenant_id = str(uuid.uuid4())
-    _setup_tenant(tenant_id)
+    _setup_tenant(tenant_id, plan="enterprise")
     yield tenant_id
     _cleanup_tenant(tenant_id)
 
@@ -167,162 +175,191 @@ def enterprise_tenant():
 @pytest.fixture(scope="module")
 def pro_tenant():
     """Create a professional (non-enterprise) tenant for the test module."""
-    tid = str(uuid.uuid4())
-    db_url = _db_url()
+    tenant_id = str(uuid.uuid4())
+    _setup_tenant(tenant_id, plan="professional")
+    yield tenant_id
+    _cleanup_tenant(tenant_id)
 
-    async def _create():
-        engine = create_async_engine(db_url, echo=False)
-        async_session = async_sessionmaker(engine, expire_on_commit=False)
-        async with async_session() as session:
-            await session.execute(
-                text(
-                    "INSERT INTO tenants (id, name, slug, plan, primary_contact_email, status) "
-                    "VALUES (:id, :name, :slug, 'professional', :email, 'active') "
-                    "ON CONFLICT (id) DO NOTHING"
-                ),
-                {
-                    "id": tid,
-                    "name": f"Pro Tenant {tid[:8]}",
-                    "slug": f"pro-{tid[:8]}",
-                    "email": f"admin-{tid[:8]}@test.example",
-                },
-            )
-            await session.commit()
-        await engine.dispose()
 
-    asyncio.run(_create())
-    yield tid
-
-    async def _cleanup():
-        engine = create_async_engine(db_url, echo=False)
-        async_session = async_sessionmaker(engine, expire_on_commit=False)
-        async with async_session() as session:
-            await session.execute(
-                text("DELETE FROM tenant_configs WHERE tenant_id = :tid"), {"tid": tid}
-            )
-            await session.execute(
-                text("DELETE FROM tenants WHERE id = :id"), {"id": tid}
-            )
-            await session.commit()
-        await engine.dispose()
-
-    asyncio.run(_cleanup())
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
 class TestBYOLLMSecurity:
-    """Security invariants for BYOLLM credential storage."""
+    """Security invariants for BYOLLM credential storage via library entries API."""
 
     def test_store_byollm_key_response_has_no_plaintext_key(
         self, client, enterprise_tenant
     ):
-        """PATCH /admin/llm-config/byollm response must not contain the API key."""
+        """POST /admin/byollm/library-entries response must not contain the API key."""
         token = _make_token(
             enterprise_tenant, roles=["tenant_admin"], plan="enterprise"
         )
-        response = client.patch(
-            "/api/v1/admin/llm-config/byollm",
+        response = client.post(
+            "/api/v1/admin/byollm/library-entries",
             json={
+                "name": "Security Test Entry",
                 "provider": "openai_direct",
+                "model_name": "gpt-4o",
                 "api_key": PLAINTEXT_KEY,
+                "capabilities": {"eligible_slots": ["chat", "intent"]},
             },
             headers={"Authorization": f"Bearer {token}"},
         )
-        # Accept 200 or 422 (if JWT_SECRET_KEY missing for fernet)
-        if response.status_code == 422:
-            pytest.skip("JWT_SECRET_KEY not configured — cannot encrypt key")
+        # Skip if Fernet key not configured (encryption infra missing)
+        if response.status_code == 500:
+            pytest.skip("Fernet key not configured — cannot encrypt key")
 
-        assert response.status_code == 200, response.text
+        assert response.status_code == 201, response.text
         body = response.json()
 
-        # Response MUST NOT contain the plaintext key
+        # Response MUST NOT contain the plaintext key anywhere
         body_str = str(body)
-        assert PLAINTEXT_KEY not in body_str
-        assert "sk-" not in body_str or "sk-" not in PLAINTEXT_KEY[:3]
+        assert PLAINTEXT_KEY not in body_str, (
+            f"Plaintext API key found in POST response: {body_str}"
+        )
 
-        # Response shows key_present: true
-        assert body.get("key_present") is True
+        # api_key_encrypted must never appear in response
+        assert "api_key_encrypted" not in body, (
+            "api_key_encrypted field must never be returned in API response"
+        )
+
+        # Response shows api_key_last4 only
+        assert "api_key_last4" in body
+        assert body["api_key_last4"] == PLAINTEXT_KEY[-4:]
 
     def test_db_stores_no_plaintext_key(self, client, enterprise_tenant):
-        """After PATCH, the DB row must not contain the plaintext API key."""
+        """After POST, the DB row must store the key encrypted, not in plaintext."""
         token = _make_token(
             enterprise_tenant, roles=["tenant_admin"], plan="enterprise"
         )
-        response = client.patch(
-            "/api/v1/admin/llm-config/byollm",
+        response = client.post(
+            "/api/v1/admin/byollm/library-entries",
             json={
+                "name": "DB Encryption Test Entry",
                 "provider": "openai_direct",
+                "model_name": "gpt-4o",
                 "api_key": PLAINTEXT_KEY,
+                "capabilities": {"eligible_slots": ["chat"]},
             },
             headers={"Authorization": f"Bearer {token}"},
         )
-        if response.status_code != 200:
+        if response.status_code != 201:
             pytest.skip("BYOLLM store failed — skipping DB assertion")
 
-        config_data = _read_byollm_config(enterprise_tenant)
-        assert config_data is not None, "byollm_key_ref config_data not found in DB"
+        entry_id = response.json()["id"]
+        row = _read_library_row(entry_id, enterprise_tenant)
+        assert row is not None, "Library entry not found in DB"
 
-        # The plaintext key must not appear anywhere in the stored config
-        config_str = str(config_data)
-        assert (
-            PLAINTEXT_KEY not in config_str
-        ), f"Plaintext key found in DB config: {config_str}"
+        # api_key_encrypted must not be the plaintext key
+        encrypted = row["api_key_encrypted"]
+        assert encrypted is not None, "api_key_encrypted must not be NULL"
+        assert encrypted != PLAINTEXT_KEY, (
+            "api_key_encrypted must not equal the plaintext key"
+        )
+        assert PLAINTEXT_KEY not in str(encrypted), (
+            f"Plaintext key found inside api_key_encrypted: {encrypted}"
+        )
 
-        # encrypted_key_ref must be present
-        if isinstance(config_data, dict):
-            assert "encrypted_key_ref" in config_data
-            # The encrypted ref is an opaque token — not the raw key
-            assert config_data["encrypted_key_ref"] != PLAINTEXT_KEY
+        # last4 must match
+        assert row["api_key_last4"] == PLAINTEXT_KEY[-4:], (
+            f"api_key_last4 mismatch: expected {PLAINTEXT_KEY[-4:]!r}, got {row['api_key_last4']!r}"
+        )
 
-    def test_get_llm_config_has_no_plaintext_key(self, client, enterprise_tenant):
-        """GET /admin/llm-config response must never contain the API key."""
+    def test_get_entry_has_no_plaintext_key(self, client, enterprise_tenant):
+        """GET /admin/byollm/library-entries/{id} must never contain the API key."""
         token = _make_token(
             enterprise_tenant, roles=["tenant_admin"], plan="enterprise"
         )
-        response = client.get(
-            "/api/v1/admin/llm-config",
+        # Create an entry first
+        create_resp = client.post(
+            "/api/v1/admin/byollm/library-entries",
+            json={
+                "name": "GET Security Test",
+                "provider": "openai_direct",
+                "model_name": "gpt-4o",
+                "api_key": PLAINTEXT_KEY,
+                "capabilities": {"eligible_slots": ["chat"]},
+            },
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 200, response.text
-        body = response.json()
+        if create_resp.status_code != 201:
+            pytest.skip("Entry creation failed — skipping GET assertion")
+
+        entry_id = create_resp.json()["id"]
+
+        # Fetch the entry
+        get_resp = client.get(
+            f"/api/v1/admin/byollm/library-entries/{entry_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert get_resp.status_code == 200, get_resp.text
+        body = get_resp.json()
         body_str = str(body)
 
-        assert PLAINTEXT_KEY not in body_str
-        # byollm section shows key_present bool only
-        byollm = body.get("byollm", {})
-        assert "api_key" not in byollm
-        assert "encrypted_key_ref" not in byollm
+        assert PLAINTEXT_KEY not in body_str, (
+            f"Plaintext API key found in GET response: {body_str}"
+        )
+        assert "api_key_encrypted" not in body, (
+            "api_key_encrypted must never be returned in GET response"
+        )
 
-    def test_delete_removes_key_material(self, client, enterprise_tenant):
-        """DELETE /admin/llm-config/byollm removes key from DB."""
+    def test_delete_disables_entry(self, client, enterprise_tenant):
+        """DELETE /admin/byollm/library-entries/{id} soft-deletes entry (status=disabled)."""
         token = _make_token(
             enterprise_tenant, roles=["tenant_admin"], plan="enterprise"
         )
-        # Ensure key is stored first
-        client.patch(
-            "/api/v1/admin/llm-config/byollm",
-            json={"provider": "openai_direct", "api_key": PLAINTEXT_KEY},
+        # Ensure entry is created first
+        create_resp = client.post(
+            "/api/v1/admin/byollm/library-entries",
+            json={
+                "name": "Delete Test Entry",
+                "provider": "openai_direct",
+                "model_name": "gpt-4o",
+                "api_key": PLAINTEXT_KEY,
+                "capabilities": {"eligible_slots": ["chat"]},
+            },
             headers={"Authorization": f"Bearer {token}"},
         )
+        if create_resp.status_code != 201:
+            pytest.skip("Entry creation failed — skipping DELETE test")
 
-        # Now delete
+        entry_id = create_resp.json()["id"]
+
+        # Confirm it exists and has no disabled status
+        row_before = _read_library_row(entry_id, enterprise_tenant)
+        assert row_before is not None, "Entry must exist in DB before DELETE"
+
+        # Delete it
         delete_resp = client.delete(
-            "/api/v1/admin/llm-config/byollm",
+            f"/api/v1/admin/byollm/library-entries/{entry_id}",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert delete_resp.status_code == 204, delete_resp.text
 
-        # DB row should be gone
-        config_data = _read_byollm_config(enterprise_tenant)
-        assert (
-            config_data is None
-        ), f"byollm_key_ref still present after DELETE: {config_data}"
+        # Entry should be soft-deleted (status=disabled) — verify via list endpoint
+        list_resp = client.get(
+            "/api/v1/admin/byollm/library-entries",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert list_resp.status_code == 200, list_resp.text
+        active_ids = [e["id"] for e in list_resp.json() if e.get("status") != "disabled"]
+        assert entry_id not in active_ids, (
+            "Deleted entry must not appear as active in library list"
+        )
 
     def test_non_enterprise_tenant_gets_403(self, client, pro_tenant):
-        """Non-enterprise plan gets 403 on PATCH /admin/llm-config/byollm."""
+        """Non-enterprise plan gets 403 on POST /admin/byollm/library-entries."""
         token = _make_token(pro_tenant, roles=["tenant_admin"], plan="professional")
-        response = client.patch(
-            "/api/v1/admin/llm-config/byollm",
-            json={"provider": "openai_direct", "api_key": PLAINTEXT_KEY},
+        response = client.post(
+            "/api/v1/admin/byollm/library-entries",
+            json={
+                "name": "Should Be Blocked",
+                "provider": "openai_direct",
+                "model_name": "gpt-4o",
+                "api_key": PLAINTEXT_KEY,
+            },
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 403, response.text

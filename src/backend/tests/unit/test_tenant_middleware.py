@@ -240,7 +240,7 @@ class TestExtractClaimsFromJWT:
         """Returns (tenant_id, scope) from a well-formed JWT in a single decode."""
         import time
 
-        import jwt as pyjwt
+        from jose import jwt as jose_jwt
 
         from app.core.tenant_middleware import _extract_claims_from_jwt
 
@@ -255,7 +255,7 @@ class TestExtractClaimsFromJWT:
             "iat": int(time.time()),
             "exp": int(time.time()) + 3600,
         }
-        token = pyjwt.encode(payload, secret, algorithm="HS256")
+        token = jose_jwt.encode(payload, secret, algorithm="HS256")
 
         with patch.dict(
             os.environ, {"JWT_SECRET_KEY": secret, "JWT_ALGORITHM": "HS256"}

@@ -322,7 +322,7 @@ class TestDeployAccessControlRow:
             )
             assert row is not None
             assert row["visibility_mode"] == "user_specific"
-            assert uid in list(row["allowed_user_ids"] or [])
+            assert uid in [str(x) for x in list(row["allowed_user_ids"] or [])]
             assert list(row["allowed_roles"] or []) == []
 
         asyncio.run(_run())
@@ -477,6 +477,7 @@ class TestCheckAgentAccess:
         self,
         agent_id: str,
         tid: str,
+        uid: str,
         visibility_mode: str,
         allowed_roles: list,
         allowed_user_ids: list,
@@ -493,7 +494,7 @@ class TestCheckAgentAccess:
                     "id": agent_id,
                     "tid": tid,
                     "name": f"ACL Test Agent {agent_id[:8]}",
-                    "uid": agent_id,  # reuse agent_id as placeholder — not a real user FK in this table
+                    "uid": uid,  # real user FK — must exist in users table
                 },
             )
         )
@@ -525,7 +526,7 @@ class TestCheckAgentAccess:
 
         tid, uid = tenant_and_user
         agent_id = str(uuid.uuid4())
-        self._insert_acl_row(agent_id, tid, "workspace_wide", [], [])
+        self._insert_acl_row(agent_id, tid, uid, "workspace_wide", [], [])
 
         async def _run():
             engine = _make_engine()
@@ -567,7 +568,7 @@ class TestCheckAgentAccess:
 
         tid, uid = tenant_and_user
         agent_id = str(uuid.uuid4())
-        self._insert_acl_row(agent_id, tid, "role_restricted", ["analyst"], [])
+        self._insert_acl_row(agent_id, tid, uid, "role_restricted", ["analyst"], [])
 
         async def _run():
             engine = _make_engine()
@@ -609,7 +610,7 @@ class TestCheckAgentAccess:
 
         tid, uid = tenant_and_user
         agent_id = str(uuid.uuid4())
-        self._insert_acl_row(agent_id, tid, "role_restricted", ["analyst"], [])
+        self._insert_acl_row(agent_id, tid, uid, "role_restricted", ["analyst"], [])
 
         async def _run():
             engine = _make_engine()
@@ -648,7 +649,7 @@ class TestCheckAgentAccess:
 
         tid, uid = tenant_and_user
         agent_id = str(uuid.uuid4())
-        self._insert_acl_row(agent_id, tid, "user_specific", [], [uid])
+        self._insert_acl_row(agent_id, tid, uid, "user_specific", [], [uid])
 
         async def _run():
             engine = _make_engine()
@@ -688,7 +689,7 @@ class TestCheckAgentAccess:
         tid, uid = tenant_and_user
         agent_id = str(uuid.uuid4())
         other_uid = str(uuid.uuid4())
-        self._insert_acl_row(agent_id, tid, "user_specific", [], [other_uid])
+        self._insert_acl_row(agent_id, tid, uid, "user_specific", [], [other_uid])
 
         async def _run():
             engine = _make_engine()

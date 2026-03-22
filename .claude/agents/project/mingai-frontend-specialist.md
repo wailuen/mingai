@@ -1,6 +1,6 @@
 ---
 name: mingai-frontend-specialist
-description: mingai frontend specialist for Next.js 14 App Router + React Query + Tailwind. Use when implementing or debugging frontend features, understanding the Obsidian Intelligence design system, KB access control UI, admin console responsive patterns, glossary hooks, or SSE streaming in the web app.
+description: mingai frontend specialist for Next.js 14 App Router + React Query + Tailwind. Use when implementing or debugging frontend features, understanding the Obsidian Intelligence design system, KB access control UI, admin console responsive patterns, glossary hooks, SSE streaming, data tables with infinite scroll, responsive column hiding, tab filtering, or row-click interactions in the web app.
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -37,13 +37,17 @@ lib/
   sanitize.ts         — DOMPurify wrapper — use for any user-generated HTML
   react-query.tsx     — QueryClientProvider
   hooks/
-    useKBAccessControl.ts   — GET/PATCH /admin/knowledge-base/{id}/access
-    useGlossary.ts          — glossary CRUD + miss signals + version history + import/export
+    useKBAccessControl.ts        — GET/PATCH /admin/knowledge-base/{id}/access
+    useGlossary.ts               — glossary CRUD + miss signals + version history + import/export
+                                   includes useInfiniteGlossaryTerms (infinite scroll)
+    usePlatformDashboard.ts      — platform stats + useInfiniteTenants (infinite scroll)
+    useInfiniteScrollSentinel.ts — IntersectionObserver hook for infinite scroll sentinel
     useAuth.ts, useChat.ts, useMyReports.ts
 components/
   layout/             — AppShell, Sidebar, Topbar
   chat/               — ChatInput, MessageList, CitationsPanel
   shared/             — ErrorBoundary, LoadingState (Skeleton), SafeHTML
+                        ScrollableTableWrapper — ALWAYS use for data tables
   notifications/      — NotificationBell + SSE hook
 tailwind.config.ts    — Obsidian Intelligence tokens (rounded-card, rounded-control, rounded-badge, text-section-heading, etc.)
 middleware.ts         — Protects /platform/* (scope=platform) and /admin/* (tenant_admin role)
@@ -116,23 +120,65 @@ Replacing `text-sm` with `text-body-default` restores the intended 22–15–13�
 
 Never use `rounded-2xl`, `shadow-lg`, `rounded-sm` for badges, or hardcoded hex colors.
 
+### Responsive Tables with Infinite Scroll
+
+**Read `.claude/skills/project/mingai-table-patterns.md` for the full reference.**
+
+Every data table uses two shared primitives:
+
+- **`ScrollableTableWrapper`** — `src/web/components/shared/ScrollableTableWrapper.tsx`
+  Responsive container: `overflow-x-auto overflow-y-auto`, `maxHeight: calc(100svh - var(--topbar-h, 48px) - 180px)`, pinned footer slot, Obsidian card chrome.
+- **`useInfiniteScrollSentinel`** — `src/web/lib/hooks/useInfiniteScrollSentinel.ts`
+  Returns a `ref` for a sentinel `<div>`. Fires `onIntersect()` via `IntersectionObserver` when sentinel enters the viewport.
+
+```tsx
+// Every table — minimal skeleton
+const { data, isPending, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteMyItems();
+const rows = data?.pages.flatMap((p) => p.items) ?? [];
+const total = data?.pages[0]?.total ?? 0;
+
+const handleIntersect = useCallback(() => {
+  if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+const sentinelRef = useInfiniteScrollSentinel(handleIntersect, hasNextPage && !isFetchingNextPage);
+
+return (
+  <ScrollableTableWrapper footer={<span>{rows.length} of {total}</span>}>
+    <table className="w-full">
+      <thead className="sticky top-0 z-10 bg-bg-surface">...</thead>
+      <tbody>
+        {/* data rows */}
+        {/* sentinel — MUST be inside tr>td */}
+        <tr><td colSpan={n} className="p-0"><div ref={sentinelRef} className="h-1" /></td></tr>
+        {/* next-page skeleton */}
+      </tbody>
+    </table>
+  </ScrollableTableWrapper>
+);
+```
+
+**Small card tables** (TenantHealthTable, SyncJobHistory, etc.): use `<ScrollableTableWrapper maxHeight="none">` to disable the height cap.
+
+**Responsive column hiding** — use `meta: { hideBelow: "sm" | "md" | "lg" }` on column definitions with a `colHide()` helper. Apply to BOTH `<th>` and `<td>`. See `mingai-table-patterns.md` § "Responsive Column Hiding — Multi-Breakpoint".
+
+**Blur overlay for narrow viewports** — when even the minimal columns are too cramped (typically `< sm` / 640px), wrap the component in `relative` and add `<div className="sm:hidden absolute inset-0 z-30 ... backdrop-blur-sm pointer-events-none">`. See `mingai-table-patterns.md` § "Blur Overlay for Narrow Viewports".
+
+**Tab filtering** — always fetch all data once, filter client-side with `useMemo`. Never create a separate `useQuery` per tab status. See `mingai-table-patterns.md` § "Tab Filter Pattern (Client-Side)".
+
+**Row-click interactions** — make entire rows clickable (`onClick` + `cursor-pointer`) and remove the Edit/View action button. Keep the Actions column only for destructive or lifecycle operations, with `e.stopPropagation()` on the action container. See `mingai-table-patterns.md` § "Row-Click Interaction Pattern".
+
+**`useInfiniteQuery` hook pattern** — see `mingai-table-patterns.md` § "Converting useQuery → useInfiniteQuery".
+
 ### Mobile Responsive (TA-036)
 
 ```tsx
 // KPI grids: start 1-col, expand
 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
 
-// Table columns: hide non-critical on mobile
-<th className="hidden sm:table-cell">Email</th>
-<td className="hidden sm:table-cell">{email}</td>
-
-// Table wrapper
-<div className="overflow-x-auto">
-  <table className="min-w-full">
-
 // Authoring-only screens: desktop recommended banner
 <div className="md:hidden rounded-card border border-warn/30 bg-warn-dim p-4 mb-4">
-  <p className="text-sm text-warn">Desktop recommended for this screen.</p>
+  <p className="text-body-default text-warn">Desktop recommended for this screen.</p>
 </div>
 ```
 
@@ -171,7 +217,8 @@ const isDirty =
 // transformTerm: definition = raw.full_form ?? ""
 
 // Available hooks:
-useGlossaryTerms(page, search, statusFilter);
+useGlossaryTerms(page, search, statusFilter);      // paginated (legacy)
+useInfiniteGlossaryTerms(search, statusFilter);    // infinite scroll — use this for TermList
 useCreateTerm(); // POST /api/v1/glossary
 useUpdateTerm(); // PATCH /api/v1/glossary/{id}
 useDeleteTerm(); // DELETE /api/v1/glossary/{id}
@@ -231,6 +278,14 @@ useEffect(() => {
 - `roles.sort()` without `.slice()` first (mutates state)
 - Calling `/api/v1/users` with search param (use `/api/v1/admin/users?search=...`)
 - **`text-sm` for body text** — use `text-body-default` (13px). `text-sm` = 14px, not in the design scale.
+- **Raw `<div className="overflow-x-auto">` table wrapper** — use `ScrollableTableWrapper` instead
+- **`<div ref={sentinelRef}>` directly inside `<tbody>`** — sentinel must be inside `<tr><td>`
+- **No `useCallback` on `handleIntersect`** — causes double-fetch on every render
+- **Separate `useQuery` per tab filter** — always fetch all data + `useMemo` filter client-side
+- **`colHide()` on `<th>` only, not `<td>`** — columns appear hidden in header but cells still render
+- **Edit/View action button when row-click exists** — remove the button; row click IS the interaction
+- **Action button inside clickable row without `e.stopPropagation()`** — triggers row click unintentionally
+- **`meta: { hideOnMobile: true }` (old binary pattern)** — use `meta: { hideBelow: "sm"|"md"|"lg" }` instead
 
 ## Backend API Contracts (frontend must match exactly)
 

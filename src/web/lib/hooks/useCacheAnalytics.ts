@@ -12,14 +12,28 @@ export interface TopHitPattern {
   count: number;
 }
 
+export interface CacheOverall {
+  hit_rate: number;
+  hits: number;
+  misses: number;
+  estimated_cost_saved_usd: number;
+}
+
+export interface CacheByType {
+  cache_type: string;
+  hit_rate: number;
+  hits: number;
+  misses: number;
+}
+
+/** Shape returned by GET /api/v1/platform/analytics/cache */
 export interface CacheStats {
-  hit_rate_pct: number | null;
-  miss_rate_pct: number | null;
-  avg_hit_latency_ms: number | null;
-  avg_miss_latency_ms: number | null;
-  total_cached_queries: number | null;
-  cache_size_mb: number | null;
-  top_hit_patterns: TopHitPattern[];
+  period: string;
+  overall: CacheOverall;
+  by_type: CacheByType[];
+  generated_at: string;
+  /** Legacy field — may be absent if not returned by this API version */
+  top_hit_patterns?: TopHitPattern[];
 }
 
 // ---------------------------------------------------------------------------

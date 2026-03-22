@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import type {
   PlatformIssue,
   IssueFilters,
@@ -189,71 +190,71 @@ export function IssueQueueTable({
   }
 
   return (
-    <div className="rounded-card border border-border bg-bg-surface">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-border">
-                {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="px-3.5 py-2.5 text-left">
-                    {header.isPlaceholder ? null : (
-                      <SortHeader
-                        label={
-                          typeof header.column.columnDef.header === "string"
-                            ? header.column.columnDef.header
-                            : header.id
-                        }
-                        canSort={header.column.getCanSort()}
-                        sorted={header.column.getIsSorted()}
-                        onClick={
-                          header.column.getToggleSortingHandler() as () => void
-                        }
-                      />
-                    )}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {isPending && <SkeletonRows />}
+    <ScrollableTableWrapper
+      footer={
+        data && data.length > 0 ? (
+          <div className="px-5 py-2.5">
+            <p className="font-mono text-data-value text-text-faint">
+              {data.length} issue{data.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        ) : undefined
+      }
+    >
+      <table className="w-full">
+        <thead className="sticky top-0 z-10 bg-bg-surface">
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id} className="border-b border-border">
+              {headerGroup.headers.map((header) => (
+                <th key={header.id} className="px-3.5 py-2.5 text-left">
+                  {header.isPlaceholder ? null : (
+                    <SortHeader
+                      label={
+                        typeof header.column.columnDef.header === "string"
+                          ? header.column.columnDef.header
+                          : header.id
+                      }
+                      canSort={header.column.getCanSort()}
+                      sorted={header.column.getIsSorted()}
+                      onClick={
+                        header.column.getToggleSortingHandler() as () => void
+                      }
+                    />
+                  )}
+                </th>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {isPending && <SkeletonRows />}
 
-            {data && data.length === 0 && (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
-                >
-                  No issues found matching the current filters.
-                </td>
-              </tr>
-            )}
-
-            {table.getRowModel().rows.map((row) => (
-              <tr
-                key={row.id}
-                onClick={() => onSelectIssue(row.original.id)}
-                className="cursor-pointer border-b border-border-faint transition-colors hover:bg-accent-dim"
+          {data && data.length === 0 && (
+            <tr>
+              <td
+                colSpan={columns.length}
+                className="px-3.5 py-12 text-center text-body-default text-text-faint"
               >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3.5 py-3">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                No issues found matching the current filters.
+              </td>
+            </tr>
+          )}
 
-      {data && data.length > 0 && (
-        <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-data-value text-text-faint">
-            {data.length} issue{data.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-      )}
-    </div>
+          {table.getRowModel().rows.map((row) => (
+            <tr
+              key={row.id}
+              onClick={() => onSelectIssue(row.original.id)}
+              className="cursor-pointer border-b border-border-faint transition-colors hover:bg-accent-dim"
+            >
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id} className="px-3.5 py-3">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </ScrollableTableWrapper>
   );
 }

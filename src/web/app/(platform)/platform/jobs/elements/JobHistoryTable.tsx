@@ -1,6 +1,7 @@
 "use client";
 
 import { JobStatusBadge } from "./JobStatusBadge";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import type { JobHistoryResponse } from "@/lib/hooks/useJobHistory";
 
 interface JobHistoryTableProps {
@@ -74,114 +75,97 @@ export function JobHistoryTable({
   const hasNext = data ? offset + data.items.length < totalCount : false;
 
   return (
-    <div className="rounded-card border border-border bg-bg-surface">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Job
-              </th>
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Started
-              </th>
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Duration
-              </th>
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Status
-              </th>
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Records
-              </th>
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Instance
-              </th>
-              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                Error
-              </th>
+    <ScrollableTableWrapper
+      footer={
+        <div className="px-4 py-3">
+          <span className="text-xs text-text-faint">
+            {totalCount > 0
+              ? `${offset + 1}–${Math.min(offset + limit, totalCount)} of ${totalCount}`
+              : "0 results"}
+          </span>
+        </div>
+      }
+    >
+      <table className="w-full">
+        <thead className="sticky top-0 z-10 bg-bg-surface">
+          <tr className="border-b border-border">
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Job
+            </th>
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Started
+            </th>
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Duration
+            </th>
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Status
+            </th>
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Records
+            </th>
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Instance
+            </th>
+            <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+              Error
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {isPending ? (
+            <SkeletonRows />
+          ) : !data || data.items.length === 0 ? (
+            <tr>
+              <td
+                colSpan={7}
+                className="px-3.5 py-8 text-center text-body-default text-text-faint"
+              >
+                No job history matches the current filters.
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {isPending ? (
-              <SkeletonRows />
-            ) : !data || data.items.length === 0 ? (
-              <tr>
+          ) : (
+            data.items.map((row) => (
+              <tr
+                key={row.id}
+                className={`border-b border-border-faint ${row.status === "running" ? "animate-pulse bg-accent-dim" : "hover:bg-accent-dim"}`}
+              >
+                <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
+                  {row.job_name}
+                </td>
+                <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
+                  {formatTimestamp(row.started_at)}
+                </td>
+                <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
+                  {formatDuration(row.duration_ms)}
+                </td>
+                <td className="px-3.5 py-3">
+                  <JobStatusBadge status={row.status} />
+                </td>
+                <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
+                  {row.records_processed ?? "—"}
+                </td>
                 <td
-                  colSpan={7}
-                  className="px-3.5 py-8 text-center text-body-default text-text-faint"
+                  className="px-3.5 py-3 font-mono text-data-value text-text-faint"
+                  title={row.instance_id ?? undefined}
                 >
-                  No job history matches the current filters.
+                  {row.instance_id
+                    ? row.instance_id.length > 20
+                      ? row.instance_id.slice(0, 20) + "…"
+                      : row.instance_id
+                    : "—"}
+                </td>
+                <td
+                  className="px-3.5 py-3 max-w-[200px] truncate font-mono text-data-value text-alert"
+                  title={row.error_message ?? undefined}
+                >
+                  {row.error_message ?? "—"}
                 </td>
               </tr>
-            ) : (
-              data.items.map((row) => (
-                <tr
-                  key={row.id}
-                  className={`border-b border-border-faint ${row.status === "running" ? "animate-pulse bg-accent-dim" : "hover:bg-accent-dim"}`}
-                >
-                  <td className="px-3.5 py-3 text-body-default font-medium text-text-primary">
-                    {row.job_name}
-                  </td>
-                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
-                    {formatTimestamp(row.started_at)}
-                  </td>
-                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
-                    {formatDuration(row.duration_ms)}
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <JobStatusBadge status={row.status} />
-                  </td>
-                  <td className="px-3.5 py-3 font-mono text-data-value text-text-muted">
-                    {row.records_processed ?? "—"}
-                  </td>
-                  <td
-                    className="px-3.5 py-3 font-mono text-data-value text-text-faint"
-                    title={row.instance_id ?? undefined}
-                  >
-                    {row.instance_id
-                      ? row.instance_id.length > 20
-                        ? row.instance_id.slice(0, 20) + "…"
-                        : row.instance_id
-                      : "—"}
-                  </td>
-                  <td
-                    className="px-3.5 py-3 max-w-[200px] truncate font-mono text-data-value text-alert"
-                    title={row.error_message ?? undefined}
-                  >
-                    {row.error_message ?? "—"}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination footer */}
-      <div className="flex items-center justify-between border-t border-border px-4 py-3">
-        <span className="text-xs text-text-faint">
-          {totalCount > 0
-            ? `${offset + 1}–${Math.min(offset + limit, totalCount)} of ${totalCount}`
-            : "0 results"}
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onOffsetChange(Math.max(0, offset - limit))}
-            disabled={!hasPrev}
-            className="rounded-control border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ← Prev
-          </button>
-          <button
-            onClick={() => onOffsetChange(offset + limit)}
-            disabled={!hasNext}
-            className="rounded-control border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Next →
-          </button>
-        </div>
-      </div>
-    </div>
+            ))
+          )}
+        </tbody>
+      </table>
+    </ScrollableTableWrapper>
   );
 }

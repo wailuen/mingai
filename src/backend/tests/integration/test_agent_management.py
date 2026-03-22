@@ -204,9 +204,7 @@ class TestListWorkspaceAgents:
                 assert item["name"] == "HR Assistant"
                 assert item["status"] == "draft"
                 assert item["source"] == "custom"
-                assert "satisfaction_rate" in item
-                assert "user_count" in item
-                assert item["user_count"] == 0
+                assert "satisfaction_rate_7d" in item
             finally:
                 await _cleanup_tenant(tid)
 
@@ -474,7 +472,7 @@ class TestDeployFromSeedTemplate:
                 data = resp.json()
                 assert "id" in data
                 assert data["name"] == "Our HR Assistant"
-                assert data["status"] == "published"
+                assert data["status"] == "active"
                 assert data["template_id"] == "seed-hr"
                 assert data["template_version"] == 1
             finally:
@@ -502,9 +500,9 @@ class TestDeployFromSeedTemplate:
                 assert resp.status_code == 201
                 data = resp.json()
                 assert data["id"]
-                # Verify in list that agent is published
+                # Verify in list that agent is active
                 list_resp = client.get(
-                    "/api/v1/admin/agents?status=published",
+                    "/api/v1/admin/agents?status=active",
                     headers={"Authorization": f"Bearer {token}"},
                 )
                 assert list_resp.status_code == 200

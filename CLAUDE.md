@@ -27,26 +27,35 @@ When you discover a missing feature, endpoint, or record — **implement or crea
 
 See `rules/e2e-god-mode.md` and `rules/no-stubs.md` for enforcement details.
 
-### 4. Mandatory Reviews
+### 4. Recommended Reviews
 
-- **Code review** (intermediate-reviewer) after EVERY file change — see `rules/agents.md` Rule 1
-- **Security review** (security-reviewer) before EVERY commit — NO exceptions — see `rules/agents.md` Rule 2
-- **NO MOCKING** in Tier 2/3 tests — use real infrastructure — see `rules/testing.md`
+- **Code review** (intermediate-reviewer) after file changes — see `rules/agents.md` Rule 1
+- **Security review** (security-reviewer) before commits — strongly recommended — see `rules/agents.md` Rule 2
+- **Real infrastructure preferred** in Tier 2/3 tests — see `rules/testing.md`
 
 ## Rules Index
 
-| Concern                               | Rule File                    | Scope                                                        |
-| ------------------------------------- | ---------------------------- | ------------------------------------------------------------ |
-| Agent orchestration & review mandates | `rules/agents.md`            | Global                                                       |
-| E2E god-mode testing                  | `rules/e2e-god-mode.md`      | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                |
-| API keys & model names                | `rules/env-models.md`        | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                     |
-| Git commits, branches, PRs            | `rules/git.md`               | Global                                                       |
-| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`          | Global                                                       |
-| Kailash SDK execution patterns        | `rules/patterns.md`          | `**/*.py`, `**/*.ts`, `**/*.js`                              |
-| Security (secrets, injection)         | `rules/security.md`          | Global                                                       |
-| 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`           | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`          |
-| Auto-generated workflow instincts     | `rules/learned-instincts.md` | Global                                                       |
-| Design system (Obsidian Intelligence) | `rules/design-system.md`     | `**/*.tsx`, `**/*.jsx`, `**/*.html`, `**/*.css`, `**/*.scss` |
+| Concern                               | Rule File                       | Scope                                                        |
+| ------------------------------------- | ------------------------------- | ------------------------------------------------------------ |
+| Agent orchestration & review mandates | `rules/agents.md`               | Global                                                       |
+| Branch protection policies            | `rules/branch-protection.md`    | Global                                                       |
+| Communication & response style        | `rules/communication.md`        | Global                                                       |
+| Deployment safety                     | `rules/deployment.md`           | Global                                                       |
+| Design system (Obsidian Intelligence) | `rules/design.md`               | `**/*.tsx`, `**/*.jsx`, `**/*.html`, `**/*.css`, `**/*.scss` |
+| Documentation standards               | `rules/documentation.md`        | Global                                                       |
+| EATP trust protocol                   | `rules/eatp.md`                 | Global                                                       |
+| E2E god-mode testing                  | `rules/e2e-god-mode.md`         | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                |
+| API keys & model names                | `rules/env-models.md`           | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                     |
+| Git commits, branches, PRs            | `rules/git.md`                  | Global                                                       |
+| Agent independence                    | `rules/independence.md`         | Global                                                       |
+| Infrastructure & SQL patterns         | `rules/infrastructure-sql.md`   | Global                                                       |
+| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`             | Global                                                       |
+| Kailash SDK execution patterns        | `rules/patterns.md`             | `**/*.py`, `**/*.ts`, `**/*.js`                              |
+| Security (secrets, injection)         | `rules/security.md`             | Global                                                       |
+| Terrene naming conventions            | `rules/terrene-naming.md`       | Global                                                       |
+| 3-tier testing, real infrastructure   | `rules/testing.md`              | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`          |
+| Trust plane security                  | `rules/trust-plane-security.md` | Global                                                       |
+| Zero-tolerance policies               | `rules/zero-tolerance.md`       | Global                                                       |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 

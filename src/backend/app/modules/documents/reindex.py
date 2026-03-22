@@ -107,7 +107,7 @@ async def _get_embedding_cost_per_token(tenant_id: str, db: AsyncSession) -> flo
             "FROM tenant_configs tc "
             "JOIN llm_library ll ON ll.id::text = tc.config_data->>'llm_library_id' "
             "WHERE tc.tenant_id = :tid AND tc.config_type = 'llm_config' "
-            "AND ll.status = 'Published' "
+            "AND ll.status = 'published' "
             "LIMIT 1"
         ),
         {"tid": tenant_id},

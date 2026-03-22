@@ -286,13 +286,20 @@ async def test_warming_job_creates_cache_entries(seed_tenant):
             await warm_embedding_cache()
 
     # Verify Redis keys exist for each query
+    from app.modules.chat.embedding import _deserialize_float16
+
     redis = get_redis()
     for q in queries:
-        cache_key = EmbeddingService._build_cache_key(tenant_id, q)
+        cache_key = EmbeddingService._build_cache_key(tenant_id, q, "text-embedding-3-small")
         cached = await redis.get(cache_key)
         assert cached is not None, f"Cache key should exist for query: {q}"
-        vector = json.loads(cached)
-        assert vector == _DEFAULT_VECTOR
+        # Cache is stored as float16 binary (not JSON); deserialize and compare approximately
+        # get_redis() uses decode_responses=True so binary data comes back as str; re-encode
+        raw = cached.encode("latin-1") if isinstance(cached, str) else cached
+        vector = _deserialize_float16(raw)
+        assert len(vector) == len(_DEFAULT_VECTOR), f"Vector length mismatch: {len(vector)} != {len(_DEFAULT_VECTOR)}"
+        for actual, expected in zip(vector, _DEFAULT_VECTOR):
+            assert abs(actual - expected) < 0.01, f"Vector value mismatch: {actual} != {expected}"
 
     # Verify the LLM was called for each query
     assert len(call_tracker) >= len(
@@ -335,17 +342,17 @@ async def test_warming_job_tenant_isolation(seed_tenant):
     redis = get_redis()
 
     # Tenant A's query should be cached under tenant A's key
-    key_a = EmbeddingService._build_cache_key(tenant_a_id, "tenant A question")
+    key_a = EmbeddingService._build_cache_key(tenant_a_id, "tenant A question", "text-embedding-3-small")
     cached_a = await redis.get(key_a)
     assert cached_a is not None, "Tenant A query should be cached"
 
     # Tenant B's query should be cached under tenant B's key
-    key_b = EmbeddingService._build_cache_key(tenant_b_id, "tenant B question")
+    key_b = EmbeddingService._build_cache_key(tenant_b_id, "tenant B question", "text-embedding-3-small")
     cached_b = await redis.get(key_b)
     assert cached_b is not None, "Tenant B query should be cached"
 
     # Cross-tenant: tenant A's key namespace should NOT have tenant B's query
-    cross_key = EmbeddingService._build_cache_key(tenant_a_id, "tenant B question")
+    cross_key = EmbeddingService._build_cache_key(tenant_a_id, "tenant B question", "text-embedding-3-small")
     cross_cached = await redis.get(cross_key)
     assert cross_cached is None, "Tenant A should not have tenant B's query cached"
 
@@ -384,7 +391,7 @@ async def test_warming_job_idempotent(seed_tenant):
 
             redis = get_redis()
             cache_key = EmbeddingService._build_cache_key(
-                tenant_id, "idempotent test query"
+                tenant_id, "idempotent test query", "text-embedding-3-small"
             )
             ttl_after_first = await redis.ttl(cache_key)
             assert ttl_after_first > 0, "TTL should be set after first run"
@@ -448,9 +455,9 @@ async def test_warming_job_continues_on_embed_failure(seed_tenant):
 
     # Verify the good queries were still cached
     redis = get_redis()
-    key_good1 = EmbeddingService._build_cache_key(tenant_id, "good query one")
-    key_good2 = EmbeddingService._build_cache_key(tenant_id, "good query two")
-    key_bad = EmbeddingService._build_cache_key(tenant_id, "bad query fails")
+    key_good1 = EmbeddingService._build_cache_key(tenant_id, "good query one", "text-embedding-3-small")
+    key_good2 = EmbeddingService._build_cache_key(tenant_id, "good query two", "text-embedding-3-small")
+    key_bad = EmbeddingService._build_cache_key(tenant_id, "bad query fails", "text-embedding-3-small")
 
     assert await redis.get(key_good1) is not None, "First good query should be cached"
     assert await redis.get(key_good2) is not None, "Second good query should be cached"

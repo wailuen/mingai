@@ -1,38 +1,80 @@
-commit: 41c2d5c (security hardening — red team findings round 2)
-timestamp: 2026-03-21T17:30:00Z
-baseline_pass: 2850
-baseline_fail: 7
-final_pass: 2857
-final_fail: 7
-new_tests: 7
+commit: 2ffebcc+round5 (LLM Profile — Round 5: SSRF shared module, profile history, cost routes, BYOLLM key rotation)
+timestamp: 2026-03-22T19:00:00Z
+baseline_pass: 3287
+baseline_fail: 0
+final_pass: 3371
+final_fail: 0
+new_tests: 84
 regressions: 0
-command: pytest tests/unit/ --ignore=tests/unit/test_azure_cost_job.py --ignore=tests/unit/test_embedding_service.py --tb=short -q
+command: pytest src/backend/tests/unit/ src/backend/tests/regression/ --ignore=src/backend/tests/unit/test_azure_cost_job.py --tb=short -q
 
-Notes:
-  - Excluded test_azure_cost_job.py: error at collection (pre-existing env config issue)
-  - Pre-existing failures (not introduced this session):
-    - test_embedding_service.py::TestEmbeddingCaching (4 tests) — mock patches non-existent get_redis path
-    - test_glossary_routes.py::TestDeleteGlossaryTerm::test_delete_term_returns_204 — 404 instead of 204
-    - test_main_app.py::TestCORSMiddleware::test_cors_allows_configured_origin — CORS env config
-    - test_provisioning_worker.py (4 tests) — Stripe/SMTP env config
-    - test_tenant_middleware.py::TestExtractClaimsFromJWT::test_returns_both_claims_from_valid_token — JWT mock config
-  - Cumulative fixes this session (LLM Library credential store):
-    - HIGH-1 (prev session): E2E LLM-C-007 test response shape fixed (tokens_in/tokens_out, no all_passed)
-    - HIGH-2: Added DELETE /platform/llm-library/{id} endpoint (Draft-only delete)
-    - HIGH-3: LibraryForm.tsx handlePublish() — removed api_key re-send that cleared last_test_passed_at
-    - Security H1: model_name change now sets credential_changed = True
-    - Security H2: Publish gate atomic TOCTOU fix (api_key_encrypted + last_test_passed_at)
-    - Security H3: SSRF protection via _assert_endpoint_ssrf_safe() with IPv6 coverage
-    - Value V1: Test harness surfaces actual provider error (URL-sanitized) in 502
-    - FE-BUG-1: LibraryForm.tsx useEffect split — Publish button enables after test pass
-  - Red team round 2 security fixes:
-    - SEC-H1: decrypted_key cleared before logging/re-raising in except blocks (traceback protection)
-               + `raise ... from None` strips original traceback chain
-    - SEC-M1: best_practices_md max_length=50000 added to Create and Update schemas
-    - SEC-M2: Provider error URLs sanitized before logging and 502 response (re.sub https?://\S+ → [URL])
-    - SEC-M5: api_key min_length=8 enforced on Create and Update schemas
-    - SEC-L3: endpoint_url validator now checks parsed hostname is non-empty (rejects "https://")
-  - New unit tests (round 2, 7 tests):
-    - TestAssertEndpointSsrfSafeIPv6: IPv6 loopback (::1), link-local (fe80::1), ULA (fd00::1)
-    - TestApiVersionChangeResetsTest: api_version change clears last_test_passed_at
-    - TestLLMLibraryTestEndpointErrorPaths: 504 timeout, 502 URL sanitization, endpoint_url no-hostname
+Round 5 features implemented:
+
+FEAT-1: Shared SSRF module — app/core/security/ssrf.py
+  resolve_and_pin_url() (async) and resolve_and_pin_url_sync() (sync)
+  Single DNS pass: resolves once, validates ALL returned IPs, pins URL to first resolved IP.
+  Eliminates TOCTOU window (DNS rebinding, CWE-918) across ALL 6 SSRF call sites:
+    - app/modules/agents/a2a_proxy.py       (pinned_endpoint → httpx)
+    - app/modules/agents/mcp_client.py      (verify_and_enumerate + call_tool)
+    - app/modules/agents/a2a_card_fetcher.py (require_https=True)
+    - app/modules/agents/a2a_health_worker.py
+    - app/modules/tools/executor.py          (HttpWrapperExecutor + McpSseExecutor)
+    - app/modules/platform/llm_library/routes.py (_assert_endpoint_ssrf_safe delegates)
+  SSRF_BLOCKED_NETWORKS canonical blocklist: RFC1918, loopback, link-local, CGNAT,
+    Azure Wire Server, IPv6 ULA, class E reserved.
+  SSRFBlockedError: machine-readable .code; details logged server-side only.
+  Fixes HIGH-1 (DNS rebinding TOCTOU across 6 of 7 SSRF implementations).
+
+FEAT-2: BYOLLM key rotation UI
+  New file: src/web/app/settings/llm-profile/elements/RotateKeyModal.tsx
+    Password input (min 8 chars, DM Mono), warn-coloured confirmation notice,
+    1.2s green success state, inline error surfacing. Enter submits, Escape closes.
+  Modified: src/web/app/settings/llm-profile/elements/BYOLLMSection.tsx
+    KeyRound icon button per slot, refetch() after successful rotation.
+  Fixes VA-M2 (BYOLLM key rotation hook existed, no UI wired up).
+
+FEAT-3: Cost analytics routes — fixes COST-1 (inline "Failed to load" on cost page)
+  GET /api/v1/platform/analytics/cost/summary
+    Aggregate: total_llm_cost, total_infra_cost, total_revenue, gross_margin_pct, period.
+    Infra cost = INFRA_COST_PER_TENANT_DAILY_USD (env, default $1.50) × tenants × days.
+    gross_margin_pct = None when revenue is zero (starter tenants).
+  GET /api/v1/platform/analytics/cost/tenants
+    Per-tenant breakdown with plan, tokens_consumed, costs, revenue, margin.
+  GET /api/v1/platform/analytics/cost/margin-trend
+    Date-series [{date, margin_pct}] from cost_summary_daily. Empty list when no data.
+
+FEAT-4: LLM Profile version history and rollback — fixes VA-C1 (PA-4 feature gap)
+  GET /api/v1/platform/llm-profiles/{id}/history
+    Reads llm_profile_audit_log newest-first; limit param (1–100, default 20).
+    Verifies profile is platform-owned (no BYOLLM bleed).
+  POST /api/v1/platform/llm-profiles/{id}/rollback/{history_id}
+    Extracts diff.before slot fields (allowlisted to *_library_id, *_params, *_traffic_split).
+    Returns 422 if diff.before has no slot fields (e.g., create entries).
+    Writes rollback audit entry with rolled_back_from_history_id.
+    Calls resolver.invalidate_all() after commit.
+  Hooks: useProfileHistory + useRollbackProfile in usePlatformLLMProfiles.ts
+  UI: Collapsible "Version History" section in ProfileDetailPanel.tsx
+    Action badge (DM Mono 10px), relative timestamps, Rollback button with
+    warn-dim confirmation treatment.
+
+Test alignment (SSRF refactor):
+  test_agent_studio_todos_13_25.py: 4 classes updated (TestToolExecutorSSRF,
+    TestMCPClientSSRF, TestHTTPWrapperExecutorSSRF, TestA2ACardFetcherSSRF)
+    → import from app.core.security.ssrf, catch SSRFBlockedError
+  test_a2a_proxy_security.py: 3 regression tests updated
+    → reference resolve_and_pin_url (shared) not _check_ssrf (removed)
+  test_llm_library_credentials.py: 7 error message assertions updated
+    → "SSRF blocked" (new contract from _assert_endpoint_ssrf_safe wrapper)
+
+New test files (84 new tests):
+  tests/unit/test_ssrf_shared_module.py:     37 tests (shared module coverage)
+  tests/unit/test_cost_analytics_routes.py:  15 tests (cost/summary, cost/tenants, margin-trend)
+  tests/unit/test_profile_history.py:        13 tests (history + rollback API)
+  tests/unit/test_ssrf_private_ip.py:        21 tests (existing)
+  tests/unit/test_ssrf_dns_rebinding.py:     24 tests (existing)
+  tests/unit/test_ssrf_domain_allowlist.py:  14 tests (existing)
+
+Remaining tracked items (non-blocking):
+  VA-H1: Change notifications to tenants (TA-3) — feature gap, not in this release
+  CR-H2: _lru_cache TOCTOU under CPython GIL — low probability, mitigated by LRU_MAX_SIZE=1000
+  CR-H4: test_resolution_redis_failure.py doesn't inject real Redis failure

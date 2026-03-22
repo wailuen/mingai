@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import math
 import os
+import re
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -24,8 +24,15 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 import app.core.redis_client as redis_client_module
-from app.core.redis_client import get_redis
-from app.modules.chat.embedding import EMBEDDING_CACHE_TTL_SECONDS, EmbeddingService
+from app.core.redis_client import get_redis_binary
+from app.modules.chat.embedding import (
+    EMBEDDING_CACHE_TTL_SECONDS,
+    EmbeddingService,
+    _deserialize_float16,
+)
+
+# Model used in the embedding_service fixture
+_FIXTURE_MODEL = "text-embedding-3-small"
 
 
 def _unique_tenant() -> str:
@@ -51,14 +58,25 @@ def _make_embedding_response(vector: list[float]):
     return SimpleNamespace(data=[embedding_obj])
 
 
+def _approx_equal(a: list[float], b: list[float], tol: float = 0.01) -> bool:
+    """Compare two float vectors approximately (needed for float16 precision)."""
+    if len(a) != len(b):
+        return False
+    return all(abs(x - y) < tol for x, y in zip(a, b))
+
+
 @pytest.fixture(autouse=True)
 async def _reset_redis_pool():
     """Reset Redis pool per test to avoid event loop binding issues."""
     redis_client_module._redis_pool = None
+    redis_client_module._redis_binary_pool = None
     yield
     if redis_client_module._redis_pool is not None:
         await redis_client_module._redis_pool.aclose()
         redis_client_module._redis_pool = None
+    if redis_client_module._redis_binary_pool is not None:
+        await redis_client_module._redis_binary_pool.aclose()
+        redis_client_module._redis_binary_pool = None
 
 
 @pytest.fixture
@@ -84,7 +102,7 @@ def embedding_service(mock_openai_client):
         os.environ,
         {
             "CLOUD_PROVIDER": "local",
-            "EMBEDDING_MODEL": "text-embedding-3-small",
+            "EMBEDDING_MODEL": _FIXTURE_MODEL,
             "OPENAI_API_KEY": "sk-test-not-real-key-for-integration-tests",
         },
     ):
@@ -108,18 +126,24 @@ async def test_cache_miss_stores_result_in_redis(embedding_service, mock_openai_
     # LLM was called exactly once
     mock_openai_client.embeddings.create.assert_called_once()
 
-    # Result matches our known vector
-    assert result == _KNOWN_VECTOR
+    # Result matches our known vector (approximately — float16 precision loss)
+    assert _approx_equal(result, _KNOWN_VECTOR), (
+        f"Result vector should approximately match known vector"
+    )
 
-    # Verify Redis has the cached value
-    redis = get_redis()
-    cache_key = EmbeddingService._build_cache_key(tenant_id, text_input)
+    # Verify Redis has the cached value (binary pool — cache uses float16 bytes)
+    redis = get_redis_binary()
+    cache_key = EmbeddingService._build_cache_key(
+        tenant_id, text_input, embedding_service._model
+    )
     cached_raw = await redis.get(cache_key)
-    assert (
-        cached_raw is not None
-    ), "Embedding should be cached in Redis after first call"
-    cached_vector = json.loads(cached_raw)
-    assert cached_vector == _KNOWN_VECTOR
+    assert cached_raw is not None, "Embedding should be cached in Redis after first call"
+
+    # Cache is stored as float16 binary — deserialize and compare approximately
+    cached_vector = _deserialize_float16(cached_raw)
+    assert _approx_equal(cached_vector, _KNOWN_VECTOR), (
+        "Cached vector should approximately match known vector"
+    )
 
     # Cleanup
     await redis.delete(cache_key)
@@ -147,11 +171,13 @@ async def test_cache_hit_returns_from_redis_no_llm_call(
         mock_openai_client.embeddings.create.call_count == 1
     ), "LLM should not be called on cache hit"
 
-    assert result1 == result2
+    assert _approx_equal(result1, result2), "Both calls should return same vector"
 
     # Cleanup
-    redis = get_redis()
-    cache_key = EmbeddingService._build_cache_key(tenant_id, text_input)
+    redis = get_redis_binary()
+    cache_key = EmbeddingService._build_cache_key(
+        tenant_id, text_input, embedding_service._model
+    )
     await redis.delete(cache_key)
 
 
@@ -179,11 +205,12 @@ async def test_cache_key_includes_tenant_isolation(
     ), "LLM should be called once per tenant (different cache keys)"
 
     # Verify different Redis keys
-    key_a = EmbeddingService._build_cache_key(tenant_a, text_input)
-    key_b = EmbeddingService._build_cache_key(tenant_b, text_input)
+    model = embedding_service._model
+    key_a = EmbeddingService._build_cache_key(tenant_a, text_input, model)
+    key_b = EmbeddingService._build_cache_key(tenant_b, text_input, model)
     assert key_a != key_b, "Cache keys for different tenants must differ"
 
-    redis = get_redis()
+    redis = get_redis_binary()
     assert await redis.get(key_a) is not None
     assert await redis.get(key_b) is not None
 
@@ -192,50 +219,56 @@ async def test_cache_key_includes_tenant_isolation(
 
 
 # =========================================================================
-# TEST-011-04: Cache key includes model version
+# TEST-011-04: Cache key structure validation
 # =========================================================================
 
 
-async def test_cache_key_includes_model_in_hash():
+async def test_cache_key_includes_model_in_hash(embedding_service):
     """
-    The cache key is built from tenant_id + text hash. If the model changes,
-    the EmbeddingService instance changes, but the cache key format uses
-    the text content hash. Verify that the key structure is deterministic
-    and based on the text content (model isolation is handled by cache
-    invalidation on model change, not by key structure).
+    The cache key format is: mingai:{tenant_id}:emb:{safe_model_id}:{sha256(text)}
+    Verify that the key structure is deterministic and contains the model.
     """
     tenant_id = _unique_tenant()
     text_input = "What are the pricing tiers?"
+    model = embedding_service._model  # "text-embedding-3-small"
 
-    key = EmbeddingService._build_cache_key(tenant_id, text_input)
+    key = EmbeddingService._build_cache_key(tenant_id, text_input, model)
 
-    # Key format: mingai:{tenant_id}:embedding_cache:{sha256[:16]}
-    expected_hash = hashlib.sha256(text_input.encode()).hexdigest()[:16]
-    expected_key = f"mingai:{tenant_id}:embedding_cache:{expected_hash}"
-    assert key == expected_key
+    # Key format: mingai:{tenant_id}:emb:{safe_model_id}:{sha256_hex}
+    expected_hash = hashlib.sha256(text_input.encode()).hexdigest()
+    # The model is sanitized: hyphens/dots stay, other special chars become _
+    assert key.startswith(f"mingai:{tenant_id}:emb:")
+    assert key.endswith(f":{expected_hash}")
+    assert "text-embedding-3-small" in key or "text_embedding_3_small" in key
 
     # Different text -> different key
-    key2 = EmbeddingService._build_cache_key(tenant_id, "Different text entirely")
+    key2 = EmbeddingService._build_cache_key(tenant_id, "Different text entirely", model)
     assert key != key2, "Different texts must produce different cache keys"
+
+    # Different model -> different key
+    key3 = EmbeddingService._build_cache_key(tenant_id, text_input, "other-model")
+    assert key != key3, "Different models must produce different cache keys"
 
 
 # =========================================================================
-# TEST-011-05: 24-hour TTL set
+# TEST-011-05: 7-day TTL set (CACHE-002: changed from 24h to 7 days)
 # =========================================================================
 
 
 async def test_24_hour_ttl_set_after_cache_write(embedding_service, mock_openai_client):
-    """After caching an embedding, Redis TTL is approximately 86400 seconds."""
+    """After caching an embedding, Redis TTL is approximately EMBEDDING_CACHE_TTL_SECONDS."""
     tenant_id = _unique_tenant()
     text_input = "TTL verification query"
 
     await embedding_service.embed(text_input, tenant_id=tenant_id)
 
-    redis = get_redis()
-    cache_key = EmbeddingService._build_cache_key(tenant_id, text_input)
+    redis = get_redis_binary()
+    cache_key = EmbeddingService._build_cache_key(
+        tenant_id, text_input, embedding_service._model
+    )
     ttl = await redis.ttl(cache_key)
 
-    # TTL should be close to 86400 (allow 10s tolerance for test execution time)
+    # TTL should be close to EMBEDDING_CACHE_TTL_SECONDS (allow 10s tolerance)
     assert ttl > 0, "TTL should be positive"
     assert (
         abs(ttl - EMBEDDING_CACHE_TTL_SECONDS) < 10
@@ -255,9 +288,8 @@ async def test_float16_roundtrip_precision(embedding_service, mock_openai_client
     Store a known float32 vector via the embedding service, retrieve it
     from Redis cache, and verify cosine distance from original is < 0.001.
 
-    Note: the current EmbeddingService stores vectors as JSON (float64),
-    so precision should be exact. This test validates the round-trip
-    regardless of any future compression changes.
+    Note: the EmbeddingService stores vectors as float16 binary, so there is
+    some precision loss. The round-trip cosine distance should still be < 0.001.
     """
     tenant_id = _unique_tenant()
     text_input = "Precision test query"
@@ -307,8 +339,10 @@ async def test_float16_roundtrip_precision(embedding_service, mock_openai_client
     ), f"Cosine distance after round-trip should be < 0.001, got {distance}"
 
     # Cleanup
-    redis = get_redis()
-    cache_key = EmbeddingService._build_cache_key(tenant_id, text_input)
+    redis = get_redis_binary()
+    cache_key = EmbeddingService._build_cache_key(
+        tenant_id, text_input, embedding_service._model
+    )
     await redis.delete(cache_key)
 
 
@@ -322,13 +356,15 @@ async def test_cache_expiry_returns_miss(embedding_service, mock_openai_client):
     tenant_id = _unique_tenant()
     text_input = "Expiry test query"
 
-    # First call caches with default 24h TTL
+    # First call caches with default TTL
     await embedding_service.embed(text_input, tenant_id=tenant_id)
     assert mock_openai_client.embeddings.create.call_count == 1
 
     # Manually override the TTL to 1 second
-    redis = get_redis()
-    cache_key = EmbeddingService._build_cache_key(tenant_id, text_input)
+    redis = get_redis_binary()
+    cache_key = EmbeddingService._build_cache_key(
+        tenant_id, text_input, embedding_service._model
+    )
     await redis.expire(cache_key, 1)
 
     # Wait for expiry
@@ -392,15 +428,17 @@ async def test_batch_embedding_caches_individually(
     assert call_index == 3
 
     # Verify each is cached individually in Redis
-    redis = get_redis()
+    redis = get_redis_binary()
+    model = embedding_service._model
     for t in texts:
-        cache_key = EmbeddingService._build_cache_key(tenant_id, t)
+        cache_key = EmbeddingService._build_cache_key(tenant_id, t, model)
         cached_raw = await redis.get(cache_key)
         assert cached_raw is not None, f"Text '{t}' should be cached"
-        cached_vector = json.loads(cached_raw)
-        assert (
-            cached_vector == vectors[t]
-        ), f"Cached vector for '{t}' should match the original"
+        # Deserialize float16 binary and compare approximately
+        cached_vector = _deserialize_float16(cached_raw)
+        assert _approx_equal(cached_vector, vectors[t]), (
+            f"Cached vector for '{t}' should approximately match the original"
+        )
 
     # Verify cache hits on second pass
     mock_openai_client.embeddings.create.side_effect = None
@@ -408,11 +446,13 @@ async def test_batch_embedding_caches_individually(
 
     for t in texts:
         result = await embedding_service.embed(t, tenant_id=tenant_id)
-        assert result == vectors[t]
+        assert _approx_equal(result, vectors[t]), (
+            f"Cache hit for '{t}' should return approximately correct vector"
+        )
 
     mock_openai_client.embeddings.create.assert_not_called()
 
     # Cleanup
     for t in texts:
-        cache_key = EmbeddingService._build_cache_key(tenant_id, t)
+        cache_key = EmbeddingService._build_cache_key(tenant_id, t, model)
         await redis.delete(cache_key)

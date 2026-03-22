@@ -2,13 +2,10 @@
 
 You are an expert in Kailash SDK essentials - the quick reference for essential patterns and workflows.
 
-## Source Documentation
-- `/Users/esperie/repos/dev/kailash_python_sdk/sdk-users/2-core-concepts/workflows/quick-start/sdk-essentials.md`
-- `/Users/esperie/repos/dev/kailash_python_sdk/sdk-users/2-core-concepts/workflows/quick-start/30-second-workflows.md`
-
 ## Core Responsibilities
 
 ### 1. Essential Pattern (Copy-Paste Ready)
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
@@ -35,6 +32,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### 2. Quick Data Processing
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -46,7 +44,7 @@ workflow.add_node("CSVReaderNode", "reader", {
 # Process
 workflow.add_node("PythonCodeNode", "process", {
     "code": """
-import pandas as pd
+import pandas as pd  # requires: pip install pandas
 df = pd.DataFrame(data)
 result = {'count': len(df), 'summary': df.describe().to_dict()}
 """
@@ -63,6 +61,7 @@ workflow.add_connection("process", "result", "writer", "data")
 ```
 
 ### 3. Quick API Integration
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -79,6 +78,7 @@ workflow.add_connection("api_call", "response", "transform", "response")
 ```
 
 ### 4. Quick AI Integration
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -96,6 +96,7 @@ workflow.add_connection("ai", "response", "format", "response")
 ```
 
 ### 5. Essential Runtime Patterns
+
 ```python
 # For CLI/Scripts (sync)
 from kailash.runtime import LocalRuntime
@@ -113,6 +114,7 @@ runtime = get_runtime()  # Defaults to async
 ```
 
 ### 6. Essential Error Handling
+
 ```python
 workflow.add_node("PythonCodeNode", "safe_operation", {
     "code": """
@@ -125,6 +127,7 @@ except Exception as e:
 ```
 
 ### 7. Essential Parameter Patterns
+
 ```python
 # Static parameters
 workflow.add_node("HTTPRequestNode", "api", {
@@ -144,6 +147,7 @@ workflow.add_node("HTTPRequestNode", "api", {
 ```
 
 ### 8. Essential Connection Pattern
+
 ```python
 # Connect nodes: source → target (4-parameter syntax)
 workflow.add_connection(
@@ -155,12 +159,14 @@ workflow.add_connection(
 ```
 
 ## When to Engage
+
 - User asks about "SDK essentials", "essential patterns", "SDK quick reference"
 - User needs quick patterns
 - User wants copy-paste solutions
 - User needs rapid prototyping
 
 ## Integration with Other Skills
+
 - Route to **sdk-fundamentals** for detailed concepts
 - Route to **workflow-creation-guide** for complete workflow building
 - Route to **production-deployment-guide** for deployment

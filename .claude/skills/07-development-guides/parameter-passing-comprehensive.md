@@ -2,9 +2,6 @@
 
 Enterprise parameter passing patterns for Kailash SDK with security and governance.
 
-## Source Documentation
-- `/Users/esperie/repos/dev/kailash_python_sdk/sdk-users/7-gold-standards/parameter_passing_comprehensive.md`
-
 ## Core Patterns
 
 ### 1. Three Ways to Pass Parameters

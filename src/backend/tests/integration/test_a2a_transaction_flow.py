@@ -136,7 +136,7 @@ def test_env():
                 "INSERT INTO agent_cards "
                 "(id, tenant_id, name, description, system_prompt, status, version, "
                 "created_by, trust_score, kyb_level) "
-                "VALUES (:id, :tid, :name, :desc, :prompt, 'published', 1, :uid, 50, 2)",
+                "VALUES (:id, :tid, :name, :desc, :prompt, 'published', 1, :uid, 50, 'none')",
                 {
                     "id": aid,
                     "tid": tid,

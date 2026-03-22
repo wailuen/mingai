@@ -4,6 +4,7 @@ import {
   useTopCachedQueries,
   type CachePeriod,
 } from "@/lib/hooks/useCacheAnalytics";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 interface TopQueriesTableProps {
   period: CachePeriod;
@@ -63,9 +64,12 @@ export function TopQueriesTable({ period }: TopQueriesTableProps) {
           Query hashes shown for privacy. Full queries are not stored.
         </p>
       </div>
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        maxHeight="none"
+        className="rounded-none border-0"
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
                 Query Hash
@@ -91,7 +95,7 @@ export function TopQueriesTable({ period }: TopQueriesTableProps) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

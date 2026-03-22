@@ -19,6 +19,7 @@ Endpoints (admin router /admin/agents):
 Seed templates are hardcoded and always available. DB templates come from agent_cards table.
 Platform templates are stored in agent_cards under PLATFORM_TENANT_ID.
 """
+import hashlib
 import json
 import os
 import re
@@ -399,6 +400,13 @@ async def get_agent_template_db(
     template_id: str, tenant_id: str, db: AsyncSession
 ) -> Optional[dict]:
     """Fetch a single agent_cards template by id and tenant_id."""
+    import uuid as _uuid_mod
+
+    try:
+        _uuid_mod.UUID(template_id)
+    except ValueError:
+        return None
+
     result = await db.execute(
         text(
             "SELECT id, name, description, system_prompt, capabilities, status, version, created_at "
@@ -1253,9 +1261,15 @@ async def deploy_from_library_db(
     created_by: str,
     db: AsyncSession,
     access_mode: str = "workspace_wide",
+    kb_ids: Optional[List[str]] = None,
 ) -> dict:
     """Create a new published agent from a library or seed template (API-073)."""
     agent_id = str(uuid.uuid4())
+    # Per ADR-01: kb_ids are stored inside the capabilities JSONB (no join table).
+    # Normalise capabilities to a dict so kb_ids can coexist with feature_tags.
+    if isinstance(capabilities, list):
+        capabilities = {"feature_tags": capabilities}
+    capabilities["kb_ids"] = list(kb_ids or [])
     capabilities_json = json.dumps(capabilities)
     await db.execute(
         text(
@@ -1804,6 +1818,7 @@ async def deploy_from_library(
         created_by=current_user.id,
         db=session,
         access_mode=body.access_mode,
+        kb_ids=body.kb_ids,
     )
 
     # ATA-025: store credentials to vault (agent_id is now available after INSERT)
@@ -2207,6 +2222,29 @@ async def test_agent(
 
     latency_ms = int((time.monotonic() - start_ms) * 1000)
 
+    # Write last_tested_at so publish gate can verify the agent was tested.
+    await session.execute(
+        text(
+            "UPDATE agent_cards SET last_tested_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="agent_test_run",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={
+            "mode": "test",
+            "test_as_user_id": current_user.id,
+            "query_preview": body.query[:100],
+        },
+        db=session,
+    )
+
     logger.info(
         "agent_test_completed",
         agent_id=agent_id,
@@ -2344,3 +2382,1207 @@ async def list_agents_for_user(
         total=result["total"],
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# TODO-18: Custom Agent Studio endpoints
+# POST /admin/agents/studio/create       — create custom agent with skills+tools
+# PUT  /admin/agents/studio/{id}         — update with ETag/If-Match concurrency
+# POST /admin/agents/studio/{id}/test    — test with audit log mode='test'
+# POST /admin/agents/studio/{id}/publish — publish + access_control + cache inv.
+# ---------------------------------------------------------------------------
+
+# studio_router is registered under admin_router prefix /admin/agents
+studio_router = APIRouter(prefix="/admin/agents/studio", tags=["admin-agents-studio"])
+
+
+class SkillAttachment(BaseModel):
+    """A skill attached to a custom agent, with optional pipeline trigger override."""
+    skill_id: str = Field(..., min_length=1, max_length=255)
+    invocation_override: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Custom pipeline_trigger value overriding the skill's default.",
+    )
+
+
+class CreateCustomAgentRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+    icon: Optional[str] = Field(None, max_length=100)
+    system_prompt: str = Field(..., min_length=1, max_length=3000)
+    kb_ids: List[str] = Field(default_factory=list)
+    attached_skills: List[SkillAttachment] = Field(default_factory=list)
+    attached_tools: List[str] = Field(default_factory=list)  # tool catalog IDs
+    guardrails: GuardrailsSchema = Field(default_factory=GuardrailsSchema)
+    access_rules: Optional[dict] = None
+
+
+class UpdateCustomAgentRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+    icon: Optional[str] = Field(None, max_length=100)
+    system_prompt: Optional[str] = Field(None, max_length=3000)
+    kb_ids: Optional[List[str]] = None
+    attached_skills: Optional[List[SkillAttachment]] = None
+    attached_tools: Optional[List[str]] = None
+    guardrails: Optional[GuardrailsSchema] = None
+
+
+class StudioPublishRequest(BaseModel):
+    access_rules: Optional[dict] = None  # {mode, allowed_roles, allowed_user_ids}
+
+
+async def _validate_skill_ids_for_tenant(
+    skill_ids: List[str], tenant_id: str, db: AsyncSession
+) -> None:
+    """
+    Validate that all skill_ids are accessible to the tenant:
+    - platform skills the tenant has adopted (in tenant_skill_adoptions)
+    - tenant-authored skills with status='published' belonging to this tenant
+
+    Raises HTTPException 403 if any skill is not accessible.
+    """
+    if not skill_ids:
+        return
+    for sid in skill_ids:
+        if not _UUID_RE.match(str(sid)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"skill_id '{sid}' is not a valid UUID.",
+            )
+    skill_ids_str = [str(s) for s in skill_ids]
+    # Check platform-adopted skills OR tenant-owned published skills
+    result = await db.execute(
+        text(
+            "SELECT id FROM skills "
+            "WHERE id = ANY(CAST(:ids AS uuid[])) "
+            "AND ("
+            "  (tenant_id IS NULL AND EXISTS ("
+            "    SELECT 1 FROM tenant_skill_adoptions tsa "
+            "    WHERE tsa.skill_id = skills.id AND tsa.tenant_id = :tenant_id"
+            "  ))"
+            "  OR (tenant_id = :tenant_id AND status = 'published')"
+            ")"
+        ),
+        {"ids": skill_ids_str, "tenant_id": tenant_id},
+    )
+    found_ids = {str(r[0]) for r in result.fetchall()}
+    missing = [s for s in skill_ids_str if s not in found_ids]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="One or more skill_ids are not accessible to this tenant.",
+        )
+
+
+async def _validate_tool_ids_for_tenant(
+    tool_ids: List[str], tenant_id: str, db: AsyncSession
+) -> None:
+    """
+    Validate that all tool_ids are accessible to the tenant:
+    - platform-scoped tools (tenant_id IS NULL)
+    - tenant-scoped tools belonging to this tenant
+
+    Raises HTTPException 403 if any tool is not accessible.
+    """
+    if not tool_ids:
+        return
+    for tid in tool_ids:
+        if not _UUID_RE.match(str(tid)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"tool_id '{tid}' is not a valid UUID.",
+            )
+    tool_ids_str = [str(t) for t in tool_ids]
+    result = await db.execute(
+        text(
+            "SELECT id FROM tool_catalog "
+            "WHERE id = ANY(CAST(:ids AS uuid[])) "
+            "AND (tenant_id IS NULL OR tenant_id = :tenant_id)"
+        ),
+        {"ids": tool_ids_str, "tenant_id": tenant_id},
+    )
+    found_ids = {str(r[0]) for r in result.fetchall()}
+    missing = [t for t in tool_ids_str if t not in found_ids]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="One or more tool_ids are not accessible to this tenant.",
+        )
+
+
+def _compute_template_type(
+    attached_skills: List[SkillAttachment],
+    attached_tools: List[str],
+) -> str:
+    """Derive template_type from skill/tool attachments."""
+    if attached_tools:
+        return "tool_augmented"
+    if attached_skills:
+        return "skill_augmented"
+    return "rag"
+
+
+async def _upsert_agent_skill_attachments(
+    agent_id: str,
+    tenant_id: str,
+    attached_skills: List[SkillAttachment],
+    db: AsyncSession,
+) -> None:
+    """
+    Persist skill attachments into agent_template_skills.
+    Deletes all existing rows for this agent then re-inserts (simpler than diff).
+    Invocation overrides stored in invocation_override JSONB column.
+    """
+    # Delete existing skill associations for this agent
+    await db.execute(
+        text(
+            "DELETE FROM agent_template_skills "
+            "WHERE agent_id = CAST(:agent_id AS uuid) AND tenant_id = :tenant_id"
+        ),
+        {"agent_id": agent_id, "tenant_id": tenant_id},
+    )
+    for attachment in attached_skills:
+        override_json: Optional[str] = None
+        if attachment.invocation_override is not None:
+            override_json = json.dumps(
+                {"pipeline_trigger": attachment.invocation_override}
+            )
+        await db.execute(
+            text(
+                "INSERT INTO agent_template_skills "
+                "(agent_id, skill_id, tenant_id, invocation_override) "
+                "VALUES (CAST(:agent_id AS uuid), CAST(:skill_id AS uuid), "
+                ":tenant_id, CAST(:override AS jsonb))"
+            ),
+            {
+                "agent_id": agent_id,
+                "skill_id": attachment.skill_id,
+                "tenant_id": tenant_id,
+                "override": override_json,
+            },
+        )
+
+
+async def _invalidate_agent_cache(
+    agent_id: str, tenant_id: str, redis_client=None
+) -> None:
+    """
+    Publish a Redis Pub/Sub cache invalidation event for the agent.
+    Fail-open: if Redis is unavailable, log a warning and continue.
+    """
+    try:
+        from app.core.redis_client import build_redis_key
+
+        channel = build_redis_key(tenant_id, "agent_invalidation", agent_id)
+        if redis_client is not None:
+            await redis_client.publish(channel, json.dumps({"agent_id": agent_id}))
+    except Exception as exc:
+        logger.warning(
+            "agent_cache_invalidation_failed",
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            error=str(exc),
+        )
+
+
+@studio_router.post("/create", status_code=status.HTTP_201_CREATED)
+async def create_custom_agent(
+    body: CreateCustomAgentRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-18: Create a custom agent from scratch with skills/tools/guardrails.
+
+    - Runs SystemPromptValidator on system_prompt before INSERT
+    - Validates all skill IDs accessible to tenant
+    - Validates all tool IDs accessible to tenant
+    - Persists skill attachments with invocation_override into agent_template_skills
+    - Persists tool IDs into agent_cards.attached_tools JSONB
+    - Sets template_type based on skills/tools presence
+    """
+    from app.modules.agents.prompt_validator import SKILL_PROMPT_MAX_CHARS, validate_prompt
+
+    # 1. SystemPromptValidator — 422 on violation
+    pv_result = validate_prompt(body.system_prompt, max_chars=SKILL_PROMPT_MAX_CHARS)
+    if not pv_result.valid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"System prompt failed validation: {pv_result.reason}",
+        )
+
+    skill_ids = [sa.skill_id for sa in body.attached_skills]
+    tool_ids = body.attached_tools
+
+    # 2. Validate skills/tools belong to the tenant
+    await _validate_skill_ids_for_tenant(skill_ids, current_user.tenant_id, session)
+    await _validate_tool_ids_for_tenant(tool_ids, current_user.tenant_id, session)
+
+    template_type = _compute_template_type(body.attached_skills, tool_ids)
+
+    # 3. Build capabilities JSONB
+    capabilities = {
+        "guardrails": body.guardrails.model_dump(),
+        "kb_ids": body.kb_ids,
+        "tool_ids": tool_ids,
+        "template_type": template_type,
+    }
+    if body.icon:
+        capabilities["icon"] = body.icon
+
+    agent_id = str(uuid.uuid4())
+    capabilities_json = json.dumps(capabilities)
+
+    # 4. INSERT agent_cards — status='draft' for custom agents
+    await session.execute(
+        text(
+            "INSERT INTO agent_cards "
+            "(id, tenant_id, name, description, category, avatar, system_prompt, "
+            "capabilities, status, version, source, template_type, created_by) "
+            "VALUES (:id, :tenant_id, :name, :description, :category, :avatar, "
+            ":system_prompt, CAST(:capabilities AS jsonb), 'draft', 1, 'custom', "
+            ":template_type, :created_by)"
+        ),
+        {
+            "id": agent_id,
+            "tenant_id": current_user.tenant_id,
+            "name": body.name,
+            "description": body.description,
+            "category": body.category,
+            "avatar": body.icon,
+            "system_prompt": body.system_prompt,
+            "capabilities": capabilities_json,
+            "template_type": template_type,
+            "created_by": current_user.id,
+        },
+    )
+
+    # 5. Insert default ACL row in the same transaction
+    access_rules = body.access_rules or {}
+    visibility_mode = _ACCESS_CONTROL_MAP.get(
+        access_rules.get("mode", "workspace"), "workspace_wide"
+    )
+    await session.execute(
+        text("""
+            INSERT INTO agent_access_control
+                (agent_id, tenant_id, visibility_mode, allowed_roles, allowed_user_ids)
+            VALUES
+                (:agent_id, :tenant_id, :visibility_mode, :allowed_roles, :allowed_user_ids)
+            ON CONFLICT (tenant_id, agent_id) DO NOTHING
+        """),
+        {
+            "agent_id": agent_id,
+            "tenant_id": current_user.tenant_id,
+            "visibility_mode": visibility_mode,
+            "allowed_roles": list(access_rules.get("allowed_roles", [])),
+            "allowed_user_ids": list(access_rules.get("allowed_user_ids", [])),
+        },
+    )
+    await session.commit()
+
+    # 6. Persist skill attachments
+    await _upsert_agent_skill_attachments(
+        agent_id, current_user.tenant_id, body.attached_skills, session
+    )
+    await session.commit()
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="custom_agent_created",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={
+            "name": body.name,
+            "template_type": template_type,
+            "skill_count": len(body.attached_skills),
+            "tool_count": len(tool_ids),
+        },
+        db=session,
+    )
+    logger.info(
+        "custom_agent_created",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        template_type=template_type,
+    )
+    return {
+        "id": agent_id,
+        "name": body.name,
+        "status": "draft",
+        "template_type": template_type,
+    }
+
+
+@studio_router.put("/{agent_id}")
+async def update_custom_agent(
+    agent_id: str,
+    body: UpdateCustomAgentRequest,
+    if_match: Optional[str] = None,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-18: Update a custom agent.
+
+    - Returns ETag header based on updated_at
+    - Accepts If-Match header; returns 409 on conflict
+    - Runs SystemPromptValidator on system_prompt if provided
+    - Validates updated skills/tools
+    """
+    from app.modules.agents.prompt_validator import SKILL_PROMPT_MAX_CHARS, validate_prompt
+    from fastapi.responses import JSONResponse
+
+    # 1. Fetch existing agent
+    existing = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    # 2. ETag concurrency check
+    updated_at_str = existing.get("updated_at", "")
+    current_etag = '"' + hashlib.sha256(updated_at_str.encode()).hexdigest()[:16] + '"'
+    if if_match is not None and if_match != current_etag:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ETag mismatch — agent was modified by another request. Re-fetch and retry.",
+        )
+
+    # 3. Validate system_prompt if provided
+    if body.system_prompt is not None:
+        pv_result = validate_prompt(body.system_prompt, max_chars=SKILL_PROMPT_MAX_CHARS)
+        if not pv_result.valid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"System prompt failed validation: {pv_result.reason}",
+            )
+
+    # 4. Validate skills/tools if updating them
+    if body.attached_skills is not None:
+        skill_ids = [sa.skill_id for sa in body.attached_skills]
+        await _validate_skill_ids_for_tenant(skill_ids, current_user.tenant_id, session)
+
+    if body.attached_tools is not None:
+        await _validate_tool_ids_for_tenant(
+            body.attached_tools, current_user.tenant_id, session
+        )
+
+    # 5. Compute new capabilities
+    existing_caps = existing.get("capabilities") or {}
+    if not isinstance(existing_caps, dict):
+        existing_caps = {}
+
+    new_kb_ids = body.kb_ids if body.kb_ids is not None else existing_caps.get("kb_ids", [])
+    new_tool_ids = (
+        body.attached_tools if body.attached_tools is not None
+        else existing_caps.get("tool_ids", [])
+    )
+    new_skills = body.attached_skills if body.attached_skills is not None else None
+    new_guardrails = (
+        body.guardrails.model_dump() if body.guardrails is not None
+        else existing_caps.get("guardrails", GuardrailsSchema().model_dump())
+    )
+
+    effective_skills = new_skills if new_skills is not None else []
+    template_type = _compute_template_type(effective_skills, new_tool_ids)
+
+    new_capabilities = {
+        **existing_caps,
+        "guardrails": new_guardrails,
+        "kb_ids": new_kb_ids,
+        "tool_ids": new_tool_ids,
+        "template_type": template_type,
+    }
+    if body.icon is not None:
+        new_capabilities["icon"] = body.icon
+
+    # 6. Build SET clauses — only update provided fields
+    set_parts = []
+    params: dict = {
+        "id": agent_id,
+        "tenant_id": current_user.tenant_id,
+        "capabilities": json.dumps(new_capabilities),
+        "template_type": template_type,
+    }
+    set_parts.append("capabilities = CAST(:capabilities AS jsonb)")
+    set_parts.append("template_type = :template_type")
+    set_parts.append("updated_at = NOW()")
+
+    if body.name is not None:
+        set_parts.append("name = :name")
+        params["name"] = body.name
+    if body.description is not None:
+        set_parts.append("description = :description")
+        params["description"] = body.description
+    if body.category is not None:
+        set_parts.append("category = :category")
+        params["category"] = body.category
+    if body.system_prompt is not None:
+        set_parts.append("system_prompt = :system_prompt")
+        params["system_prompt"] = body.system_prompt
+    if body.icon is not None:
+        set_parts.append("avatar = :avatar")
+        params["avatar"] = body.icon
+
+    set_clause = ", ".join(set_parts)
+    result = await session.execute(
+        text(
+            f"UPDATE agent_cards SET {set_clause} "  # noqa: S608 — only hardcoded allowlisted fragments
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        params,
+    )
+    if (result.rowcount or 0) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+    await session.commit()
+
+    # 7. Update skill attachments if provided
+    if body.attached_skills is not None:
+        await _upsert_agent_skill_attachments(
+            agent_id, current_user.tenant_id, body.attached_skills, session
+        )
+        await session.commit()
+
+    # 8. Re-fetch for new updated_at
+    updated = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    new_updated_at = updated.get("updated_at", "") if updated else ""
+    new_etag = '"' + hashlib.sha256(new_updated_at.encode()).hexdigest()[:16] + '"'
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="custom_agent_updated",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={"name": body.name, "template_type": template_type},
+        db=session,
+    )
+    logger.info(
+        "custom_agent_updated",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+    )
+    response_data = {
+        "id": agent_id,
+        "version": updated.get("version") if updated else None,
+        "status": updated.get("status") if updated else None,
+        "updated_at": new_updated_at,
+    }
+    return JSONResponse(
+        content=response_data,
+        headers={"ETag": new_etag},
+    )
+
+
+@studio_router.post("/{agent_id}/test")
+async def test_custom_agent_studio(
+    agent_id: str,
+    body: AgentTestRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-18: Run a one-shot test of a custom agent draft.
+
+    Audit log is written with mode='test' and test_as_user_id = requesting admin's own ID.
+    Delegates to the existing test_agent handler logic.
+    Returns: response, confidence, sources, skill_invocations, tool_calls,
+             guardrail_events, latency_ms.
+    """
+    import asyncio
+    import os
+    import time
+
+    # 1. Fetch agent — must belong to this tenant
+    agent = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    # 2. Write audit log with mode='test' BEFORE executing — so partial failures are
+    #    still traceable.
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="agent_test_run",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={
+            "mode": "test",
+            "test_as_user_id": current_user.id,
+            "query_preview": body.query[:100],
+        },
+        db=session,
+    )
+
+    system_prompt = agent.get("system_prompt") or ""
+    capabilities = agent.get("capabilities") or {}
+    if isinstance(capabilities, str):
+        capabilities = json.loads(capabilities)
+    kb_ids: list = capabilities.get("kb_ids", []) if isinstance(capabilities, dict) else []
+
+    # 3. KB retrieval (best-effort)
+    sources: list = []
+    retrieval_confidence = 0.0
+    try:
+        from app.modules.chat.embedding import EmbeddingService
+        from app.modules.chat.vector_search import VectorSearchService
+
+        embedding_service = EmbeddingService()
+        query_vector = await embedding_service.embed(
+            body.query, tenant_id=current_user.tenant_id
+        )
+        vector_service = VectorSearchService()
+        search_results = await vector_service.search(
+            query_vector=query_vector,
+            tenant_id=current_user.tenant_id,
+            agent_id=agent_id,
+        )
+        for r in search_results:
+            r_dict = r.to_dict() if hasattr(r, "to_dict") else r
+            sources.append(
+                {
+                    "doc_id": r_dict.get("document_id", ""),
+                    "chunk_text": r_dict.get("content", ""),
+                    "relevance_score": float(r_dict.get("score", 0.0)),
+                }
+            )
+        retrieval_confidence = (
+            min(1.0, len(search_results) * 0.2) if search_results else 0.0
+        )
+    except Exception as kb_err:
+        logger.warning(
+            "studio_test_kb_retrieval_failed",
+            agent_id=agent_id,
+            tenant_id=current_user.tenant_id,
+            error=str(kb_err),
+        )
+
+    # 4. LLM call with 30s timeout
+    model = os.environ.get("PRIMARY_MODEL", "").strip()
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM not configured: PRIMARY_MODEL environment variable is required.",
+        )
+
+    cloud_provider = os.environ.get("CLOUD_PROVIDER", "local").strip()
+    if cloud_provider == "azure":
+        from openai import AsyncAzureOpenAI
+
+        llm_client = AsyncAzureOpenAI(
+            api_key=os.environ.get("AZURE_PLATFORM_OPENAI_API_KEY", "").strip(),
+            azure_endpoint=os.environ.get("AZURE_PLATFORM_OPENAI_ENDPOINT", "").strip(),
+            api_version=os.environ.get(
+                "AZURE_PLATFORM_OPENAI_API_VERSION", "2024-02-01"
+            ).strip(),
+        )
+    else:
+        from openai import AsyncOpenAI
+
+        llm_client = AsyncOpenAI()
+
+    start_ms = time.monotonic()
+
+    async def _call_llm() -> dict:
+        completion = await llm_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": body.query},
+            ],
+            stream=False,
+        )
+        answer = completion.choices[0].message.content or ""
+        usage = completion.usage
+        return {
+            "answer": answer,
+            "tokens_in": usage.prompt_tokens if usage else 0,
+            "tokens_out": usage.completion_tokens if usage else 0,
+        }
+
+    try:
+        llm_result = await asyncio.wait_for(_call_llm(), timeout=30.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Agent test timed out after 30 seconds.",
+        )
+
+    latency_ms = int((time.monotonic() - start_ms) * 1000)
+
+    # Write last_tested_at so publish gate can verify the agent was tested.
+    # MUST commit here — no subsequent insert_audit_log to trigger commit.
+    await session.execute(
+        text(
+            "UPDATE agent_cards SET last_tested_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    await session.commit()
+
+    logger.info(
+        "studio_agent_test_completed",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        latency_ms=latency_ms,
+    )
+    return {
+        "response": llm_result["answer"],
+        "confidence": retrieval_confidence,
+        "sources": sources,
+        "skill_invocations": [],   # populated by SkillExecutor in Phase 2 integration
+        "tool_calls": [],           # populated by ToolExecutor in Phase 2 integration
+        "guardrail_events": [],     # populated by guardrail middleware in Phase 2 integration
+        "tokens_in": llm_result["tokens_in"],
+        "tokens_out": llm_result["tokens_out"],
+        "latency_ms": latency_ms,
+    }
+
+
+@studio_router.post("/{agent_id}/publish")
+async def publish_custom_agent(
+    agent_id: str,
+    body: StudioPublishRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-18: Publish a custom agent draft to active.
+
+    - Validates required fields (name, system_prompt non-empty)
+    - Transitions status: draft → active
+    - UPSERT agent_access_control from access_rules
+    - Publishes Redis cache invalidation event
+    """
+    agent = await get_agent_by_id_db(agent_id, current_user.tenant_id, session)
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_id}' not found",
+        )
+
+    if not agent.get("name", "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Cannot publish: agent name must not be empty.",
+        )
+    if not agent.get("system_prompt", "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Cannot publish: system_prompt must not be empty.",
+        )
+
+    # Atomic publish gate: require at least one test run AND transition status in one UPDATE.
+    # Using last_tested_at IS NOT NULL in the WHERE clause eliminates the TOCTOU race
+    # that would exist if we read last_tested_at and updated status in separate statements.
+    upd_result = await session.execute(
+        text(
+            "UPDATE agent_cards "
+            "SET status = 'active', updated_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id "
+            "AND last_tested_at IS NOT NULL"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    if (upd_result.rowcount or 0) == 0:
+        # Either agent not found OR last_tested_at IS NULL — distinguish for user message.
+        check = await session.execute(
+            text(
+                "SELECT last_tested_at FROM agent_cards "
+                "WHERE id = :id AND tenant_id = :tenant_id"
+            ),
+            {"id": agent_id, "tenant_id": current_user.tenant_id},
+        )
+        row = check.fetchone()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Cannot publish: agent must be tested at least once before publishing. "
+                "Use the Test button to run a test query first."
+            ),
+        )
+
+    # UPSERT access control from access_rules
+    access_rules = body.access_rules or {}
+    visibility_mode = _ACCESS_CONTROL_MAP.get(
+        access_rules.get("mode", "workspace"), "workspace_wide"
+    )
+    await session.execute(
+        text("""
+            INSERT INTO agent_access_control
+                (agent_id, tenant_id, visibility_mode, allowed_roles, allowed_user_ids)
+            VALUES
+                (:agent_id, :tenant_id, :visibility_mode, :allowed_roles, :allowed_user_ids)
+            ON CONFLICT (tenant_id, agent_id) DO UPDATE
+                SET visibility_mode = EXCLUDED.visibility_mode,
+                    allowed_roles = EXCLUDED.allowed_roles,
+                    allowed_user_ids = EXCLUDED.allowed_user_ids
+        """),
+        {
+            "agent_id": agent_id,
+            "tenant_id": current_user.tenant_id,
+            "visibility_mode": visibility_mode,
+            "allowed_roles": list(access_rules.get("allowed_roles", [])),
+            "allowed_user_ids": list(access_rules.get("allowed_user_ids", [])),
+        },
+    )
+    await session.commit()
+
+    # Cache invalidation (fail-open)
+    await _invalidate_agent_cache(agent_id, current_user.tenant_id)
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="custom_agent_published",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={"visibility_mode": visibility_mode},
+        db=session,
+    )
+    logger.info(
+        "custom_agent_published",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        visibility_mode=visibility_mode,
+    )
+    return {"id": agent_id, "status": "active"}
+
+
+# ---------------------------------------------------------------------------
+# TODO-19: Tenant A2A Agent Registration endpoints
+# POST   /admin/agents/a2a/register         — register external A2A agent
+# GET    /admin/agents/a2a/{id}/card        — return imported_card JSONB
+# POST   /admin/agents/a2a/{id}/verify      — re-fetch card + health check
+# DELETE /admin/agents/a2a/{id}             — soft delete (status=archived)
+# ---------------------------------------------------------------------------
+
+a2a_tenant_router = APIRouter(
+    prefix="/admin/agents/a2a", tags=["admin-agents-a2a"]
+)
+
+
+class RegisterA2AAgentRequest(BaseModel):
+    card_url: str = Field(..., min_length=8, max_length=2048, description="HTTPS URL of A2A card")
+    display_name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    icon: Optional[str] = Field(None, max_length=100)
+    access_rules: Optional[dict] = None
+
+
+@a2a_tenant_router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_a2a_agent(
+    body: RegisterA2AAgentRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-19: Register an external A2A agent by fetching and validating its card.
+
+    - Fetches agent card from card_url (SSRF-protected, HTTPS-only)
+    - Validates card schema (required fields, trust_level, auth.type)
+    - Inserts agent_cards row with template_type='registered_a2a', status='active'
+    - Inserts access control row
+    - Returns the parsed card preview
+    """
+    from app.modules.agents.a2a_card_fetcher import A2ACardValidationError, fetch_and_validate_card
+
+    # Validate HTTPS scheme before fetching (belt-and-suspenders beyond a2a_card_fetcher)
+    if not body.card_url.startswith("https://"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="card_url must use HTTPS.",
+        )
+
+    try:
+        card = await fetch_and_validate_card(body.card_url)
+    except A2ACardValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"A2A card validation failed: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.warning(
+            "a2a_card_fetch_failed",
+            card_url=body.card_url,
+            tenant_id=current_user.tenant_id,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not fetch A2A card from the provided URL. Check that the URL is reachable and returns a valid A2A card.",
+        ) from exc
+
+    agent_id = str(uuid.uuid4())
+    capabilities = {
+        "a2a_endpoint": card.a2a_endpoint,
+        "trust_level": card.trust_level,
+        "transaction_types": card.transaction_types,
+        "industries": card.industries,
+        "capabilities": card.capabilities,
+    }
+    if body.icon:
+        capabilities["icon"] = body.icon
+
+    capabilities_json = json.dumps(capabilities)
+    imported_card_json = json.dumps(card.raw)
+
+    await session.execute(
+        text(
+            "INSERT INTO agent_cards "
+            "(id, tenant_id, name, description, avatar, system_prompt, "
+            "capabilities, status, version, source, template_type, "
+            "a2a_endpoint, source_card_url, imported_card, created_by) "
+            "VALUES (:id, :tenant_id, :name, :description, :avatar, '', "
+            "CAST(:capabilities AS jsonb), 'active', 1, 'registered_a2a', "
+            "'registered_a2a', :a2a_endpoint, :source_card_url, "
+            "CAST(:imported_card AS jsonb), :created_by)"
+        ),
+        {
+            "id": agent_id,
+            "tenant_id": current_user.tenant_id,
+            "name": body.display_name,
+            "description": body.description,
+            "avatar": body.icon,
+            "capabilities": capabilities_json,
+            "a2a_endpoint": card.a2a_endpoint,
+            "source_card_url": body.card_url,
+            "imported_card": imported_card_json,
+            "created_by": current_user.id,
+        },
+    )
+
+    # ACL row
+    access_rules = body.access_rules or {}
+    visibility_mode = _ACCESS_CONTROL_MAP.get(
+        access_rules.get("mode", "workspace"), "workspace_wide"
+    )
+    await session.execute(
+        text("""
+            INSERT INTO agent_access_control
+                (agent_id, tenant_id, visibility_mode, allowed_roles, allowed_user_ids)
+            VALUES
+                (:agent_id, :tenant_id, :visibility_mode, :allowed_roles, :allowed_user_ids)
+            ON CONFLICT (tenant_id, agent_id) DO NOTHING
+        """),
+        {
+            "agent_id": agent_id,
+            "tenant_id": current_user.tenant_id,
+            "visibility_mode": visibility_mode,
+            "allowed_roles": list(access_rules.get("allowed_roles", [])),
+            "allowed_user_ids": list(access_rules.get("allowed_user_ids", [])),
+        },
+    )
+    await session.commit()
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="a2a_agent_registered",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={"card_url": body.card_url, "display_name": body.display_name},
+        db=session,
+    )
+    logger.info(
+        "a2a_agent_registered",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+        card_url=body.card_url,
+    )
+    return {
+        "id": agent_id,
+        "name": body.display_name,
+        "status": "active",
+        "card_preview": {
+            "name": card.name,
+            "description": card.description,
+            "a2a_endpoint": card.a2a_endpoint,
+            "trust_level": card.trust_level,
+            "capabilities": card.capabilities,
+        },
+    }
+
+
+@a2a_tenant_router.get("/{agent_id}/card")
+async def get_a2a_agent_card(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """TODO-19: Return the imported_card JSONB for a registered A2A agent."""
+    result = await session.execute(
+        text(
+            "SELECT id, name, imported_card, source_card_url, status "
+            "FROM agent_cards "
+            "WHERE id = :id AND tenant_id = :tenant_id "
+            "AND template_type = 'registered_a2a'"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"A2A agent '{agent_id}' not found",
+        )
+    imported_card = row["imported_card"]
+    if isinstance(imported_card, str):
+        imported_card = json.loads(imported_card)
+    return {
+        "agent_id": str(row["id"]),
+        "name": row["name"],
+        "card_url": row["source_card_url"],
+        "status": row["status"],
+        "card": imported_card,
+    }
+
+
+@a2a_tenant_router.post("/{agent_id}/verify")
+async def verify_a2a_agent(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-19: Re-fetch agent card and ping health endpoint.
+    Updates status and stores refreshed card.
+    """
+    from app.modules.agents.a2a_card_fetcher import A2ACardValidationError, fetch_and_validate_card
+    from app.modules.agents.a2a_health_worker import check_a2a_agent_health
+
+    # Also fetch current consecutive_failures for health check state computation
+    verify_row_result = await session.execute(
+        text(
+            "SELECT id, source_card_url, a2a_endpoint, health_consecutive_failures "
+            "FROM agent_cards "
+            "WHERE id = :id AND tenant_id = :tenant_id "
+            "AND template_type = 'registered_a2a'"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    row = verify_row_result.mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"A2A agent '{agent_id}' not found",
+        )
+
+    card_url = row["source_card_url"]
+    a2a_endpoint = row["a2a_endpoint"]
+    current_failures = int(row["health_consecutive_failures"] or 0)
+
+    # Re-fetch card
+    card_valid = False
+    card_error: str = ""
+    try:
+        card = await fetch_and_validate_card(card_url, timeout=10.0)
+        # Update imported_card with refreshed version
+        await session.execute(
+            text(
+                "UPDATE agent_cards "
+                "SET imported_card = CAST(:card AS jsonb), updated_at = NOW() "
+                "WHERE id = :id AND tenant_id = :tenant_id"
+            ),
+            {
+                "card": json.dumps(card.raw),
+                "id": agent_id,
+                "tenant_id": current_user.tenant_id,
+            },
+        )
+        card_valid = True
+    except A2ACardValidationError as exc:
+        logger.warning("a2a_verify_card_invalid", agent_id=agent_id, error=str(exc))
+        card_error = "A2A card validation failed."
+    except Exception as exc:
+        logger.warning("a2a_verify_card_fetch_failed", agent_id=agent_id, error=str(exc))
+        card_error = "Could not fetch or validate the A2A card."
+
+    # Health check — returns (new_status, new_failures, http_status) tuple
+    health_status, new_failures, _http_status = await check_a2a_agent_health(
+        agent_id=agent_id,
+        a2a_endpoint=a2a_endpoint or card_url,
+        consecutive_failures=current_failures,
+    )
+    health_ok = health_status == "healthy"
+    new_status = "active" if (card_valid and health_ok) else "unhealthy"
+
+    await session.execute(
+        text(
+            "UPDATE agent_cards "
+            "SET status = :status, health_consecutive_failures = :failures, "
+            "last_health_check_at = NOW(), updated_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id"
+        ),
+        {
+            "status": new_status,
+            "failures": new_failures,
+            "id": agent_id,
+            "tenant_id": current_user.tenant_id,
+        },
+    )
+    await session.commit()
+
+    # Cache invalidation
+    await _invalidate_agent_cache(agent_id, current_user.tenant_id)
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="a2a_agent_verified",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={
+            "card_valid": card_valid,
+            "health_status": new_status,
+            "card_error": card_error,
+        },
+        db=session,
+    )
+    return {
+        "agent_id": agent_id,
+        "status": new_status,
+        "card_valid": card_valid,
+        "health_check": health_ok,
+        "card_error": card_error or None,
+    }
+
+
+@a2a_tenant_router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deregister_a2a_agent(
+    agent_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    TODO-19: Soft-delete a registered A2A agent (status → archived).
+    Removes agent from chat selector. Existing conversation history is preserved.
+    """
+    result = await session.execute(
+        text(
+            "UPDATE agent_cards "
+            "SET status = 'archived', updated_at = NOW() "
+            "WHERE id = :id AND tenant_id = :tenant_id "
+            "AND template_type = 'registered_a2a'"
+        ),
+        {"id": agent_id, "tenant_id": current_user.tenant_id},
+    )
+    if (result.rowcount or 0) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"A2A agent '{agent_id}' not found",
+        )
+    await session.commit()
+
+    # Cache invalidation so agent disappears from chat selector immediately
+    await _invalidate_agent_cache(agent_id, current_user.tenant_id)
+
+    await insert_audit_log(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        action="a2a_agent_deregistered",
+        resource_type="agent",
+        resource_id=agent_id,
+        details={},
+        db=session,
+    )
+    logger.info(
+        "a2a_agent_deregistered",
+        agent_id=agent_id,
+        tenant_id=current_user.tenant_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Template versioning helpers (TODO-20, PA Template Studio)
+# ---------------------------------------------------------------------------
+
+
+def _bump_version(current_version: str, bump_type: str) -> str:
+    """
+    Bump a semver string by the given type.
+
+    Args:
+        current_version: Semver string in "major.minor.patch" format.
+        bump_type: One of "major", "minor", "patch".
+
+    Returns:
+        New version string.
+
+    Rules:
+        - major: increment major, reset minor and patch to 0
+        - minor: increment minor, reset patch to 0
+        - patch: increment patch only
+    """
+    try:
+        parts = current_version.split(".")
+        major = int(parts[0]) if len(parts) > 0 else 1
+        minor = int(parts[1]) if len(parts) > 1 else 0
+        patch = int(parts[2]) if len(parts) > 2 else 0
+    except (ValueError, IndexError):
+        major, minor, patch = 1, 0, 0
+
+    if bump_type == "major":
+        return f"{major + 1}.0.0"
+    if bump_type == "minor":
+        return f"{major}.{minor + 1}.0"
+    # patch (default)
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def _detect_breaking_changes(old: dict, new: dict) -> str:
+    """
+    Determine the semver bump type required by comparing old and new template configs.
+
+    Change classification:
+        major  — auth_mode changed OR required_credentials changed (breaking API contract)
+        minor  — system_prompt or guardrails changed (behavior change, not API contract)
+        patch  — only name, description, avatar, or other metadata changed
+
+    Args:
+        old: Previous template config dict (keys: auth_mode, required_credentials,
+             system_prompt, guardrails, name, description, ...).
+        new: New template config dict.
+
+    Returns:
+        "major", "minor", or "patch"
+    """
+    # Major: breaking auth/credential contract changes
+    if old.get("auth_mode") != new.get("auth_mode"):
+        return "major"
+
+    old_creds = sorted(
+        [str(c) for c in (old.get("required_credentials") or [])],
+    )
+    new_creds = sorted(
+        [str(c) for c in (new.get("required_credentials") or [])],
+    )
+    if old_creds != new_creds:
+        return "major"
+
+    # Minor: behavior-affecting changes
+    if old.get("system_prompt") != new.get("system_prompt"):
+        return "minor"
+    if old.get("guardrails") != new.get("guardrails"):
+        return "minor"
+
+    # Patch: metadata-only changes
+    return "patch"

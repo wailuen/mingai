@@ -155,7 +155,7 @@ context = skill_tool.execute(skill="python-patterns")
 
 ## Developer Documentation
 
-Full v1.0 documentation in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
+Full v1.0 documentation in the package source:
 
 | Guide | Description |
 |-------|-------------|
@@ -172,6 +172,6 @@ Full v1.0 documentation in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
 
 ## Reference
 
-- Specialist guide: `apps/kailash-kaizen/src/kaizen/docs/developers/06-specialist-system-guide.md`
-- TAOD loop: `apps/kailash-kaizen/src/kaizen/docs/developers/02-local-kaizen-adapter-guide.md`
-- Performance: `apps/kailash-kaizen/src/kaizen/docs/developers/09-performance-optimization-guide.md`
+- Specialist guide: the package source
+- TAOD loop: the package source
+- Performance: the package source

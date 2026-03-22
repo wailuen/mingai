@@ -220,8 +220,8 @@ WARNING: Workflow 'my_workflow': PythonCodeNode node 'code_node' imports
 
 For comprehensive migration from legacy PythonCodeNode workflows to handlers:
 
-- `apps/kailash-nexus/docs/migration/handler-migration-guide.md` - 5 migration patterns, 6-phase checklist, "When NOT to Migrate" guidance
-- `apps/kailash-nexus/docs/migration/real-project-patterns.md` - 8 real-world patterns from 3 production projects (382K LOC)
+- the package source - 5 migration patterns, 6-phase checklist, "When NOT to Migrate" guidance
+- the package source - 8 real-world patterns from 3 production projects (382K LOC)
 
 ### Key Migration Insight
 
@@ -237,7 +237,6 @@ async def create_order(items: list) -> dict: ...
 
 ## Full Documentation
 
-- `apps/kailash-nexus/docs/handler-support.md` - Complete handler guide
-- `apps/kailash-nexus/docs/migration/handler-migration-guide.md` - Migration guide (5 patterns)
-- `apps/kailash-nexus/docs/migration/real-project-patterns.md` - Real project patterns (8 patterns)
-- `src/kailash/nodes/handler.py` - HandlerNode implementation
+- the package source - Complete handler guide
+- the package source - Migration guide (5 patterns)
+- the package source - Real project patterns (8 patterns)

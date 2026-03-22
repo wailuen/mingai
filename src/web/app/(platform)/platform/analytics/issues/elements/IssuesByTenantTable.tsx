@@ -6,6 +6,7 @@ import {
   type AnalyticsPeriod,
 } from "@/lib/hooks/useIssueAnalytics";
 import { TableRowSkeleton } from "@/components/shared/LoadingState";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 interface IssuesByTenantTableProps {
   period: AnalyticsPeriod;
@@ -29,9 +30,9 @@ export function IssuesByTenantTable({ period }: IssuesByTenantTableProps) {
       <h2 className="mb-3 text-section-heading text-text-primary">
         Issues by Tenant
       </h2>
-      <div className="overflow-hidden rounded-card border border-border">
+      <ScrollableTableWrapper>
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border bg-bg-surface">
               <th className="px-3.5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-faint">
                 Tenant
@@ -94,7 +95,7 @@ export function IssuesByTenantTable({ period }: IssuesByTenantTableProps) {
             )}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

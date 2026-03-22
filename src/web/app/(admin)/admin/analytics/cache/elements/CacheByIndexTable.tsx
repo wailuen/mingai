@@ -4,6 +4,7 @@ import {
   useCacheByIndex,
   type CachePeriod,
 } from "@/lib/hooks/useCacheAnalytics";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 interface CacheByIndexTableProps {
   period: CachePeriod;
@@ -68,9 +69,12 @@ export function CacheByIndexTable({ period }: CacheByIndexTableProps) {
           Cache Performance by Index
         </h2>
       </div>
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        maxHeight="none"
+        className="rounded-none border-0"
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
                 Index
@@ -113,7 +117,7 @@ export function CacheByIndexTable({ period }: CacheByIndexTableProps) {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

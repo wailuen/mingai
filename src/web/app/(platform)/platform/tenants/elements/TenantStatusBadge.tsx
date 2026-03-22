@@ -13,11 +13,12 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function TenantStatusBadge({ status }: TenantStatusBadgeProps) {
+  const key = status.toLowerCase();
   return (
     <span
       className={cn(
         "inline-block rounded-badge px-2 py-0.5 font-mono text-[10px] uppercase",
-        STATUS_STYLES[status] ?? "bg-bg-elevated text-text-faint",
+        STATUS_STYLES[key] ?? "bg-bg-elevated text-text-faint",
       )}
     >
       {status}
@@ -36,11 +37,12 @@ const PLAN_STYLES: Record<string, string> = {
 };
 
 export function TenantPlanBadge({ plan }: TenantPlanBadgeProps) {
+  const key = plan.toLowerCase();
   return (
     <span
       className={cn(
         "inline-block rounded-badge px-2 py-0.5 font-mono text-[10px] uppercase",
-        PLAN_STYLES[plan] ?? "bg-bg-elevated text-text-faint",
+        PLAN_STYLES[key] ?? "bg-bg-elevated text-text-faint",
       )}
     >
       {plan}

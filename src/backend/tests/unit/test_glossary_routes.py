@@ -258,12 +258,16 @@ class TestDeleteGlossaryTerm:
         assert resp.status_code == 403
 
     def test_delete_term_returns_204(self, client, admin_headers):
+        # Must use a valid UUID — the route validates uuid.UUID(term_id) before any DB call
+        valid_term_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         with patch(
             "app.modules.glossary.routes.delete_glossary_term_db",
             new_callable=AsyncMock,
         ) as mock_del:
             mock_del.return_value = True
-            resp = client.delete("/api/v1/glossary/term-1", headers=admin_headers)
+            resp = client.delete(
+                f"/api/v1/glossary/{valid_term_id}", headers=admin_headers
+            )
         assert resp.status_code == 204
 
     def test_delete_term_returns_404(self, client, admin_headers):

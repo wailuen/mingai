@@ -200,19 +200,18 @@ app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 
 ### Key Files
 
-- `src/kailash/nodes/handler.py` - HandlerNode implementation
-- `apps/kailash-nexus/src/nexus/core.py` - handler() decorator, register_handler()
+- the package source - handler() decorator, register_handler()
 - `tests/unit/nodes/test_handler_node.py` - 22 SDK unit tests
-- `apps/kailash-nexus/tests/unit/test_handler_registration.py` - 16 Nexus unit tests
-- `apps/kailash-nexus/tests/integration/test_handler_execution.py` - 7 integration tests
-- `apps/kailash-nexus/tests/e2e/test_handler_e2e.py` - 3 E2E tests
+- the package source - 16 Nexus unit tests
+- the package source - 7 integration tests
+- the package source - 3 E2E tests
 
 ### Migration Documentation
 
-- `apps/kailash-nexus/docs/migration/handler-migration-guide.md` - 5 migration patterns, 6-phase checklist
-- `apps/kailash-nexus/docs/migration/real-project-patterns.md` - 8 real-world patterns from 3 projects
-- `apps/kailash-nexus/tests/docs/migration/` - 26 doc validation tests
-- `apps/kailash-nexus/tests/docs/real_projects/` - 38 doc validation tests (incl. auth integration)
+- the package source - 5 migration patterns, 6-phase checklist
+- the package source - 8 real-world patterns from 3 projects
+- the package source - 26 doc validation tests
+- the package source - 38 doc validation tests (incl. auth integration)
 
 **Type Mapping Limitation**: `_derive_params_from_signature()` maps complex generics (e.g., `List[dict]`) to `str`. Use plain `list` instead.
 
@@ -220,8 +219,8 @@ app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 
 - `.claude/skills/03-nexus/golden-patterns-catalog.md` - Top 10 patterns ranked by production usage
 - `.claude/skills/03-nexus/codegen-decision-tree.md` - Decision tree, anti-patterns, scaffolding templates
-- `apps/kailash-nexus/tests/docs/golden_patterns/` - 53 golden pattern validation tests
-- `apps/kailash-nexus/tests/docs/templates/` - 19 scaffolding template validation tests
+- the package source - 53 golden pattern validation tests
+- the package source - 19 scaffolding template validation tests
 
 ## Authentication & Authorization (NexusAuthPlugin)
 
@@ -491,9 +490,9 @@ PEP 563 turns type annotations into strings, preventing FastAPI from recognizing
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/apps/nexus/CLAUDE.md` - Complete Nexus guide
+- `.claude/skills/03-nexus/` - Complete Nexus skills directory
 - `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
-- `sdk-users/apps/nexus/docs/troubleshooting/input-mapping-guide.md` - Input mapping
+- `.claude/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
 
 ---
 

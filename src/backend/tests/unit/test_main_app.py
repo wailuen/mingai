@@ -27,8 +27,16 @@ TEST_ENV = {
 
 @pytest.fixture
 def client():
-    """Create test client with env vars set."""
+    """Create test client with env vars set, reloading the app to pick up env vars."""
+    import importlib
+    import sys
+
     with patch.dict(os.environ, TEST_ENV):
+        # Reload app.main so CORS middleware picks up the patched FRONTEND_URL,
+        # since the module is cached on first import and may have stale config.
+        for mod_name in list(sys.modules.keys()):
+            if mod_name == "app.main" or mod_name.startswith("app.main."):
+                del sys.modules[mod_name]
         from app.main import app
 
         return TestClient(app, raise_server_exceptions=False)

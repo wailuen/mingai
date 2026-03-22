@@ -9,6 +9,7 @@ import {
   type RegistryStatus,
 } from "@/lib/hooks/useTenantRegistry";
 import { RegistryStatusBadge } from "./RegistryStatusBadge";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 function formatDate(iso: string): string {
   try {
@@ -81,120 +82,119 @@ export function RegistryAgentList({ statusFilter }: RegistryAgentListProps) {
 
   return (
     <>
-      <div className="rounded-card border border-border bg-bg-surface">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Name
-                </th>
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Category
-                </th>
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Publisher
-                </th>
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Status
-                </th>
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Installs
-                </th>
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Created
-                </th>
-                <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {isPending && <SkeletonRows />}
+      <ScrollableTableWrapper
+        footer={
+          !isPending && filteredAgents.length > 0 ? (
+            <div className="px-5 py-2.5">
+              <p className="font-mono text-data-value text-text-faint">
+                Showing {filteredAgents.length} agent
+                {filteredAgents.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          ) : undefined
+        }
+      >
+        <table className="w-full">
+          <thead className="sticky top-0 z-10 bg-bg-surface">
+            <tr className="border-b border-border">
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Name
+              </th>
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Category
+              </th>
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Publisher
+              </th>
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Status
+              </th>
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Installs
+              </th>
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Created
+              </th>
+              <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {isPending && <SkeletonRows />}
 
-              {!isPending && filteredAgents.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3.5 py-12 text-center text-body-default text-text-faint"
-                  >
-                    No registry agents found.
-                  </td>
-                </tr>
-              )}
-
-              {filteredAgents.map((agent) => (
-                <tr
-                  key={agent.id}
-                  className="border-b border-border-faint transition-colors hover:bg-accent-dim"
+            {!isPending && filteredAgents.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-3.5 py-12 text-center text-body-default text-text-faint"
                 >
-                  <td className="px-3.5 py-3">
-                    <span className="text-body-default font-medium text-text-primary">
-                      {agent.name}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <span className="text-body-default text-text-muted">
-                      {agent.category}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <span className="text-body-default text-text-muted">
-                      {agent.publisher_tenant}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <RegistryStatusBadge status={agent.status} />
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <span className="font-mono text-data-value text-text-muted">
-                      {agent.install_count.toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <span className="font-mono text-data-value text-text-muted">
-                      {formatDate(agent.created_at)}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-3">
-                    {(agent.status === "draft" ||
-                      agent.status === "pending_review") && (
-                      <button
-                        type="button"
-                        onClick={() => handlePublish(agent.id)}
-                        disabled={publishMutation.isPending}
-                        className="rounded-control border border-accent px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent-dim disabled:opacity-50"
-                      >
-                        Publish
-                      </button>
-                    )}
-                    {agent.status === "published" && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmUnpublishId(agent.id)}
-                        disabled={unpublishMutation.isPending}
-                        className="rounded-control border border-alert/40 px-2 py-1 text-[11px] font-medium text-alert transition-colors hover:bg-alert-dim disabled:opacity-50"
-                      >
-                        Unpublish
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  No registry agents found.
+                </td>
+              </tr>
+            )}
 
-        {/* Pagination info */}
-        {!isPending && filteredAgents.length > 0 && (
-          <div className="border-t border-border px-5 py-2.5">
-            <p className="font-mono text-data-value text-text-faint">
-              Showing {filteredAgents.length} agent
-              {filteredAgents.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-        )}
-      </div>
+            {filteredAgents.map((agent) => (
+              <tr
+                key={agent.id}
+                className="border-b border-border-faint transition-colors hover:bg-accent-dim"
+              >
+                <td className="px-3.5 py-3">
+                  <span className="text-body-default font-medium text-text-primary">
+                    {agent.name}
+                  </span>
+                </td>
+                <td className="px-3.5 py-3">
+                  <span className="text-body-default text-text-muted">
+                    {agent.category}
+                  </span>
+                </td>
+                <td className="px-3.5 py-3">
+                  <span className="text-body-default text-text-muted">
+                    {agent.publisher_tenant}
+                  </span>
+                </td>
+                <td className="px-3.5 py-3">
+                  <RegistryStatusBadge status={agent.status} />
+                </td>
+                <td className="px-3.5 py-3">
+                  <span className="font-mono text-data-value text-text-muted">
+                    {agent.install_count.toLocaleString()}
+                  </span>
+                </td>
+                <td className="px-3.5 py-3">
+                  <span className="font-mono text-data-value text-text-muted">
+                    {formatDate(agent.created_at)}
+                  </span>
+                </td>
+                <td className="px-3.5 py-3">
+                  {(agent.status === "draft" ||
+                    agent.status === "pending_review") && (
+                    <button
+                      type="button"
+                      onClick={() => handlePublish(agent.id)}
+                      disabled={publishMutation.isPending}
+                      className="rounded-control border border-accent px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent-dim disabled:opacity-50"
+                    >
+                      Publish
+                    </button>
+                  )}
+                  {agent.status === "published" && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmUnpublishId(agent.id)}
+                      disabled={unpublishMutation.isPending}
+                      className="rounded-control border border-alert/40 px-2 py-1 text-[11px] font-medium text-alert transition-colors hover:bg-alert-dim disabled:opacity-50"
+                    >
+                      Unpublish
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ScrollableTableWrapper>
 
       {/* Unpublish confirmation dialog */}
       {confirmUnpublishId !== null && (

@@ -7,7 +7,11 @@ import { apiGet, apiPost, apiPatch } from "@/lib/api";
 // Types
 // ---------------------------------------------------------------------------
 
-export type LLMLibraryProvider = "azure_openai" | "openai_direct" | "anthropic";
+export type LLMLibraryProvider =
+  | "azure_openai"
+  | "openai_direct"
+  | "anthropic"
+  | "bedrock";
 export type LLMLibraryStatus = "Draft" | "Published" | "Deprecated";
 export type PlanTier = "starter" | "professional" | "enterprise";
 
@@ -29,6 +33,12 @@ export interface LLMLibraryEntry {
   last_test_passed_at?: string;
   created_at: string;
   updated_at?: string;
+  /** Added in TODO-35: capabilities JSON controlling eligible_slots, supports_vision etc. */
+  capabilities?: Record<string, unknown>;
+  /** Added in TODO-35: health status from periodic connectivity checks. */
+  health_status?: "healthy" | "degraded" | "unknown";
+  /** Added in TODO-35: timestamp of last successful health check. */
+  health_checked_at?: string | null;
 }
 
 export interface TenantAssignment {
@@ -62,6 +72,8 @@ export interface CreateLLMLibraryPayload {
   endpoint_url?: string;
   api_key?: string;
   api_version?: string;
+  /** Added in TODO-35: capabilities JSON controlling eligible_slots, supports_vision etc. */
+  capabilities?: Record<string, unknown>;
 }
 
 export interface UpdateLLMLibraryPayload {
@@ -76,6 +88,8 @@ export interface UpdateLLMLibraryPayload {
   endpoint_url?: string;
   api_key?: string;
   api_version?: string;
+  /** Added in TODO-35: capabilities JSON controlling eligible_slots, supports_vision etc. */
+  capabilities?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,13 +102,32 @@ const LIBRARY_KEY = ["platform-llm-library"] as const;
 // Hooks
 // ---------------------------------------------------------------------------
 
+/** Normalize a raw status string from the API to the capitalized TypeScript type. */
+function normalizeStatus(raw: string): LLMLibraryStatus {
+  const s = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  if (s === "Draft" || s === "Published" || s === "Deprecated") return s;
+  return "Draft";
+}
+
+/** Normalize raw API entry — the backend returns lowercase status values. */
+function normalizeEntry(raw: Record<string, unknown>): LLMLibraryEntry {
+  return {
+    ...(raw as unknown as LLMLibraryEntry),
+    status: normalizeStatus(raw.status as string),
+  };
+}
+
 /** GET /api/v1/platform/llm-library?status=... */
 export function useLLMLibrary(status?: LLMLibraryStatus) {
   const params = status ? `?status=${status}` : "";
   return useQuery({
     queryKey: [...LIBRARY_KEY, status ?? "all"],
-    queryFn: () =>
-      apiGet<LLMLibraryEntry[]>(`/api/v1/platform/llm-library${params}`),
+    queryFn: async () => {
+      const raw = await apiGet<Record<string, unknown>[]>(
+        `/api/v1/platform/llm-library${params}`,
+      );
+      return raw.map(normalizeEntry);
+    },
   });
 }
 
@@ -102,8 +135,12 @@ export function useLLMLibrary(status?: LLMLibraryStatus) {
 export function useLLMLibraryEntry(id: string | null) {
   return useQuery({
     queryKey: ["platform-llm-library-entry", id],
-    queryFn: () =>
-      apiGet<LLMLibraryEntry>(`/api/v1/platform/llm-library/${id}`),
+    queryFn: async () => {
+      const raw = await apiGet<Record<string, unknown>>(
+        `/api/v1/platform/llm-library/${id}`,
+      );
+      return normalizeEntry(raw);
+    },
     enabled: !!id,
   });
 }

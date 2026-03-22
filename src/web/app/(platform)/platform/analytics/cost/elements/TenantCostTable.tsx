@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowUpDown, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import {
   useTenantCostBreakdown,
   type CostPeriod,
@@ -266,9 +267,20 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        footer={
+          data && data.length > 0 ? (
+            <div className="px-5 py-2.5">
+              <p className="font-mono text-data-value text-text-faint">
+                {data.length} tenant{data.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          ) : undefined
+        }
+        className="rounded-none border-0"
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-border">
                 {headerGroup.headers.map((header) => (
@@ -320,16 +332,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Footer */}
-      {data && data.length > 0 && (
-        <div className="border-t border-border px-5 py-2.5">
-          <p className="font-mono text-data-value text-text-faint">
-            {data.length} tenant{data.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-      )}
+      </ScrollableTableWrapper>
     </div>
   );
 }

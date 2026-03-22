@@ -11,6 +11,7 @@ export type ProviderType =
   | "azure_openai"
   | "openai"
   | "anthropic"
+  | "bedrock"
   | "deepseek"
   | "dashscope"
   | "doubao"

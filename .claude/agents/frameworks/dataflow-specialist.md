@@ -28,6 +28,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation (v
 ### Common Operations
 
 - "Query patterns?" -> [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md)
+- "Aggregation queries? GROUP BY? COUNT/SUM/AVG?" -> [`dataflow-aggregation`](../../skills/02-dataflow/dataflow-aggregation.md) (P4)
 - "Bulk operations?" -> [`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md)
 - "Transactions?" -> [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md)
 - "Connection isolation?" -> [`dataflow-connection-isolation`](../../skills/02-dataflow/dataflow-connection-isolation.md)
@@ -41,6 +42,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation (v
 - "Schema cache?" -> [`dataflow-schema-cache`](../../skills/02-dataflow/dataflow-schema-cache.md)
 - "Enterprise migrations?" -> [`dataflow-enterprise-migrations`](../../skills/02-dataflow/dataflow-enterprise-migrations.md)
 - "Troubleshooting?" -> [`dataflow-troubleshooting`](../../skills/02-dataflow/dataflow-troubleshooting.md)
+- "SQLite concurrency? Pool? WAL?" -> [`dataflow-sqlite-concurrency`](../../skills/02-dataflow/dataflow-sqlite-concurrency.md)
 
 ### Integration
 
@@ -60,6 +62,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation (v
 
 - Basic CRUD operations -> Use `dataflow-crud-operations` Skill
 - Simple queries -> Use `dataflow-queries` Skill
+- SQL aggregation (COUNT/SUM/AVG/MIN/MAX GROUP BY) -> Use `dataflow-aggregation` Skill
 - Model setup -> Use `dataflow-models` Skill
 - Nexus integration -> Use `dataflow-nexus-integration` Skill
 - Fast db.express operations -> Use `dataflow-express` Skill
@@ -173,6 +176,7 @@ workflow.add_node("UserUpdateNode", "update", {
 
 ### Key Features
 
+- **SQL Aggregation Queries** (v0.12.3+): `count_by`, `sum_by`, `aggregate` with GROUP BY, parameterized SQL, identifier validation
 - **ExpressDataFlow** (v0.10.6+): ~23x faster CRUD via `db.express`
 - **Schema Cache** (v0.7.3+): 91-99% performance improvement
 - **ErrorEnhancer** (v0.8.0+): Rich DF-XXX error codes
@@ -222,14 +226,15 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 
 ### Core Decision Matrix
 
-| Need              | Use                                        |
-| ----------------- | ------------------------------------------ |
-| Simple CRUD       | Basic nodes                                |
-| Bulk import       | BulkCreateNode                             |
-| Complex queries   | ListNode + MongoDB filters                 |
-| Existing database | `auto_migrate=True` (v0.12.1 auto-detects) |
-| Schema changes    | Enterprise migration system                |
-| Risk assessment   | RiskAssessmentEngine                       |
+| Need                   | Use                                        |
+| ---------------------- | ------------------------------------------ |
+| Simple CRUD            | Basic nodes                                |
+| Bulk import            | BulkCreateNode                             |
+| Complex queries        | ListNode + MongoDB filters                 |
+| Aggregation (GROUP BY) | `dataflow.query.count_by/sum_by/aggregate` |
+| Existing database      | `auto_migrate=True` (v0.12.1 auto-detects) |
+| Schema changes         | Enterprise migration system                |
+| Risk assessment        | RiskAssessmentEngine                       |
 
 ## Key Rules
 
@@ -256,8 +261,8 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 
 ### Primary Documentation
 
-- [DataFlow README](../../sdk-users/apps/dataflow/README.md)
-- [Complete Documentation](../../sdk-users/apps/dataflow/docs/)
+- [DataFlow Skills](../../skills/02-dataflow/SKILL.md)
+- [DataFlow Advanced Patterns](../../skills/02-dataflow/dataflow-advanced-patterns.md)
 
 ### Nexus Integration (v0.12.1)
 
@@ -283,6 +288,7 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 
 | Topic                    | Skill File                                                                                     |
 | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| Aggregation Queries      | [`dataflow-aggregation`](../../skills/02-dataflow/dataflow-aggregation.md)                     |
 | Async Lifecycle (DF-501) | [`dataflow-async-lifecycle`](../../skills/02-dataflow/dataflow-async-lifecycle.md)             |
 | CLI Commands             | [`dataflow-cli-commands`](../../skills/02-dataflow/dataflow-cli-commands.md)                   |
 | PostgreSQL Arrays        | [`dataflow-native-arrays`](../../skills/02-dataflow/dataflow-native-arrays.md)                 |
@@ -294,6 +300,7 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 | Strict Mode              | [`dataflow-strict-mode`](../../skills/02-dataflow/dataflow-strict-mode.md)                     |
 | Express API              | [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md)                             |
 | TDD Mode                 | [`dataflow-tdd-mode`](../../skills/02-dataflow/dataflow-tdd-mode.md)                           |
+| SQLite Concurrency       | [`dataflow-sqlite-concurrency`](../../skills/02-dataflow/dataflow-sqlite-concurrency.md)       |
 
 ## Related Agents
 
@@ -307,6 +314,6 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/apps/dataflow/CLAUDE.md` - Complete DataFlow guide
-- `sdk-users/apps/dataflow/docs/` - Comprehensive documentation
+- `.claude/skills/02-dataflow/` - Complete DataFlow skills directory
+- `.claude/skills/02-dataflow/dataflow-advanced-patterns.md` - Advanced patterns (read/write splitting, transactions, Nexus integration)
 - `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns

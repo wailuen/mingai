@@ -132,6 +132,6 @@ def run(self, **kwargs):
 
 ## Documentation
 
-- **Custom Nodes**: [`sdk-contributors/3-development/05-custom-nodes.md`](../../../../sdk-contributors/3-development/05-custom-nodes.md)
+- **Custom Nodes**: [`contrib/3-development/05-custom-nodes.md`](../../../../contrib/3-development/05-custom-nodes.md)
 
 <!-- Trigger Keywords: create custom node, custom node standard, node development, custom node gold standard -->

@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 
@@ -89,6 +94,38 @@ export function useGlossaryTerms(
         items: raw.items.map(transformTerm),
       } as GlossaryListResponse;
     },
+  });
+}
+
+const GLOSSARY_PAGE_SIZE = 50;
+
+export function useInfiniteGlossaryTerms(search: string, statusFilter: string) {
+  return useInfiniteQuery({
+    queryKey: [GLOSSARY_KEY, "infinite", search, statusFilter],
+    queryFn: async ({ pageParam = 1 }) => {
+      const params = new URLSearchParams({
+        page: String(pageParam),
+        page_size: String(GLOSSARY_PAGE_SIZE),
+      });
+      if (search) params.set("search", search);
+      if (statusFilter === "active") params.set("is_active", "true");
+      if (statusFilter === "inactive") params.set("is_active", "false");
+      const raw = await apiGet<{
+        items: GlossaryTermRaw[];
+        total: number;
+        page: number;
+        page_size: number;
+      }>(`/api/v1/glossary/?${params.toString()}`);
+      return {
+        ...raw,
+        items: raw.items.map(transformTerm),
+      } as GlossaryListResponse;
+    },
+    getNextPageParam: (lastPage) => {
+      const totalPages = Math.ceil(lastPage.total / GLOSSARY_PAGE_SIZE);
+      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
+    },
+    initialPageParam: 1,
   });
 }
 

@@ -1,6 +1,6 @@
 ---
 name: pythoncode-data-science
-description: "PythonCodeNode patterns for data science workflows. Use when asking 'data science', 'pandas workflows', 'numpy patterns', 'scientific computing', or 'data analysis'."
+description: "PythonCodeNode patterns for data science workflows using third-party libraries (pandas, numpy — install separately). Use when asking 'data science', 'data analysis', 'scientific computing', or 'data processing workflows'."
 ---
 
 # Pythoncode Data Science
@@ -17,7 +17,8 @@ Pythoncode Data Science guide with patterns, examples, and best practices.
 - **Primary Use**: Pythoncode Data Science
 - **Category**: core-patterns
 - **Priority**: HIGH
-- **Trigger Keywords**: data science, pandas workflows, numpy patterns, scientific computing, data analysis
+- **Trigger Keywords**: data science, data analysis, scientific computing, data processing workflows
+- **Note**: pandas, numpy, and other data science libraries are not bundled with the SDK — install separately (e.g., `pip install pandas numpy`)
 
 ## Core Pattern
 
@@ -29,12 +30,10 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/pythoncode-data-science.md
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
-
 
 ## Common Use Cases
 
@@ -53,6 +52,7 @@ results, run_id = runtime.execute(workflow.build())
 ## When to Escalate to Subagent
 
 Use specialized subagents when:
+
 - **pattern-expert**: Complex patterns, multi-node workflows
 - **sdk-navigator**: Error resolution, parameter issues
 - **testing-specialist**: Comprehensive testing strategies
@@ -60,7 +60,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/`](../../../sdk-users/2-core-concepts/cheatsheet/)
 
 ## Quick Tips
 
@@ -70,4 +69,4 @@ Use specialized subagents when:
 
 ## Keywords for Auto-Trigger
 
-<!-- Trigger Keywords: data science, pandas workflows, numpy patterns, scientific computing, data analysis -->
+<!-- Trigger Keywords: data science, data analysis, scientific computing, data processing workflows -->

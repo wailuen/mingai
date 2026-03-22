@@ -49,7 +49,7 @@ export function ChatEmptyState({
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-4">
-      <div className="w-full max-w-[600px]">
+      <div className="mx-auto w-full max-w-[600px]">
         {/* Agent icon */}
         <div className="mb-4 flex justify-center">
           <div className="flex h-11 w-11 items-center justify-center rounded-card bg-accent/10 text-accent">
@@ -90,7 +90,7 @@ export function ChatEmptyState({
         </div>
 
         {/* Suggestion chips */}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center">
           {SUGGESTIONS.map((suggestion) => (
             <button
               key={suggestion}

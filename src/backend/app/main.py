@@ -158,115 +158,194 @@ async def lifespan(app: FastAPI):
         # job_run_log may not exist yet (pre-migration environment) — never block startup.
         logger.warning("startup_zombie_cleanup_failed", error=str(_exc))
 
+    # In test mode, skip all background scheduler tasks — they iterate over
+    # accumulated test tenants and cause TestClient teardown timeouts.
+    _testing = os.environ.get("TESTING", "").lower() in ("1", "true", "yes")
+
     # AI-048 / SCHED-019: Start agent health monitor background job.
     # Recomputes trust scores for all published agents every hour.
     _health_monitor_task = None
-    try:
-        from app.modules.har.health_monitor import run_agent_health_scheduler
-
-        _health_monitor_task = asyncio.create_task(run_agent_health_scheduler())
-        logger.info("agent_health_monitor_scheduled", interval_seconds=3600)
-    except Exception as exc:
-        logger.warning(
-            "agent_health_monitor_startup_failed",
-            error=str(exc),
-        )
-
     # INFRA-026 / SCHED-020: Warm up glossary cache for all active tenants.
-    # Run as a background task (not blocking await) so the application becomes
-    # ready immediately. Glossary cache writes are idempotent Redis SETs — a
-    # second pod running warm-up simultaneously is harmless (last write wins,
-    # both writes are identical for the same glossary data). No lock needed.
     _glossary_warmup_task = None
-    try:
-        from app.modules.glossary.warmup import warm_up_glossary_cache
-
-        _glossary_warmup_task = asyncio.create_task(warm_up_glossary_cache())
-    except Exception as exc:
-        logger.warning(
-            "glossary_warmup_startup_failed",
-            error=str(exc),
-        )
-
     # CACHE-014: Start semantic cache cleanup background job (runs hourly).
     _semantic_cache_cleanup_task = None
-    try:
-        from app.core.cache.cleanup_job import run_semantic_cache_cleanup_loop
-
-        _semantic_cache_cleanup_task = asyncio.create_task(
-            run_semantic_cache_cleanup_loop()
-        )
-        logger.info("semantic_cache_cleanup_scheduled", interval_seconds=3600)
-    except Exception as exc:
-        logger.warning(
-            "semantic_cache_cleanup_startup_failed",
-            error=str(exc),
-        )
-
     # CACHE-006: Start query embedding warming scheduler (fires daily at 03:00 UTC).
     _query_warming_task = None
-    try:
-        from app.modules.cache.query_warming import run_query_warming_scheduler
-
-        _query_warming_task = asyncio.create_task(run_query_warming_scheduler())
-        logger.info("query_warming_scheduler_started", schedule="daily at 03:00 UTC")
-    except Exception as exc:
-        logger.warning(
-            "query_warming_scheduler_startup_failed",
-            error=str(exc),
-        )
-
     # PA-007: Start tenant health score batch job scheduler (fires daily at 02:00 UTC).
     _health_score_task = None
-    try:
-        from app.modules.platform.health_score_job import run_health_score_scheduler
-
-        _health_score_task = asyncio.create_task(run_health_score_scheduler())
-        logger.info("health_score_scheduler_started", schedule="daily at 02:00 UTC")
-    except Exception as exc:
-        logger.warning(
-            "health_score_scheduler_startup_failed",
-            error=str(exc),
-        )
-
     # PA-012: Start token attribution / cost summary batch job (fires daily at 03:30 UTC).
     _cost_summary_task = None
-    try:
-        from app.modules.platform.cost_summary_job import start_cost_summary_scheduler
-
-        _cost_summary_task = asyncio.create_task(start_cost_summary_scheduler())
-        logger.info("cost_summary_scheduler_started", schedule="daily at 03:30 UTC")
-    except Exception as exc:
-        logger.warning(
-            "cost_summary_scheduler_startup_failed",
-            error=str(exc),
-        )
-
     # PA-014: Start Azure Cost Management pull job (fires daily at 03:45 UTC).
     _azure_cost_task = None
-    try:
-        from app.modules.platform.azure_cost_job import start_azure_cost_scheduler
-
-        _azure_cost_task = asyncio.create_task(start_azure_cost_scheduler())
-        logger.info("azure_cost_scheduler_started", schedule="daily at 03:45 UTC")
-    except Exception as exc:
-        logger.warning(
-            "azure_cost_scheduler_startup_failed",
-            error=str(exc),
-        )
-
     # PA-015: Start cost alert evaluation job (fires daily at 04:00 UTC).
     _cost_alert_task = None
-    try:
-        from app.modules.platform.cost_alert_job import start_cost_alert_scheduler
+    # TA-013: Start glossary miss signals batch job (fires daily at 04:30 UTC).
+    _miss_signals_task = None
+    # TA-017: Start credential expiry monitoring job (fires daily at 05:00 UTC).
+    _credential_expiry_task = None
+    # HAR-004: Start URL health monitor for public agent registry (runs every ~5 minutes).
+    _url_health_monitor_task = None
+    # HAR-010: Start approval timeout job (runs every ~1 hour).
+    _approval_timeout_task = None
+    # PVDR-007 / SCHED-006: Start provider health check job (asyncio loop, every 600s).
+    _provider_health_task = None
+    # SCHED-008: Start tool health check job (asyncio loop, every 300s).
+    _tool_health_task = None
+    # SCHED-039: Start document sync scheduler (fires due syncs every 60s).
+    _doc_sync_task = None
+    # ATA-036: Start credential health check job (fires daily at 05:30 UTC).
+    _credential_health_task = None
 
-        _cost_alert_task = asyncio.create_task(start_cost_alert_scheduler())
-        logger.info("cost_alert_scheduler_started", schedule="daily at 04:00 UTC")
-    except Exception as exc:
-        logger.warning(
-            "cost_alert_scheduler_startup_failed",
-            error=str(exc),
-        )
+    if not _testing:
+        # All background scheduler tasks are skipped in test mode — they iterate
+        # over accumulated test tenants and cause TestClient teardown timeouts.
+
+        try:
+            from app.modules.har.health_monitor import run_agent_health_scheduler
+
+            _health_monitor_task = asyncio.create_task(run_agent_health_scheduler())
+            logger.info("agent_health_monitor_scheduled", interval_seconds=3600)
+        except Exception as exc:
+            logger.warning("agent_health_monitor_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.glossary.warmup import warm_up_glossary_cache
+
+            _glossary_warmup_task = asyncio.create_task(warm_up_glossary_cache())
+        except Exception as exc:
+            logger.warning("glossary_warmup_startup_failed", error=str(exc))
+
+        try:
+            from app.core.cache.cleanup_job import run_semantic_cache_cleanup_loop
+
+            _semantic_cache_cleanup_task = asyncio.create_task(
+                run_semantic_cache_cleanup_loop()
+            )
+            logger.info("semantic_cache_cleanup_scheduled", interval_seconds=3600)
+        except Exception as exc:
+            logger.warning("semantic_cache_cleanup_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.cache.query_warming import run_query_warming_scheduler
+
+            _query_warming_task = asyncio.create_task(run_query_warming_scheduler())
+            logger.info("query_warming_scheduler_started", schedule="daily at 03:00 UTC")
+        except Exception as exc:
+            logger.warning("query_warming_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.health_score_job import run_health_score_scheduler
+
+            _health_score_task = asyncio.create_task(run_health_score_scheduler())
+            logger.info("health_score_scheduler_started", schedule="daily at 02:00 UTC")
+        except Exception as exc:
+            logger.warning("health_score_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.cost_summary_job import start_cost_summary_scheduler
+
+            _cost_summary_task = asyncio.create_task(start_cost_summary_scheduler())
+            logger.info("cost_summary_scheduler_started", schedule="daily at 03:30 UTC")
+        except Exception as exc:
+            logger.warning("cost_summary_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.azure_cost_job import start_azure_cost_scheduler
+
+            _azure_cost_task = asyncio.create_task(start_azure_cost_scheduler())
+            logger.info("azure_cost_scheduler_started", schedule="daily at 03:45 UTC")
+        except Exception as exc:
+            logger.warning("azure_cost_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.cost_alert_job import start_cost_alert_scheduler
+
+            _cost_alert_task = asyncio.create_task(start_cost_alert_scheduler())
+            logger.info("cost_alert_scheduler_started", schedule="daily at 04:00 UTC")
+        except Exception as exc:
+            logger.warning("cost_alert_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.glossary.miss_signals_job import run_miss_signals_scheduler
+
+            _miss_signals_task = asyncio.create_task(run_miss_signals_scheduler())
+            logger.info("miss_signals_scheduler_started", schedule="daily at 04:30 UTC")
+        except Exception as exc:
+            logger.warning("miss_signals_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.documents.credential_expiry_job import (
+                run_credential_expiry_scheduler,
+            )
+
+            _credential_expiry_task = asyncio.create_task(run_credential_expiry_scheduler())
+            logger.info("credential_expiry_scheduler_started", schedule="daily at 05:00 UTC")
+        except Exception as exc:
+            logger.warning("credential_expiry_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.registry.url_health_monitor import (
+                run_url_health_monitor_scheduler,
+            )
+
+            _url_health_monitor_task = asyncio.create_task(
+                run_url_health_monitor_scheduler()
+            )
+            logger.info(
+                "url_health_monitor_scheduler_started",
+                schedule="every ~5 minutes with ±60s jitter",
+            )
+        except Exception as exc:
+            logger.warning("url_health_monitor_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.har.approval_timeout_job import run_approval_timeout_scheduler
+
+            _approval_timeout_task = asyncio.create_task(run_approval_timeout_scheduler())
+            logger.info(
+                "har_approval_timeout_scheduler_started",
+                schedule="every ~1 hour with ±60s jitter",
+            )
+        except Exception as exc:
+            logger.warning("har_approval_timeout_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.provider_health_job import run_provider_health_scheduler
+
+            _provider_health_task = asyncio.create_task(run_provider_health_scheduler())
+            logger.info("provider_health_scheduler_started", interval_seconds=600)
+        except Exception as exc:
+            logger.warning("provider_health_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.tool_health_job import run_tool_health_scheduler
+
+            _tool_health_task = asyncio.create_task(run_tool_health_scheduler())
+            logger.info("tool_health_scheduler_started", interval_seconds=300)
+        except Exception as exc:
+            logger.warning("tool_health_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.documents.sync_scheduler_job import run_document_sync_scheduler
+
+            _doc_sync_task = asyncio.create_task(run_document_sync_scheduler())
+            logger.info("doc_sync_scheduler_started", interval_seconds=60)
+        except Exception as exc:
+            logger.warning("doc_sync_scheduler_startup_failed", error=str(exc))
+
+        try:
+            from app.modules.platform.credential_health import (
+                run_credential_health_scheduler,
+            )
+
+            _credential_health_task = asyncio.create_task(
+                run_credential_health_scheduler()
+            )
+            logger.info(
+                "credential_health_scheduler_started", schedule="daily at 05:30 UTC"
+            )
+        except Exception as exc:
+            logger.warning("credential_health_scheduler_startup_failed", error=str(exc))
 
     # PVDR-006: Bootstrap LLM provider from env vars if table is empty.
     try:
@@ -284,132 +363,22 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("agent_templates_seed_failed", error=str(exc))
 
-    # TA-013: Start glossary miss signals batch job (fires daily at 04:30 UTC).
-    _miss_signals_task = None
-    try:
-        from app.modules.glossary.miss_signals_job import run_miss_signals_scheduler
+    # TODO-38: Start LLM library health check job (every 900s / 15 min).
+    _llm_health_task = None
+    if not _testing:
+        try:
+            from app.modules.platform.llm_health_check import run_llm_health_scheduler
 
-        _miss_signals_task = asyncio.create_task(run_miss_signals_scheduler())
-        logger.info("miss_signals_scheduler_started", schedule="daily at 04:30 UTC")
-    except Exception as exc:
-        logger.warning(
-            "miss_signals_scheduler_startup_failed",
-            error=str(exc),
-        )
-
-    # TA-017: Start credential expiry monitoring job (fires daily at 05:00 UTC).
-    _credential_expiry_task = None
-    try:
-        from app.modules.documents.credential_expiry_job import (
-            run_credential_expiry_scheduler,
-        )
-
-        _credential_expiry_task = asyncio.create_task(run_credential_expiry_scheduler())
-        logger.info(
-            "credential_expiry_scheduler_started", schedule="daily at 05:00 UTC"
-        )
-    except Exception as exc:
-        logger.warning(
-            "credential_expiry_scheduler_startup_failed",
-            error=str(exc),
-        )
-
-    # HAR-004: Start URL health monitor for public agent registry (runs every ~5 minutes).
-    _url_health_monitor_task = None
-    try:
-        from app.modules.registry.url_health_monitor import (
-            run_url_health_monitor_scheduler,
-        )
-
-        _url_health_monitor_task = asyncio.create_task(
-            run_url_health_monitor_scheduler()
-        )
-        logger.info(
-            "url_health_monitor_scheduler_started",
-            schedule="every ~5 minutes with ±60s jitter",
-        )
-    except Exception as exc:
-        logger.warning(
-            "url_health_monitor_scheduler_startup_failed",
-            error=str(exc),
-        )
-
-    # HAR-010: Start approval timeout job (runs every ~1 hour).
-    _approval_timeout_task = None
-    try:
-        from app.modules.har.approval_timeout_job import run_approval_timeout_scheduler
-
-        _approval_timeout_task = asyncio.create_task(run_approval_timeout_scheduler())
-        logger.info(
-            "har_approval_timeout_scheduler_started",
-            schedule="every ~1 hour with ±60s jitter",
-        )
-    except Exception as exc:
-        logger.warning(
-            "har_approval_timeout_scheduler_startup_failed",
-            error=str(exc),
-        )
-
-    # PVDR-007 / SCHED-006: Start provider health check job (asyncio loop, every 600s).
-    _provider_health_task = None
-    try:
-        from app.modules.platform.provider_health_job import run_provider_health_scheduler
-
-        _provider_health_task = asyncio.create_task(run_provider_health_scheduler())
-        logger.info(
-            "provider_health_scheduler_started",
-            interval_seconds=600,
-        )
-    except Exception as exc:
-        logger.warning(
-            "provider_health_scheduler_startup_failed",
-            error=str(exc),
-        )
-
-    # SCHED-008: Start tool health check job (asyncio loop, every 300s).
-    _tool_health_task = None
-    try:
-        from app.modules.platform.tool_health_job import run_tool_health_scheduler
-
-        _tool_health_task = asyncio.create_task(run_tool_health_scheduler())
-        logger.info(
-            "tool_health_scheduler_started",
-            interval_seconds=300,
-        )
-    except Exception as exc:
-        logger.warning(
-            "tool_health_scheduler_startup_failed",
-            error=str(exc),
-        )
-
-    # SCHED-039: Start document sync scheduler (fires due syncs every 60s).
-    _doc_sync_task = None
-    try:
-        from app.modules.documents.sync_scheduler_job import run_document_sync_scheduler
-
-        _doc_sync_task = asyncio.create_task(run_document_sync_scheduler())
-        logger.info("doc_sync_scheduler_started", interval_seconds=60)
-    except Exception as exc:
-        logger.warning("doc_sync_scheduler_startup_failed", error=str(exc))
-
-    # ATA-036: Start credential health check job (fires daily at 05:30 UTC).
-    _credential_health_task = None
-    try:
-        from app.modules.platform.credential_health import (
-            run_credential_health_scheduler,
-        )
-
-        _credential_health_task = asyncio.create_task(
-            run_credential_health_scheduler()
-        )
-        logger.info(
-            "credential_health_scheduler_started", schedule="daily at 05:30 UTC"
-        )
-    except Exception as exc:
-        logger.warning(
-            "credential_health_scheduler_startup_failed",
-            error=str(exc),
-        )
+            _llm_health_task = asyncio.create_task(run_llm_health_scheduler())
+            logger.info(
+                "llm_library_health_scheduler_started",
+                interval_seconds=900,
+            )
+        except Exception as exc:
+            logger.warning(
+                "llm_library_health_scheduler_startup_failed",
+                error=str(exc),
+            )
 
     logger.info("application_started")
 
@@ -546,6 +515,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("credential_health_scheduler_stopped")
+
+    if _llm_health_task is not None and not _llm_health_task.done():
+        _llm_health_task.cancel()
+        try:
+            await _llm_health_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("llm_library_health_scheduler_stopped")
 
     if _glossary_warmup_task is not None and not _glossary_warmup_task.done():
         _glossary_warmup_task.cancel()

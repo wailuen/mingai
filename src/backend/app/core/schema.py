@@ -36,6 +36,8 @@ TABLE_NAMES = [
     "har_transactions",
     "har_transaction_events",
     "notifications",
+    "llm_profile_history",
+    "llm_profile_audit_log",
 ]
 
 # All tables requiring RLS (standard tenant_id + special cases)
@@ -81,18 +83,32 @@ TABLE_DEFINITIONS = {
         "UNIQUE (tenant_id, config_type)"
     ),
     "llm_profiles": (
+        # v2 schema (rebuilt by v050 migration — two-track: NULL=platform, UUID=BYOLLM)
         "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
-        "tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, "
         "name VARCHAR(255) NOT NULL, "
-        "provider VARCHAR(100) NOT NULL, "
-        "primary_model VARCHAR(255) NOT NULL, "
-        "intent_model VARCHAR(255) NOT NULL, "
-        "embedding_model VARCHAR(255) NOT NULL, "
-        "endpoint_url VARCHAR(500), "
-        "api_key_ref VARCHAR(500), "
-        "is_default BOOLEAN DEFAULT false, "
-        "created_at TIMESTAMPTZ DEFAULT NOW(), "
-        "updated_at TIMESTAMPTZ DEFAULT NOW()"
+        "description VARCHAR(1000), "
+        "status VARCHAR(50) NOT NULL DEFAULT 'active' "
+        "CHECK (status IN ('active', 'deprecated')), "
+        "chat_library_id UUID, "       # REFERENCES llm_library(id)
+        "intent_library_id UUID, "     # REFERENCES llm_library(id)
+        "vision_library_id UUID, "     # REFERENCES llm_library(id)
+        "agent_library_id UUID, "      # REFERENCES llm_library(id)
+        "chat_params JSONB DEFAULT '{}', "
+        "intent_params JSONB DEFAULT '{}', "
+        "vision_params JSONB DEFAULT '{}', "
+        "agent_params JSONB DEFAULT '{}', "
+        "chat_traffic_split JSONB DEFAULT '[]', "
+        "intent_traffic_split JSONB DEFAULT '[]', "
+        "vision_traffic_split JSONB DEFAULT '[]', "
+        "agent_traffic_split JSONB DEFAULT '[]', "
+        "custom_slots JSONB DEFAULT '{}', "
+        "is_platform_default BOOLEAN NOT NULL DEFAULT false, "
+        "plan_tiers TEXT[] DEFAULT '{}', "
+        "owner_tenant_id UUID, "       # REFERENCES tenants(id) — NULL=platform
+        "created_by UUID, "
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), "
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), "
+        "UNIQUE (name, owner_tenant_id)"
     ),
     "conversations": (
         "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
@@ -339,6 +355,28 @@ TABLE_DEFINITIONS = {
         "link VARCHAR(500), "
         "read BOOLEAN NOT NULL DEFAULT false, "
         "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ),
+    # v050 new tables (LLM Profile redesign)
+    "llm_profile_history": (
+        # Mutation history for rollback support
+        "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "profile_id UUID NOT NULL, "    # REFERENCES llm_profiles(id) ON DELETE CASCADE
+        "slot_snapshot JSONB NOT NULL, "
+        "changed_by UUID, "
+        "changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), "
+        "change_reason TEXT"
+    ),
+    "llm_profile_audit_log": (
+        # SOC 2 append-only audit trail — no DELETE, no UPDATE
+        "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "entity_type VARCHAR(50), "
+        "entity_id UUID, "
+        "action VARCHAR(50), "
+        "actor_id UUID, "
+        "tenant_id UUID, "
+        "diff JSONB, "
+        "ip_address INET, "
+        "logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ),
 }
 

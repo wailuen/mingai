@@ -13,9 +13,7 @@ function KPICard({ icon, value, label }: KPICardProps) {
   return (
     <div className="rounded-card border border-border bg-bg-surface p-5">
       <div className="mb-3 text-text-faint">{icon}</div>
-      <p className="font-mono text-[28px] font-semibold text-text-primary">
-        {value}
-      </p>
+      <p className="font-mono text-[28px] font-semibold text-accent">{value}</p>
       <p className="mt-1 text-[11px] uppercase tracking-wider text-text-faint">
         {label}
       </p>

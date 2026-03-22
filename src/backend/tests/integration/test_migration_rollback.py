@@ -10,7 +10,13 @@ the test database, since Alembic's Python API requires a sync connection.
 import os
 import subprocess
 import sys
-import psycopg2
+
+import pytest
+
+psycopg2 = pytest.importorskip(
+    "psycopg2",
+    reason="psycopg2 not installed — install with: pip install psycopg2-binary",
+)
 
 # Backend root — where alembic.ini lives
 BACKEND_ROOT = os.path.dirname(

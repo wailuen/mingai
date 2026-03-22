@@ -1,15 +1,25 @@
 """
-Tenant LLM Configuration API (P2LLM-006).
+Tenant LLM Configuration API (P2LLM-006 + TODO-33 B6 rewrite).
 
-Endpoints (require tenant_admin):
-    GET  /admin/llm-config                 — returns current llm_config + byollm key presence
-    PATCH /admin/llm-config                — set model_source (library/byollm) + llm_library_id
-    GET  /admin/llm-config/library-options — list Published llm_library entries available for
-                                             assignment (excludes Deprecated) (PA-003/PA-004)
+V1 endpoints (DEPRECATED — remove in Phase D once frontend is updated):
+    GET    /admin/llm-config                   — returns current llm_config + byollm key presence
+    PATCH  /admin/llm-config                   — DEPRECATED: removed in v2 (use select-profile)
+    GET    /admin/llm-config/library-options   — DEPRECATED: delegates to available-profiles
+    GET    /admin/llm-config/providers         — list enabled platform providers (PVDR-008)
+    PATCH  /admin/llm-config/provider          — set tenant provider selection (PVDR-008)
+
+V2 endpoints (TODO-33 B6):
+    GET    /admin/llm-config                   — effective resolved profile (profile-aware)
+    GET    /admin/llm-config/available-profiles — platform profiles visible to this tenant's plan
+    POST   /admin/llm-config/select-profile    — select a platform profile (professional+ only)
+
+V1 GET /admin/llm-config now includes _deprecated_model_source for frontend compat.
+PATCH /admin/llm-config is REMOVED — replaced by POST /admin/llm-config/select-profile.
+GET /admin/llm-config/library-options preserved as alias for available-profiles.
 
 Config is stored in tenant_configs table under config_type='llm_config'.
-After PATCH: Redis key mingai:{tenant_id}:config is DEL'd to bust cache (PA-003).
-SLA: 60s propagation — DEL forces cache miss → re-read from PostgreSQL on next call.
+Profile selection stored in tenants.llm_profile_id (set by select-profile endpoint).
+Cache invalidation: Redis key mingai:{tenant_id}:llm_profile is DEL'd after profile changes.
 """
 import json
 import uuid
@@ -22,6 +32,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, require_tenant_admin
+from app.core.middleware.plan_tier import require_plan_or_above
 from app.core.redis_client import get_redis
 from app.core.session import get_async_session
 
@@ -47,22 +58,79 @@ class BYOLLMStatus(BaseModel):
     key_present: bool = False
 
 
-class LLMConfigResponse(BaseModel):
-    """Current tenant LLM configuration."""
+class SlotInfo(BaseModel):
+    """Resolved info for a single model slot."""
 
-    model_source: str  # "library" | "byollm"
-    llm_library_id: Optional[str] = None
-    byollm: BYOLLMStatus
+    library_entry_id: Optional[str] = None
+    model_name: Optional[str] = None
+    display_name: Optional[str] = None
+    provider: Optional[str] = None
+    test_passed_at: Optional[str] = None
+    is_available_on_plan: bool = True
 
     model_config = {"protected_namespaces": ()}
 
 
-class UpdateLLMConfigRequest(BaseModel):
-    model_source: str = Field(..., description="One of: library, byollm")
-    llm_library_id: Optional[str] = Field(
-        None,
-        description="Required when model_source=library. UUID of a Published llm_library entry.",
-    )
+class SlotsPayload(BaseModel):
+    """All four model slots — always present, values may be null."""
+
+    chat: SlotInfo = Field(default_factory=SlotInfo)
+    intent: SlotInfo = Field(default_factory=SlotInfo)
+    vision: SlotInfo = Field(default_factory=SlotInfo)
+    agent: SlotInfo = Field(default_factory=SlotInfo)
+
+    model_config = {"protected_namespaces": ()}
+
+
+class LLMConfigResponse(BaseModel):
+    """Current tenant LLM configuration (v1 compat + v2 profile fields)."""
+
+    # V1 compat fields (DEPRECATED: remove in Phase D)
+    model_source: str  # "library" | "byollm" | "profile"
+    llm_library_id: Optional[str] = None
+    byollm: BYOLLMStatus
+
+    # V2 profile fields
+    profile_id: Optional[str] = None
+    profile_name: Optional[str] = None
+    description: Optional[str] = None
+    plan_tier: str = "starter"
+    is_byollm: bool = False
+    slots: SlotsPayload = Field(default_factory=SlotsPayload)
+    available_profiles_count: int = 0
+
+    model_config = {"protected_namespaces": ()}
+
+
+class EffectiveProfileResponse(BaseModel):
+    """V2 response shape for resolved LLM profile."""
+
+    profile_id: Optional[str] = None
+    profile_name: Optional[str] = None
+    is_byollm: bool = False
+    slots: dict = Field(default_factory=dict)
+
+    model_config = {"protected_namespaces": ()}
+
+
+class SelectProfileRequest(BaseModel):
+    """Body for POST /admin/llm-config/select-profile."""
+
+    profile_id: str = Field(..., description="UUID of a platform LLM profile")
+
+    model_config = {"protected_namespaces": ()}
+
+
+class AvailableProfileItem(BaseModel):
+    """A platform profile available for this tenant's plan tier."""
+
+    id: str
+    name: str
+    description: Optional[str] = None
+    plan_tiers: list[str]
+    slot_summary: dict = Field(default_factory=dict)
+    is_platform_default: bool = False
+    estimated_cost_per_1k_queries: Optional[float] = None
 
     model_config = {"protected_namespaces": ()}
 
@@ -113,14 +181,22 @@ async def _invalidate_config_cache(tenant_id: str) -> None:
     Key format matches TenantConfigService._redis_key():
     mingai:{tenant_id}:config:{key}
 
+    Also invalidates the ProfileResolver cache key:
+    mingai:{tenant_id}:llm_profile
+
     Both keys are deleted because byollm mutations change byollm_key_ref
     and llm_config mutations change model_source — both affect routing.
     """
     try:
+        # Clear in-process LRU first so the next resolve() hits DB, not stale LRU
+        from app.core.llm.profile_resolver import ProfileResolver
+        await ProfileResolver().invalidate(tenant_id)
+
         redis = get_redis()
         llm_key = f"mingai:{tenant_id}:config:llm_config"
         byollm_key = f"mingai:{tenant_id}:config:byollm_key_ref"
-        await redis.delete(llm_key, byollm_key)
+        profile_key = f"mingai:{tenant_id}:llm_profile"
+        await redis.delete(llm_key, byollm_key, profile_key)
         logger.debug("llm_config_cache_invalidated", tenant_id=tenant_id)
     except Exception as exc:
         # Non-blocking — cache miss is acceptable
@@ -131,8 +207,197 @@ async def _invalidate_config_cache(tenant_id: str) -> None:
         )
 
 
+_NULL_SLOT = {
+    "library_entry_id": None,
+    "model_name": None,
+    "display_name": None,
+    "provider": None,
+    "test_passed_at": None,
+    "is_available_on_plan": True,
+}
+
+_SLOT_NAMES = ("chat", "intent", "vision", "agent")
+
+
+def _empty_slots() -> dict:
+    return {s: dict(_NULL_SLOT) for s in _SLOT_NAMES}
+
+
+async def _resolve_effective_profile(tenant_id: str, plan: str, db: AsyncSession) -> dict:
+    """Resolve the effective LLM profile for the tenant.
+
+    Returns a dict with profile_id, profile_name, description, is_byollm, slots.
+    Slots always contains all four keys (chat/intent/vision/agent) with null-safe values.
+    Falls back to legacy llm_config if profile resolution returns nothing.
+    """
+    try:
+        from app.core.llm.profile_resolver import ProfileResolver
+        resolver = ProfileResolver()
+        resolved = await resolver.resolve(tenant_id, plan=plan, db=db)
+        if resolved:
+            slots = _empty_slots()
+            for slot_name in _SLOT_NAMES:
+                slot = resolved.get_slot(slot_name)
+                if slot and slot.library_id:
+                    lib_result = await db.execute(
+                        text(
+                            "SELECT id, provider, model_name, display_name "
+                            "FROM llm_library WHERE id = :id"
+                        ),
+                        {"id": slot.library_id},
+                    )
+                    lib_row = lib_result.fetchone()
+                    if lib_row:
+                        slots[slot_name] = {
+                            "library_entry_id": str(lib_row[0]),
+                            "model_name": lib_row[2],
+                            "display_name": lib_row[3],
+                            "provider": lib_row[1],
+                            "test_passed_at": None,
+                            "is_available_on_plan": True,
+                        }
+            return {
+                "profile_id": resolved.profile_id,
+                "profile_name": resolved.profile_name,
+                "description": resolved.description if hasattr(resolved, "description") else None,
+                "is_byollm": resolved.owner_tenant_id is not None,
+                "slots": slots,
+            }
+    except Exception as exc:
+        logger.warning(
+            "effective_profile_resolution_failed",
+            tenant_id=tenant_id,
+            error=str(exc),
+        )
+
+    # Fallback: legacy llm_config
+    raw = await _get_llm_config_raw(tenant_id, db)
+    llm_cfg = raw.get("llm_config", {})
+    return {
+        "profile_id": None,
+        "profile_name": "No profile assigned",
+        "description": None,
+        "is_byollm": llm_cfg.get("model_source") == "byollm",
+        "slots": _empty_slots(),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Route handlers
+# V2 Route handlers (TODO-33 B6)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/llm-config/available-profiles", response_model=list[AvailableProfileItem])
+async def list_available_profiles(
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """List platform LLM profiles available for this tenant's plan tier (TODO-33 B6).
+
+    Returns profiles where plan_tiers is empty (all plans) or contains the tenant's plan.
+    Excludes deprecated profiles.
+    """
+    plan = getattr(current_user, "plan", "starter") or "starter"
+
+    result = await db.execute(
+        text(
+            "SELECT id, name, description, plan_tiers, is_platform_default, "
+            "chat_library_id, intent_library_id, vision_library_id, agent_library_id "
+            "FROM llm_profiles "
+            "WHERE owner_tenant_id IS NULL "
+            "AND status = 'active' "
+            "AND (plan_tiers = '{}' OR :plan = ANY(plan_tiers)) "
+            "ORDER BY is_platform_default DESC, name ASC"
+        ),
+        {"plan": plan},
+    )
+    rows = result.fetchall()
+
+    items = []
+    for row in rows:
+        slot_summary: dict = {}
+        for i, slot_name in enumerate(("chat", "intent", "vision", "agent"), start=5):
+            if row[i]:
+                slot_summary[slot_name] = "assigned"
+        items.append(
+            AvailableProfileItem(
+                id=str(row[0]),
+                name=row[1],
+                description=row[2],
+                plan_tiers=list(row[3]) if row[3] else [],
+                is_platform_default=bool(row[4]),
+                slot_summary=slot_summary,
+            )
+        )
+    return items
+
+
+@router.post("/llm-config/select-profile", response_model=EffectiveProfileResponse)
+async def select_profile(
+    request: SelectProfileRequest,
+    current_user: CurrentUser = Depends(require_plan_or_above("professional")),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Select a platform LLM profile for this tenant (professional+ only) (TODO-33 B6).
+
+    Starter tenants receive 403 before any DB access (enforced by require_plan_or_above).
+    Invalidates the profile resolver cache for this tenant.
+    """
+    tenant_id = current_user.tenant_id
+    plan = getattr(current_user, "plan", "professional") or "professional"
+
+    # Verify the profile exists, is active, and is eligible for this tenant's plan
+    profile_result = await db.execute(
+        text(
+            "SELECT id, name, status, plan_tiers, owner_tenant_id "
+            "FROM llm_profiles "
+            "WHERE id = :pid "
+            "AND owner_tenant_id IS NULL "
+            "AND status = 'active' "
+            "AND (plan_tiers = '{}' OR :plan = ANY(plan_tiers))"
+        ),
+        {"pid": request.profile_id, "plan": plan},
+    )
+    profile_row = profile_result.fetchone()
+    if profile_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found or not available for your plan",
+        )
+
+    # Update tenant's llm_profile_id
+    update_result = await db.execute(
+        text("UPDATE tenants SET llm_profile_id = :pid WHERE id = :tid"),
+        {"pid": request.profile_id, "tid": tenant_id},
+    )
+    if (update_result.rowcount or 0) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found",
+        )
+
+    await db.commit()
+    await _invalidate_config_cache(tenant_id)
+
+    logger.info(
+        "tenant_profile_selected",
+        tenant_id=tenant_id,
+        profile_id=request.profile_id,
+        actor_id=current_user.id,
+    )
+
+    # Return the effective resolved profile
+    effective = await _resolve_effective_profile(tenant_id, plan, db)
+    return EffectiveProfileResponse(
+        profile_id=effective["profile_id"],
+        profile_name=effective["profile_name"],
+        is_byollm=effective["is_byollm"],
+        slots=effective["slots"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# V1/V2 combined GET /admin/llm-config
 # ---------------------------------------------------------------------------
 
 
@@ -142,17 +407,16 @@ async def list_llm_library_options(
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    List Published llm_library entries available for tenant assignment (PA-003/PA-004).
-
-    Excludes Deprecated entries — WHERE status = 'Published'.
-    Ordered by is_recommended DESC then display_name ASC.
+    DEPRECATED: use GET /admin/llm-config/available-profiles instead.
+    # DEPRECATED: remove in Phase D
+    Preserved for frontend compat during Phase C transition.
     """
     result = await db.execute(
         text(
             "SELECT id, provider, model_name, display_name, plan_tier, "
             "is_recommended, pricing_per_1k_tokens_in, pricing_per_1k_tokens_out "
             "FROM llm_library "
-            "WHERE status = 'Published' "
+            "WHERE status = 'published' "
             "ORDER BY is_recommended DESC, display_name ASC"
         )
     )
@@ -177,118 +441,69 @@ async def get_llm_config(
     current_user: CurrentUser = Depends(require_tenant_admin),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Get current LLM config for this tenant (P2LLM-006)."""
+    """Get current LLM config for this tenant.
+
+    V2 (TODO-33 B6): Returns effective resolved profile data in addition to
+    legacy model_source fields for backward compatibility.
+    """
     await db.execute(
         text("SELECT set_config('app.tenant_id', :tid, true)"),
         {"tid": current_user.tenant_id},
     )
+    plan = getattr(current_user, "plan", "starter") or "starter"
 
     raw = await _get_llm_config_raw(current_user.tenant_id, db)
-
     llm_cfg = raw.get("llm_config", {})
     byollm_cfg = raw.get("byollm_key_ref", {})
 
-    return LLMConfigResponse(
-        model_source=llm_cfg.get("model_source", "library"),
-        llm_library_id=llm_cfg.get("llm_library_id"),
-        byollm=BYOLLMStatus(
-            provider=byollm_cfg.get("provider") if byollm_cfg else None,
-            key_present=bool(byollm_cfg.get("encrypted_key_ref"))
-            if byollm_cfg
-            else False,
-        ),
-    )
+    effective = await _resolve_effective_profile(current_user.tenant_id, plan, db)
 
-
-@router.patch("/llm-config", response_model=LLMConfigResponse)
-async def update_llm_config(
-    request: UpdateLLMConfigRequest,
-    current_user: CurrentUser = Depends(require_tenant_admin),
-    db: AsyncSession = Depends(get_async_session),
-):
-    """Update LLM model source (P2LLM-006)."""
-    if request.model_source not in _VALID_MODEL_SOURCES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"model_source must be one of {sorted(_VALID_MODEL_SOURCES)}",
-        )
-
-    if request.model_source == "byollm":
-        if current_user.plan != "enterprise":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="BYOLLM requires an enterprise plan.",
-            )
-
-    if request.model_source == "library":
-        if not request.llm_library_id:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="llm_library_id is required when model_source=library",
-            )
-        # Validate the referenced entry is Published
-        lib_result = await db.execute(
-            text("SELECT status FROM llm_library WHERE id = :id"),
-            {"id": request.llm_library_id},
-        )
-        lib_row = lib_result.fetchone()
-        if lib_row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="llm_library entry not found",
-            )
-        if lib_row[0] != "Published":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"llm_library entry is not Published (status: {lib_row[0]})",
-            )
-
-    config_data = {
-        "model_source": request.model_source,
-        "llm_library_id": request.llm_library_id,
-    }
-
-    await db.execute(
+    # Count available platform profiles for this tenant's plan (for upgrade nudge)
+    count_result = await db.execute(
         text(
-            "INSERT INTO tenant_configs (id, tenant_id, config_type, config_data) "
-            "VALUES (:id, :tid, 'llm_config', CAST(:data AS jsonb)) "
-            "ON CONFLICT (tenant_id, config_type) DO UPDATE SET config_data = CAST(:data AS jsonb)"
+            "SELECT COUNT(*) FROM llm_profiles "
+            "WHERE owner_tenant_id IS NULL AND status = 'active' "
+            "AND (plan_tiers = '{}' OR :plan = ANY(plan_tiers))"
         ),
-        {
-            "id": str(uuid.uuid4()),
-            "tid": current_user.tenant_id,
-            "data": json.dumps(config_data),
-        },
+        {"plan": plan},
     )
-    await db.commit()
+    available_count = count_result.scalar() or 0
 
-    await _invalidate_config_cache(current_user.tenant_id)
-
-    logger.info(
-        "llm_config_updated",
-        tenant_id=current_user.tenant_id,
-        model_source=request.model_source,
+    # Build SlotsPayload with all four slot keys always present
+    slots_dict = effective["slots"]
+    slots_payload = SlotsPayload(
+        chat=SlotInfo(**slots_dict.get("chat", _NULL_SLOT)),
+        intent=SlotInfo(**slots_dict.get("intent", _NULL_SLOT)),
+        vision=SlotInfo(**slots_dict.get("vision", _NULL_SLOT)),
+        agent=SlotInfo(**slots_dict.get("agent", _NULL_SLOT)),
     )
-
-    # Return current config
-    raw = await _get_llm_config_raw(current_user.tenant_id, db)
-    llm_cfg = raw.get("llm_config", {})
-    byollm_cfg = raw.get("byollm_key_ref", {})
 
     return LLMConfigResponse(
+        # V1 compat fields
         model_source=llm_cfg.get("model_source", "library"),
         llm_library_id=llm_cfg.get("llm_library_id"),
         byollm=BYOLLMStatus(
             provider=byollm_cfg.get("provider") if byollm_cfg else None,
-            key_present=bool(byollm_cfg.get("encrypted_key_ref"))
-            if byollm_cfg
-            else False,
+            key_present=bool(byollm_cfg.get("encrypted_key_ref")) if byollm_cfg else False,
         ),
+        # V2 profile fields
+        profile_id=effective["profile_id"],
+        profile_name=effective["profile_name"],
+        description=effective.get("description"),
+        plan_tier=plan,
+        is_byollm=effective["is_byollm"],
+        slots=slots_payload,
+        available_profiles_count=int(available_count),
     )
+
+
+# NOTE: PATCH /admin/llm-config is REMOVED in v2.
+# # DEPRECATED: remove in Phase D
+# Use POST /admin/llm-config/select-profile instead.
 
 
 # ---------------------------------------------------------------------------
-# PVDR-008: Tenant Provider Selection API
+# PVDR-008: Tenant Provider Selection API (preserved from v1)
 # ---------------------------------------------------------------------------
 
 
@@ -337,21 +552,25 @@ async def list_available_providers(
     Returns enabled providers with slots_available derived from the models dict.
     No credentials are returned.
     """
+    # Elevate to platform scope to read llm_providers (cross-tenant table).
+    # Reset in finally to guarantee tenant scope is restored on the pooled connection.
     await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
-
-    result = await db.execute(
-        text(
-            "SELECT id, provider_type, display_name, description, "
-            "is_default, provider_status, models "
-            "FROM llm_providers WHERE is_enabled = true "
-            "ORDER BY is_default DESC, display_name ASC"
+    try:
+        result = await db.execute(
+            text(
+                "SELECT id, provider_type, display_name, description, "
+                "is_default, provider_status, models "
+                "FROM llm_providers WHERE is_enabled = true "
+                "ORDER BY is_default DESC, display_name ASC"
+            )
         )
-    )
-    rows = result.fetchall()
+        rows = result.fetchall()
+    finally:
+        await db.execute(text("SELECT set_config('app.scope', 'tenant', true)"))
 
     import json as _json
 
-    _AVAILABLE_SLOTS = ["primary", "chat", "doc_embedding", "kb_embedding", "intent"]
+    _AVAILABLE_SLOTS_PVDR = ["primary", "chat", "doc_embedding", "kb_embedding", "intent"]
 
     options = []
     for row in rows:
@@ -363,7 +582,7 @@ async def list_available_providers(
         else:
             models_dict = {}
 
-        slots_available = [s for s in _AVAILABLE_SLOTS if models_dict.get(s)]
+        slots_available = [s for s in _AVAILABLE_SLOTS_PVDR if models_dict.get(s)]
 
         options.append(
             ProviderOptionResponse(
@@ -397,27 +616,30 @@ async def update_provider_selection(
     tenant_id = current_user.tenant_id
 
     if request.provider_id is not None:
-        # Validate provider exists and is enabled
+        # Validate provider exists and is enabled.
+        # Use try/finally to guarantee scope is reset to 'tenant' even if a
+        # 404/422 exception escapes — without this, the pooled connection
+        # would retain 'platform' scope for the next request.
         await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
-        check_result = await db.execute(
-            text("SELECT is_enabled FROM llm_providers WHERE id = :id"),
-            {"id": request.provider_id},
-        )
-        provider_row_check = check_result.fetchone()
-        if provider_row_check is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Provider not found",
+        try:
+            check_result = await db.execute(
+                text("SELECT is_enabled FROM llm_providers WHERE id = :id"),
+                {"id": request.provider_id},
             )
-        if not provider_row_check[0]:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Provider is disabled and cannot be selected",
-            )
-
-        # Reset RLS to tenant scope for tenant_configs write.
-        # Both app.scope and app.tenant_id must be correct before the INSERT.
-        await db.execute(text("SELECT set_config('app.scope', 'tenant', true)"))
+            provider_row_check = check_result.fetchone()
+            if provider_row_check is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Provider not found",
+                )
+            if not provider_row_check[0]:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Provider is disabled and cannot be selected",
+                )
+        finally:
+            # Reset RLS to tenant scope regardless of outcome.
+            await db.execute(text("SELECT set_config('app.scope', 'tenant', true)"))
         await db.execute(
             text("SELECT set_config('app.tenant_id', :tid, true)"),
             {"tid": tenant_id},

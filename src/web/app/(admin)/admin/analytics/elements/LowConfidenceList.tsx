@@ -1,6 +1,7 @@
 "use client";
 
 import type { LowConfidenceItem } from "@/lib/hooks/useAnalytics";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 interface LowConfidenceListProps {
   items: LowConfidenceItem[];
@@ -60,9 +61,12 @@ export function LowConfidenceList({
           well-covered!
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <ScrollableTableWrapper
+          maxHeight="none"
+          className="rounded-none border-0"
+        >
           <table className="w-full text-left">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-bg-surface">
               <tr className="border-b border-border">
                 <th className="pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-text-faint">
                   Query
@@ -94,7 +98,7 @@ export function LowConfidenceList({
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableWrapper>
       )}
     </div>
   );

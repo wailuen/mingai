@@ -50,11 +50,19 @@ interface FormState {
   endpoint_url: string;
   api_key: string;
   api_version: string;
+  /** TODO-35: capabilities JSON controlling eligible_slots, supports_vision etc. */
+  capabilities_json: string;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+
+const DEFAULT_CAPABILITIES_JSON = JSON.stringify(
+  { eligible_slots: ["chat", "intent"], supports_vision: false },
+  null,
+  2,
+);
 
 const EMPTY_FORM: FormState = {
   provider: "azure_openai",
@@ -68,12 +76,14 @@ const EMPTY_FORM: FormState = {
   endpoint_url: "",
   api_key: "",
   api_version: "2024-12-01-preview",
+  capabilities_json: DEFAULT_CAPABILITIES_JSON,
 };
 
 const PROVIDERS: { value: LLMLibraryProvider; label: string }[] = [
   { value: "azure_openai", label: "Azure OpenAI" },
   { value: "openai_direct", label: "OpenAI Direct" },
   { value: "anthropic", label: "Anthropic" },
+  { value: "bedrock", label: "AWS Bedrock" },
 ];
 
 const PLAN_TIERS: { value: PlanTier; label: string }[] = [
@@ -105,6 +115,9 @@ function formFromEntry(entry: LLMLibraryEntry): FormState {
     endpoint_url: entry.endpoint_url ?? "",
     api_key: "", // never pre-filled from entry
     api_version: entry.api_version ?? "2024-12-01-preview",
+    capabilities_json: entry.capabilities
+      ? JSON.stringify(entry.capabilities, null, 2)
+      : DEFAULT_CAPABILITIES_JSON,
   };
 }
 
@@ -310,6 +323,19 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
       // Only send api_key if user typed something — empty means "keep existing"
       if (form.api_key) payload.api_key = form.api_key;
 
+      // Capabilities — only send if valid JSON and changed
+      try {
+        const parsedCaps = JSON.parse(form.capabilities_json);
+        const existingCaps = entry.capabilities
+          ? JSON.stringify(entry.capabilities)
+          : null;
+        if (JSON.stringify(parsedCaps) !== existingCaps) {
+          payload.capabilities = parsedCaps;
+        }
+      } catch {
+        // invalid JSON — skip capabilities field
+      }
+
       updateMutation.mutate(
         { id: entry.id, payload },
         {
@@ -322,6 +348,13 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         },
       );
     } else {
+      let parsedCapabilities: Record<string, unknown> | undefined;
+      try {
+        parsedCapabilities = JSON.parse(form.capabilities_json);
+      } catch {
+        parsedCapabilities = undefined;
+      }
+
       const payload: CreateLLMLibraryPayload = {
         provider: form.provider,
         model_name: form.model_name,
@@ -338,6 +371,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         endpoint_url: form.endpoint_url || undefined,
         api_key: form.api_key || undefined,
         api_version: form.api_version || undefined,
+        capabilities: parsedCapabilities,
       };
 
       createMutation.mutate(payload, {
@@ -500,10 +534,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             </select>
           </div>
 
-          {/* Deployment Name */}
+          {/* Deployment Name / Model ARN */}
           <div>
             <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-              Deployment Name *
+              {form.provider === "bedrock" ? "Model ARN *" : "Deployment Name *"}
             </label>
             <input
               type="text"
@@ -511,11 +545,17 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               onChange={(e) => updateField("model_name", e.target.value)}
               required
               maxLength={255}
-              placeholder="e.g. agentic-worker"
+              placeholder={
+                form.provider === "bedrock"
+                  ? "arn:aws:bedrock:ap-southeast-1:123456789:application-inference-profile/..."
+                  : "e.g. agentic-worker"
+              }
               className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
             <p className="mt-1 text-[11px] text-text-faint">
-              Must match deployment name exactly
+              {form.provider === "bedrock"
+                ? "Enter the full ARN, e.g. arn:aws:bedrock:ap-southeast-1:123456789:application-inference-profile/..."
+                : "Must match deployment name exactly"}
             </p>
           </div>
 
@@ -610,6 +650,46 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             Mark as recommended
           </label>
 
+          {/* Capabilities JSON */}
+          <div>
+            <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
+              Capabilities JSON
+            </label>
+            <textarea
+              value={form.capabilities_json}
+              onChange={(e) => updateField("capabilities_json", e.target.value)}
+              onBlur={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value);
+                  updateField(
+                    "capabilities_json",
+                    JSON.stringify(parsed, null, 2),
+                  );
+                } catch {
+                  // leave as-is — invalid JSON shows red border
+                }
+              }}
+              rows={4}
+              spellCheck={false}
+              className={cn(
+                "w-full rounded-control border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none",
+                (() => {
+                  try {
+                    JSON.parse(form.capabilities_json);
+                    return "border-border";
+                  } catch {
+                    return "border-alert";
+                  }
+                })(),
+              )}
+              placeholder={DEFAULT_CAPABILITIES_JSON}
+            />
+            <p className="mt-1 text-[11px] text-text-faint">
+              Controls eligible_slots (chat, intent, vision, agent) and
+              supports_vision flag
+            </p>
+          </div>
+
           {/* ---------------------------------------------------------------- */}
           {/* Section 2 — Connection Credentials                               */}
           {/* ---------------------------------------------------------------- */}
@@ -621,18 +701,25 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               </h3>
             </div>
 
-            {/* Endpoint URL — Azure only */}
-            {form.provider === "azure_openai" && (
+            {/* Endpoint URL — Azure and Bedrock */}
+            {(form.provider === "azure_openai" ||
+              form.provider === "bedrock") && (
               <div>
                 <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-                  Endpoint URL
+                  {form.provider === "bedrock"
+                    ? "Bedrock Base URL"
+                    : "Endpoint URL"}
                 </label>
                 <input
                   type="text"
                   value={form.endpoint_url}
                   onChange={(e) => updateField("endpoint_url", e.target.value)}
                   maxLength={512}
-                  placeholder="https://ai-xxx.cognitiveservices.azure.com/"
+                  placeholder={
+                    form.provider === "bedrock"
+                      ? "https://bedrock-runtime.ap-southeast-1.amazonaws.com"
+                      : "https://ai-xxx.cognitiveservices.azure.com/"
+                  }
                   className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
@@ -641,7 +728,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             {/* API Key — all providers */}
             <div>
               <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-                API Key
+                {form.provider === "bedrock" ? "AWS Bearer Token" : "API Key"}
               </label>
               <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
                 <input
@@ -687,6 +774,33 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   placeholder="2024-12-01-preview"
                   className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
+              </div>
+            )}
+
+            {/* Health status — read-only, shown when editing */}
+            {isEditing && (
+              <div className="flex items-center gap-2 pt-1">
+                <span
+                  className={cn(
+                    "inline-block h-2 w-2 flex-shrink-0 rounded-full",
+                    entry.health_status === "healthy" && "bg-accent",
+                    entry.health_status === "degraded" && "bg-alert",
+                    (!entry.health_status ||
+                      entry.health_status === "unknown") &&
+                      "bg-warn",
+                  )}
+                />
+                <span className="text-[11px] text-text-faint">
+                  {entry.health_status === "healthy"
+                    ? "Healthy"
+                    : entry.health_status === "degraded"
+                      ? "Degraded"
+                      : "Unknown"}
+                  {" · "}
+                  {entry.health_checked_at
+                    ? `Last checked: ${formatDate(entry.health_checked_at)}`
+                    : "Not yet checked"}
+                </span>
               </div>
             )}
           </div>
@@ -944,7 +1058,10 @@ function MarkdownPreview({ content }: { content: string }) {
         }
         if (trimmed.startsWith("## ")) {
           return (
-            <p key={i} className="mt-2 text-section-heading font-bold text-text-primary">
+            <p
+              key={i}
+              className="mt-2 text-section-heading font-bold text-text-primary"
+            >
               {trimmed.slice(3)}
             </p>
           );

@@ -1,6 +1,7 @@
 "use client";
 
 import type { TopHitPattern } from "@/lib/hooks/useCacheAnalytics";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 interface TopHitPatternsProps {
   patterns: TopHitPattern[];
@@ -12,8 +13,12 @@ function truncate(str: string, max: number): string {
 }
 
 export function TopHitPatterns({ patterns }: TopHitPatternsProps) {
-  const top10 = patterns.slice(0, 10);
-  const totalCount = patterns.reduce((sum, p) => sum + p.count, 0);
+  // Guard: API may not return top_hit_patterns if the schema has evolved.
+  // Treat undefined/null as an empty list so the component renders the empty
+  // state rather than crashing with "Cannot read properties of undefined".
+  const safePatterns: TopHitPattern[] = Array.isArray(patterns) ? patterns : [];
+  const top10 = safePatterns.slice(0, 10);
+  const totalCount = safePatterns.reduce((sum, p) => sum + p.count, 0);
 
   if (top10.length === 0) {
     return (
@@ -33,9 +38,12 @@ export function TopHitPatterns({ patterns }: TopHitPatternsProps) {
           Top Hit Patterns
         </h2>
       </div>
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        maxHeight="none"
+        className="rounded-none border-0"
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
                 Pattern
@@ -73,7 +81,7 @@ export function TopHitPatterns({ patterns }: TopHitPatternsProps) {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

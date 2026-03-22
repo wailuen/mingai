@@ -74,8 +74,8 @@ const TENANT_ADMIN_SECTIONS: NavSection[] = [
         icon: AlertCircle,
       },
       {
-        label: "LLM Settings",
-        href: "/admin/settings/llm",
+        label: "LLM Profile",
+        href: "/settings/llm-profile",
         icon: Cpu,
       },
       { label: "Settings", href: "/settings/workspace", icon: Settings },

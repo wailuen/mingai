@@ -7,6 +7,7 @@ import {
   type AtRiskTenant,
 } from "@/lib/hooks/useHealthScores";
 import { healthScoreColor } from "@/lib/chartColors";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import { LineChart, Line } from "recharts";
 
 // ---------------------------------------------------------------------------
@@ -15,7 +16,9 @@ import { LineChart, Line } from "recharts";
 
 function HealthScoreBadge({ score }: { score: number | null }) {
   if (score === null) {
-    return <span className="font-mono text-data-value text-text-faint">--</span>;
+    return (
+      <span className="font-mono text-data-value text-text-faint">--</span>
+    );
   }
 
   const colorClass =
@@ -169,9 +172,12 @@ export function TenantHealthTable() {
             declining 2+ consecutive weeks, OR composite declining 3+ weeks.
             A tenant can appear here with composite 41-69 if rules 2 or 3 fired. */}
       </div>
-      <div className="overflow-x-auto">
+      <ScrollableTableWrapper
+        maxHeight="none"
+        className="rounded-none border-0"
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="px-3.5 py-2.5 text-left text-label-nav uppercase tracking-wider text-text-faint">
                 Tenant
@@ -211,7 +217,7 @@ export function TenantHealthTable() {
               ))}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
     </div>
   );
 }

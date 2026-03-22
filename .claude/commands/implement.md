@@ -1,57 +1,153 @@
-# From todos to implementation
-## NOTE: Spam this repeatedly until all todos/active have been moved to todos/completed)
+---
+name: implement
+description: "Load phase 03 (implement) for the current workspace. Repeat until all todos complete."
+---
 
-Use a team of agents and follow procedural directives with right specialist agent for the right task.
+## Workspace Resolution
 
-1. You MUST always use the todo-manager to create the detailed todos FOR EVERY SINGLE TODO in `todos/000-master.md`
-   - Review with agents, before implementation.
-   - Ensure that both FE and BE detailed todos exist, if applicable
-2. Continue with the implementation of the next todo/phase using a team of agents, following our procedural directives.
-   - Ensure that both FE and BE are implemented, if applicable
-3. At the end of each phase, work with the todo-manager and update the detailed todos in todos/active.
-   - Ensure that every task is verified with evidence before you close them, then move completed ones to completed/.
-   - Ensure that you test comprehensively as you implement, with all tests passing at 100%
-     - No tests can be skipped (make sure docker is up and running).
-     - Do not rewrite the tests just to get them passing but ensure that it's not infrastructure issues that is causing the errors.
-     - Always tests according to the intent of what we are trying to achieve and against users' expectations
-       - Do not write simple naive technical assertions.
-       - Do not have stubs, hardcodes, simulations, naive fallbacks without informative logs.
-     - If the tests involve LLMs and are too slow, check if you are using local LLMs and switch to OpenAI
-     - If the tests involve LLMs and are failing, please check the following errors first before skipping or changing the logic:
-       - Structured outputs are not coded properly
-       - LLM agentic pipelines are not coded properly
-       - Only after exhausting all the input/output and pipeline errors, should you try with a larger model
-4. When writing and testing agents, always remember to utilize the LLM's capabilities instead of naive NLP approaches such as keywords, regex etc.
-   - Use ollama or openai (if ollama is too slow)
-   - always check .env for api keys and model names to use in development.
-     - Always assume that the model names in your memory are outdated and perform a web check on our model names in .env before declaring them invalid.
-5. At the end of each phase, create and update 
-   - these docs
-      - `docs` (complete detailed docs capturing every single details of the codebase)
-        - This is the last resort document that agents try and find elusive and extremely deep documentation if agents and skills files can't resolve
-      - `docs/00-authority`
-        - This is the set of authoritative documents that developers and codegen always read first to gain full situational awareness
-        - Ensure you create/update the `README.md` (navigating the authority documents) and the `CLAUDE.md` (preloaded instructions for developers and codegen)
-      - Project agents and skills (do not touch the other agents and skills in .claude/)
-        - `.claude/agents/project` (Claude Code agents following the `.claude/agents/_subagent-guide.md` and `.claude/guides/claude-code/05-the-agent-system.md`)
-        - `.claude/skills/project` (Claude Code skills following the `.claude/guides/claude-code/06-the-skill-system.md`)
-   - using as many subdirectories and files as required, and naming them sequentially 00-, 01- for easy referencing.
-   - focus on capturing the essence and intent, the 'what it is' and 'how to use it', and not status/progress/reports and other irrelevant information that consumes context unnecessarily.
+1. If `$ARGUMENTS` specifies a project name or todo, parse accordingly
+2. Otherwise, use the most recently modified directory under  (excluding `instructions/`)
+3. If no workspace exists, ask the user to create one first
+4. Read all files in  for user context (this is the user's input surface)
 
-At the end of each phase, launch `documentation-validator` then update:
+## Phase Check
 
-- `docs/` — complete detailed codebase documentation (last-resort reference for agents)
-- `docs/00-authority/` — authoritative docs agents read first for situational awareness:
-  - `README.md` — navigation guide for all authority documents
-  - `CLAUDE.md` — preloaded instructions for developers and codegen agents
-- `.claude/agents/project/` — project-specific agents (follow `.claude/agents/_subagent-guide.md`)
-- `.claude/skills/project/` — project-specific skills (follow `.claude/guides/claude-code/06-the-skill-system.md`)
+- Read files in  to see what needs doing
+- Read files in  to see what's done
+- If `$ARGUMENTS` specifies a specific todo, focus on that one
+- Otherwise, pick the next active todo
+- Reference plans in  for context
 
-Use as many subdirectories and files as needed, named sequentially `00-`, `01-`.
-Capture essence and intent — what it is and how to use it. No status reports or progress notes.
+## Workflow
 
-# Mandatory Gates (every cycle, non-negotiable)
+### NOTE: Run `/implement` repeatedly until all todos/active have been moved to todos/completed
 
-- After every file change → `intermediate-reviewer`
-- Before every commit → `security-reviewer`
-- After each phase → `gold-standards-validator`
+### 1. Prepare todos
+
+You MUST always use the todo-manager to create detailed todos for EVERY SINGLE TODO in `todos/000-master.md`.
+
+- Review with agents before implementation
+- Ensure that both FE and BE detailed todos exist, if applicable
+
+### 2. Implement
+
+Continue with the implementation of the next todo/phase using a team of agents, following procedural directives.
+
+- Ensure that both FE and BE are implemented, if applicable
+
+### 3. Quality standards
+
+Always involve tdd-implementer, testing-specialists, value auditor, ai ui ux specialists, with any agents relevant to the work at hand.
+
+- Test for rigor, completeness, and quality of output from both value and technical user perspectives
+- Pre-existing failures often hint that you are missing something obvious and critical
+  - Always address pre-existing failures — do not pass until all failures, warnings, hints are resolved
+- Always identify the root causes of issues, and implement optimal, elegant fixes
+
+### 4. Testing requirements
+
+**Test-once protocol**: Tests run ONCE per code change, not once per phase.
+
+**Before implementing (baseline):**
+
+1. Run the full test suite ONCE to establish baseline: `pytest tests/ -x --tb=short -q`
+2. Record the result: pass count, fail count, commit hash
+3. If there are pre-existing failures, note them — they are NOT your regressions
+
+**During implementation (TDD cycle):**
+
+- tdd-implementer runs tests as part of red-green-refactor — this is the ONE authoritative test run
+- Run only affected tests during development for speed: `pytest tests/unit/path_to_affected/ -x`
+- Run the full suite ONCE when the todo is complete (not after every small change)
+
+**After implementing (regression check):**
+
+1. Run full suite: `pytest tests/ -x --tb=short -q`
+2. Compare against baseline: if any test that passed before now fails, you introduced a regression — STOP and fix
+3. Write `.test-results` artifact in workspace: 
+
+**`.test-results` format:**
+
+```
+commit: <git hash>
+timestamp: <ISO 8601>
+baseline_pass: <N>
+baseline_fail: <N>
+final_pass: <N>
+final_fail: <N>
+new_tests: <N>
+regressions: <N> (must be 0)
+command: pytest tests/ -x --tb=short -q
+```
+
+**Bug fixes MUST include regression tests:**
+
+- Every bug fix adds a test to `tests/regression/` marked with `@pytest.mark.regression`
+- The test MUST reproduce the bug (fail before fix, pass after)
+- Regression tests are NEVER deleted — they are permanent guards
+
+**What NOT to do:**
+
+- Do NOT run the full suite multiple times per todo
+- Do NOT let testing-specialist re-run tests that tdd-implementer already ran
+- Do NOT re-run tests just to "verify" — read the results from the last run
+
+### 5. LLM usage
+
+When writing and testing agents, always utilize the LLM's capabilities instead of naive NLP approaches (keywords, regex, etc).
+
+- Use ollama or openai (if ollama is too slow)
+- Always check `.env` for api keys and model names to use in development
+  - Always assume model names in memory are outdated — perform a web check on model names in `.env` before declaring them invalid
+
+### 6. Update docs and close todos
+
+After completing each todo:
+
+- Move it from `todos/active/` to `todos/completed/`
+- Ensure every task is verified with evidence before closing
+
+At the end of each implementation cycle, create and update documentation at the **project root** (not inside the workspace):
+
+- `docs/` (complete detailed docs capturing every detail of the codebase)
+  - This is the last resort document that agents use to find elusive and deep documentation
+- `docs/00-authority/`
+  - Authoritative documents that developers and codegen read first for full situational awareness
+  - Ensure you create/update `README.md` (navigating authority documents) and `CLAUDE.md` (preloaded instructions)
+- Use as many subdirectories and files as required, naming them sequentially 00-, 01- for easy referencing
+- Focus on capturing the essence and intent — the 'what it is' and 'how to use it' — not status/progress/reports
+
+## Agent Teams
+
+Deploy these agents as a team for each implementation cycle:
+
+**Core team (always):**
+
+- **tdd-implementer** — Test-first development, red-green-refactor
+- **testing-specialist** — 3-tier test strategy, real infrastructure recommended in Tier 2-3
+- **intermediate-reviewer** — Code review after every file change (MANDATORY)
+- **todo-manager** — Track progress, update todo status, verify completion with evidence
+
+**Specialist (invoke ONE matching the current todo):**
+
+- **pattern-expert** — Workflow patterns, node configuration
+- **dataflow-specialist** — Database operations (if project uses DataFlow)
+- **nexus-specialist** — API deployment (if project uses Nexus)
+- **kaizen-specialist** — AI agents (if project uses Kaizen)
+- **mcp-specialist** — MCP integration (if project uses MCP)
+
+**Frontend team (when implementing frontend):**
+
+- **uiux-designer** — Design system, visual hierarchy, responsive layouts
+- **react-specialist** or **flutter-specialist** — Framework-specific implementation
+- **ai-ux-designer** — AI interaction patterns (if AI-facing UI)
+- **frontend-developer** — Responsive UI components
+
+**Recovery (invoke when builds break):**
+
+- **build-fix** — Fix build/type errors with minimal changes (NO architectural changes)
+
+**Quality gate (once per todo, before closing):**
+
+- **value-auditor** — Evaluate from user/buyer perspective, not just technical assertions
+- **security-reviewer** — Security audit before any commit (MANDATORY)

@@ -9,6 +9,7 @@ import {
   type GroupSyncConfig,
 } from "@/lib/hooks/useSSO";
 import { useUserProfile } from "@/lib/hooks/useUserProfile";
+import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 
 // TA-004: viewer | editor | admin only — "user" is excluded from mapping UI
 const MAPPING_ROLE_OPTIONS: GroupRole[] = ["viewer", "editor", "admin"];
@@ -210,9 +211,12 @@ export function GroupRoleMappingTable() {
       )}
 
       {/* Mapping table */}
-      <div className="overflow-x-auto rounded-control border border-border">
+      <ScrollableTableWrapper
+        maxHeight="none"
+        className="rounded-control border border-border shadow-none"
+      >
         <table className="min-w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-bg-surface">
             <tr className="border-b border-border">
               <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-faint">
                 IdP Group Name
@@ -271,7 +275,7 @@ export function GroupRoleMappingTable() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
 
       {/* Add row */}
       <div className="flex gap-2">

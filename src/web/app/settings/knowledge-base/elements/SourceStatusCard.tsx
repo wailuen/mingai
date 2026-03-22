@@ -126,7 +126,7 @@ export function SourceStatusCard({
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <span
-            className={`rounded-badge border px-2 py-0.5 text-xs font-medium ${statusBadge}`}
+            className={`rounded-badge border px-2 py-0.5 text-[11px] font-medium font-mono ${statusBadge}`}
           >
             {syncing ? "syncing" : integration.status}
           </span>

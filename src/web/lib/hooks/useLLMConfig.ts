@@ -38,7 +38,10 @@ const CONFIG_KEY = ["admin-llm-config"] as const;
 // Hooks
 // ---------------------------------------------------------------------------
 
-/** GET /api/v1/admin/llm-config */
+/**
+ * GET /api/v1/admin/llm-config
+ * @deprecated Use `useEffectiveProfile` from `useLLMProfileConfig` instead (TODO-36).
+ */
 export function useLLMConfig() {
   return useQuery({
     queryKey: CONFIG_KEY,
@@ -58,7 +61,10 @@ export interface LibraryOption {
   pricing_per_1k_tokens_out: number | null;
 }
 
-/** GET /api/v1/admin/llm-config/library-options — tenant-admin accessible */
+/**
+ * GET /api/v1/admin/llm-config/library-options — tenant-admin accessible
+ * @deprecated Use `useAvailableProfiles` from `useLLMProfileConfig` instead (TODO-36).
+ */
 export function useLLMLibraryOptions() {
   return useQuery({
     queryKey: ["admin-llm-library-options"] as const,
@@ -67,7 +73,10 @@ export function useLLMLibraryOptions() {
   });
 }
 
-/** PATCH /api/v1/admin/llm-config */
+/**
+ * PATCH /api/v1/admin/llm-config
+ * @deprecated Use `useSelectProfile` from `useLLMProfileConfig` instead (TODO-36).
+ */
 export function useUpdateLLMConfig() {
   const queryClient = useQueryClient();
 
@@ -80,7 +89,10 @@ export function useUpdateLLMConfig() {
   });
 }
 
-/** PATCH /api/v1/admin/llm-config/byollm */
+/**
+ * PATCH /api/v1/admin/llm-config/byollm
+ * @deprecated Use `useCreateBYOLLMEntry` from `useLLMProfileConfig` instead (TODO-36).
+ */
 export function useUpdateBYOLLM() {
   const queryClient = useQueryClient();
 
@@ -93,7 +105,10 @@ export function useUpdateBYOLLM() {
   });
 }
 
-/** DELETE /api/v1/admin/llm-config/byollm */
+/**
+ * DELETE /api/v1/admin/llm-config/byollm
+ * @deprecated Use BYOLLM removal via `useLLMProfileConfig` hooks instead (TODO-36).
+ */
 export function useDeleteBYOLLM() {
   const queryClient = useQueryClient();
 

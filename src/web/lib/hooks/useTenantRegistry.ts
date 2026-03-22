@@ -25,22 +25,32 @@ export interface RegistryAgent {
 
 const REGISTRY_AGENTS_KEY = ["platform-registry-agents"] as const;
 
-/** GET /api/v1/platform/registry/agents -- list all registry agents */
+interface RegistryAgentPage {
+  items: RegistryAgent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** GET /api/v1/registry/agents -- list all registry agents */
 export function useRegistryAgents() {
   return useQuery({
     queryKey: REGISTRY_AGENTS_KEY,
-    queryFn: () => apiGet<RegistryAgent[]>("/api/v1/platform/registry/agents"),
+    queryFn: async () => {
+      const result = await apiGet<RegistryAgentPage | RegistryAgent[]>("/api/v1/registry/agents");
+      return Array.isArray(result) ? result : (result as RegistryAgentPage).items ?? [];
+    },
   });
 }
 
-/** POST /api/v1/platform/registry/agents/{id}/publish -- publish an agent */
+/** POST /api/v1/registry/agents/{id}/publish -- publish an agent */
 export function usePublishAgent() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (agentId: string) =>
       apiPost<RegistryAgent>(
-        `/api/v1/platform/registry/agents/${agentId}/publish`,
+        `/api/v1/registry/agents/${agentId}/publish`,
         {},
       ),
     onSuccess: () => {
@@ -49,14 +59,14 @@ export function usePublishAgent() {
   });
 }
 
-/** POST /api/v1/platform/registry/agents/{id}/unpublish -- unpublish an agent */
+/** POST /api/v1/registry/agents/{id}/unpublish -- unpublish an agent */
 export function useUnpublishAgent() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (agentId: string) =>
       apiPost<RegistryAgent>(
-        `/api/v1/platform/registry/agents/${agentId}/unpublish`,
+        `/api/v1/registry/agents/${agentId}/unpublish`,
         {},
       ),
     onSuccess: () => {

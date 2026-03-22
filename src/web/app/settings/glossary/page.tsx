@@ -20,7 +20,6 @@ export default function GlossaryPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchQuery = useDeferredValue(searchInput);
   const [statusFilter, setStatusFilter] = useState("");
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 });
 
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -79,7 +78,6 @@ export default function GlossaryPage() {
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
-                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
               }}
               className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
@@ -90,7 +88,6 @@ export default function GlossaryPage() {
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
-              setPagination((prev) => ({ ...prev, pageIndex: 0 }));
             }}
             className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors focus:border-accent focus:outline-none"
           >
@@ -143,8 +140,6 @@ export default function GlossaryPage() {
           <TermList
             searchQuery={searchQuery}
             statusFilter={statusFilter}
-            pagination={pagination}
-            onPaginationChange={setPagination}
             onEdit={handleEdit}
           />
         </ErrorBoundary>

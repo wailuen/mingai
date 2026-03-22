@@ -120,7 +120,7 @@ async def _create_test_agent(
         "(id, tenant_id, name, description, system_prompt, status, version, created_by, "
         "public_key, private_key_enc, trust_score, kyb_level) "
         "VALUES (:id, :tid, :name, :desc, :prompt, 'published', 1, :uid, "
-        ":pub_key, :priv_key_enc, 50, 2)",
+        ":pub_key, :priv_key_enc, 50, 'none')",
         {
             "id": agent_id,
             "tid": tid,

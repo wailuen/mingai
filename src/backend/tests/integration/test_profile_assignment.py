@@ -85,7 +85,7 @@ async def _create_test_tenant() -> str:
 async def _create_llm_library_entry(
     provider: str = "azure_openai",
     model_name: str = "test-model",
-    status: str = "Published",
+    status: str = "published",
     pricing_in: float = 0.002,
     pricing_out: float = 0.006,
 ) -> str:
@@ -261,11 +261,11 @@ class TestProfileAssignmentCacheInvalidation:
         async def _run():
             published_id = await _create_llm_library_entry(
                 model_name=f"published-{uuid.uuid4().hex[:6]}",
-                status="Published",
+                status="published",
             )
             deprecated_id = await _create_llm_library_entry(
                 model_name=f"deprecated-{uuid.uuid4().hex[:6]}",
-                status="Deprecated",
+                status="deprecated",
             )
             self.__class__._library_ids.extend([published_id, deprecated_id])
 
@@ -279,7 +279,7 @@ class TestProfileAssignmentCacheInvalidation:
                     result = await session.execute(
                         text(
                             "SELECT id, status FROM llm_library "
-                            "WHERE status = 'Published' "
+                            "WHERE status = 'published' "
                             "ORDER BY is_recommended DESC, display_name ASC"
                         )
                     )
@@ -308,7 +308,7 @@ class TestProfileAssignmentCacheInvalidation:
         async def _run():
             deprecated_id = await _create_llm_library_entry(
                 model_name=f"dep-assign-{uuid.uuid4().hex[:6]}",
-                status="Deprecated",
+                status="deprecated",
             )
             self.__class__._library_ids.append(deprecated_id)
 
@@ -322,10 +322,10 @@ class TestProfileAssignmentCacheInvalidation:
         status_val, deprecated_id = asyncio.run(_run())
 
         # The PATCH handler rejects any non-Published status
-        assert status_val == "Deprecated"
-        assert status_val != "Published", (
-            "PATCH handler checks status = 'Published' before assignment — "
-            "Deprecated entry will be rejected with 422"
+        assert status_val == "deprecated"
+        assert status_val != "published", (
+            "PATCH handler checks status = 'published' before assignment — "
+            "deprecated entry will be rejected with 422"
         )
 
     def test_tenant_assignments_query_finds_assigned_tenants(self, tenant_id):
@@ -337,7 +337,7 @@ class TestProfileAssignmentCacheInvalidation:
         async def _run():
             lib_id = await _create_llm_library_entry(
                 model_name=f"assigned-{uuid.uuid4().hex[:6]}",
-                status="Published",
+                status="published",
             )
             self.__class__._library_ids.append(lib_id)
 
@@ -399,7 +399,7 @@ class TestProfileAssignmentCacheInvalidation:
         async def _run():
             lib_id = await _create_llm_library_entry(
                 model_name=f"dep-preserve-{uuid.uuid4().hex[:6]}",
-                status="Published",
+                status="published",
             )
             self.__class__._library_ids.append(lib_id)
 
@@ -419,7 +419,7 @@ class TestProfileAssignmentCacheInvalidation:
 
             # Deprecate the entry (simulating the deprecate endpoint action)
             await _run_sql(
-                "UPDATE llm_library SET status = 'Deprecated', updated_at = NOW() "
+                "UPDATE llm_library SET status = 'deprecated', updated_at = NOW() "
                 "WHERE id = :id",
                 {"id": lib_id},
             )
@@ -446,7 +446,7 @@ class TestProfileAssignmentCacheInvalidation:
             "tenant_configs.config_data.llm_library_id must still reference "
             "the (now Deprecated) entry — assignments are preserved"
         )
-        assert lib_row[0] == "Deprecated", "Entry must now be Deprecated in llm_library"
+        assert lib_row[0] == "deprecated", "Entry must now be deprecated in llm_library"
 
     @classmethod
     def teardown_class(cls):

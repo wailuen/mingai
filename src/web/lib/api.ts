@@ -96,28 +96,36 @@ export async function apiRequest<T>(
 }
 
 /**
- * POST helper
+ * POST helper.
+ * Pass `{ skipRedirectOn401: true }` in opts to suppress the automatic
+ * /login redirect on 401 and let the caller handle the ApiException instead.
  */
 export async function apiPost<T>(
   path: string,
   body: Record<string, unknown> | object,
+  opts: { skipRedirectOn401?: boolean } = {},
 ): Promise<T> {
   return apiRequest<T>(path, {
     method: "POST",
     body: JSON.stringify(body),
+    skipRedirectOn401: opts.skipRedirectOn401,
   });
 }
 
 /**
- * PATCH helper
+ * PATCH helper.
+ * Pass `{ skipRedirectOn401: true }` in opts to suppress the automatic
+ * /login redirect on 401 and let the caller handle the ApiException instead.
  */
 export async function apiPatch<T>(
   path: string,
   body: Record<string, unknown> | object,
+  opts: { skipRedirectOn401?: boolean } = {},
 ): Promise<T> {
   return apiRequest<T>(path, {
     method: "PATCH",
     body: JSON.stringify(body),
+    skipRedirectOn401: opts.skipRedirectOn401,
   });
 }
 

@@ -42,26 +42,37 @@ function getHitRateColor(pct: number): string {
 }
 
 export function CacheKPICards({ stats }: CacheKPICardsProps) {
-  const hitRate = stats.hit_rate_pct ?? 0;
-  const missRate = stats.miss_rate_pct ?? 0;
-  const hitLatency = stats.avg_hit_latency_ms ?? 0;
-  const cacheSize = stats.cache_size_mb ?? 0;
+  // API returns stats.overall.hit_rate (0–1 fraction) — convert to percentage for display.
+  const overall = stats.overall ?? {
+    hit_rate: 0,
+    hits: 0,
+    misses: 0,
+    estimated_cost_saved_usd: 0,
+  };
+  const hitRatePct = (overall.hit_rate ?? 0) * 100;
+  const total = (overall.hits ?? 0) + (overall.misses ?? 0);
+  const missRatePct = total > 0 ? ((overall.misses ?? 0) / total) * 100 : 0;
+  const costSaved = overall.estimated_cost_saved_usd ?? 0;
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <KPICard
         label="Hit Rate"
-        value={hitRate.toFixed(1)}
+        value={hitRatePct.toFixed(1)}
         suffix="%"
-        colorClass={getHitRateColor(hitRate)}
+        colorClass={getHitRateColor(hitRatePct)}
       />
-      <KPICard label="Miss Rate" value={missRate.toFixed(1)} suffix="%" />
+      <KPICard label="Miss Rate" value={missRatePct.toFixed(1)} suffix="%" />
       <KPICard
-        label="Avg Hit Latency"
-        value={hitLatency.toFixed(1)}
-        suffix="ms"
+        label="Total Hits"
+        value={(overall.hits ?? 0).toLocaleString()}
+        suffix="hits"
       />
-      <KPICard label="Cache Size" value={cacheSize.toFixed(1)} suffix="MB" />
+      <KPICard
+        label="Est. Cost Saved"
+        value={`$${costSaved.toFixed(4)}`}
+        suffix=""
+      />
     </div>
   );
 }

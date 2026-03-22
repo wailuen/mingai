@@ -187,6 +187,7 @@ class TestRowToEntry:
         # 10: created_at, 11: updated_at
         # 12: endpoint_url, 13: key_present, 14: api_key_last4
         # 15: api_version, 16: last_test_passed_at
+        # 17: health_status, 18: health_checked_at
         now = datetime(2026, 3, 21, 0, 0, 0, tzinfo=timezone.utc)
         return (
             "11111111-1111-1111-1111-111111111111",  # 0 id
@@ -206,6 +207,8 @@ class TestRowToEntry:
             api_key_last4,                            # 14 api_key_last4
             api_version,                              # 15 api_version
             last_test_passed_at,                      # 16 last_test_passed_at
+            None,                                     # 17 health_status
+            None,                                     # 18 health_checked_at
         )
 
     def test_key_present_false_when_null(self):
@@ -307,7 +310,7 @@ class TestPublishGate:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             pricing_per_1k_tokens_in=0.002,
             pricing_per_1k_tokens_out=0.006,
             key_present=True,
@@ -457,7 +460,7 @@ class TestPublishGate:
 
         from app.modules.platform.llm_library.routes import publish_llm_library_entry
 
-        entry = self._make_entry(status="Published")
+        entry = self._make_entry(status="published")
 
         mock_db = AsyncMock()
         mock_user = MagicMock()
@@ -500,7 +503,7 @@ class TestPublishGate:
             provider="openai_direct",
             endpoint_url=None,
             api_version=None,
-            status="Published",
+            status="published",
         )
 
         with patch(
@@ -512,7 +515,7 @@ class TestPublishGate:
                 current_user=mock_user,
                 db=mock_db,
             )
-        assert result.status == "Published"
+        assert result.status == "published"
 
 
 # ---------------------------------------------------------------------------
@@ -539,7 +542,7 @@ class TestTestHarnessNoKey:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=False,
             created_at="2026-03-21T00:00:00+00:00",
             updated_at="2026-03-21T00:00:00+00:00",
@@ -577,7 +580,7 @@ class TestTestHarnessNoKey:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Deprecated",
+            status="deprecated",
             key_present=True,
             created_at="2026-03-21T00:00:00+00:00",
             updated_at="2026-03-21T00:00:00+00:00",
@@ -686,7 +689,7 @@ class TestUpdateCredentialChanged:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=True,
             last_test_passed_at="2026-03-21T12:00:00+00:00",
             created_at="2026-03-21T00:00:00+00:00",
@@ -700,7 +703,7 @@ class TestUpdateCredentialChanged:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=True,
             last_test_passed_at=None,  # reset after key change
             created_at="2026-03-21T00:00:00+00:00",
@@ -756,7 +759,7 @@ class TestUpdateCredentialChanged:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=True,
             last_test_passed_at="2026-03-21T12:00:00+00:00",
             endpoint_url="https://old.openai.azure.com/",
@@ -771,7 +774,7 @@ class TestUpdateCredentialChanged:
             display_name="GPT-4o",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=True,
             last_test_passed_at=None,
             endpoint_url="https://new.openai.azure.com/",
@@ -823,6 +826,8 @@ class TestUpdateCredentialChanged:
             None,   # api_key_last4
             None,   # api_version
             None,   # last_test_passed_at
+            None,   # health_status
+            None,   # health_checked_at
         )
         entry = _row_to_entry(row)
         assert entry.key_present is False
@@ -841,6 +846,8 @@ class TestUpdateCredentialChanged:
             "5678", # api_key_last4
             None,   # api_version
             None,   # last_test_passed_at
+            None,   # health_status
+            None,   # health_checked_at
         )
         entry = _row_to_entry(row)
         assert entry.key_present is True
@@ -857,7 +864,7 @@ class TestUpdateCredentialChanged:
 class TestDeleteLLMLibraryEntry:
     """DELETE /{entry_id} — Draft entries only."""
 
-    def _make_entry(self, status: str = "Draft"):
+    def _make_entry(self, status: str = "draft"):
         from app.modules.platform.llm_library.routes import LLMLibraryEntry
 
         return LLMLibraryEntry(
@@ -879,7 +886,7 @@ class TestDeleteLLMLibraryEntry:
         """DELETE on a Draft entry returns 204 and executes DELETE SQL."""
         from app.modules.platform.llm_library.routes import delete_llm_library_entry
 
-        entry = self._make_entry("Draft")
+        entry = self._make_entry("draft")
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.rowcount = 1
@@ -904,7 +911,7 @@ class TestDeleteLLMLibraryEntry:
         call_args = mock_db.execute.call_args_list[0]
         sql_str = str(call_args[0][0])
         assert "DELETE" in sql_str
-        assert "status = 'Draft'" in sql_str
+        assert "status = 'draft'" in sql_str
 
     @pytest.mark.asyncio
     async def test_delete_published_entry_fails_409(self):
@@ -912,7 +919,7 @@ class TestDeleteLLMLibraryEntry:
         from fastapi import HTTPException
         from app.modules.platform.llm_library.routes import delete_llm_library_entry
 
-        entry = self._make_entry("Published")
+        entry = self._make_entry("published")
         mock_db = AsyncMock()
         mock_user = MagicMock()
 
@@ -936,7 +943,7 @@ class TestDeleteLLMLibraryEntry:
         from fastapi import HTTPException
         from app.modules.platform.llm_library.routes import delete_llm_library_entry
 
-        entry = self._make_entry("Deprecated")
+        entry = self._make_entry("deprecated")
         mock_db = AsyncMock()
         mock_user = MagicMock()
 
@@ -999,17 +1006,12 @@ class TestAssertEndpointSsrfSafe:
             _assert_endpoint_ssrf_safe("https://ai.cognitiveservices.azure.com/")
 
     def test_loopback_ip_raises(self):
-        """127.x.x.x is blocked."""
-        from unittest.mock import patch
+        """127.x.x.x is blocked (via localhost hostname guard)."""
         from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
-        import socket
 
-        with patch.object(
-            socket, "getaddrinfo",
-            return_value=[(None, None, None, None, ("127.0.0.1", 0))]
-        ):
-            with pytest.raises(ValueError, match="non-routable"):
-                _assert_endpoint_ssrf_safe("https://localhost/")
+        # localhost is intercepted before DNS by the blocked-hostname guard
+        with pytest.raises(ValueError, match="SSRF blocked"):
+            _assert_endpoint_ssrf_safe("https://localhost/")
 
     def test_private_rfc1918_raises(self):
         """192.168.x.x is blocked."""
@@ -1021,7 +1023,7 @@ class TestAssertEndpointSsrfSafe:
             socket, "getaddrinfo",
             return_value=[(None, None, None, None, ("192.168.1.1", 0))]
         ):
-            with pytest.raises(ValueError, match="non-routable"):
+            with pytest.raises(ValueError, match="SSRF blocked"):
                 _assert_endpoint_ssrf_safe("https://internal.corp/")
 
     def test_link_local_raises(self):
@@ -1034,14 +1036,14 @@ class TestAssertEndpointSsrfSafe:
             socket, "getaddrinfo",
             return_value=[(None, None, None, None, ("169.254.169.254", 0))]
         ):
-            with pytest.raises(ValueError, match="non-routable"):
+            with pytest.raises(ValueError, match="SSRF blocked"):
                 _assert_endpoint_ssrf_safe("https://metadata.internal/")
 
     def test_missing_hostname_raises(self):
-        """A URL with no hostname raises ValueError immediately."""
+        """A URL with no hostname raises ValueError."""
         from app.modules.platform.llm_library.routes import _assert_endpoint_ssrf_safe
 
-        with pytest.raises(ValueError, match="hostname"):
+        with pytest.raises(ValueError, match="SSRF blocked"):
             _assert_endpoint_ssrf_safe("https:///path")
 
     def test_dns_failure_raises(self):
@@ -1054,7 +1056,7 @@ class TestAssertEndpointSsrfSafe:
             socket, "getaddrinfo",
             side_effect=socket.gaierror("Name or service not known")
         ):
-            with pytest.raises(ValueError, match="Cannot resolve"):
+            with pytest.raises(ValueError, match="SSRF blocked"):
                 _assert_endpoint_ssrf_safe("https://does-not-exist.invalid/")
 
 
@@ -1084,7 +1086,7 @@ class TestModelNameChangeResetsTest:
             display_name="My Entry",
             plan_tier="Professional",
             is_recommended=False,
-            status="Published",
+            status="published",
             key_present=True,
             last_test_passed_at=now.isoformat(),
             created_at=now.isoformat(),
@@ -1097,7 +1099,7 @@ class TestModelNameChangeResetsTest:
             display_name="My Entry",
             plan_tier="Professional",
             is_recommended=False,
-            status="Published",
+            status="published",
             key_present=True,
             last_test_passed_at=None,  # cleared after update
             created_at=now.isoformat(),
@@ -1152,7 +1154,7 @@ class TestModelNameChangeResetsTest:
             display_name="My Entry",
             plan_tier="Professional",
             is_recommended=False,
-            status="Published",
+            status="published",
             key_present=True,
             last_test_passed_at=now.isoformat(),
             created_at=now.isoformat(),
@@ -1165,7 +1167,7 @@ class TestModelNameChangeResetsTest:
             display_name="New Display Name",
             plan_tier="Professional",
             is_recommended=False,
-            status="Published",
+            status="published",
             key_present=True,
             last_test_passed_at=now.isoformat(),
             created_at=now.isoformat(),
@@ -1223,7 +1225,7 @@ class TestAssertEndpointSsrfSafeIPv6:
             socket, "getaddrinfo",
             return_value=[(None, None, None, None, ("::1", 0, 0, 0))]
         ):
-            with pytest.raises(ValueError, match="non-routable"):
+            with pytest.raises(ValueError, match="SSRF blocked"):
                 _assert_endpoint_ssrf_safe("https://ipv6-loopback.example.com/")
 
     def test_ipv6_link_local_raises(self):
@@ -1236,7 +1238,7 @@ class TestAssertEndpointSsrfSafeIPv6:
             socket, "getaddrinfo",
             return_value=[(None, None, None, None, ("fe80::1", 0, 0, 0))]
         ):
-            with pytest.raises(ValueError, match="non-routable"):
+            with pytest.raises(ValueError, match="SSRF blocked"):
                 _assert_endpoint_ssrf_safe("https://ipv6-link-local.example.com/")
 
     def test_ipv6_ula_private_raises(self):
@@ -1249,7 +1251,7 @@ class TestAssertEndpointSsrfSafeIPv6:
             socket, "getaddrinfo",
             return_value=[(None, None, None, None, ("fd00::1", 0, 0, 0))]
         ):
-            with pytest.raises(ValueError, match="non-routable"):
+            with pytest.raises(ValueError, match="SSRF blocked"):
                 _assert_endpoint_ssrf_safe("https://ipv6-ula.example.com/")
 
 
@@ -1278,7 +1280,7 @@ class TestApiVersionChangeResetsTest:
             display_name="My Entry",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=True,
             last_test_passed_at=now.isoformat(),
             endpoint_url="https://ai.openai.azure.com/",
@@ -1293,7 +1295,7 @@ class TestApiVersionChangeResetsTest:
             display_name="My Entry",
             plan_tier="Professional",
             is_recommended=False,
-            status="Draft",
+            status="draft",
             key_present=True,
             last_test_passed_at=None,  # cleared
             endpoint_url="https://ai.openai.azure.com/",
@@ -1339,7 +1341,7 @@ class TestApiVersionChangeResetsTest:
 class TestLLMLibraryTestEndpointErrorPaths:
     """Test harness error paths: 504 timeout and 502 provider error with URL sanitization."""
 
-    def _make_entry(self, key_present: bool = True, status: str = "Draft"):
+    def _make_entry(self, key_present: bool = True, status: str = "draft"):
         from app.modules.platform.llm_library.routes import LLMLibraryEntry
 
         return LLMLibraryEntry(

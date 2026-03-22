@@ -143,7 +143,9 @@ export function TenantLLMConfig({
                     ? "OpenAI Direct"
                     : currentProfile.provider === "anthropic"
                       ? "Anthropic"
-                      : currentProfile.provider}
+                      : currentProfile.provider === "bedrock"
+                        ? "AWS Bedrock"
+                        : currentProfile.provider}
               </span>
             </div>
           )}

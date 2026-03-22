@@ -478,36 +478,18 @@ class TestLLMProviders:
     def test_09_seed_idempotency(self):
         """seed_llm_provider_from_env(): first call returns True (or False if env missing),
         second call always returns False (idempotent)."""
-        import os
-
         db_url = _db_url()
-        jwt_secret = _jwt_secret()
 
         results = {}
 
         async def _do():
-            engine = create_async_engine(db_url, echo=False)
-            async_session = async_sessionmaker(engine, expire_on_commit=False)
-            async with async_session() as db:
-                await db.execute(
-                    text("SELECT set_config('app.scope', 'platform', true)")
-                )
-                # Get current count to restore later
-                res = await db.execute(text("SELECT COUNT(*) FROM llm_providers"))
-                count_before = res.fetchone()[0]
-
-            # Only test idempotency logic: if table already has rows, seed returns False
             from app.core.seeds import seed_llm_provider_from_env
-
             # Run seed once (may or may not create based on env vars)
             r1 = await seed_llm_provider_from_env()
             results["r1"] = r1
-
             # Run seed again — always False (idempotent)
             r2 = await seed_llm_provider_from_env()
             results["r2"] = r2
-
-            await engine.dispose()
 
         asyncio.run(_do())
 

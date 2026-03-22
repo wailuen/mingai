@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +74,23 @@ export function useTenants(page = 1, pageSize = 20) {
       apiGet<TenantsResponse>(
         `/api/v1/platform/tenants?page=${page}&page_size=${pageSize}`,
       ),
+  });
+}
+
+const TENANTS_PAGE_SIZE = 30;
+
+export function useInfiniteTenants() {
+  return useInfiniteQuery({
+    queryKey: ["platform-tenants-infinite"],
+    queryFn: ({ pageParam = 1 }) =>
+      apiGet<TenantsResponse>(
+        `/api/v1/platform/tenants?page=${pageParam}&page_size=${TENANTS_PAGE_SIZE}`,
+      ),
+    getNextPageParam: (lastPage) => {
+      const totalPages = Math.ceil(lastPage.total / TENANTS_PAGE_SIZE);
+      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
+    },
+    initialPageParam: 1,
   });
 }
 

@@ -27,7 +27,6 @@ export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
   return (
     <AppShell>
@@ -81,7 +80,6 @@ export default function UsersPage() {
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
-                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                   }}
                   className="w-full rounded-control border border-border bg-bg-elevated py-1.5 pl-8 pr-3 text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
@@ -91,7 +89,6 @@ export default function UsersPage() {
                 value={roleFilter}
                 onChange={(e) => {
                   setRoleFilter(e.target.value);
-                  setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                 }}
                 className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors focus:border-accent focus:outline-none"
               >
@@ -104,7 +101,6 @@ export default function UsersPage() {
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
-                  setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                 }}
                 className="rounded-control border border-border bg-bg-elevated px-3 py-1.5 text-body-default text-text-muted transition-colors focus:border-accent focus:outline-none"
               >
@@ -120,8 +116,6 @@ export default function UsersPage() {
                 searchQuery={searchQuery}
                 roleFilter={roleFilter}
                 statusFilter={statusFilter}
-                pagination={pagination}
-                onPaginationChange={setPagination}
               />
             </ErrorBoundary>
           </>

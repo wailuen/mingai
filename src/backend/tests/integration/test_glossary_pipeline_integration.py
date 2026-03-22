@@ -142,7 +142,7 @@ def _make_orchestrator_with_real_glossary(tenant_id: str, db_session):
     # Embedding mock — records the query passed to embed()
     embedding_service = MagicMock()
 
-    async def _embed(query):
+    async def _embed(query, **kwargs):
         received_queries["embed"] = query
         return [0.1] * 1536  # dummy vector
 
@@ -179,6 +179,12 @@ def _make_orchestrator_with_real_glossary(tenant_id: str, db_session):
     # Prompt builder mock — records the system prompt
     prompt_builder = MagicMock()
 
+    async def _get_agent_prompt(**kwargs):
+        # Returns (agent_prompt, capabilities, kb_ids, tool_ids)
+        return None, {}, [], []
+
+    prompt_builder._get_agent_prompt = _get_agent_prompt
+
     async def _build(**kwargs):
         rag_ctx = kwargs.get("rag_context", [])
         received_queries["prompt_system"] = kwargs
@@ -212,13 +218,18 @@ def _make_orchestrator_with_real_glossary(tenant_id: str, db_session):
         persistence_service=persistence_service,
         confidence_calculator=confidence_calculator,
         llm_service=llm_service,
+        db_session=db_session,
     )
 
     return orchestrator, received_queries
 
 
+_TEST_AGENT_ID = "00000000-0000-0000-0000-000000000001"
+_TEST_USER_ID = "00000000-0000-0000-0000-000000000002"
+
+
 async def _collect_events(
-    orchestrator, *, query, tenant_id, user_id="user-1", agent_id="agent-1"
+    orchestrator, *, query, tenant_id, user_id=_TEST_USER_ID, agent_id=_TEST_AGENT_ID
 ):
     """Collect all SSE events from stream_response."""
     events = []

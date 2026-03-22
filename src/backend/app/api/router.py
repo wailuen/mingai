@@ -160,6 +160,37 @@ from app.modules.agents.routes import admin_router as agents_admin_router
 
 router.include_router(agents_admin_router)
 
+# Agent Studio Skills endpoints (TODO-16)
+from app.modules.agents.skills_routes import admin_router as skills_admin_router
+from app.modules.agents.skills_routes import router as skills_router
+
+router.include_router(skills_router)
+router.include_router(skills_admin_router)
+
+# Agent Studio custom-agent studio endpoints (TODO-18)
+from app.modules.agents.routes import studio_router as agents_studio_router
+
+router.include_router(agents_studio_router)
+
+# Tenant A2A agent registration endpoints (TODO-19)
+from app.modules.agents.routes import a2a_tenant_router
+
+router.include_router(a2a_tenant_router)
+
+# Agent Studio Tool Catalog + MCP server endpoints (TODO-17)
+from app.modules.agents.tenant_tools_routes import admin_tools_router
+from app.modules.agents.tenant_tools_routes import mcp_router as mcp_servers_tenant_router
+from app.modules.agents.tenant_tools_routes import tools_router
+
+router.include_router(tools_router)
+router.include_router(admin_tools_router)
+router.include_router(mcp_servers_tenant_router)
+
+# Platform A2A Registry endpoints (TODO-24)
+from app.modules.agents.platform_a2a_routes import router as platform_a2a_router
+
+router.include_router(platform_a2a_router)
+
 # HAR A2A transaction endpoints (AI-043 to AI-045)
 from app.modules.har.routes import router as har_router
 
@@ -204,6 +235,11 @@ router.include_router(llm_config_router)
 from app.modules.admin.byollm import router as byollm_router
 
 router.include_router(byollm_router)
+
+# Platform LLM Profile API (TODO-32)
+from app.modules.llm_profiles.routes import router as llm_profiles_router
+
+router.include_router(llm_profiles_router)
 
 # Admin KB access control endpoints (TA-007)
 from app.modules.admin.kb_access_control import router as kb_access_control_router

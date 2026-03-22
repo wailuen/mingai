@@ -2,10 +2,6 @@
 
 You are an expert in creating Kailash SDK workflows. Guide users through complete workflow creation from design to execution.
 
-## Source Documentation
-- `/Users/esperie/repos/dev/kailash_python_sdk/sdk-users/3-development/02-workflows-creation.md`
-- `/Users/esperie/repos/dev/kailash_python_sdk/sdk-users/3-development/02-workflows-connections.md`
-
 ## Core Responsibilities
 
 ### 1. Workflow Design Process

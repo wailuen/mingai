@@ -328,6 +328,162 @@ class TestDeployFromAgentTemplates:
 
 
 # ---------------------------------------------------------------------------
+# deploy_from_library_db — kb_ids regression (GAP-5 / R2 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestDeployFromLibraryDbKbIds:
+    """Regression tests for R2: kb_ids must be forwarded to deploy_from_library_db.
+
+    Before the fix, kb_ids from DeployFromLibraryRequest were silently discarded
+    and never passed to the DB helper.  These tests guard against that regression.
+    """
+
+    def test_kb_ids_forwarded_to_deploy_db(self, client):
+        """R2 regression: kb_ids in request body are passed to deploy_from_library_db."""
+        deploy_mock = AsyncMock(return_value=_MOCK_DEPLOY_RESULT)
+        with (
+            _patch_get_agent_template(_MOCK_AGENT_TEMPLATE),
+            _patch_validate_kb(),
+            patch(f"{_MOD}.deploy_from_library_db", new=deploy_mock),
+            _patch_audit(),
+        ):
+            resp = client.post(
+                _DEPLOY_URL,
+                json={
+                    "template_id": TEST_TEMPLATE_ID,
+                    "name": "R2 Regression Bot",
+                    "variable_values": {"company": "Acme"},
+                    "kb_ids": [TEST_KB_ID],
+                },
+                headers=_tenant_headers(),
+            )
+        assert resp.status_code == 201
+        call_kwargs = deploy_mock.call_args.kwargs
+        # kb_ids must be forwarded — this was the bug: it was silently dropped.
+        assert call_kwargs.get("kb_ids") == [TEST_KB_ID], (
+            "R2 regression: kb_ids not forwarded to deploy_from_library_db"
+        )
+
+    def test_empty_kb_ids_forwarded(self, client):
+        """Empty kb_ids list should still be forwarded (not treated as missing)."""
+        deploy_mock = AsyncMock(return_value=_MOCK_DEPLOY_RESULT)
+        with (
+            _patch_get_agent_template(_MOCK_AGENT_TEMPLATE),
+            _patch_validate_kb(),
+            patch(f"{_MOD}.deploy_from_library_db", new=deploy_mock),
+            _patch_audit(),
+        ):
+            resp = client.post(
+                _DEPLOY_URL,
+                json={
+                    "template_id": TEST_TEMPLATE_ID,
+                    "name": "No KB Bot",
+                    "variable_values": {"company": "Acme"},
+                    "kb_ids": [],
+                },
+                headers=_tenant_headers(),
+            )
+        assert resp.status_code == 201
+        call_kwargs = deploy_mock.call_args.kwargs
+        assert call_kwargs.get("kb_ids") == []
+
+
+class TestDeployFromLibraryDbDirect:
+    """Unit tests for deploy_from_library_db function internals (GAP-5).
+
+    Tests that capabilities JSONB is correctly built with kb_ids merged in.
+    """
+
+    @pytest.mark.asyncio
+    async def test_kb_ids_merged_into_capabilities_jsonb(self):
+        """deploy_from_library_db must store kb_ids inside capabilities JSONB."""
+        from unittest.mock import AsyncMock, MagicMock, call
+
+        from app.modules.agents.routes import deploy_from_library_db
+
+        captured_capabilities = []
+
+        async def mock_execute(query, params=None):
+            # Capture the capabilities JSON string on INSERT
+            if params and "capabilities" in (params or {}):
+                captured_capabilities.append(params["capabilities"])
+            result = MagicMock()
+            result.mappings.return_value.first.return_value = None
+            return result
+
+        mock_db = MagicMock()
+        mock_db.execute = mock_execute
+        mock_db.commit = AsyncMock()
+
+        with patch(f"{_MOD}.generate_agent_keypair", return_value=("pubkey", "enckey")):
+            await deploy_from_library_db(
+                tenant_id="tenant-1",
+                template_id="tmpl-1",
+                template_version=1,
+                template_name="HR Bot",
+                name="Test Agent",
+                system_prompt="Be helpful.",
+                description="",
+                category="HR",
+                capabilities=["hr_policies", "leave_management"],
+                created_by="user-1",
+                db=mock_db,
+                access_mode="workspace_wide",
+                kb_ids=["kb-001", "kb-002"],
+            )
+
+        import json
+
+        assert captured_capabilities, "No capabilities captured — INSERT not called?"
+        caps = json.loads(captured_capabilities[0])
+        assert "kb_ids" in caps, "R2 regression: kb_ids not in capabilities JSONB"
+        assert caps["kb_ids"] == ["kb-001", "kb-002"]
+        assert "feature_tags" in caps
+        assert "hr_policies" in caps["feature_tags"]
+
+    @pytest.mark.asyncio
+    async def test_empty_kb_ids_still_sets_key(self):
+        """deploy_from_library_db always sets kb_ids key (even when empty)."""
+        from app.modules.agents.routes import deploy_from_library_db
+
+        captured_capabilities = []
+
+        async def mock_execute(query, params=None):
+            if params and "capabilities" in (params or {}):
+                captured_capabilities.append(params["capabilities"])
+            result = MagicMock()
+            result.mappings.return_value.first.return_value = None
+            return result
+
+        mock_db = MagicMock()
+        mock_db.execute = mock_execute
+        mock_db.commit = AsyncMock()
+
+        with patch(f"{_MOD}.generate_agent_keypair", return_value=("pubkey", "enckey")):
+            await deploy_from_library_db(
+                tenant_id="tenant-1",
+                template_id="tmpl-1",
+                template_version=1,
+                template_name="IT Bot",
+                name="IT Agent",
+                system_prompt="Fix IT issues.",
+                description="",
+                category="IT",
+                capabilities=["it_support"],
+                created_by="user-1",
+                db=mock_db,
+                access_mode="workspace_wide",
+                kb_ids=[],
+            )
+
+        import json
+
+        caps = json.loads(captured_capabilities[0])
+        assert caps.get("kb_ids") == [], "Empty kb_ids must be stored as [] not missing"
+
+
+# ---------------------------------------------------------------------------
 # _validate_kb_ids_for_tenant unit tests (direct)
 # ---------------------------------------------------------------------------
 

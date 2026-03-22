@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-07
 **Scope**: Complete first-login experience for all five roles across two scopes (platform + tenant)
-**Design reference**: `.claude/rules/design-system.md` — Obsidian Intelligence design system
+**Design reference**: `.claude/rules/design.md` — Obsidian Intelligence design system
 **Architecture rule**: End User / Tenant Admin / Platform Admin NEVER share a layout. Each role gets a completely different navigation structure, not the same nav with items locked.
 
 ---
@@ -754,4 +754,4 @@ After first login, the chat empty state offers:
 **Document Version**: 1.0
 **Last Updated**: 2026-03-07
 **Covers**: All 6 roles (platform_admin, platform_operator, tenant_admin, analyst, reader, viewer)
-**Design reference**: `.claude/rules/design-system.md` — role layout architecture section
+**Design reference**: `.claude/rules/design.md` — role layout architecture section
