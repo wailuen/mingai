@@ -34,8 +34,8 @@ This is the PA counterpart to the TA surfaces shipped in Phase 1. After this tod
 - [ ] Test tab: embedded test harness (query input, response, confidence, sources, KB queries, guardrail events, latency)
 - [ ] Instances tab: list tenant deployments with tenant name (not data), version pinned, status, last-active date
 - [ ] Optimistic concurrency: 409 returned when two admins edit simultaneously
-- [ ] Deprecated components removed: `TemplateAuthoringForm.tsx`, `VersionHistoryDrawer.tsx`, `TestHarnessPanel.tsx`
-- [ ] 4 seed templates configurable through new PA studio without regression
+- [ ] **FIRST ACTION — delete before building**: `TemplateAuthoringForm.tsx`, `VersionHistoryDrawer.tsx`, `TestHarnessPanel.tsx` removed from `src/web/app/(platform)/platform/agent-templates/elements/` before any new component is written. No code should reference these files after deletion.
+- [ ] Agent Templates table is empty (seed data already cleared 2026-03-22 — confirm 0 rows before starting)
 
 ---
 
@@ -65,6 +65,7 @@ File: `src/backend/app/modules/agents/prompt_validator.py`
 (If created in TODO-16 for skills, extend; otherwise create here.)
 
 Full implementation:
+
 - Regex-based blocked pattern detection (OWASP LLM Top 10 prompt injection corpus):
   - "ignore (all |previous |your )?(instructions|directives|system|prompt)"
   - "disregard (your|the) system"
@@ -132,6 +133,7 @@ GET  /platform/agent-templates/{id}/instances
 ### Security: Tenant Data Sovereignty in Instances Tab
 
 The instances endpoint must NOT expose:
+
 - `tenant_id` (return tenant name only, from tenant settings)
 - System prompt of deployed instance
 - KB bindings or access rules
@@ -144,6 +146,7 @@ The instances endpoint must NOT expose:
 ### Deprecated Components to Remove
 
 After `TemplateStudioPanel` is complete and all references updated:
+
 - `src/web/app/(platform)/platform/agent-templates/elements/TemplateAuthoringForm.tsx` — DELETE
 - `src/web/app/(platform)/platform/agent-templates/elements/VersionHistoryDrawer.tsx` — DELETE
 - `src/web/app/(platform)/platform/agent-templates/elements/TestHarnessPanel.tsx` — DELETE
@@ -164,39 +167,46 @@ Location: `src/web/app/(platform)/platform/agent-templates/elements/TemplateStud
 **Edit Tab — 7 Progressive Sections**
 
 Section 1 — Identity:
+
 - `IconPicker` (reuse from TODO-18)
 - Name, Description, Category, Tags (chip input)
 - Agent Type badge display (auto-detected from config)
 
 Section 2 — System Prompt + Variables:
+
 - `SystemPromptEditor` component: DM Mono textarea, 2000-char counter (warn 1600 alert 1800), `{{variable}}` detection with yellow highlight
 - Variable Schema table (below prompt): auto-synced from detected tokens; columns: Variable Name, Type (string/number/boolean), Required toggle, Description; rows editable inline
 - "Auto-detect variables" button
 - Validation error display (inline red banner below editor when validator rejects)
 
 Section 3 — LLM Policy (collapsed by default for RAG agents):
+
 - Required Model dropdown: None (any), model list from `GET /platform/llm-library`
 - Allowed Providers checkboxes: OpenAI, Azure OpenAI, Anthropic, Google
 - Tenant Override toggle: "Tenants can change model within policy"
 - Defaults: temperature slider (0.0–2.0), max_tokens numeric input
 
 Section 4 — Knowledge:
+
 - KB Ownership mode radio: "Tenant-managed", "Platform-managed", "Dedicated"
 - Recommended Categories: chip input (type + Enter)
 - Required KB IDs: shown only when platform_managed; text input list
 
 Section 5 — Capabilities (collapsed by default for RAG agents):
+
 - Skills: checkbox list from `GET /skills` (platform published); shows skill name + version + execution_pattern badge
 - Tools: checkbox list from `GET /tools` (platform-scoped); shows tool name + credential_source badge
 - `CredentialSchemaEditor`: table of credential fields; columns: Key (auto-gen from label), Label, Type, Sensitive toggle; add/remove rows; shown when tools with tenant_managed credentials are selected or auth_mode is non-none
 
 Section 6 — A2A Interface:
+
 - A2A Enabled toggle
 - Operations table: add/remove operation rows; each row: operation name, description, input schema (JSON), output schema (JSON)
 - Auth Required toggle
 - Caller Requires Plan dropdown
 
 Section 7 — Guardrails:
+
 - Rule cards: add/remove; each rule: name, rule_type dropdown (keyword_block / regex_match / content_filter), pattern textarea with syntax validation, violation_action radio (block/redact/warn), user message textarea
 - Confidence threshold slider
 - Citation mode dropdown (inline / footnote / none)
@@ -204,11 +214,13 @@ Section 7 — Guardrails:
 - PII masking toggle
 
 Progressive disclosure logic:
+
 - Default: Sections 1, 2, 6, 7 open; Sections 3, 4, 5 show collapsed one-line summaries
 - When `auth_mode` changes from none: Section 3 expands (LLM policy), Section 5 expands (capabilities + credentials)
 - Transition: 220ms ease
 
 Section visibility summary cards:
+
 - "LLM Policy: Any model (tenant override enabled)" — clickable to expand
 - "Knowledge: Tenant-managed (3 recommended categories)" — clickable to expand
 - "Capabilities: No skills, no tools" — clickable to expand
