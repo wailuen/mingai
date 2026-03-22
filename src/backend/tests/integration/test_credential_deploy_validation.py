@@ -146,6 +146,7 @@ async def _cleanup_tenant(tid: str):
         "agent_access_control",
         "har_transactions",
         "agent_cards",
+        "audit_log",
         "users",
         "tenants",
     ]
