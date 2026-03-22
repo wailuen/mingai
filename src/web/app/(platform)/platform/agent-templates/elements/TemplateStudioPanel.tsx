@@ -17,7 +17,10 @@ import {
   type A2AInterface,
   type A2AOperation,
 } from "@/lib/hooks/useAgentTemplatesAdmin";
-import { SystemPromptEditor, extractVariableTokens } from "@/components/shared/SystemPromptEditor";
+import {
+  SystemPromptEditor,
+  extractVariableTokens,
+} from "@/components/shared/SystemPromptEditor";
 import { GuardrailsEditor } from "@/components/shared/GuardrailsEditor";
 import { CredentialSchemaEditor } from "./CredentialSchemaEditor";
 import { PublishFlow } from "./PublishFlow";
@@ -25,18 +28,20 @@ import { TestHarnessTab } from "./TestHarnessTab";
 import { InstancesTab } from "./InstancesTab";
 import { VersionHistoryTab } from "./VersionHistoryTab";
 import { LifecycleActions } from "./LifecycleActions";
+import { PerformanceTab } from "./PerformanceTab";
 
 // ---------------------------------------------------------------------------
 // Types & constants
 // ---------------------------------------------------------------------------
 
-type StudioTab = "edit" | "test" | "instances" | "versions";
+type StudioTab = "edit" | "test" | "instances" | "versions" | "performance";
 
 const TABS: { value: StudioTab; label: string }[] = [
   { value: "edit", label: "Edit" },
   { value: "test", label: "Test" },
   { value: "instances", label: "Instances" },
   { value: "versions", label: "Version History" },
+  { value: "performance", label: "Performance" },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -169,18 +174,21 @@ function CollapsibleSection({
         <div className="text-left">
           <p className="text-section-heading text-text-primary">{title}</p>
           {!isOpen && summary && (
-            <p className="mt-0.5 text-body-default text-text-faint">{summary}</p>
+            <p className="mt-0.5 text-body-default text-text-faint">
+              {summary}
+            </p>
           )}
         </div>
-        {!forceOpen && (
-          isOpen ? (
+        {!forceOpen &&
+          (isOpen ? (
             <ChevronDown size={15} className="flex-shrink-0 text-text-muted" />
           ) : (
             <ChevronRight size={15} className="flex-shrink-0 text-text-muted" />
-          )
-        )}
+          ))}
       </button>
-      {isOpen && <div className="border-t border-border px-4 pb-4 pt-3">{children}</div>}
+      {isOpen && (
+        <div className="border-t border-border px-4 pb-4 pt-3">{children}</div>
+      )}
     </div>
   );
 }
@@ -258,9 +266,8 @@ export function TemplateStudioPanel({
 }: TemplateStudioPanelProps) {
   const isCreate = templateId === null;
 
-  const { data: serverTemplate, isPending: loadingTemplate } = useAgentTemplate(
-    templateId,
-  );
+  const { data: serverTemplate, isPending: loadingTemplate } =
+    useAgentTemplate(templateId);
 
   const [activeTab, setActiveTab] = useState<StudioTab>("edit");
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -350,14 +357,19 @@ export function TemplateStudioPanel({
         setIsDirty(false);
       }
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Save failed";
+      const msg = err instanceof Error ? err.message : "Save failed";
       setValidationError(msg);
     }
-  }, [form, isCreate, serverTemplate, createMutation, updateMutation, onCreated]);
+  }, [
+    form,
+    isCreate,
+    serverTemplate,
+    createMutation,
+    updateMutation,
+    onCreated,
+  ]);
 
-  const saveError =
-    createMutation.error || updateMutation.error;
+  const saveError = createMutation.error || updateMutation.error;
 
   // Progressive disclosure: expand sections 3 & 5 when auth_mode !== none
   const authActive = form.authMode !== "none";
@@ -414,9 +426,7 @@ export function TemplateStudioPanel({
               </h2>
             )}
 
-            {template && (
-              <StatusBadge status={template.status} />
-            )}
+            {template && <StatusBadge status={template.status} />}
           </div>
 
           <div className="ml-3 flex flex-shrink-0 items-center gap-2">
@@ -443,7 +453,9 @@ export function TemplateStudioPanel({
                 activeTab === tab.value
                   ? "border-accent text-text-primary"
                   : "border-transparent text-text-faint hover:text-text-muted",
-                isCreate && tab.value !== "edit" && "cursor-not-allowed opacity-40",
+                isCreate &&
+                  tab.value !== "edit" &&
+                  "cursor-not-allowed opacity-40",
               )}
             >
               {tab.label}
@@ -498,7 +510,9 @@ export function TemplateStudioPanel({
                         </label>
                         <textarea
                           value={form.description}
-                          onChange={(e) => setField("description", e.target.value)}
+                          onChange={(e) =>
+                            setField("description", e.target.value)
+                          }
                           placeholder="Brief description of what this template does"
                           rows={2}
                           className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 text-body-default text-text-primary placeholder:text-text-faint focus:border-accent focus:outline-none"
@@ -535,7 +549,10 @@ export function TemplateStudioPanel({
                   </CollapsibleSection>
 
                   {/* Section 2 — System Prompt + Variables */}
-                  <CollapsibleSection title="System Prompt & Variables" defaultOpen>
+                  <CollapsibleSection
+                    title="System Prompt & Variables"
+                    defaultOpen
+                  >
                     <SystemPromptEditor
                       value={form.systemPrompt}
                       onChange={handlePromptChange}
@@ -581,16 +598,17 @@ export function TemplateStudioPanel({
                                     <select
                                       value={v.type}
                                       onChange={(e) => {
-                                        const updated = form.variables.map((vv, ii) =>
-                                          ii === i
-                                            ? {
-                                                ...vv,
-                                                type: e.target.value as
-                                                  | "string"
-                                                  | "number"
-                                                  | "boolean",
-                                              }
-                                            : vv,
+                                        const updated = form.variables.map(
+                                          (vv, ii) =>
+                                            ii === i
+                                              ? {
+                                                  ...vv,
+                                                  type: e.target.value as
+                                                    | "string"
+                                                    | "number"
+                                                    | "boolean",
+                                                }
+                                              : vv,
                                         );
                                         setField("variables", updated);
                                       }}
@@ -606,10 +624,14 @@ export function TemplateStudioPanel({
                                       type="checkbox"
                                       checked={v.required}
                                       onChange={(e) => {
-                                        const updated = form.variables.map((vv, ii) =>
-                                          ii === i
-                                            ? { ...vv, required: e.target.checked }
-                                            : vv,
+                                        const updated = form.variables.map(
+                                          (vv, ii) =>
+                                            ii === i
+                                              ? {
+                                                  ...vv,
+                                                  required: e.target.checked,
+                                                }
+                                              : vv,
                                         );
                                         setField("variables", updated);
                                       }}
@@ -621,10 +643,14 @@ export function TemplateStudioPanel({
                                       type="text"
                                       value={v.description ?? ""}
                                       onChange={(e) => {
-                                        const updated = form.variables.map((vv, ii) =>
-                                          ii === i
-                                            ? { ...vv, description: e.target.value }
-                                            : vv,
+                                        const updated = form.variables.map(
+                                          (vv, ii) =>
+                                            ii === i
+                                              ? {
+                                                  ...vv,
+                                                  description: e.target.value,
+                                                }
+                                              : vv,
                                         );
                                         setField("variables", updated);
                                       }}
@@ -720,7 +746,9 @@ export function TemplateStudioPanel({
                             Tenant Override
                           </span>
                           <ToggleSwitch
-                            checked={form.llmPolicy.tenant_override_enabled ?? true}
+                            checked={
+                              form.llmPolicy.tenant_override_enabled ?? true
+                            }
                             onChange={(v) =>
                               setField("llmPolicy", {
                                 ...form.llmPolicy,
@@ -776,8 +804,8 @@ export function TemplateStudioPanel({
                                 name="kb-ownership"
                                 value={opt.value}
                                 checked={
-                                  (form.kbPolicy.ownership_mode ?? "tenant_managed") ===
-                                  opt.value
+                                  (form.kbPolicy.ownership_mode ??
+                                    "tenant_managed") === opt.value
                                 }
                                 onChange={() =>
                                   setField("kbPolicy", {
@@ -877,7 +905,9 @@ export function TemplateStudioPanel({
                           </label>
                           <CredentialSchemaEditor
                             rows={form.credentialSchema}
-                            onChange={(rows) => setField("credentialSchema", rows)}
+                            onChange={(rows) =>
+                              setField("credentialSchema", rows)
+                            }
                           />
                         </div>
                       )}
@@ -924,7 +954,9 @@ export function TemplateStudioPanel({
                               Caller Requires Plan
                             </label>
                             <select
-                              value={form.a2aInterface.caller_requires_plan ?? ""}
+                              value={
+                                form.a2aInterface.caller_requires_plan ?? ""
+                              }
                               onChange={(e) =>
                                 setField("a2aInterface", {
                                   ...form.a2aInterface,
@@ -961,7 +993,9 @@ export function TemplateStudioPanel({
                       rules={form.guardrails}
                       onChange={(rules) => setField("guardrails", rules)}
                       confidenceThreshold={form.confidenceThreshold}
-                      onConfidenceChange={(v) => setField("confidenceThreshold", v)}
+                      onConfidenceChange={(v) =>
+                        setField("confidenceThreshold", v)
+                      }
                       citationMode={form.citationMode}
                       onCitationModeChange={(v) => setField("citationMode", v)}
                       maxResponseLength={form.maxResponseLength}
@@ -969,7 +1003,9 @@ export function TemplateStudioPanel({
                         setField("maxResponseLength", v)
                       }
                       piiMaskingEnabled={form.piiMaskingEnabled}
-                      onPiiMaskingChange={(v) => setField("piiMaskingEnabled", v)}
+                      onPiiMaskingChange={(v) =>
+                        setField("piiMaskingEnabled", v)
+                      }
                     />
                   </CollapsibleSection>
 
@@ -981,9 +1017,11 @@ export function TemplateStudioPanel({
                   )}
 
                   {/* Publish flow */}
-                  {!showPublishFlow && template && template.status === "Draft" && (
-                    <div /> /* Placeholder — publish button is in footer */
-                  )}
+                  {!showPublishFlow &&
+                    template &&
+                    template.status === "Draft" && (
+                      <div /> /* Placeholder — publish button is in footer */
+                    )}
                   {showPublishFlow && template && (
                     <PublishFlow
                       template={{ ...template, ...formToTemplatePreview(form) }}
@@ -1019,13 +1057,20 @@ export function TemplateStudioPanel({
           {activeTab === "instances" && template && (
             <InstancesTab
               templateId={template.id}
-              currentVersionLabel={template.version_label ?? String(template.version)}
+              currentVersionLabel={
+                template.version_label ?? String(template.version)
+              }
             />
           )}
 
           {/* ── VERSION HISTORY TAB ── */}
           {activeTab === "versions" && template && (
             <VersionHistoryTab templateId={template.id} />
+          )}
+
+          {/* ── PERFORMANCE TAB ── */}
+          {activeTab === "performance" && template && (
+            <PerformanceTab templateId={template.id} />
           )}
         </div>
 
@@ -1036,9 +1081,7 @@ export function TemplateStudioPanel({
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                disabled={
-                  !isDirty || !form.name.trim() || isSaving
-                }
+                disabled={!isDirty || !form.name.trim() || isSaving}
                 className="flex items-center gap-1.5 rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
               >
                 {isSaving && <Loader2 size={13} className="animate-spin" />}
@@ -1057,7 +1100,11 @@ export function TemplateStudioPanel({
             </div>
 
             <p className="text-[11px] text-text-faint">
-              {isDirty ? "Unsaved changes" : template ? "Saved" : "New template"}
+              {isDirty
+                ? "Unsaved changes"
+                : template
+                  ? "Saved"
+                  : "New template"}
             </p>
           </div>
         )}
@@ -1171,7 +1218,9 @@ function A2AOperationsEditor({
     field: K,
     value: A2AOperation[K],
   ) {
-    onChange(operations.map((op, idx) => (idx === i ? { ...op, [field]: value } : op)));
+    onChange(
+      operations.map((op, idx) => (idx === i ? { ...op, [field]: value } : op)),
+    );
   }
 
   return (
