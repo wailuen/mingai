@@ -1743,6 +1743,45 @@ async def platform_batch_action(
     return {"succeeded": succeeded, "failed": failed}
 
 
+@platform_issues_router.get("/{issue_id}")
+async def platform_get_issue_detail(
+    issue_id: str = Path(..., max_length=36),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """GET /platform/issues/{id} — Full issue detail for platform admin view."""
+    result = await session.execute(
+        text(
+            "SELECT ir.id, ir.tenant_id, ir.reporter_id, ir.issue_type, ir.description, "
+            "ir.screenshot_url, ir.status, ir.severity, ir.blur_acknowledged, "
+            "ir.created_at, ir.updated_at, ir.metadata, "
+            "t.name as tenant_name "
+            "FROM issue_reports ir "
+            "LEFT JOIN tenants t ON t.id = ir.tenant_id "
+            "WHERE ir.id = :id"
+        ),
+        {"id": issue_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return {
+        "id": str(row[0]),
+        "tenant_id": str(row[1]),
+        "reporter_id": str(row[2]) if row[2] else None,
+        "issue_type": row[3],
+        "description": row[4],
+        "screenshot_url": row[5],
+        "status": row[6],
+        "severity": row[7],
+        "blur_acknowledged": row[8],
+        "created_at": row[9].isoformat() if row[9] else None,
+        "updated_at": row[10].isoformat() if row[10] else None,
+        "metadata": row[11],
+        "tenant_name": row[12],
+    }
+
+
 @platform_issues_router.post("/{issue_id}/accept", status_code=status.HTTP_200_OK)
 async def platform_accept_issue(
     issue_id: str = Path(

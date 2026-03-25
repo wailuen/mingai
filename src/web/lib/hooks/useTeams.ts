@@ -175,7 +175,7 @@ export function useTeamMemoryConfig(teamId: string | null) {
   return useQuery({
     queryKey: [TEAMS_KEY, teamId, "memory-config"],
     queryFn: () =>
-      apiGet<MemoryConfig>(`/api/v1/admin/teams/${teamId}/memory-config`),
+      apiGet<MemoryConfig>(`/api/v1/teams/${teamId}/memory-config`),
     enabled: teamId !== null,
   });
 }
@@ -192,7 +192,7 @@ export function useUpdateMemoryConfig() {
       payload: { enabled: boolean; ttl_days: number };
     }) =>
       apiPatch<MemoryConfig>(
-        `/api/v1/admin/teams/${teamId}/memory-config`,
+        `/api/v1/teams/${teamId}/memory-config`,
         payload,
       ),
     onSuccess: (_data, variables) => {
@@ -203,6 +203,23 @@ export function useUpdateMemoryConfig() {
   });
 }
 
+interface RawAuditLogEntry {
+  id: string;
+  created_at: string; // backend sends created_at, not timestamp
+  actor_email?: string | null; // backend sends actor_email, not actor
+  source: "manual" | "auth0_sync";
+  action: "added" | "removed";
+  member_name?: string | null;
+  member_email?: string | null;
+}
+
+interface RawAuditLogResponse {
+  items: RawAuditLogEntry[];
+  total: number;
+  page: number;
+  page_size: number; // backend sends page_size, not limit
+}
+
 export function useTeamAuditLog(
   teamId: string | null,
   page: number = 1,
@@ -210,10 +227,24 @@ export function useTeamAuditLog(
 ) {
   return useQuery({
     queryKey: [TEAMS_KEY, teamId, "audit-log", page, limit],
-    queryFn: () =>
-      apiGet<AuditLogResponse>(
-        `/api/v1/admin/teams/${teamId}/audit-log?page=${page}&limit=${limit}`,
-      ),
+    queryFn: async () => {
+      const raw = await apiGet<RawAuditLogResponse>(
+        `/api/v1/teams/${teamId}/audit-log?page=${page}&limit=${limit}`,
+      );
+      return {
+        items: raw.items.map((e) => ({
+          id: e.id,
+          timestamp: e.created_at,
+          actor: e.actor_email ?? "System",
+          source: e.source,
+          action: e.action,
+          member_name: e.member_name ?? e.member_email ?? "Unknown",
+        })) satisfies AuditLogEntry[],
+        total: raw.total,
+        page: raw.page,
+        limit: raw.page_size,
+      } satisfies AuditLogResponse;
+    },
     enabled: teamId !== null,
   });
 }
@@ -236,7 +267,7 @@ export function useBulkAddMembers() {
 
   return useMutation({
     mutationFn: ({ teamId, userIds }: { teamId: string; userIds: string[] }) =>
-      apiPost<BulkAddMembersResult>(`/api/v1/admin/teams/${teamId}/members`, {
+      apiPost<BulkAddMembersResult>(`/api/v1/teams/${teamId}/members/bulk`, {
         user_ids: userIds,
       }),
     onSuccess: (_data, variables) => {

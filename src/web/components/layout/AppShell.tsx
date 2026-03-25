@@ -53,11 +53,11 @@ export function AppShell({
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onLogout={logout}
       />
-      <div className="flex flex-1 pt-topbar-h">
+      <div className="flex min-h-0 flex-1 pt-topbar-h">
         <div
           className={cn(
-            "flex-shrink-0 transition-all duration-200",
-            sidebarOpen ? "w-sidebar-w" : "w-0 overflow-hidden",
+            "flex-shrink-0 overflow-hidden transition-all duration-200",
+            sidebarOpen ? "w-sidebar-w" : "w-0",
           )}
         >
           <Sidebar
@@ -68,7 +68,7 @@ export function AppShell({
             conversationListRefreshTrigger={conversationListRefreshTrigger}
           />
         </div>
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );

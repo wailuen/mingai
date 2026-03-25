@@ -97,15 +97,13 @@ export function useIssueDetail(id: string | null) {
   return useQuery({
     queryKey: ["platform-issue-detail", id],
     queryFn: async () => {
-      // Platform issues list is at /api/v1/platform/issues (GET), but the
-      // per-issue GET is at /api/v1/issues/{id} (shared endpoint).
       const raw = await apiGet<
         RawPlatformIssue & {
           description?: string;
           issue_type?: string;
           reporter_id?: string;
         }
-      >(`/api/v1/issues/${id}`);
+      >(`/api/v1/platform/issues/${id}`);
       return {
         id: raw.id,
         severity: raw.severity ?? ("P3" as IssueSeverity),

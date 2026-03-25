@@ -21,6 +21,8 @@ export interface PlatformSkillAdmin {
   plan_required?: "starter" | "professional" | "enterprise" | null;
   adoption_count?: number;
   scope: "platform";
+  tool_dependencies?: string[];
+  prompt_template?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -38,6 +40,7 @@ export interface CreatePlatformSkillPayload {
   prompt_template?: string;
   plan_required?: "starter" | "professional" | "enterprise" | null;
   mandatory?: boolean;
+  tool_dependencies?: string[];
 }
 
 export interface UpdatePlatformSkillPayload {
@@ -47,6 +50,7 @@ export interface UpdatePlatformSkillPayload {
   execution_pattern?: "prompt" | "tool_composing" | "sequential_pipeline";
   prompt_template?: string;
   plan_required?: "starter" | "professional" | "enterprise" | null;
+  tool_dependencies?: string[];
 }
 
 export interface PublishPlatformSkillPayload {

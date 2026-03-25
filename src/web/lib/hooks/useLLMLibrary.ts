@@ -11,7 +11,8 @@ export type LLMLibraryProvider =
   | "azure_openai"
   | "openai_direct"
   | "anthropic"
-  | "bedrock";
+  | "bedrock"
+  | "ollama";
 export type LLMLibraryStatus = "Draft" | "Published" | "Deprecated";
 export type PlanTier = "starter" | "professional" | "enterprise";
 
@@ -39,6 +40,8 @@ export interface LLMLibraryEntry {
   health_status?: "healthy" | "degraded" | "unknown";
   /** Added in TODO-35: timestamp of last successful health check. */
   health_checked_at?: string | null;
+  /** Count of LLM Profiles currently referencing this entry in any slot. */
+  profile_usage_count: number;
 }
 
 export interface TenantAssignment {
@@ -119,7 +122,7 @@ function normalizeEntry(raw: Record<string, unknown>): LLMLibraryEntry {
 
 /** GET /api/v1/platform/llm-library?status=... */
 export function useLLMLibrary(status?: LLMLibraryStatus) {
-  const params = status ? `?status=${status}` : "";
+  const params = status ? `?status=${status.toLowerCase()}` : "";
   return useQuery({
     queryKey: [...LIBRARY_KEY, status ?? "all"],
     queryFn: async () => {

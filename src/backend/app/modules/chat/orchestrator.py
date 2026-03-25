@@ -51,6 +51,136 @@ _MEMORY_COMMAND_PATTERNS = [
 MAX_MEMORY_NOTE_LENGTH = 200
 
 
+def _build_auth_config_for_platform_credentials(
+    resolved_credentials: dict,
+) -> tuple:
+    """Build (auth_config, query_params) from resolved platform credentials.
+
+    Handles all 4 authentication injection patterns:
+    - bearer:      Authorization: Bearer {value}
+    - header:      Custom header with raw or formatted value (e.g. X-Api-Key)
+    - query_param: URL query parameter injection
+    - basic_auth:  Authorization: Basic base64(value)
+    - (default):   Falls back to bearer for unknown types
+
+    Args:
+        resolved_credentials: {key: {"value": str, "injection_config": dict}}
+
+    Returns:
+        (auth_config, query_params) where:
+        - auth_config: passed to MCPClient.call_tool() as auth_config param
+        - query_params: extra URL query params for HTTP wrapper tools
+    """
+    import base64
+
+    header_map: dict = {}
+    raw_credentials: dict = {}
+    query_params: dict = {}
+
+    for key, cred_data in resolved_credentials.items():
+        value = cred_data["value"]
+        config = cred_data.get("injection_config", {})
+        injection_type = config.get("type", "bearer")
+
+        if injection_type == "bearer":
+            # MCPClient handles bearer via known key name: bearer_token → Authorization: Bearer
+            raw_credentials["bearer_token"] = value
+
+        elif injection_type == "header":
+            header_name = config.get("header_name", "Authorization")
+            header_format = config.get("header_format", "{value}")
+            header_map[header_name] = header_format.replace("{value}", value)
+
+        elif injection_type == "query_param":
+            param_name = config.get("param_name", key.lower())
+            query_params[param_name] = value
+
+        elif injection_type == "basic_auth":
+            encoded = base64.b64encode(value.encode()).decode()
+            header_map["Authorization"] = f"Basic {encoded}"
+
+        else:
+            # Unknown type — default to bearer (fail-safe)
+            raw_credentials["bearer_token"] = value
+
+    auth_config: dict = {}
+    if raw_credentials:
+        auth_config["credentials"] = raw_credentials
+    if header_map:
+        auth_config["header_map"] = header_map
+
+    return auth_config, query_params
+
+
+def _validate_endpoint_for_credential(
+    endpoint_url: str,
+    credential_key: str,
+    allowed_domains: list,
+    template_id: str,
+    tenant_id: str,
+    request_id: str = "",
+) -> bool:
+    """Validate that endpoint_url is in the credential's allowed_domains list.
+
+    Returns True if allowed, False if blocked.
+
+    On block: logs a warning. Callers should write audit records and skip
+    credential injection for this tool call.
+
+    Args:
+        endpoint_url:    URL of the tool being called.
+        credential_key:  Credential key being injected (for logging only).
+        allowed_domains: List of allowed hostname strings (exact match or subdomain).
+        template_id:     Agent template/card UUID string.
+        tenant_id:       Tenant UUID string.
+        request_id:      Correlation ID for this request.
+
+    Returns:
+        True if the endpoint hostname is in allowed_domains, False if blocked.
+    """
+    from urllib.parse import urlparse
+
+    if not allowed_domains:
+        # Empty allowlist = block all (fail-closed for SSRF protection)
+        logger.warning(
+            "credential_injection_blocked_empty_allowlist",
+            credential_key=credential_key,
+            endpoint_url=endpoint_url,
+            template_id=template_id,
+            tenant_id=tenant_id,
+        )
+        return False
+
+    try:
+        parsed = urlparse(endpoint_url)
+        hostname = (parsed.hostname or "").lower()
+    except Exception:
+        logger.warning(
+            "credential_injection_blocked_url_parse_failed",
+            credential_key=credential_key,
+            endpoint_url=endpoint_url,
+            template_id=template_id,
+            tenant_id=tenant_id,
+        )
+        return False
+
+    for domain in allowed_domains:
+        domain = domain.strip().lower()
+        if hostname == domain or hostname.endswith("." + domain):
+            return True
+
+    logger.warning(
+        "credential_injection_blocked",
+        credential_key=credential_key,
+        endpoint_url=endpoint_url,
+        allowed_domains=allowed_domains,
+        template_id=template_id,
+        tenant_id=tenant_id,
+        request_id=request_id,
+    )
+    return False
+
+
 class ChatOrchestrationService:
     """
     Orchestrates the 8-stage RAG pipeline for chat responses.
@@ -307,6 +437,112 @@ class ChatOrchestrationService:
                 db_session=self._db_session,
             )
         )
+
+        # --- Platform credential eager resolution (TODO-46 / C-04 fix) ---
+        # Resolve credentials BEFORE any tool call so missing credentials fail fast
+        # rather than mid-stream. Credentials are stored in a request-scoped local
+        # variable and NEVER cached across requests.
+        _resolved_credentials: dict = {}
+        _credential_scrubber = None
+
+        import uuid as _uuid_check
+        _is_valid_agent_uuid = True
+        try:
+            _uuid_check.UUID(agent_id)
+        except (ValueError, AttributeError):
+            _is_valid_agent_uuid = False
+
+        if _is_valid_agent_uuid and self._db_session is not None:
+            try:
+                from sqlalchemy import text as _text_cred
+                _cred_result = await self._db_session.execute(
+                    _text_cred(
+                        "SELECT auth_mode, required_credentials "
+                        "FROM agent_cards "
+                        "WHERE id = :agent_id AND tenant_id = :tenant_id "
+                        "LIMIT 1"
+                    ),
+                    {"agent_id": agent_id, "tenant_id": tenant_id},
+                )
+                _cred_row = _cred_result.fetchone()
+            except Exception as _cred_fetch_err:
+                logger.warning(
+                    "platform_credential_fetch_failed",
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    error=str(_cred_fetch_err),
+                )
+                _cred_row = None
+
+            if _cred_row is not None:
+                _agent_auth_mode = _cred_row[0] or "none"
+                _raw_required_credentials = _cred_row[1] or []
+                if isinstance(_raw_required_credentials, str):
+                    try:
+                        import json as _json_cred
+                        _raw_required_credentials = _json_cred.loads(_raw_required_credentials)
+                    except (ValueError, TypeError):
+                        _raw_required_credentials = []
+
+                if _agent_auth_mode == "platform_credentials":
+                    _required_keys = [
+                        c.get("key")
+                        for c in (_raw_required_credentials or [])
+                        if isinstance(c, dict) and c.get("key")
+                    ]
+                    if _required_keys:
+                        try:
+                            from app.modules.agents.credential_manager import (
+                                resolve_platform_credentials,
+                                MissingPlatformCredentialError,
+                                PlatformVaultUnavailableError,
+                            )
+                            # resolve_platform_credentials is synchronous
+                            _resolved_credentials = resolve_platform_credentials(
+                                template_id=agent_id,
+                                required_keys=_required_keys,
+                                tenant_id=str(tenant_id),
+                                request_id=None,
+                            )
+                            from app.core.credential_scrubber import CredentialScrubber
+                            _credential_scrubber = CredentialScrubber(_resolved_credentials)
+                            logger.info(
+                                "platform_credentials_resolved_for_orchestration",
+                                agent_id=agent_id,
+                                tenant_id=tenant_id,
+                                key_count=len(_required_keys),
+                                # values NEVER logged
+                            )
+                        except MissingPlatformCredentialError as _missing_err:
+                            logger.warning(
+                                "platform_credentials_missing",
+                                agent_id=agent_id,
+                                tenant_id=tenant_id,
+                                missing_keys=_missing_err.missing_keys,
+                                # values NEVER logged
+                            )
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "code": 503,
+                                    "message": "Agent temporarily unavailable — contact your administrator.",
+                                },
+                            }
+                            return
+                        except PlatformVaultUnavailableError:
+                            logger.warning(
+                                "platform_vault_unavailable",
+                                agent_id=agent_id,
+                                tenant_id=tenant_id,
+                            )
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "code": 503,
+                                    "message": "Agent temporarily unavailable — contact your administrator.",
+                                },
+                            }
+                            return
 
         # Stage 3.5: Resolve tool configurations (ATA-030)
         from app.modules.chat.tool_resolver import ToolResolver

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { X, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useAgentTemplate,
   useCreateAgentTemplate,
-  useUpdateAgentTemplate,
+  usePatchAgentTemplate,
   useDeprecateAgentTemplate,
+  useCredentialHealth,
   type AgentTemplateAdmin,
   type AgentTemplateVariable,
   type GuardrailRule,
@@ -17,6 +18,7 @@ import {
   type A2AInterface,
   type A2AOperation,
 } from "@/lib/hooks/useAgentTemplatesAdmin";
+import { usePlatformSkillsAdmin } from "@/lib/hooks/usePlatformSkillsAdmin";
 import {
   SystemPromptEditor,
   extractVariableTokens,
@@ -29,12 +31,13 @@ import { InstancesTab } from "./InstancesTab";
 import { VersionHistoryTab } from "./VersionHistoryTab";
 import { LifecycleActions } from "./LifecycleActions";
 import { PerformanceTab } from "./PerformanceTab";
+import { CredentialsTab } from "./CredentialsTab";
 
 // ---------------------------------------------------------------------------
 // Types & constants
 // ---------------------------------------------------------------------------
 
-type StudioTab = "edit" | "test" | "instances" | "versions" | "performance";
+type StudioTab = "edit" | "test" | "instances" | "versions" | "performance" | "credentials";
 
 const TABS: { value: StudioTab; label: string }[] = [
   { value: "edit", label: "Edit" },
@@ -42,6 +45,7 @@ const TABS: { value: StudioTab; label: string }[] = [
   { value: "instances", label: "Instances" },
   { value: "versions", label: "Version History" },
   { value: "performance", label: "Performance" },
+  { value: "credentials", label: "Credentials" },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -275,6 +279,39 @@ export function TemplateStudioPanel({
   const [showPublishFlow, setShowPublishFlow] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
+  const [publishWarning, setPublishWarning] = useState<string | null>(null);
+  const publishWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Credential health — only queried for platform_credentials templates
+  const isPlatformCreds =
+    (serverTemplate?.auth_mode ?? form.authMode) === "platform_credentials";
+  const { data: credHealth } = useCredentialHealth(
+    isPlatformCreds && templateId ? templateId : "",
+  );
+
+  const missingCredCount =
+    isPlatformCreds && credHealth
+      ? Object.values(credHealth.keys).filter(
+          (s) => s === "missing" || s === "revoked",
+        ).length
+      : 0;
+
+  // Auto-dismiss publish warning after 8 seconds
+  useEffect(() => {
+    if (publishWarning) {
+      if (publishWarningTimerRef.current) {
+        clearTimeout(publishWarningTimerRef.current);
+      }
+      publishWarningTimerRef.current = setTimeout(() => {
+        setPublishWarning(null);
+      }, 8000);
+    }
+    return () => {
+      if (publishWarningTimerRef.current) {
+        clearTimeout(publishWarningTimerRef.current);
+      }
+    };
+  }, [publishWarning]);
 
   // Reset form when template loads
   useEffect(() => {
@@ -289,10 +326,13 @@ export function TemplateStudioPanel({
   }, [serverTemplate, isCreate]);
 
   const createMutation = useCreateAgentTemplate();
-  const updateMutation = useUpdateAgentTemplate();
+  const patchMutation = usePatchAgentTemplate();
   const deprecateMutation = useDeprecateAgentTemplate();
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  // Load published platform skills for the skills picker
+  const { data: platformSkillsData } = usePlatformSkillsAdmin("published");
+
+  const isSaving = createMutation.isPending || patchMutation.isPending;
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -349,10 +389,9 @@ export function TemplateStudioPanel({
         setIsDirty(false);
         onCreated?.(created.id);
       } else if (serverTemplate) {
-        await updateMutation.mutateAsync({
+        await patchMutation.mutateAsync({
           id: serverTemplate.id,
           payload,
-          etag: serverTemplate.etag,
         });
         setIsDirty(false);
       }
@@ -365,11 +404,11 @@ export function TemplateStudioPanel({
     isCreate,
     serverTemplate,
     createMutation,
-    updateMutation,
+    patchMutation,
     onCreated,
   ]);
 
-  const saveError = createMutation.error || updateMutation.error;
+  const saveError = createMutation.error || patchMutation.error;
 
   // Progressive disclosure: expand sections 3 & 5 when auth_mode !== none
   const authActive = form.authMode !== "none";
@@ -442,25 +481,42 @@ export function TemplateStudioPanel({
 
         {/* Tab bar */}
         <div className="flex flex-shrink-0 border-b border-border">
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setActiveTab(tab.value)}
-              disabled={isCreate && tab.value !== "edit"}
-              className={cn(
-                "border-b-2 px-4 py-2 text-[12px] font-medium transition-colors",
-                activeTab === tab.value
-                  ? "border-accent text-text-primary"
-                  : "border-transparent text-text-faint hover:text-text-muted",
-                isCreate &&
-                  tab.value !== "edit" &&
-                  "cursor-not-allowed opacity-40",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {TABS.map((tab) => {
+            const showCredBadge =
+              tab.value === "credentials" && missingCredCount > 0;
+            const tabAriaLabel = showCredBadge
+              ? `Credentials, ${missingCredCount} missing`
+              : tab.label;
+
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActiveTab(tab.value)}
+                disabled={isCreate && tab.value !== "edit"}
+                aria-label={tabAriaLabel}
+                className={cn(
+                  "relative border-b-2 px-4 py-2 text-[12px] font-medium transition-colors",
+                  activeTab === tab.value
+                    ? "border-accent text-text-primary"
+                    : "border-transparent text-text-faint hover:text-text-muted",
+                  isCreate &&
+                    tab.value !== "edit" &&
+                    "cursor-not-allowed opacity-40",
+                )}
+              >
+                {tab.label}
+                {showCredBadge && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-[4px] -right-[4px] flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-alert px-[3px] font-mono text-[10px] font-semibold text-white"
+                  >
+                    {missingCredCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab content */}
@@ -911,6 +967,70 @@ export function TemplateStudioPanel({
                           />
                         </div>
                       )}
+
+                      {/* Skills picker */}
+                      <div>
+                        <label className="mb-2 block text-[11px] uppercase tracking-wider text-text-faint">
+                          Skills
+                        </label>
+                        {!platformSkillsData ||
+                        platformSkillsData.items.length === 0 ? (
+                          <p className="text-body-default text-text-faint">
+                            No published skills available.
+                          </p>
+                        ) : (
+                          <div className="space-y-1.5 rounded-control border border-border bg-bg-elevated p-2 max-h-56 overflow-y-auto">
+                            {platformSkillsData.items.map((skill) => {
+                              const checked = form.attachedSkills.includes(
+                                skill.id,
+                              );
+                              return (
+                                <label
+                                  key={skill.id}
+                                  className={cn(
+                                    "flex cursor-pointer items-start gap-2.5 rounded-control px-2 py-1.5 transition-colors hover:bg-accent-dim",
+                                    checked && "bg-accent-dim",
+                                  )}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      setField(
+                                        "attachedSkills",
+                                        checked
+                                          ? form.attachedSkills.filter(
+                                              (id) => id !== skill.id,
+                                            )
+                                          : [...form.attachedSkills, skill.id],
+                                      );
+                                      setIsDirty(true);
+                                    }}
+                                    className="mt-0.5 accent-accent"
+                                  />
+                                  <div className="min-w-0">
+                                    <p
+                                      className={cn(
+                                        "text-body-default font-medium",
+                                        checked
+                                          ? "text-accent"
+                                          : "text-text-primary",
+                                      )}
+                                    >
+                                      {skill.name}
+                                    </p>
+                                    {skill.description && (
+                                      <p className="line-clamp-1 text-[11px] text-text-faint">
+                                        {skill.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CollapsibleSection>
 
@@ -1050,7 +1170,66 @@ export function TemplateStudioPanel({
 
           {/* ── TEST TAB ── */}
           {activeTab === "test" && template && (
-            <TestHarnessTab template={template} />
+            <div>
+              {/* TODO-54: Credential status banner for platform_credentials templates */}
+              {isPlatformCreds && credHealth && (
+                <div className="px-5 pt-5">
+                  {missingCredCount === 0 ? (
+                    <div className="flex items-start gap-3 rounded-[7px] border border-accent/15 bg-accent-dim px-4 py-3">
+                      <span
+                        className="mt-[4px] h-2 w-2 flex-shrink-0 rounded-full bg-accent"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="text-[13px] font-medium text-text-primary">
+                          Platform credentials{" "}
+                          <span className="font-mono">
+                            ({Object.values(credHealth.keys).filter((s) => s === "stored").length}/
+                            {credHealth.required_credentials?.length ??
+                              Object.keys(credHealth.keys).length}{" "}
+                            configured)
+                          </span>
+                        </p>
+                        <p className="text-[13px] text-text-muted">
+                          Credentials will be injected automatically at runtime
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3 rounded-[7px] border border-alert/15 bg-alert-dim px-4 py-3">
+                      <span
+                        className="mt-[4px] h-2 w-2 flex-shrink-0 rounded-full bg-alert"
+                        aria-hidden="true"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium text-text-primary">
+                          <span className="font-mono">{missingCredCount}</span>/
+                          <span className="font-mono">
+                            {credHealth.required_credentials?.length ??
+                              Object.keys(credHealth.keys).length}
+                          </span>{" "}
+                          credentials missing
+                        </p>
+                        <p className="text-[13px] text-text-muted">
+                          Configure in the Credentials tab before testing.{" "}
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("credentials")}
+                            className="text-accent hover:underline underline-offset-2"
+                          >
+                            Go →
+                          </button>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              <TestHarnessTab
+                template={template}
+                credentialsMissing={isPlatformCreds && missingCredCount > 0}
+              />
+            </div>
           )}
 
           {/* ── INSTANCES TAB ── */}
@@ -1072,40 +1251,94 @@ export function TemplateStudioPanel({
           {activeTab === "performance" && template && (
             <PerformanceTab templateId={template.id} />
           )}
+
+          {/* ── CREDENTIALS TAB ── */}
+          {activeTab === "credentials" && template && (
+            <CredentialsTab
+              templateId={template.id}
+              authMode={template.auth_mode}
+              requiredCredentials={template.required_credentials ?? []}
+              onSwitchToTab={(tab) => setActiveTab(tab as StudioTab)}
+            />
+          )}
         </div>
 
         {/* Footer — Edit tab only */}
         {activeTab === "edit" && (
-          <div className="flex flex-shrink-0 items-center justify-between border-t border-border px-5 py-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={!isDirty || !form.name.trim() || isSaving}
-                className="flex items-center gap-1.5 rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
-              >
-                {isSaving && <Loader2 size={13} className="animate-spin" />}
-                {isSaving ? "Saving..." : "Save Draft"}
-              </button>
-
-              {template && template.status === "Draft" && (
+          <div className="flex-shrink-0 border-t border-border px-5 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowPublishFlow(!showPublishFlow)}
-                  className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
+                  onClick={handleSaveDraft}
+                  disabled={!isDirty || !form.name.trim() || isSaving}
+                  className="flex items-center gap-1.5 rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:opacity-30"
                 >
-                  Publish →
+                  {isSaving && <Loader2 size={13} className="animate-spin" />}
+                  {isSaving ? "Saving..." : "Save Draft"}
                 </button>
-              )}
+
+                {template && template.status === "Draft" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Publish gate: block if platform_credentials with missing creds
+                      if (isPlatformCreds && missingCredCount > 0) {
+                        setPublishWarning(
+                          `${missingCredCount} required credential${missingCredCount !== 1 ? "s" : ""} not configured`,
+                        );
+                        return;
+                      }
+                      setShowPublishFlow(!showPublishFlow);
+                    }}
+                    className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-1.5 text-body-default font-semibold text-bg-base transition-opacity hover:opacity-90"
+                  >
+                    Publish →
+                  </button>
+                )}
+              </div>
+
+              <p className="text-[11px] text-text-faint">
+                {isDirty
+                  ? "Unsaved changes"
+                  : template
+                    ? "Saved"
+                    : "New template"}
+              </p>
             </div>
 
-            <p className="text-[11px] text-text-faint">
-              {isDirty
-                ? "Unsaved changes"
-                : template
-                  ? "Saved"
-                  : "New template"}
-            </p>
+            {/* Publish gate warning — below button row */}
+            {publishWarning && (
+              <div
+                className="mt-[8px] flex items-start gap-2 rounded-[7px] border border-warn/20 bg-warn-dim p-[12px_16px]"
+                style={{
+                  animation: "publishWarnEnter 220ms ease forwards",
+                }}
+              >
+                <style>{`
+                  @keyframes publishWarnEnter {
+                    from { opacity: 0; transform: translateY(4px); }
+                    to { opacity: 1; transform: translateY(0); }
+                  }
+                `}</style>
+                <span className="mt-0.5 text-[13px] text-warn">⚠</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-warn">
+                    Cannot publish: {publishWarning}. Configure them in the Credentials tab.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPublishWarning(null);
+                    setActiveTab("credentials");
+                  }}
+                  className="flex-shrink-0 text-[13px] text-accent underline-offset-2 hover:underline"
+                >
+                  Go →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

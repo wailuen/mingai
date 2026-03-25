@@ -31,11 +31,16 @@ export function Topbar({
   const THEME_CYCLE: ThemeMode[] = ["dark", "light", "system"];
   const THEME_KEY = "mingai-theme";
 
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "system";
-    return (localStorage.getItem(THEME_KEY) as ThemeMode) ?? "system";
-  });
+  // Start with "system" as the default; sync from localStorage on mount.
+  // Using "system" as the SSR default avoids a dark flash for users who
+  // prefer light, while still being deterministic before hydration.
+  const [theme, setTheme] = useState<ThemeMode>("system");
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(THEME_KEY) as ThemeMode | null;
+    setTheme(saved ?? "system");
+  }, []);
 
   function applyTheme(mode: ThemeMode) {
     const resolved =

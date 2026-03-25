@@ -109,12 +109,9 @@ export function SyncJobHistory({ integrationId }: SyncJobHistoryProps) {
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border-faint">
               {jobs.map((job) => (
-                <tr
-                  key={job.id}
-                  className="border-b border-border-faint last:border-b-0"
-                >
+                <tr key={job.id}>
                   <td className="py-2.5 pr-4 font-mono text-xs text-text-muted">
                     {job.id.slice(0, 8)}
                   </td>

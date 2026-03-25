@@ -5,6 +5,7 @@ import { Plus, FileCode } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ToolList } from "./elements/ToolList";
+import { ToolDetailPanel } from "./elements/ToolDetailPanel";
 import { ToolRegistrationForm } from "./elements/ToolRegistrationForm";
 import { MCPIntegrationBuilder } from "./elements/MCPIntegrationBuilder";
 import type { Tool } from "@/lib/hooks/useToolCatalog";
@@ -17,11 +18,7 @@ import type { Tool } from "@/lib/hooks/useToolCatalog";
 export default function ToolCatalogPage() {
   const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [showMCPBuilder, setShowMCPBuilder] = useState(false);
-  const [_selectedTool, setSelectedTool] = useState<Tool | null>(null);
-
-  function handleView(tool: Tool) {
-    setSelectedTool(tool);
-  }
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
 
   return (
     <AppShell>
@@ -56,8 +53,16 @@ export default function ToolCatalogPage() {
 
         {/* Tool list */}
         <ErrorBoundary>
-          <ToolList onView={handleView} />
+          <ToolList onView={(tool) => setSelectedTool(tool)} />
         </ErrorBoundary>
+
+        {/* Tool detail slide-in */}
+        {selectedTool && (
+          <ToolDetailPanel
+            tool={selectedTool}
+            onClose={() => setSelectedTool(null)}
+          />
+        )}
 
         {/* Manual registration slide-in */}
         {showRegisterForm && (

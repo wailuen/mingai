@@ -5,7 +5,7 @@ Periodically tests published llm_library entries to detect connectivity
 or credential issues before they affect tenants.
 
 Behaviour:
-  - Runs every _CHECK_INTERVAL_SECONDS (default: 900s / 15 min)
+  - Runs every _CHECK_INTERVAL_SECONDS (default: 300s / 5 min)
   - Distributed lock prevents thundering herd across pods
   - Per-entry jitter (0–15s) spreads load
   - One entry failure does NOT abort others
@@ -29,8 +29,8 @@ from app.core.session import async_session_factory
 
 logger = structlog.get_logger()
 
-_CHECK_INTERVAL_SECONDS = 900   # 15 minutes
-_LOCK_TTL_SECONDS = 1050        # interval + jitter (900 + 15*10 headroom)
+_CHECK_INTERVAL_SECONDS = 300   # 5 minutes
+_LOCK_TTL_SECONDS = 450         # interval + jitter (300 + 15*10 headroom)
 _JITTER_MAX_SECONDS = 15
 _TEST_PROMPT = "Respond with 'ok' and nothing else."
 _MAX_ENTRIES_PER_RUN = 50       # safety cap — don't overload providers
@@ -155,13 +155,11 @@ async def run_llm_health_check_job() -> dict:
                 await db.execute(
                     text(
                         "UPDATE llm_library "
-                        "SET health_status = :status, health_checked_at = NOW(), "
-                        "health_error = :error "
+                        "SET health_status = :status, health_checked_at = NOW() "
                         "WHERE id = :id"
                     ),
                     {
-                        "status": "healthy" if success else "error",
-                        "error": error_msg if not success else None,
+                        "status": "healthy" if success else "degraded",
                         "id": entry_id,
                     },
                 )
@@ -200,28 +198,50 @@ async def _test_entry(entry: dict, api_key: str) -> None:
     messages = [{"role": "user", "content": _TEST_PROMPT}]
 
     if provider == "azure_openai":
-        from openai import AsyncAzureOpenAI
+        from openai import AsyncAzureOpenAI, BadRequestError
 
         client = AsyncAzureOpenAI(
             api_key=api_key,
             azure_endpoint=endpoint_url,
             api_version=api_version,
         )
-        await client.chat.completions.create(
-            model=deployment_name,
-            messages=messages,
-            max_tokens=5,
-        )
+        try:
+            await client.chat.completions.create(
+                model=deployment_name,
+                messages=messages,
+                max_tokens=5,
+            )
+        except BadRequestError as exc:
+            # Newer reasoning models (o1/o3/o4-series) reject max_tokens —
+            # they require max_completion_tokens instead.  Retry once.
+            if "max_tokens" in str(exc) and "max_completion_tokens" in str(exc):
+                await client.chat.completions.create(
+                    model=deployment_name,
+                    messages=messages,
+                    max_completion_tokens=5,
+                )
+            else:
+                raise
 
     elif provider in ("openai_direct", "openai"):
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI, BadRequestError
 
         client = AsyncOpenAI(api_key=api_key)
-        await client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            max_tokens=5,
-        )
+        try:
+            await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_tokens=5,
+            )
+        except BadRequestError as exc:
+            if "max_tokens" in str(exc) and "max_completion_tokens" in str(exc):
+                await client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    max_completion_tokens=5,
+                )
+            else:
+                raise
 
     elif provider == "anthropic":
         import anthropic
@@ -257,16 +277,29 @@ async def run_llm_health_scheduler() -> None:
     Uses a distributed lock to ensure only one pod runs the check per cycle.
     Runs indefinitely — cancelled on app shutdown.
     """
-    lock = DistributedJobLock(
-        job_name="llm_library_health_check",
-        ttl=_LOCK_TTL_SECONDS,
-    )
-
     while True:
         try:
-            async with job_run_context("llm_library_health_check"):
-                async with lock:
-                    await run_llm_health_check_job()
+            async with DistributedJobLock(
+                "llm_library_health_check", ttl=_LOCK_TTL_SECONDS
+            ) as acquired:
+                if acquired:
+                    try:
+                        async with job_run_context("llm_library_health_check") as ctx:
+                            summary = await run_llm_health_check_job()
+                            ctx.records_processed = summary.get("checked", 0)
+                    except Exception as exc:
+                        logger.error(
+                            "llm_library_health_scheduler_error",
+                            error=str(exc),
+                        )
+                else:
+                    logger.debug(
+                        "llm_library_health_check_skipped",
+                        reason="lock_held_by_another_pod",
+                    )
+
+            await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
+
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -274,5 +307,4 @@ async def run_llm_health_scheduler() -> None:
                 "llm_library_health_scheduler_error",
                 error=str(exc),
             )
-
-        await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
+            await asyncio.sleep(_CHECK_INTERVAL_SECONDS)

@@ -31,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_current_user, require_tenant_admin
+from app.core.dependencies import CurrentUser, get_current_user, require_platform_admin, require_tenant_admin
 from app.core.session import get_async_session
 from app.modules.agents.prompt_validator import validate_prompt, SKILL_PROMPT_MAX_CHARS
 
@@ -39,6 +39,7 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 admin_router = APIRouter(prefix="/admin/skills", tags=["admin-skills"])
+platform_admin_router = APIRouter(prefix="/platform/skills", tags=["platform-skills"])
 
 # ---------------------------------------------------------------------------
 # Plan-gate helpers
@@ -134,6 +135,11 @@ async def _get_rls_context(db: AsyncSession, tenant_id: str) -> None:
         text("SELECT set_config('app.current_tenant_id', :tid, true)"),
         {"tid": tenant_id},
     )
+
+
+async def _get_platform_rls_context(db: AsyncSession) -> None:
+    """Set RLS context for platform admin operations."""
+    await db.execute(text("SELECT set_config('app.scope', 'platform', true)"))
 
 
 # ---------------------------------------------------------------------------
@@ -899,3 +905,396 @@ async def submit_skill_for_promotion(
         tenant_id=current_user.tenant_id,
     )
     return {"submission_id": submission_id, "status": "pending"}
+
+
+# ---------------------------------------------------------------------------
+# Platform admin skills management
+# ---------------------------------------------------------------------------
+
+class PlatformCreateSkillRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+    execution_pattern: str = Field("prompt")
+    invocation_mode: str = Field("llm_invoked")
+    pipeline_trigger: Optional[str] = None
+    prompt_template: str = Field(..., max_length=SKILL_PROMPT_MAX_CHARS)
+    input_schema: dict = Field(default_factory=dict)
+    output_schema: dict = Field(default_factory=dict)
+    tool_dependencies: List[str] = Field(default_factory=list)
+    llm_config: dict = Field(default_factory=lambda: {"temperature": 0.3, "max_tokens": 2000})
+    mandatory: bool = Field(False)
+    plan_required: Optional[str] = Field(None)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlatformUpdateSkillRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+    execution_pattern: Optional[str] = None
+    invocation_mode: Optional[str] = None
+    pipeline_trigger: Optional[str] = None
+    prompt_template: Optional[str] = Field(None, max_length=SKILL_PROMPT_MAX_CHARS)
+    input_schema: Optional[dict] = None
+    output_schema: Optional[dict] = None
+    tool_dependencies: Optional[List[str]] = None
+    llm_config: Optional[dict] = None
+    mandatory: Optional[bool] = None
+    plan_required: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+_PLATFORM_SKILL_UPDATE_ALLOWLIST: dict[str, str] = {
+    "name": "name = :name",
+    "description": "description = :description",
+    "category": "category = :category",
+    "execution_pattern": "execution_pattern = :execution_pattern",
+    "invocation_mode": "invocation_mode = :invocation_mode",
+    "pipeline_trigger": "pipeline_trigger = :pipeline_trigger",
+    "prompt_template": "prompt_template = :prompt_template",
+    "input_schema": "input_schema = CAST(:input_schema AS jsonb)",
+    "output_schema": "output_schema = CAST(:output_schema AS jsonb)",
+    "tool_dependencies": "tool_dependencies = CAST(:tool_dependencies AS jsonb)",
+    "llm_config": "llm_config = CAST(:llm_config AS jsonb)",
+    "mandatory": "mandatory = :mandatory",
+    "plan_required": "plan_required = :plan_required",
+}
+
+
+@platform_admin_router.get("")
+async def platform_list_skills(
+    status: Optional[str] = Query(None, pattern="^(draft|published|deprecated)$"),
+    category: Optional[str] = Query(None, max_length=100),
+    search: Optional[str] = Query(None, max_length=200),
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """List all platform-scoped skills. Platform admin only."""
+    await _get_platform_rls_context(db)
+    conditions = ["scope = 'platform'"]
+    params: dict = {}
+
+    if status:
+        conditions.append("status = :status")
+        params["status"] = status
+    if category:
+        conditions.append("category = :category")
+        params["category"] = category
+    if search:
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        conditions.append("(name ILIKE :search OR description ILIKE :search)")
+        params["search"] = f"%{escaped}%"
+
+    where_clause = " AND ".join(conditions)
+
+    result = await db.execute(
+        text(
+            f"SELECT s.id, s.name, s.description, s.category, s.version, "  # noqa: S608
+            f"s.execution_pattern, s.invocation_mode, s.status, s.mandatory, s.plan_required, "
+            f"s.published_at, s.created_at, s.updated_at, "
+            f"COALESCE((SELECT COUNT(*) FROM tenant_skills ts WHERE ts.skill_id = s.id), 0) AS adoption_count "
+            f"FROM skills s WHERE {where_clause} ORDER BY s.name ASC"
+        ),
+        params,
+    )
+    items = []
+    for row in result.mappings():
+        items.append({
+            "id": str(row["id"]),
+            "name": row["name"],
+            "description": row["description"],
+            "category": row["category"],
+            "version": row["version"],
+            "execution_pattern": row["execution_pattern"],
+            "invocation_mode": row["invocation_mode"],
+            "status": row["status"],
+            "mandatory": row["mandatory"],
+            "plan_required": row["plan_required"],
+            "adoption_count": row["adoption_count"] or 0,
+            "scope": "platform",
+            "published_at": str(row["published_at"]) if row["published_at"] else None,
+            "created_at": str(row["created_at"]) if row["created_at"] else None,
+            "updated_at": str(row["updated_at"]) if row["updated_at"] else None,
+        })
+    return {"items": items, "total": len(items)}
+
+
+@platform_admin_router.post("")
+async def platform_create_skill(
+    body: PlatformCreateSkillRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Create a new platform skill (draft status). Platform admin only."""
+    await _get_platform_rls_context(db)
+    if body.execution_pattern not in _VALID_EXECUTION_PATTERNS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"execution_pattern must be one of {sorted(_VALID_EXECUTION_PATTERNS)}",
+        )
+    if body.invocation_mode not in _VALID_INVOCATION_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"invocation_mode must be one of {sorted(_VALID_INVOCATION_MODES)}",
+        )
+
+    validation = validate_prompt(body.prompt_template, max_chars=SKILL_PROMPT_MAX_CHARS)
+    if not validation.valid:
+        raise HTTPException(
+            status_code=422,
+            detail=validation.reason,
+            headers={"X-Blocked-Patterns": ",".join(validation.blocked_patterns)},
+        )
+
+    skill_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO skills "
+            "(id, name, description, category, execution_pattern, invocation_mode, "
+            "pipeline_trigger, prompt_template, input_schema, output_schema, "
+            "tool_dependencies, llm_config, scope, status, mandatory, plan_required, created_by) "
+            "VALUES "
+            "(:id, :name, :description, :category, :execution_pattern, :invocation_mode, "
+            ":pipeline_trigger, :prompt_template, CAST(:input_schema AS jsonb), "
+            "CAST(:output_schema AS jsonb), CAST(:tool_dependencies AS jsonb), "
+            "CAST(:llm_config AS jsonb), 'platform', 'draft', :mandatory, :plan_required, :created_by)"
+        ),
+        {
+            "id": skill_id,
+            "name": body.name,
+            "description": body.description,
+            "category": body.category,
+            "execution_pattern": body.execution_pattern,
+            "invocation_mode": body.invocation_mode,
+            "pipeline_trigger": body.pipeline_trigger,
+            "prompt_template": body.prompt_template,
+            "input_schema": json.dumps(body.input_schema),
+            "output_schema": json.dumps(body.output_schema),
+            "tool_dependencies": json.dumps(body.tool_dependencies),
+            "llm_config": json.dumps(body.llm_config),
+            "mandatory": body.mandatory,
+            "plan_required": body.plan_required,
+            "created_by": current_user.id,
+        },
+    )
+    await db.commit()
+    logger.info("platform_skill_created", skill_id=skill_id)
+    return {"id": skill_id, "status": "draft"}
+
+
+@platform_admin_router.get("/{skill_id}")
+async def platform_get_skill(
+    skill_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Get platform skill detail. Platform admin only."""
+    await _get_platform_rls_context(db)
+    result = await db.execute(
+        text(
+            "SELECT id, name, description, category, version, "
+            "execution_pattern, invocation_mode, pipeline_trigger, prompt_template, "
+            "input_schema, output_schema, tool_dependencies, llm_config, "
+            "mandatory, plan_required, status, published_at, created_at, updated_at "
+            "FROM skills WHERE id = :skill_id AND scope = 'platform'"
+        ),
+        {"skill_id": skill_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Platform skill not found")
+
+    def _load(v):
+        return json.loads(v) if isinstance(v, str) else (v or {})
+
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "description": row["description"],
+        "category": row["category"],
+        "version": row["version"],
+        "execution_pattern": row["execution_pattern"],
+        "invocation_mode": row["invocation_mode"],
+        "pipeline_trigger": row["pipeline_trigger"],
+        "prompt_template": row["prompt_template"],
+        "input_schema": _load(row["input_schema"]),
+        "output_schema": _load(row["output_schema"]),
+        "tool_dependencies": _load(row["tool_dependencies"]) if row["tool_dependencies"] else [],
+        "llm_config": _load(row["llm_config"]),
+        "mandatory": row["mandatory"],
+        "plan_required": row["plan_required"],
+        "status": row["status"],
+        "scope": "platform",
+        "published_at": str(row["published_at"]) if row["published_at"] else None,
+        "created_at": str(row["created_at"]) if row["created_at"] else None,
+        "updated_at": str(row["updated_at"]) if row["updated_at"] else None,
+    }
+
+
+@platform_admin_router.put("/{skill_id}")
+async def platform_update_skill(
+    skill_id: str,
+    body: PlatformUpdateSkillRequest,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Update a platform skill. Platform admin only."""
+    await _get_platform_rls_context(db)
+    if body.prompt_template is not None:
+        validation = validate_prompt(body.prompt_template, max_chars=SKILL_PROMPT_MAX_CHARS)
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail=validation.reason,
+                headers={"X-Blocked-Patterns": ",".join(validation.blocked_patterns)},
+            )
+    if body.execution_pattern is not None and body.execution_pattern not in _VALID_EXECUTION_PATTERNS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"execution_pattern must be one of {sorted(_VALID_EXECUTION_PATTERNS)}",
+        )
+    if body.invocation_mode is not None and body.invocation_mode not in _VALID_INVOCATION_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"invocation_mode must be one of {sorted(_VALID_INVOCATION_MODES)}",
+        )
+
+    updates = body.model_dump(exclude_none=True)
+    set_clauses = []
+    params: dict = {"skill_id": skill_id}
+
+    for field_name, sql_fragment in _PLATFORM_SKILL_UPDATE_ALLOWLIST.items():
+        if field_name in updates:
+            set_clauses.append(sql_fragment)
+            val = updates[field_name]
+            if field_name in ("input_schema", "output_schema", "tool_dependencies", "llm_config"):
+                params[field_name] = json.dumps(val)
+            else:
+                params[field_name] = val
+
+    if not set_clauses:
+        raise HTTPException(status_code=422, detail="No valid fields to update")
+
+    set_clauses.append("updated_at = NOW()")
+    set_sql = ", ".join(set_clauses)
+
+    result = await db.execute(
+        text(f"UPDATE skills SET {set_sql} WHERE id = :skill_id AND scope = 'platform'"),  # noqa: S608
+        params,
+    )
+    if (result.rowcount or 0) == 0:
+        raise HTTPException(status_code=404, detail="Platform skill not found")
+    await db.commit()
+    return {"status": "updated", "skill_id": skill_id}
+
+
+@platform_admin_router.post("/{skill_id}/publish")
+async def platform_publish_skill(
+    skill_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Publish a draft platform skill. Platform admin only."""
+    await _get_platform_rls_context(db)
+    result = await db.execute(
+        text(
+            "SELECT id, status, prompt_template FROM skills "
+            "WHERE id = :skill_id AND scope = 'platform'"
+        ),
+        {"skill_id": skill_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Platform skill not found")
+    if row["status"] != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only draft skills can be published (current status: {row['status']})",
+        )
+
+    if row["prompt_template"]:
+        validation = validate_prompt(row["prompt_template"], max_chars=SKILL_PROMPT_MAX_CHARS)
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Skill prompt failed validation: {validation.reason}",
+            )
+
+    await db.execute(
+        text(
+            "UPDATE skills SET status = 'published', published_at = NOW(), "
+            "updated_at = NOW() WHERE id = :skill_id AND scope = 'platform'"
+        ),
+        {"skill_id": skill_id},
+    )
+    await db.commit()
+    logger.info("platform_skill_published", skill_id=skill_id)
+    return {"status": "published", "skill_id": skill_id}
+
+
+@platform_admin_router.post("/{skill_id}/deprecate")
+async def platform_deprecate_skill(
+    skill_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Deprecate a published platform skill. Platform admin only."""
+    await _get_platform_rls_context(db)
+    result = await db.execute(
+        text(
+            "SELECT id, status FROM skills "
+            "WHERE id = :skill_id AND scope = 'platform'"
+        ),
+        {"skill_id": skill_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Platform skill not found")
+    if row["status"] != "published":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only published skills can be deprecated (current status: {row['status']})",
+        )
+
+    await db.execute(
+        text(
+            "UPDATE skills SET status = 'deprecated', updated_at = NOW() "
+            "WHERE id = :skill_id AND scope = 'platform'"
+        ),
+        {"skill_id": skill_id},
+    )
+    await db.commit()
+    logger.info("platform_skill_deprecated", skill_id=skill_id)
+    return {"status": "deprecated", "skill_id": skill_id}
+
+
+@platform_admin_router.delete("/{skill_id}")
+async def platform_delete_skill(
+    skill_id: str,
+    current_user: CurrentUser = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Delete a draft platform skill. 409 if published or deprecated. Platform admin only."""
+    await _get_platform_rls_context(db)
+    result = await db.execute(
+        text("SELECT status FROM skills WHERE id = :skill_id AND scope = 'platform'"),
+        {"skill_id": skill_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Platform skill not found")
+    if row["status"] in ("published", "deprecated"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete a {row['status']} skill. Deprecate it first.",
+        )
+
+    await db.execute(
+        text("DELETE FROM skills WHERE id = :skill_id AND scope = 'platform'"),
+        {"skill_id": skill_id},
+    )
+    await db.commit()
+    return {"status": "deleted", "skill_id": skill_id}

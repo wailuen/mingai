@@ -185,6 +185,34 @@ def _slugify(name: str) -> str:
     return slug[:100] or "tenant"
 
 
+# TODO-45: Reserved tenant slug/name identifiers that would collide with the
+# platform vault namespace (mingai:platform:*) or internal system namespaces.
+_RESERVED_TENANT_SLUGS: frozenset[str] = frozenset({"platform", "system", "__platform__"})
+
+
+def _validate_tenant_slug(slug: str) -> None:
+    """Reject reserved slugs that would collide with platform vault namespace.
+
+    Raises HTTPException 422 if the slug is reserved or uses a double-underscore
+    prefix which is reserved for platform-internal use.
+
+    Args:
+        slug: The tenant slug to validate (already lowercased by _slugify).
+    """
+    if slug.lower() in _RESERVED_TENANT_SLUGS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Tenant slug '{slug}' is reserved. Choose a different identifier."
+            ),
+        )
+    if slug.startswith("__"):
+        raise HTTPException(
+            status_code=422,
+            detail="Tenant slugs starting with '__' are reserved for platform use.",
+        )
+
+
 # ---------------------------------------------------------------------------
 # DB helper functions (mockable in unit tests)
 # ---------------------------------------------------------------------------
@@ -941,6 +969,12 @@ async def create_tenant(
     with status='active' and a job_id the client can use with
     GET /platform/provisioning/{job_id} (SSE) to track progress.
     """
+    # TODO-45: Validate slug is not a reserved platform identifier.
+    # The effective slug is computed as _slugify(name) when request.slug is None,
+    # so we must check both paths.
+    candidate_slug = request.slug if request.slug else _slugify(request.name)
+    _validate_tenant_slug(candidate_slug)
+
     result = await create_tenant_db(
         name=request.name,
         plan=request.plan,

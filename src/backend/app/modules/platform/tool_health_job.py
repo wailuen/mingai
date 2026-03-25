@@ -84,6 +84,17 @@ _UPDATE_TOOL_STATUS = text(
     """
 )
 
+_INSERT_HEALTH_CHECK = text(
+    """
+    INSERT INTO tool_health_checks (tool_id, checked_at, status, latency_ms, error_msg)
+    VALUES (:tool_id, NOW(), :status, :latency_ms, :error_msg)
+    """
+)
+
+_CLEANUP_OLD_HEALTH_CHECKS = text(
+    "DELETE FROM tool_health_checks WHERE checked_at < NOW() - INTERVAL '30 days'"
+)
+
 _OPEN_P1_ISSUE_QUERY = text(
     """
     SELECT id FROM issue_reports
@@ -184,14 +195,20 @@ async def _reset_failure_count(tool_id: str) -> None:
 # ── Core logic ────────────────────────────────────────────────────────────────
 
 
-async def _ping_tool(health_check_url: str) -> bool:
-    """Return True if HEAD request to health_check_url succeeds (< 500)."""
+async def _ping_tool(health_check_url: str) -> tuple[bool, Optional[int], Optional[str]]:
+    """Return (is_healthy, latency_ms, error_msg) for the HEAD request.
+
+    latency_ms is None on exception.  error_msg is None on success.
+    """
     try:
         async with httpx.AsyncClient(timeout=_HEALTH_CHECK_TIMEOUT) as client:
             resp = await client.head(health_check_url)
-            return resp.status_code < 500
-    except Exception:
-        return False
+            latency_ms = int(resp.elapsed.total_seconds() * 1000) if resp.elapsed else None
+            is_healthy = resp.status_code < 500
+            error_msg = None if is_healthy else f"HTTP {resp.status_code}"
+            return is_healthy, latency_ms, error_msg
+    except Exception as exc:
+        return False, None, str(exc)[:500]
 
 
 async def _handle_tool_result(
@@ -200,9 +217,12 @@ async def _handle_tool_result(
     tool_name: str,
     current_status: str,
     is_healthy: bool,
+    latency_ms: Optional[int] = None,
+    error_msg: Optional[str] = None,
 ) -> Optional[str]:
     """
     Update failure counter and tool status based on latest ping result.
+    Inserts a row into tool_health_checks for every invocation.
     Returns the new status string if it changed, else None.
     """
     new_status: Optional[str] = None
@@ -311,6 +331,33 @@ async def _handle_tool_result(
                 consecutive_failures=count,
             )
 
+    # Persist a time-series row for this check regardless of whether status changed.
+    # Determine the observed status at this point in time.
+    if is_healthy:
+        observed_status = "healthy"
+    elif new_status is not None:
+        observed_status = new_status
+    else:
+        observed_status = current_status if current_status in ("degraded", "unavailable") else "degraded"
+
+    try:
+        await db.execute(
+            _INSERT_HEALTH_CHECK,
+            {
+                "tool_id": tool_id,
+                "status": observed_status,
+                "latency_ms": latency_ms,
+                "error_msg": error_msg,
+            },
+        )
+    except Exception as exc:
+        # tool_health_checks may not exist yet (migration pending) — log and continue.
+        logger.warning(
+            "tool_health_check_insert_failed",
+            tool_id=tool_id,
+            error=str(exc),
+        )
+
     return new_status
 
 
@@ -344,9 +391,10 @@ async def run_tool_health_job(db: AsyncSession) -> dict:
         health_check_url = tool[3]
 
         try:
-            is_healthy = await _ping_tool(health_check_url)
+            is_healthy, latency_ms, ping_error = await _ping_tool(health_check_url)
             new_status = await _handle_tool_result(
-                db, tool_id, tool_name, current_status, is_healthy
+                db, tool_id, tool_name, current_status, is_healthy,
+                latency_ms=latency_ms, error_msg=ping_error,
             )
             checked += 1
             if new_status == "degraded":
@@ -363,6 +411,12 @@ async def run_tool_health_job(db: AsyncSession) -> dict:
                 tool_name=tool_name,
                 error=str(exc),
             )
+
+    # Prune check history older than 30 days to keep the table bounded.
+    try:
+        await db.execute(_CLEANUP_OLD_HEALTH_CHECKS)
+    except Exception as exc:
+        logger.warning("tool_health_checks_cleanup_failed", error=str(exc))
 
     return {
         "checked": checked,

@@ -358,7 +358,7 @@ async def lifespan(app: FastAPI):
     # Agent template seeding disabled — templates are authored by platform admins
     # via the Template Studio (TODO-20). No seed data on startup.
 
-    # TODO-38: Start LLM library health check job (every 900s / 15 min).
+    # TODO-38: Start LLM library health check job (every 300s / 5 min).
     _llm_health_task = None
     if not _testing:
         try:
@@ -367,13 +367,90 @@ async def lifespan(app: FastAPI):
             _llm_health_task = asyncio.create_task(run_llm_health_scheduler())
             logger.info(
                 "llm_library_health_scheduler_started",
-                interval_seconds=900,
+                interval_seconds=300,
             )
         except Exception as exc:
             logger.warning(
                 "llm_library_health_scheduler_startup_failed",
                 error=str(exc),
             )
+
+    # Platform Credential Vault startup validation (C-06 / TODO-44).
+    # Warns when neither PLATFORM_CREDENTIAL_ENCRYPTION_KEY nor VAULT_ADDR is
+    # configured.  Set STRICT_PLATFORM_CREDENTIAL_VALIDATION=true to promote
+    # the warning to a fatal startup error (useful in production environments
+    # where platform_credentials auth_mode templates are always expected).
+    if not _testing:
+        try:
+            from app.modules.agents.credential_manager import (
+                validate_platform_credential_config,
+            )
+
+            _strict = (
+                os.environ.get("STRICT_PLATFORM_CREDENTIAL_VALIDATION", "false").lower()
+                == "true"
+            )
+            try:
+                validate_platform_credential_config()
+            except RuntimeError as _cred_exc:
+                if _strict:
+                    raise
+                logger.warning(
+                    "platform_credential_vault_not_configured",
+                    detail=str(_cred_exc),
+                    hint="Set PLATFORM_CREDENTIAL_ENCRYPTION_KEY or VAULT_ADDR in environment",
+                )
+        except RuntimeError:
+            raise
+        except Exception as _exc:
+            logger.warning(
+                "platform_credential_vault_check_failed", error=str(_exc)
+            )
+
+    # TODO-56: Platform credential hard-delete scheduler (30-day retention).
+    # Runs once daily. Purges platform_credential_metadata rows where
+    # deleted_at IS NOT NULL AND retention_until < NOW().
+    # Vault values are already removed at soft-delete time — this only cleans metadata.
+    _credential_purge_task = None
+    if not _testing:
+        try:
+            from app.modules.agents.credential_manager import (
+                purge_expired_platform_credentials,
+            )
+
+            async def _run_credential_purge_scheduler():
+                """Daily hard-delete scheduler for expired platform credentials."""
+                while True:
+                    try:
+                        await asyncio.sleep(86400)  # 24 hours
+                        from app.core.session import (
+                            async_session_factory as _purge_sf,
+                        )
+
+                        async with _purge_sf() as _purge_session:
+                            count = await purge_expired_platform_credentials(
+                                _purge_session
+                            )
+                            if count:
+                                logger.info(
+                                    "credential_purge_complete", deleted=count
+                                )
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as _purge_exc:
+                        logger.warning(
+                            "credential_purge_failed", error=str(_purge_exc)
+                        )
+                        # Don't crash the scheduler — retry on next cycle
+
+            _credential_purge_task = asyncio.create_task(
+                _run_credential_purge_scheduler()
+            )
+            logger.info(
+                "credential_purge_scheduler_started", interval="daily"
+            )
+        except Exception as exc:
+            logger.warning("credential_purge_scheduler_startup_failed", error=str(exc))
 
     logger.info("application_started")
 
@@ -518,6 +595,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("llm_library_health_scheduler_stopped")
+
+    if _credential_purge_task is not None and not _credential_purge_task.done():
+        _credential_purge_task.cancel()
+        try:
+            await _credential_purge_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("credential_purge_scheduler_stopped")
 
     if _glossary_warmup_task is not None and not _glossary_warmup_task.done():
         _glossary_warmup_task.cancel()

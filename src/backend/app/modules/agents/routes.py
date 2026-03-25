@@ -338,10 +338,9 @@ def _pre_validate_credentials(
         return
 
     if auth_mode == "platform_credentials":
-        raise HTTPException(
-            status_code=422,
-            detail="Platform credentials auth_mode is not yet available. Use 'tenant_credentials' or 'none'.",
-        )
+        # Platform credentials are resolved server-side from the vault at runtime.
+        # The health pre-check happens in _validate_and_store_credentials.
+        return
 
     if auth_mode == "tenant_credentials":
         required_keys = [
@@ -375,17 +374,17 @@ async def _validate_and_store_credentials(
     only to credential test endpoints (separate step, not implemented here).
 
     Raises HTTPException 422 for:
-    - auth_mode='platform_credentials' (not yet available)
     - auth_mode='tenant_credentials' with missing required credential keys
+    (platform_credentials health check is done at call site using template_id)
     """
     if not auth_mode or auth_mode == "none":
         return None
 
     if auth_mode == "platform_credentials":
-        raise HTTPException(
-            status_code=422,
-            detail="Platform credentials auth_mode is not yet available. Use 'tenant_credentials' or 'none'.",
-        )
+        # Platform credentials are stored in the platform vault, not the tenant vault.
+        # Health pre-check is done at the deploy_from_library call site using template_id.
+        # No vault writes needed here.
+        return None
 
     if auth_mode == "tenant_credentials":
         required_keys = [
@@ -441,7 +440,7 @@ async def list_agent_templates_db(
     count_result = await db.execute(
         text(
             "SELECT COUNT(*) FROM agent_cards "
-            "WHERE tenant_id = :tenant_id AND status IN ('published', 'draft')"
+            "WHERE tenant_id = :tenant_id AND status IN ('published', 'draft', 'active')"
         ),
         {"tenant_id": tenant_id},
     )
@@ -451,7 +450,7 @@ async def list_agent_templates_db(
         text(
             "SELECT id, name, description, system_prompt, capabilities, status, version, created_at "
             "FROM agent_cards "
-            "WHERE tenant_id = :tenant_id AND status IN ('published', 'draft') "
+            "WHERE tenant_id = :tenant_id AND status IN ('published', 'draft', 'active') "
             "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
         ),
         {"tenant_id": tenant_id, "limit": page_size, "offset": offset},
@@ -1997,6 +1996,29 @@ async def deploy_from_library(
         required_credentials=_tmpl_required_credentials,
         provided_credentials=body.credentials,
     )
+
+    # TODO-47: For platform_credentials templates, check vault completeness before deployment.
+    # Uses template_id (not agent_id) since credentials are stored per-template, not per-agent.
+    if _tmpl_auth_mode == "platform_credentials" and _tmpl_required_credentials:
+        from app.modules.agents.credential_manager import get_platform_credential_health
+        _cred_keys: list[str] = []
+        for _c in _tmpl_required_credentials:
+            if isinstance(_c, dict):
+                _cred_keys.append(_c.get("key") or _c.get("name") or "")
+            elif isinstance(_c, str):
+                _cred_keys.append(_c)
+        _cred_keys = [k for k in _cred_keys if k]
+        if _cred_keys:
+            _health = await get_platform_credential_health(
+                template_id=template_id,
+                required_keys=_cred_keys,
+            )
+            _missing = [k for k, st in _health["keys"].items() if st in ("missing", "revoked")]
+            if _missing:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Cannot deploy: missing platform credentials: {_missing}",
+                )
 
     result = await deploy_from_library_db(
         tenant_id=current_user.tenant_id,

@@ -5,6 +5,34 @@ import { apiGet, apiPost, apiPatch } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 
 // ---------------------------------------------------------------------------
+// Credential Vault types — TODO-49
+// ---------------------------------------------------------------------------
+
+export interface CredentialMetadata {
+  key: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  version: number;
+  // NOTE: 'value' must NEVER appear in this type
+}
+
+export interface CredentialListResponse {
+  template_id: string;
+  credentials: CredentialMetadata[];
+}
+
+export type CredentialStatus = "stored" | "missing" | "revoked";
+
+export interface CredentialHealthResponse {
+  template_id: string;
+  required_credentials: string[];
+  status: "complete" | "incomplete" | "not_required";
+  keys: Record<string, CredentialStatus>;
+}
+
+// ---------------------------------------------------------------------------
 // Types — Platform Admin agent template management
 // ---------------------------------------------------------------------------
 
@@ -190,6 +218,7 @@ export interface TestTemplatePayload {
   query: string;
   variable_values?: Record<string, string>;
   test_prompts?: string[];
+  credential_overrides?: Record<string, string>;
 }
 
 export interface GuardrailEvent {
@@ -490,6 +519,194 @@ export function useCreateTemplateVersion() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Credential Vault hooks — TODO-49
+// ---------------------------------------------------------------------------
+
+const CREDS_KEY = (templateId: string) =>
+  ["platform", "credentials", templateId] as const;
+const CREDS_HEALTH_KEY = (templateId: string) =>
+  ["platform", "credentials", templateId, "health"] as const;
+
+/** GET /api/v1/platform/templates/{templateId}/credentials */
+export function useTemplateCredentials(templateId: string) {
+  return useQuery({
+    queryKey: CREDS_KEY(templateId),
+    queryFn: () =>
+      apiGet<CredentialListResponse>(
+        `/api/v1/platform/templates/${templateId}/credentials`,
+      ),
+    enabled: !!templateId,
+  });
+}
+
+/** GET /api/v1/platform/templates/{templateId}/credentials/health */
+export function useCredentialHealth(templateId: string) {
+  return useQuery({
+    queryKey: CREDS_HEALTH_KEY(templateId),
+    queryFn: () =>
+      apiGet<CredentialHealthResponse>(
+        `/api/v1/platform/templates/${templateId}/credentials/health`,
+      ),
+    enabled: !!templateId,
+  });
+}
+
+/** POST /api/v1/platform/templates/{templateId}/credentials */
+export function useStoreCredential() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      templateId,
+      key,
+      value,
+      description,
+      allowed_domains,
+      injection_config,
+    }: {
+      templateId: string;
+      key: string;
+      value: string;
+      description?: string;
+      allowed_domains: string[];
+      injection_config?: Record<string, unknown>;
+    }) =>
+      apiPost<CredentialMetadata>(
+        `/api/v1/platform/templates/${templateId}/credentials`,
+        { key, value, description, allowed_domains, injection_config },
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: CREDS_KEY(variables.templateId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: CREDS_HEALTH_KEY(variables.templateId),
+      });
+    },
+  });
+}
+
+/**
+ * PUT /api/v1/platform/templates/{templateId}/credentials/{key}
+ * Sends If-Match header with current version for optimistic concurrency.
+ * Surfaces 409 (version conflict) as an error to the caller.
+ */
+export function useRotateCredential() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      templateId,
+      key,
+      value,
+      version,
+    }: {
+      templateId: string;
+      key: string;
+      value: string;
+      version: number;
+    }) => {
+      const token = getStoredToken();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/v1/platform/templates/${templateId}/credentials/${key}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token ?? ""}`,
+            "Content-Type": "application/json",
+            "If-Match": String(version),
+          },
+          body: JSON.stringify({ value }),
+        },
+      );
+
+      if (res.status === 409) {
+        throw new Error(
+          "This credential was updated by another admin. Please reload and try again.",
+        );
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          (body as { detail?: string }).detail ?? `HTTP ${res.status}`,
+        );
+      }
+
+      return (await res.json()) as CredentialMetadata;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: CREDS_KEY(variables.templateId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: CREDS_HEALTH_KEY(variables.templateId),
+      });
+    },
+  });
+}
+
+export interface DeleteCredentialResult {
+  affected_agent_count?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * DELETE /api/v1/platform/templates/{templateId}/credentials/{key}?force={force}
+ * On 409: returns response body with affected_agent_count (does NOT throw — caller decides).
+ * On other errors: throws.
+ */
+export function useDeleteCredential() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      templateId,
+      key,
+      force = false,
+    }: {
+      templateId: string;
+      key: string;
+      force?: boolean;
+    }): Promise<{ conflict: true; body: DeleteCredentialResult } | { conflict: false }> => {
+      const token = getStoredToken();
+      const url = `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/v1/platform/templates/${templateId}/credentials/${key}?force=${force}`;
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token ?? ""}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({})) as DeleteCredentialResult;
+        return { conflict: true, body };
+      }
+
+      if (!res.ok && res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          (body as { detail?: string }).detail ?? `HTTP ${res.status}`,
+        );
+      }
+
+      return { conflict: false };
+    },
+    onSuccess: (data, variables) => {
+      if (!data.conflict) {
+        queryClient.invalidateQueries({
+          queryKey: CREDS_KEY(variables.templateId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: CREDS_HEALTH_KEY(variables.templateId),
+        });
+      }
     },
   });
 }

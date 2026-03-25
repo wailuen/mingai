@@ -38,11 +38,10 @@ function severityBadgeClass(severity: TenantIssueSeverity): string {
 // ---------------------------------------------------------------------------
 
 const STATUS_OPTIONS: { value: TenantIssueStatus; label: string }[] = [
-  { value: "new", label: "New" },
-  { value: "in_review", label: "In Review" },
-  { value: "escalated", label: "Escalated" },
-  { value: "resolved", label: "Resolved" },
-  { value: "closed", label: "Closed" },
+  { value: "escalated", label: "Escalate" },
+  { value: "resolved", label: "Resolve" },
+  { value: "awaiting_info", label: "Request Info" },
+  { value: "closed", label: "Close" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -65,14 +64,24 @@ function StatusDropdown({
     }
   }
 
+  // Display current status as a label; only offer actionable transitions
+  const statusLabel: Record<string, string> = {
+    new: "New", open: "Open", assigned: "Assigned", escalated: "Escalated",
+    resolved: "Resolved", closed: "Closed", awaiting_info: "Awaiting Info",
+    triaged: "Triaged", routed: "Routed", in_progress: "In Progress", in_review: "In Review",
+  };
+
   return (
     <select
-      value={currentStatus}
+      value=""
       onChange={handleChange}
       disabled={updateMutation.isPending}
       onClick={(e) => e.stopPropagation()}
       className="rounded-control border border-border bg-bg-elevated px-2 py-1 text-xs text-text-primary transition-colors focus:border-accent focus:outline-none disabled:opacity-50"
     >
+      <option value="" disabled>
+        {statusLabel[currentStatus] ?? currentStatus}
+      </option>
       {STATUS_OPTIONS.map((opt) => (
         <option key={opt.value} value={opt.value}>
           {opt.label}

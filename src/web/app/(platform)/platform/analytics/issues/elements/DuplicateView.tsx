@@ -20,7 +20,7 @@ function ClusterRow({ cluster }: { cluster: DuplicateCluster }) {
   const ExpandIcon = expanded ? ChevronDown : ChevronRight;
 
   return (
-    <div className="border-b border-border-faint last:border-b-0">
+    <div>
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
@@ -110,7 +110,7 @@ export function DuplicateView({ period }: DuplicateViewProps) {
           No duplicate clusters found for this period.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-card border border-border bg-bg-surface">
+        <div className="divide-y divide-border-faint overflow-hidden rounded-card border border-border bg-bg-surface">
           {/* Header */}
           <div className="flex items-center gap-3 border-b border-border px-5 py-2.5">
             <span className="w-5" />

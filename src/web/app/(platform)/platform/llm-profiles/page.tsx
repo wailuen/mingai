@@ -159,8 +159,8 @@ function ProfileTable({ onRowClick }: ProfileTableProps) {
               {SLOTS.map((slot) => (
                 <td key={slot} className="hidden px-3.5 py-3 md:table-cell">
                   {profile.slots[slot] ? (
-                    <span className="font-mono text-data-value text-text-muted truncate max-w-[120px] block">
-                      {profile.slots[slot]!.model_name}
+                    <span className="text-body-default text-text-muted truncate max-w-[140px] block" title={profile.slots[slot]!.model_name}>
+                      {profile.slots[slot]!.display_name || profile.slots[slot]!.model_name}
                     </span>
                   ) : (
                     <span className="text-[11px] text-text-faint">—</span>

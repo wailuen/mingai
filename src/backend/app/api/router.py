@@ -162,10 +162,12 @@ router.include_router(agents_admin_router)
 
 # Agent Studio Skills endpoints (TODO-16)
 from app.modules.agents.skills_routes import admin_router as skills_admin_router
+from app.modules.agents.skills_routes import platform_admin_router as skills_platform_admin_router
 from app.modules.agents.skills_routes import router as skills_router
 
 router.include_router(skills_router)
 router.include_router(skills_admin_router)
+router.include_router(skills_platform_admin_router)  # GET/POST /api/v1/platform/skills/...
 
 # Agent Studio custom-agent studio endpoints (TODO-18)
 from app.modules.agents.routes import studio_router as agents_studio_router
@@ -196,6 +198,11 @@ from app.modules.agents.routes import platform_templates_router
 
 router.include_router(platform_templates_router)
 
+# Platform Credential Vault CRUD endpoints (TODO-43)
+from app.modules.platform.credentials_routes import router as platform_credentials_router
+
+router.include_router(platform_credentials_router)
+
 # HAR A2A transaction endpoints (AI-043 to AI-045)
 from app.modules.har.routes import router as har_router
 
@@ -225,6 +232,11 @@ router.include_router(llm_providers_router)
 from app.modules.platform.cost_analytics import router as cost_analytics_router
 
 router.include_router(cost_analytics_router)
+
+# Platform Issues Analytics endpoints
+from app.modules.platform.issue_analytics import router as issue_analytics_router
+
+router.include_router(issue_analytics_router)
 
 # Platform Cost Alert Thresholds endpoints (PA-015)
 from app.modules.platform.cost_alerts import router as cost_alerts_router
@@ -346,6 +358,12 @@ router.include_router(tenant_jobs_router)
 from app.modules.platform.job_trigger import router as job_trigger_router
 
 router.include_router(job_trigger_router)
+
+# Pitchbook MCP server (platform tool — registered in tool catalog)
+# Embedded server, no SSRF concern — API key is caller-supplied per request.
+from app.modules.mcp_servers.pitchbook.router import router as pitchbook_mcp_router
+
+router.include_router(pitchbook_mcp_router)
 
 # Local dev: internal screenshot upload/serve endpoints (API-014 local mode)
 # Always registered — HMAC token verification is the auth mechanism.

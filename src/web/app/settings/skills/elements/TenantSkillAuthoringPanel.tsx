@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   useCreateSkill,
   useUpdateSkill,
   usePublishSkill,
+  useTenantSkill,
 } from "@/lib/hooks/useSkills";
 import type { TenantSkill, CreateSkillPayload } from "@/lib/hooks/useSkills";
 import { useTools } from "@/lib/hooks/useToolCatalog";
@@ -117,6 +118,9 @@ export function TenantSkillAuthoringPanel({
 }: TenantSkillAuthoringPanelProps) {
   const isEdit = !!skill;
 
+  // Fetch full detail — list response omits prompt_template, input_schema, output_schema
+  const { data: fullSkill } = useTenantSkill(skill?.id ?? null);
+
   // Form state
   const [name, setName] = useState(skill?.name ?? "");
   const [description, setDescription] = useState(skill?.description ?? "");
@@ -142,6 +146,28 @@ export function TenantSkillAuthoringPanel({
   const [selectedTools, setSelectedTools] = useState<string[]>(
     skill?.tool_dependencies ?? [],
   );
+
+  // Sync all form fields when full skill detail arrives (list response omits several fields)
+  useEffect(() => {
+    if (!fullSkill) return;
+    setName(fullSkill.name ?? "");
+    setDescription(fullSkill.description ?? "");
+    setCategory(fullSkill.category ?? "");
+    setExecPattern(
+      (fullSkill.execution_pattern as "prompt" | "tool_composing") ?? "prompt",
+    );
+    setInvocationMode(fullSkill.invocation_mode ?? "llm_invoked");
+    setPipelineTrigger(fullSkill.pipeline_trigger ?? "");
+    setPromptTemplate(fullSkill.prompt_template ?? "");
+    setInputRows(
+      fullSkill.input_schema ? parseSchema(fullSkill.input_schema) : [],
+    );
+    setOutputRows(
+      fullSkill.output_schema ? parseSchema(fullSkill.output_schema) : [],
+    );
+    setSelectedTools(fullSkill.tool_dependencies ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullSkill?.id]);
 
   // Accordion state
   const [openSections, setOpenSections] = useState<Set<AccordionSection>>(

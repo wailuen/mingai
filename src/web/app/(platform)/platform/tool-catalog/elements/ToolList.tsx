@@ -1,31 +1,18 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender,
-  type ColumnDef,
-  type SortingState,
-} from "@tanstack/react-table";
-import {
-  ArrowUpDown,
-  Eye,
-  Archive,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ScrollableTableWrapper } from "@/components/shared/ScrollableTableWrapper";
 import {
   useTools,
   useRetireTool,
+  classifyTools,
   type Tool,
   type HealthStatus,
+  type SafetyClass,
 } from "@/lib/hooks/useToolCatalog";
 import { SafetyClassificationBadge } from "./SafetyClassificationBadge";
 import { ToolHealthMonitor } from "./ToolHealthMonitor";
+import { IntegrationGroupRow } from "./IntegrationGroupRow";
 
 interface ToolListProps {
   onView: (tool: Tool) => void;
@@ -37,257 +24,237 @@ const HEALTH_DOT: Record<HealthStatus, string> = {
   unavailable: "bg-alert",
 };
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "--";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+const HEALTH_TEXT: Record<HealthStatus, string> = {
+  healthy: "text-accent",
+  degraded: "text-warn",
+  unavailable: "text-alert",
+};
 
-function SkeletonRows() {
+function HealthIndicator({ status }: { status: HealthStatus }) {
   return (
-    <>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <tr key={i} className="border-b border-border-faint">
-          {Array.from({ length: 6 }).map((__, j) => (
-            <td key={j} className="px-3.5 py-3">
-              <div className="h-4 w-20 animate-pulse rounded-badge bg-bg-elevated" />
-            </td>
-          ))}
-        </tr>
-      ))}
-    </>
+    <div className="flex items-center gap-1.5">
+      <span
+        className={cn("inline-block h-2 w-2 rounded-full", HEALTH_DOT[status])}
+      />
+      <span
+        className={cn(
+          "text-[12px] capitalize font-medium",
+          HEALTH_TEXT[status],
+        )}
+      >
+        {status}
+      </span>
+    </div>
   );
 }
 
-interface SortHeaderProps {
-  label: string;
-  canSort: boolean;
-  sorted: false | "asc" | "desc";
-  onClick: () => void;
-}
-
-function SortHeader({ label, canSort, sorted, onClick }: SortHeaderProps) {
+function SkeletonSection() {
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex items-center gap-1 text-label-nav uppercase tracking-wider text-text-faint",
-        canSort && "cursor-pointer hover:text-text-muted",
-      )}
-      onClick={canSort ? onClick : undefined}
-    >
-      {label}
-      {canSort && (
-        <ArrowUpDown
-          size={10}
-          className={cn(sorted ? "text-accent" : "text-text-faint")}
+    <div className="space-y-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-12 animate-pulse rounded-control bg-bg-elevated"
         />
-      )}
-    </button>
+      ))}
+    </div>
   );
 }
 
-function ToolUsageAnalytics({ tool }: { tool: Tool }) {
+function BuiltinToolRow({
+  tool,
+  onView,
+}: {
+  tool: Tool;
+  onView: (t: Tool) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <div className="border-t border-border bg-bg-elevated/50 px-6 py-4">
-      <div className="grid grid-cols-3 gap-6">
-        <div>
-          <p className="text-[11px] uppercase tracking-wider text-text-faint">
-            Invocations
-          </p>
-          <p className="mt-1 font-mono text-body-default text-text-primary">
-            {tool.invocation_count.toLocaleString()}
-          </p>
-        </div>
-        <div>
-          <p className="text-[11px] uppercase tracking-wider text-text-faint">
-            Error Rate
-          </p>
-          <p
-            className={cn(
-              "mt-1 font-mono text-body-default",
-              tool.error_rate_pct > 5 ? "text-alert" : "text-text-primary",
+    <div>
+      <div
+        onClick={() => onView(tool)}
+        className={cn(
+          "flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-accent-dim",
+          tool.is_active === false && "opacity-50",
+        )}
+        style={{ transition: "background 220ms ease" }}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-body-default font-medium text-text-primary">
+              {tool.name}
+            </span>
+            {tool.is_active === false && (
+              <span className="rounded-badge bg-bg-deep px-1.5 py-0.5 text-[10px] font-semibold text-text-faint">
+                Retired
+              </span>
             )}
-          >
-            {tool.error_rate_pct.toFixed(1)}%
-          </p>
+            <span className="rounded-badge bg-bg-elevated px-2 py-0.5 text-[10px] font-semibold text-text-faint uppercase tracking-wide">
+              Built-in
+            </span>
+          </div>
+          {tool.description && (
+            <p className="mt-0.5 text-[11px] text-text-faint line-clamp-1">
+              {tool.description}
+            </p>
+          )}
         </div>
-        <div>
-          <p className="text-[11px] uppercase tracking-wider text-text-faint">
-            P50 Latency
-          </p>
-          <p className="mt-1 font-mono text-body-default text-text-primary">
-            {tool.p50_latency_ms}ms
-          </p>
-        </div>
+        <SafetyClassificationBadge safetyClass={tool.safety_class} />
+        <HealthIndicator status={tool.health_status} />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          className="ml-2 rounded-control border border-border px-2 py-1 text-[11px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+        >
+          {expanded ? "Hide stats" : "Stats"}
+        </button>
       </div>
-      <div className="mt-3">
-        <p className="text-[11px] uppercase tracking-wider text-text-faint">
-          Health (Last 24 Checks)
+      {expanded && (
+        <div className="border-t border-border bg-bg-elevated/50 px-6 py-4">
+          <div className="grid grid-cols-3 gap-6">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-text-faint">
+                Invocations
+              </p>
+              <p className="mt-1 font-mono text-body-default text-text-primary">
+                {tool.invocation_count.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-text-faint">
+                Error Rate
+              </p>
+              <p
+                className={cn(
+                  "mt-1 font-mono text-body-default",
+                  tool.error_rate_pct > 5
+                    ? "text-alert"
+                    : "text-text-primary",
+                )}
+              >
+                {tool.error_rate_pct.toFixed(1)}%
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-text-faint">
+                P50 Latency
+              </p>
+              <p className="mt-1 font-mono text-body-default text-text-primary">
+                {tool.p50_latency_ms}ms
+              </p>
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-[11px] uppercase tracking-wider text-text-faint">
+              Health (Last 24 Checks)
+            </p>
+            <div className="mt-2">
+              <ToolHealthMonitor
+                toolId={tool.id}
+                currentStatus={tool.health_status}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Retire confirmation modal
+// ---------------------------------------------------------------------------
+
+interface RetireModalProps {
+  target: { id: string; name: string };
+  onConfirm: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+}
+
+function RetireModal({ target, onConfirm, onCancel, isPending }: RetireModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-bg-deep/60"
+        onClick={onCancel}
+        role="presentation"
+      />
+      <div className="relative w-[440px] rounded-control border border-border bg-bg-surface p-6">
+        <h3 className="text-section-heading text-text-primary mb-2">
+          Retire {target.name}?
+        </h3>
+        <p className="text-body-default text-text-muted mb-6">
+          This removes it from all tenant agent assignments. This action marks
+          the tool as unavailable and cannot be undone.
         </p>
-        <div className="mt-2">
-          <ToolHealthMonitor
-            toolId={tool.id}
-            currentStatus={tool.health_status}
-          />
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-control border border-border px-4 py-1.5 text-body-default text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isPending}
+            className="rounded-control bg-alert px-4 py-1.5 text-body-default font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-30"
+          >
+            Retire Tool
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function ToolList({ onView }: ToolListProps) {
   const { data, isPending, error } = useTools();
   const retireMutation = useRetireTool();
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
-  function toggleExpanded(id: string) {
-    setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
+  const [expandedProviders, setExpandedProviders] = useState<
+    Record<string, boolean>
+  >({});
+  const [safetyFilter, setSafetyFilter] = useState<SafetyClass | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "retired"
+  >("all");
+  const [retireTarget, setRetireTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-  const columns = useMemo<ColumnDef<Tool>[]>(
-    () => [
-      {
-        id: "expand",
-        header: "",
-        cell: (info) => {
-          const isExpanded = expandedRows[info.row.original.id] ?? false;
-          return (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpanded(info.row.original.id);
-              }}
-              className="text-text-faint transition-colors hover:text-text-muted"
-            >
-              {isExpanded ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )}
-            </button>
-          );
-        },
-        enableSorting: false,
-      },
-      {
-        accessorKey: "name",
-        header: "Name",
-        cell: (info) => (
-          <span className="text-body-default font-medium text-text-primary">
-            {info.getValue<string>()}
-          </span>
-        ),
-        enableSorting: true,
-      },
-      {
-        accessorKey: "provider",
-        header: "Provider",
-        cell: (info) => (
-          <span className="text-body-default text-text-muted">
-            {info.getValue<string>()}
-          </span>
-        ),
-        enableSorting: true,
-      },
-      {
-        accessorKey: "safety_class",
-        header: "Safety",
-        cell: (info) => (
-          <SafetyClassificationBadge
-            safetyClass={info.getValue<Tool["safety_class"]>()}
-          />
-        ),
-        enableSorting: true,
-      },
-      {
-        accessorKey: "health_status",
-        header: "Health",
-        cell: (info) => {
-          const status = info.getValue<HealthStatus>();
-          return (
-            <div className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "inline-block h-2 w-2 rounded-full",
-                  HEALTH_DOT[status],
-                )}
-              />
-              <span className="text-xs capitalize text-text-muted">
-                {status}
-              </span>
-            </div>
-          );
-        },
-        enableSorting: true,
-      },
-      {
-        accessorKey: "last_ping",
-        header: "Last Ping",
-        cell: (info) => (
-          <span className="font-mono text-data-value text-text-muted">
-            {formatDate(info.getValue<string | null>())}
-          </span>
-        ),
-        enableSorting: false,
-      },
-      {
-        id: "actions",
-        header: "Actions",
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onView(row);
-                }}
-                className="inline-flex items-center gap-1 rounded-control border border-border px-2 py-1 text-[11px] text-text-muted transition-colors hover:bg-bg-elevated hover:text-text-primary"
-              >
-                <Eye size={11} />
-                View
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  retireMutation.mutate(row.id);
-                }}
-                disabled={retireMutation.isPending}
-                className="inline-flex items-center gap-1 rounded-control border border-alert/30 px-2 py-1 text-[11px] text-alert transition-colors hover:bg-alert-dim disabled:opacity-30"
-              >
-                <Archive size={11} />
-                Retire
-              </button>
-            </div>
-          );
-        },
-        enableSorting: false,
-      },
-    ],
-    [expandedRows, onView, retireMutation],
+  const filteredTools = useMemo(() => {
+    if (!data) return [];
+    return data.filter((t) => {
+      if (safetyFilter !== "all" && t.safety_class !== safetyFilter)
+        return false;
+      if (statusFilter === "active" && t.is_active === false) return false;
+      if (statusFilter === "retired" && t.is_active !== false) return false;
+      return true;
+    });
+  }, [data, safetyFilter, statusFilter]);
+
+  const classified = useMemo(
+    () => classifyTools(filteredTools),
+    [filteredTools],
   );
 
-  const table = useReactTable({
-    data: data ?? [],
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+  function handleRetireConfirm() {
+    if (!retireTarget) return;
+    retireMutation.mutate(retireTarget.id);
+    setRetireTarget(null);
+  }
 
   if (error) {
     return (
@@ -297,86 +264,192 @@ export function ToolList({ onView }: ToolListProps) {
     );
   }
 
+  const totalCount = data?.length ?? 0;
+
   return (
-    <ScrollableTableWrapper
-      footer={
-        data && data.length > 0 ? (
-          <div className="px-5 py-2.5">
-            <p className="font-mono text-data-value text-text-faint">
-              {data.length} tool{data.length !== 1 ? "s" : ""} registered
-            </p>
-          </div>
-        ) : undefined
-      }
-    >
-      <table className="w-full">
-        <thead className="sticky top-0 z-10 bg-bg-surface">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="border-b border-border">
-              {headerGroup.headers.map((header) => (
-                <th key={header.id} className="px-3.5 py-2.5 text-left">
-                  {header.isPlaceholder ? null : (
-                    <SortHeader
-                      label={
-                        typeof header.column.columnDef.header === "string"
-                          ? header.column.columnDef.header
-                          : header.id
-                      }
-                      canSort={header.column.getCanSort()}
-                      sorted={header.column.getIsSorted()}
-                      onClick={
-                        header.column.getToggleSortingHandler() as () => void
-                      }
-                    />
-                  )}
-                </th>
-              ))}
-            </tr>
+    <>
+      {/* Filter bar */}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        {/* Safety filter */}
+        <div className="flex items-center gap-1">
+          {(
+            [
+              { value: "all", label: "All Safety" },
+              { value: "read_only", label: "Read-only" },
+              { value: "write", label: "Write" },
+              { value: "destructive", label: "Destructive" },
+            ] as { value: SafetyClass | "all"; label: string }[]
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setSafetyFilter(opt.value)}
+              className={cn(
+                "rounded-control border px-3 py-1 text-[12px] transition-colors",
+                safetyFilter === opt.value
+                  ? "border-accent bg-accent-dim text-accent"
+                  : "border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:text-text-primary",
+              )}
+              style={{ transition: "background 220ms ease, color 220ms ease, border-color 220ms ease" }}
+            >
+              {opt.label}
+            </button>
           ))}
-        </thead>
-        <tbody>
-          {isPending && <SkeletonRows />}
+        </div>
 
-          {data && data.length === 0 && (
-            <tr>
-              <td
-                colSpan={columns.length}
-                className="px-3.5 py-12 text-center text-body-default text-text-faint"
-              >
-                No tools registered yet
-              </td>
-            </tr>
+        <div className="h-4 w-px bg-border" />
+
+        {/* Status filter */}
+        <div className="flex items-center gap-1">
+          {(
+            [
+              { value: "all", label: "All Status" },
+              { value: "active", label: "Active" },
+              { value: "retired", label: "Retired" },
+            ] as { value: "all" | "active" | "retired"; label: string }[]
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setStatusFilter(opt.value)}
+              className={cn(
+                "rounded-control border px-3 py-1 text-[12px] transition-colors",
+                statusFilter === opt.value
+                  ? "border-accent bg-accent-dim text-accent"
+                  : "border-border bg-bg-elevated text-text-muted hover:border-accent-ring hover:text-text-primary",
+              )}
+              style={{ transition: "background 220ms ease, color 220ms ease, border-color 220ms ease" }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto font-mono text-[12px] text-text-faint">
+          {isPending ? "Loading…" : `${totalCount} tool${totalCount !== 1 ? "s" : ""} total`}
+        </div>
+      </div>
+
+      {/* Sections */}
+      <div className="space-y-8">
+        {/* Section 1: Built-in Tools */}
+        <section>
+          <h2 className="text-section-heading text-text-primary mb-3">
+            Built-in Tools
+          </h2>
+          {isPending ? (
+            <SkeletonSection />
+          ) : classified.builtins.length === 0 ? (
+            <p className="text-body-default text-text-faint">
+              No built-in tools configured. Contact support.
+            </p>
+          ) : (
+            <div className="divide-y divide-border rounded-control border border-border overflow-hidden">
+              {classified.builtins.map((tool) => (
+                <BuiltinToolRow key={tool.id} tool={tool} onView={onView} />
+              ))}
+            </div>
           )}
+        </section>
 
-          {table.getRowModel().rows.map((row) => {
-            const isExpanded = expandedRows[row.original.id] ?? false;
-            return (
-              <Fragment key={row.id}>
-                <tr
-                  onClick={() => toggleExpanded(row.original.id)}
-                  className="cursor-pointer border-b border-border-faint transition-colors hover:bg-accent-dim"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-3.5 py-3">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                {isExpanded && (
-                  <tr>
-                    <td colSpan={columns.length} className="p-0">
-                      <ToolUsageAnalytics tool={row.original} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </ScrollableTableWrapper>
+        {/* Section 2: MCP Integrations */}
+        <section>
+          <h2 className="text-section-heading text-text-primary mb-3">
+            MCP Integrations
+          </h2>
+          {isPending ? (
+            <SkeletonSection />
+          ) : Object.keys(classified.mcpIntegrations).length === 0 ? (
+            <p className="text-body-default text-text-faint">
+              No MCP integrations registered. Use &apos;Register Tool&apos; to
+              add one.
+            </p>
+          ) : (
+            <div className="divide-y divide-border rounded-control border border-border overflow-hidden">
+              {Object.entries(classified.mcpIntegrations).map(
+                ([provider, tools]) => (
+                  <IntegrationGroupRow
+                    key={provider}
+                    provider={provider}
+                    tools={tools}
+                    isExpanded={expandedProviders[provider] ?? false}
+                    onToggle={() =>
+                      setExpandedProviders((prev) => ({
+                        ...prev,
+                        [provider]: !prev[provider],
+                      }))
+                    }
+                    onRetire={(tool) =>
+                      setRetireTarget({ id: tool.id, name: tool.name })
+                    }
+                    onView={onView}
+                  />
+                ),
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Section 3: Tenant Tools — aggregate only (no per-tool detail per product spec) */}
+        <section>
+          <h2 className="text-section-heading text-text-primary mb-3">
+            Tenant Tools
+          </h2>
+          {isPending ? (
+            <SkeletonSection />
+          ) : classified.tenantTools.length === 0 ? (
+            <p className="text-body-default text-text-faint">
+              No tenant tools registered yet.
+            </p>
+          ) : (
+            <div className="rounded-control border border-border px-5 py-4">
+              {(() => {
+                const serverIds = new Set(
+                  classified.tenantTools
+                    .map((t) => t.source_mcp_server_id)
+                    .filter(Boolean),
+                );
+                const serverCount = serverIds.size;
+                const toolCount = classified.tenantTools.length;
+                return (
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wider text-text-faint">
+                        Private MCP Servers
+                      </p>
+                      <p className="mt-1 font-mono text-[18px] font-semibold text-text-primary">
+                        {serverCount}
+                      </p>
+                    </div>
+                    <div className="h-8 w-px bg-border" />
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wider text-text-faint">
+                        Unique Tools
+                      </p>
+                      <p className="mt-1 font-mono text-[18px] font-semibold text-text-primary">
+                        {toolCount}
+                      </p>
+                    </div>
+                    <p className="ml-2 text-body-default text-text-muted">
+                      tools registered across tenant workspaces
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Retire confirmation modal */}
+      {retireTarget && (
+        <RetireModal
+          target={retireTarget}
+          onConfirm={handleRetireConfirm}
+          onCancel={() => setRetireTarget(null)}
+          isPending={retireMutation.isPending}
+        />
+      )}
+    </>
   );
 }

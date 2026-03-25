@@ -129,10 +129,17 @@ export function usePlatformSkills(filters?: PlatformSkillFilters) {
     queryKey: [PLATFORM_SKILLS_KEY, filters ?? {}],
     queryFn: async () => {
       try {
-        const res = await apiGet<PlatformSkillsResponse>(
-          `/api/v1/skills${qs ? `?${qs}` : ""}`,
-        );
-        return res;
+        const raw = await apiGet<{
+          items: (Omit<PlatformSkill, "adopted"> & { is_adopted?: boolean })[];
+          total: number;
+        }>(`/api/v1/skills${qs ? `?${qs}` : ""}`);
+        return {
+          items: raw.items.map((s) => ({
+            ...s,
+            adopted: s.is_adopted ?? false,
+          })) as PlatformSkill[],
+          total: raw.total,
+        } satisfies PlatformSkillsResponse;
       } catch (err: unknown) {
         // 404 means no platform skills seeded — return empty gracefully
         if (

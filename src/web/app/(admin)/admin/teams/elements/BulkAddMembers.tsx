@@ -183,11 +183,11 @@ export function BulkAddMembers({
                   className="flex w-full items-center gap-3 rounded-control px-3 py-2 text-left transition-colors hover:bg-accent-dim"
                 >
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-bg-elevated text-xs font-medium text-text-muted">
-                    {user.name.charAt(0).toUpperCase()}
+                    {(user.name ?? user.email ?? "?").charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-body-default font-medium text-text-primary">
-                      {user.name}
+                      {user.name ?? user.email}
                     </p>
                     <p className="truncate font-mono text-xs text-text-faint">
                       {user.email}

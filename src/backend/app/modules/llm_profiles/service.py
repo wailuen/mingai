@@ -534,11 +534,11 @@ class LLMProfileService:
                 "p.chat_params, p.intent_params, p.vision_params, p.agent_params, "
                 "p.chat_traffic_split, p.intent_traffic_split, p.vision_traffic_split, p.agent_traffic_split, "
                 "p.is_platform_default, p.plan_tiers, p.owner_tenant_id, p.created_by, p.created_at, p.updated_at, "
-                # Join llm_library to get model_name per slot
-                "lc.model_name AS chat_model_name, lc.provider AS chat_provider, lc.health_status AS chat_health_status, "
-                "li.model_name AS intent_model_name, li.provider AS intent_provider, li.health_status AS intent_health_status, "
-                "lv.model_name AS vision_model_name, lv.provider AS vision_provider, lv.health_status AS vision_health_status, "
-                "la.model_name AS agent_model_name, la.provider AS agent_provider, la.health_status AS agent_health_status, "
+                # Join llm_library to get model_name, display_name, health, pricing, and test timestamp per slot
+                "lc.model_name AS chat_model_name, lc.display_name AS chat_display_name, lc.provider AS chat_provider, lc.health_status AS chat_health_status, lc.last_test_passed_at AS chat_test_passed_at, lc.pricing_per_1k_tokens_in AS chat_price_in, lc.pricing_per_1k_tokens_out AS chat_price_out, "
+                "li.model_name AS intent_model_name, li.display_name AS intent_display_name, li.provider AS intent_provider, li.health_status AS intent_health_status, li.last_test_passed_at AS intent_test_passed_at, li.pricing_per_1k_tokens_in AS intent_price_in, li.pricing_per_1k_tokens_out AS intent_price_out, "
+                "lv.model_name AS vision_model_name, lv.display_name AS vision_display_name, lv.provider AS vision_provider, lv.health_status AS vision_health_status, lv.last_test_passed_at AS vision_test_passed_at, lv.pricing_per_1k_tokens_in AS vision_price_in, lv.pricing_per_1k_tokens_out AS vision_price_out, "
+                "la.model_name AS agent_model_name, la.display_name AS agent_display_name, la.provider AS agent_provider, la.health_status AS agent_health_status, la.last_test_passed_at AS agent_test_passed_at, la.pricing_per_1k_tokens_in AS agent_price_in, la.pricing_per_1k_tokens_out AS agent_price_out, "
                 # Count tenants assigned to this profile
                 "(SELECT COUNT(*) FROM tenants t WHERE t.llm_profile_id = p.id) AS tenants_count "
                 "FROM llm_profiles p "
@@ -587,12 +587,18 @@ class LLMProfileService:
                 lib_id = d.get(f"{slot}_library_id")
                 model_name = row.get(f"{slot}_model_name")
                 if lib_id and model_name:
+                    test_at = row.get(f"{slot}_test_passed_at")
+                    price_in = row.get(f"{slot}_price_in")
+                    price_out = row.get(f"{slot}_price_out")
                     d["slots"][slot] = {
                         "library_entry_id": lib_id,
                         "model_name": model_name,
+                        "display_name": row.get(f"{slot}_display_name") or model_name,
                         "provider": row.get(f"{slot}_provider", ""),
                         "health_status": row.get(f"{slot}_health_status") or "unknown",
-                        "test_passed_at": None,
+                        "test_passed_at": test_at.isoformat() if test_at else None,
+                        "pricing_per_1k_tokens_in": float(price_in) if price_in is not None else None,
+                        "pricing_per_1k_tokens_out": float(price_out) if price_out is not None else None,
                     }
                 else:
                     d["slots"][slot] = None
@@ -858,10 +864,10 @@ class LLMProfileService:
                 "p.chat_params, p.intent_params, p.vision_params, p.agent_params, "
                 "p.chat_traffic_split, p.intent_traffic_split, p.vision_traffic_split, p.agent_traffic_split, "
                 "p.is_platform_default, p.plan_tiers, p.owner_tenant_id, p.created_by, p.created_at, p.updated_at, "
-                "lc.model_name AS chat_model_name, lc.provider AS chat_provider, lc.health_status AS chat_health_status, lc.last_test_passed_at AS chat_test_passed_at, lc.pricing_per_1k_tokens_in AS chat_price_in, lc.pricing_per_1k_tokens_out AS chat_price_out, "
-                "li.model_name AS intent_model_name, li.provider AS intent_provider, li.health_status AS intent_health_status, li.last_test_passed_at AS intent_test_passed_at, li.pricing_per_1k_tokens_in AS intent_price_in, li.pricing_per_1k_tokens_out AS intent_price_out, "
-                "lv.model_name AS vision_model_name, lv.provider AS vision_provider, lv.health_status AS vision_health_status, lv.last_test_passed_at AS vision_test_passed_at, lv.pricing_per_1k_tokens_in AS vision_price_in, lv.pricing_per_1k_tokens_out AS vision_price_out, "
-                "la.model_name AS agent_model_name, la.provider AS agent_provider, la.health_status AS agent_health_status, la.last_test_passed_at AS agent_test_passed_at, la.pricing_per_1k_tokens_in AS agent_price_in, la.pricing_per_1k_tokens_out AS agent_price_out, "
+                "lc.model_name AS chat_model_name, lc.display_name AS chat_display_name, lc.provider AS chat_provider, lc.health_status AS chat_health_status, lc.last_test_passed_at AS chat_test_passed_at, lc.pricing_per_1k_tokens_in AS chat_price_in, lc.pricing_per_1k_tokens_out AS chat_price_out, "
+                "li.model_name AS intent_model_name, li.display_name AS intent_display_name, li.provider AS intent_provider, li.health_status AS intent_health_status, li.last_test_passed_at AS intent_test_passed_at, li.pricing_per_1k_tokens_in AS intent_price_in, li.pricing_per_1k_tokens_out AS intent_price_out, "
+                "lv.model_name AS vision_model_name, lv.display_name AS vision_display_name, lv.provider AS vision_provider, lv.health_status AS vision_health_status, lv.last_test_passed_at AS vision_test_passed_at, lv.pricing_per_1k_tokens_in AS vision_price_in, lv.pricing_per_1k_tokens_out AS vision_price_out, "
+                "la.model_name AS agent_model_name, la.display_name AS agent_display_name, la.provider AS agent_provider, la.health_status AS agent_health_status, la.last_test_passed_at AS agent_test_passed_at, la.pricing_per_1k_tokens_in AS agent_price_in, la.pricing_per_1k_tokens_out AS agent_price_out, "
                 "(SELECT COUNT(*) FROM tenants t WHERE t.llm_profile_id = p.id) AS tenants_count "
                 "FROM llm_profiles p "
                 "LEFT JOIN llm_library lc ON p.chat_library_id = lc.id "
@@ -998,6 +1004,7 @@ def _row_to_dict_from_mapping(d: dict) -> dict:
             slots[slot] = {
                 "library_entry_id": str(lib_id),
                 "model_name": model_name,
+                "display_name": d.get(f"{slot}_display_name") or model_name,
                 "provider": d.get(f"{slot}_provider") or "",
                 "health_status": d.get(f"{slot}_health_status") or "unknown",
                 "test_passed_at": test_at.isoformat() if test_at else None,

@@ -1,0 +1,26 @@
+## Session Notes — 2026-03-25
+
+### Accomplished
+- TODO-39: Tool Catalog API Alignment — all backend already implemented; created 13 unit tests in `tests/unit/test_platform_tool_catalog.py` covering retire (200/404/403/idempotent), health history (200/404/check rows), and hard-delete guard (409/200/403)
+- TODO-40: Tool Catalog 3-Section UI — all frontend already implemented (ToolList.tsx, IntegrationGroupRow.tsx, classifyTools(), RetireModal, ToolHealthMonitor wired); confirmed no TS errors
+- Moved completed TODOs 39 and 40 to `todos/completed/` — active/ is now empty (90 total completed)
+- Confirmed background agents (from prior session) completed credential vault work with no regressions
+- Workspace cleanup: removed one-time screenshots (5 root PNGs, e2e artifacts/, e2e screenshots/), removed stray spec files (redteam-cors-fixed, redteam-validation), removed session-notes
+- Moved `98-aihub-setup/model.md` → `docs/00-authority/04-llm-models-reference.md` + updated README
+
+### In Progress
+- Nothing — all active todos complete
+
+### Blockers
+- None
+
+### Next Steps
+- All 90 todos are complete. Consider `/codify` to capture new patterns from credential vault + tool catalog work into agents/skills
+- Or start new feature planning with `/todos` for the next sprint
+
+### Active Todo
+- None (todos/active/ is empty)
+
+### Test Status
+- Unit suite: 3534 passed, 17 pre-existing failures (unchanged), 0 regressions
+- TypeScript: 0 errors

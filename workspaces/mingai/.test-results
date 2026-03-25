@@ -1,10 +1,9 @@
-commit: $(cd /Users/wailuen/Development/mingai && git rev-parse HEAD 2>/dev/null || echo "pending")
-timestamp: 2026-03-22T11:55:00Z
-baseline_pass: 65
-baseline_fail: 0
-final_pass: 65
-final_fail: 0
-new_tests: 65
+commit: 3df664a
+timestamp: 2026-03-24T00:00:00Z
+baseline_pass: 3521
+baseline_fail: 17
+final_pass: 3534
+final_fail: 17
+new_tests: 13
 regressions: 0
-command: pytest tests/unit/test_ta_agent_library.py -q
-notes: TODO-14 unit tests all pass. E2E verified via browser: Agent Library tab renders 6 templates, category filter works, detail panel opens with LLM/KB/A2A sections.
+command: pytest tests/unit/ -q --tb=short

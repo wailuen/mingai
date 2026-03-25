@@ -66,7 +66,7 @@ function ToolRow({ tool }: { tool: PlatformTool }) {
     tool.rate_limit_rpm != null;
 
   return (
-    <div className="border-b border-border last:border-b-0">
+    <div>
       {/* Main row */}
       <div
         className={cn(
@@ -244,12 +244,9 @@ export function PlatformToolsTab() {
 
       {/* Loading skeleton */}
       {isPending && (
-        <div className="animate-pulse rounded-card border border-border bg-bg-surface">
+        <div className="animate-pulse divide-y divide-border rounded-card border border-border bg-bg-surface">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-12 border-b border-border last:border-b-0"
-            />
+            <div key={i} className="h-12" />
           ))}
         </div>
       )}
@@ -277,7 +274,7 @@ export function PlatformToolsTab() {
 
       {/* Table */}
       {!isPending && filtered.length > 0 && (
-        <div className="rounded-card border border-border bg-bg-surface overflow-hidden">
+        <div className="divide-y divide-border rounded-card border border-border bg-bg-surface overflow-hidden">
           {/* Header */}
           <div
             className="grid items-center gap-4 border-b border-border bg-bg-elevated px-4 py-2.5"

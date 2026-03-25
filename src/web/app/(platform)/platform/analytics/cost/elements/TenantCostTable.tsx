@@ -65,11 +65,11 @@ function exportCsv(rows: TenantCost[]) {
       [
         sanitizeCsvCell(r.tenant_name),
         sanitizeCsvCell(r.plan),
-        r.tokens_consumed.toString(),
-        r.llm_cost.toFixed(2),
-        r.infra_cost.toFixed(2),
-        r.plan_revenue.toFixed(2),
-        r.gross_margin_pct.toFixed(1),
+        (r.tokens_consumed ?? 0).toString(),
+        (r.llm_cost ?? 0).toFixed(2),
+        (r.infra_cost ?? 0).toFixed(2),
+        (r.plan_revenue ?? 0).toFixed(2),
+        (r.gross_margin_pct ?? 0).toFixed(1),
       ]
         .map((cell) => `"${cell.replace(/"/g, '""')}"`)
         .join(","),
@@ -207,7 +207,7 @@ export function TenantCostTable({ period }: TenantCostTableProps) {
         accessorKey: "gross_margin_pct",
         header: "Margin %",
         cell: (info) => {
-          const pct = info.getValue<number>();
+          const pct = info.getValue<number>() ?? 0;
           return (
             <span
               className={cn(

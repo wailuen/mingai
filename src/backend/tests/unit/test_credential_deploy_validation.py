@@ -85,24 +85,28 @@ async def test_auth_mode_empty_string_returns_none():
 
 
 @pytest.mark.asyncio
-async def test_platform_credentials_raises_422():
-    """auth_mode='platform_credentials' raises HTTPException 422 with 'not yet available'."""
+async def test_platform_credentials_returns_none_without_vault_writes():
+    """auth_mode='platform_credentials' returns None — credentials live in platform vault.
+
+    Platform credentials are resolved at runtime from the platform vault,
+    not stored in the tenant vault. _validate_and_store_credentials is a
+    no-op for this auth mode (the platform admin pre-stores them via the
+    Platform Credential Vault API).
+    """
     vault = _make_vault()
     db = _make_db()
 
-    with pytest.raises(HTTPException) as exc_info:
-        await _validate_and_store_credentials(
-            tenant_id=_TENANT_ID,
-            agent_id=_AGENT_ID,
-            auth_mode="platform_credentials",
-            required_credentials=[],
-            provided_credentials=None,
-            vault_client=vault,
-            db=db,
-        )
+    result = await _validate_and_store_credentials(
+        tenant_id=_TENANT_ID,
+        agent_id=_AGENT_ID,
+        auth_mode="platform_credentials",
+        required_credentials=[],
+        provided_credentials=None,
+        vault_client=vault,
+        db=db,
+    )
 
-    assert exc_info.value.status_code == 422
-    assert "not yet available" in exc_info.value.detail
+    assert result is None
     vault.store_secret.assert_not_called()
 
 

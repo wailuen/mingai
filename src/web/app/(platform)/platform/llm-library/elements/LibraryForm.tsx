@@ -13,12 +13,20 @@ import {
 } from "lucide-react";
 import { ApiException } from "@/lib/api";
 import {
+  CapabilitiesEditor,
+  buildCapabilitiesPayload,
+  parseCapabilities,
+  DEFAULT_CAPABILITIES,
+  type CapabilitiesState,
+} from "./CapabilitiesEditor";
+import {
   useCreateLLMLibraryEntry,
   useUpdateLLMLibraryEntry,
   usePublishLLMLibraryEntry,
   useDeprecateLLMLibraryEntry,
   useTestProfile,
   useTenantAssignments,
+  useLLMLibraryEntry,
   type LLMLibraryEntry,
   type LLMLibraryProvider,
   type PlanTier,
@@ -50,19 +58,12 @@ interface FormState {
   endpoint_url: string;
   api_key: string;
   api_version: string;
-  /** TODO-35: capabilities JSON controlling eligible_slots, supports_vision etc. */
-  capabilities_json: string;
+  capabilities: CapabilitiesState;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const DEFAULT_CAPABILITIES_JSON = JSON.stringify(
-  { eligible_slots: ["chat", "intent"], supports_vision: false },
-  null,
-  2,
-);
 
 const EMPTY_FORM: FormState = {
   provider: "azure_openai",
@@ -76,7 +77,7 @@ const EMPTY_FORM: FormState = {
   endpoint_url: "",
   api_key: "",
   api_version: "2024-12-01-preview",
-  capabilities_json: DEFAULT_CAPABILITIES_JSON,
+  capabilities: DEFAULT_CAPABILITIES,
 };
 
 const PROVIDERS: { value: LLMLibraryProvider; label: string }[] = [
@@ -84,6 +85,7 @@ const PROVIDERS: { value: LLMLibraryProvider; label: string }[] = [
   { value: "openai_direct", label: "OpenAI Direct" },
   { value: "anthropic", label: "Anthropic" },
   { value: "bedrock", label: "AWS Bedrock" },
+  { value: "ollama", label: "Ollama" },
 ];
 
 const PLAN_TIERS: { value: PlanTier; label: string }[] = [
@@ -115,9 +117,9 @@ function formFromEntry(entry: LLMLibraryEntry): FormState {
     endpoint_url: entry.endpoint_url ?? "",
     api_key: "", // never pre-filled from entry
     api_version: entry.api_version ?? "2024-12-01-preview",
-    capabilities_json: entry.capabilities
-      ? JSON.stringify(entry.capabilities, null, 2)
-      : DEFAULT_CAPABILITIES_JSON,
+    capabilities: parseCapabilities(
+      entry.capabilities as Record<string, unknown> | null,
+    ),
   };
 }
 
@@ -205,6 +207,12 @@ function TestResultsPanel({ results }: TestResultsPanelProps) {
 
 export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   const isEditing = entry !== null;
+
+  // Live entry: picks up server-side updates (last_test_passed_at, key_present)
+  // without waiting for the parent to re-pass the prop.
+  const { data: liveEntry } = useLLMLibraryEntry(entry?.id ?? null);
+  const currentEntry = liveEntry ?? entry;
+
   const createMutation = useCreateLLMLibraryEntry();
   const updateMutation = useUpdateLLMLibraryEntry();
   const publishMutation = usePublishLLMLibraryEntry();
@@ -276,11 +284,13 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
   const canPublish =
     canSave &&
     isEditing &&
-    entry.status === "Draft" &&
-    !!entry.last_test_passed_at;
+    currentEntry?.status === "Draft" &&
+    !!currentEntry?.last_test_passed_at;
 
-  // Test button: enabled once entry is saved and key is present
-  const canTest = isEditing && !!entry.key_present;
+  // Test button: enabled once entry is saved and key is present (Ollama exempt — no key needed)
+  const canTest =
+    isEditing &&
+    (!!currentEntry?.key_present || currentEntry?.provider === "ollama");
 
   function handleSaveDraft(e: React.FormEvent) {
     e.preventDefault();
@@ -323,17 +333,13 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
       // Only send api_key if user typed something — empty means "keep existing"
       if (form.api_key) payload.api_key = form.api_key;
 
-      // Capabilities — only send if valid JSON and changed
-      try {
-        const parsedCaps = JSON.parse(form.capabilities_json);
-        const existingCaps = entry.capabilities
-          ? JSON.stringify(entry.capabilities)
-          : null;
-        if (JSON.stringify(parsedCaps) !== existingCaps) {
-          payload.capabilities = parsedCaps;
-        }
-      } catch {
-        // invalid JSON — skip capabilities field
+      // Capabilities — send if changed
+      const newCaps = buildCapabilitiesPayload(form.capabilities);
+      const existingCaps = entry.capabilities
+        ? JSON.stringify(entry.capabilities)
+        : null;
+      if (JSON.stringify(newCaps) !== existingCaps) {
+        payload.capabilities = newCaps;
       }
 
       updateMutation.mutate(
@@ -348,13 +354,6 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         },
       );
     } else {
-      let parsedCapabilities: Record<string, unknown> | undefined;
-      try {
-        parsedCapabilities = JSON.parse(form.capabilities_json);
-      } catch {
-        parsedCapabilities = undefined;
-      }
-
       const payload: CreateLLMLibraryPayload = {
         provider: form.provider,
         model_name: form.model_name,
@@ -371,7 +370,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
         endpoint_url: form.endpoint_url || undefined,
         api_key: form.api_key || undefined,
         api_version: form.api_version || undefined,
-        capabilities: parsedCapabilities,
+        capabilities: buildCapabilitiesPayload(form.capabilities),
       };
 
       createMutation.mutate(payload, {
@@ -447,8 +446,8 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
     });
   }
 
-  const isDeprecated = isEditing && entry.status === "Deprecated";
-  const isPublished = isEditing && entry.status === "Published";
+  const isDeprecated = isEditing && currentEntry?.status === "Deprecated";
+  const isPublished = isEditing && currentEntry?.status === "Published";
 
   return (
     <div
@@ -534,10 +533,14 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             </select>
           </div>
 
-          {/* Deployment Name / Model ARN */}
+          {/* Deployment Name / Model ARN / Model Name */}
           <div>
             <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-              {form.provider === "bedrock" ? "Model ARN *" : "Deployment Name *"}
+              {form.provider === "bedrock"
+                ? "Model ARN *"
+                : form.provider === "ollama"
+                  ? "Model Name *"
+                  : "Deployment Name *"}
             </label>
             <input
               type="text"
@@ -548,14 +551,18 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               placeholder={
                 form.provider === "bedrock"
                   ? "arn:aws:bedrock:ap-southeast-1:123456789:application-inference-profile/..."
-                  : "e.g. agentic-worker"
+                  : form.provider === "ollama"
+                    ? "e.g. qwen3.5:27b"
+                    : "e.g. agentic-worker"
               }
               className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
             />
             <p className="mt-1 text-[11px] text-text-faint">
               {form.provider === "bedrock"
                 ? "Enter the full ARN, e.g. arn:aws:bedrock:ap-southeast-1:123456789:application-inference-profile/..."
-                : "Must match deployment name exactly"}
+                : form.provider === "ollama"
+                  ? "Must match the ollama model name exactly (e.g. qwen3.5:27b)"
+                  : "Must match deployment name exactly"}
             </p>
           </div>
 
@@ -650,45 +657,12 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
             Mark as recommended
           </label>
 
-          {/* Capabilities JSON */}
-          <div>
-            <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-              Capabilities JSON
-            </label>
-            <textarea
-              value={form.capabilities_json}
-              onChange={(e) => updateField("capabilities_json", e.target.value)}
-              onBlur={(e) => {
-                try {
-                  const parsed = JSON.parse(e.target.value);
-                  updateField(
-                    "capabilities_json",
-                    JSON.stringify(parsed, null, 2),
-                  );
-                } catch {
-                  // leave as-is — invalid JSON shows red border
-                }
-              }}
-              rows={4}
-              spellCheck={false}
-              className={cn(
-                "w-full rounded-control border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none",
-                (() => {
-                  try {
-                    JSON.parse(form.capabilities_json);
-                    return "border-border";
-                  } catch {
-                    return "border-alert";
-                  }
-                })(),
-              )}
-              placeholder={DEFAULT_CAPABILITIES_JSON}
-            />
-            <p className="mt-1 text-[11px] text-text-faint">
-              Controls eligible_slots (chat, intent, vision, agent) and
-              supports_vision flag
-            </p>
-          </div>
+          {/* Capabilities */}
+          <CapabilitiesEditor
+            value={form.capabilities}
+            onChange={(caps) => updateField("capabilities", caps)}
+            disabled={isDeprecated}
+          />
 
           {/* ---------------------------------------------------------------- */}
           {/* Section 2 — Connection Credentials                               */}
@@ -701,14 +675,17 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
               </h3>
             </div>
 
-            {/* Endpoint URL — Azure and Bedrock */}
+            {/* Endpoint URL — Azure, Bedrock, and Ollama */}
             {(form.provider === "azure_openai" ||
-              form.provider === "bedrock") && (
+              form.provider === "bedrock" ||
+              form.provider === "ollama") && (
               <div>
                 <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
                   {form.provider === "bedrock"
                     ? "Bedrock Base URL"
-                    : "Endpoint URL"}
+                    : form.provider === "ollama"
+                      ? "Ollama Base URL"
+                      : "Endpoint URL"}
                 </label>
                 <input
                   type="text"
@@ -718,47 +695,51 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                   placeholder={
                     form.provider === "bedrock"
                       ? "https://bedrock-runtime.ap-southeast-1.amazonaws.com"
-                      : "https://ai-xxx.cognitiveservices.azure.com/"
+                      : form.provider === "ollama"
+                        ? "http://localhost:11434"
+                        : "https://ai-xxx.cognitiveservices.azure.com/"
                   }
                   className="w-full rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint transition-colors focus:border-accent focus:outline-none"
                 />
               </div>
             )}
 
-            {/* API Key — all providers */}
-            <div>
-              <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
-                {form.provider === "bedrock" ? "AWS Bearer Token" : "API Key"}
-              </label>
-              <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  value={form.api_key}
-                  onChange={(e) => updateField("api_key", e.target.value)}
-                  placeholder={
-                    isEditing && entry.key_present
-                      ? `••••••••${entry.api_key_last4 ?? "****"}`
-                      : "Enter API key"
-                  }
-                  autoComplete="new-password"
-                  className="min-w-0 flex-1 rounded-l-control bg-transparent px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey((v) => !v)}
-                  className="flex items-center px-2.5 text-text-faint transition-colors hover:text-text-muted"
-                  tabIndex={-1}
-                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                >
-                  {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
+            {/* API Key — all providers except Ollama (optional for Ollama) */}
+            {form.provider !== "ollama" && (
+              <div>
+                <label className="mb-1.5 block text-label-nav uppercase text-text-faint">
+                  {form.provider === "bedrock" ? "AWS Bearer Token" : "API Key"}
+                </label>
+                <div className="flex items-stretch rounded-control border border-border bg-bg-elevated transition-colors focus-within:border-accent">
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={form.api_key}
+                    onChange={(e) => updateField("api_key", e.target.value)}
+                    placeholder={
+                      isEditing && currentEntry?.key_present
+                        ? `••••••••${currentEntry?.api_key_last4 ?? "****"}`
+                        : "Enter API key"
+                    }
+                    autoComplete="new-password"
+                    className="min-w-0 flex-1 rounded-l-control bg-transparent px-3 py-2 font-mono text-body-default text-text-primary placeholder:text-text-faint focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((v) => !v)}
+                    className="flex items-center px-2.5 text-text-faint transition-colors hover:text-text-muted"
+                    tabIndex={-1}
+                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                  >
+                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                {isEditing && currentEntry?.key_present && (
+                  <p className="mt-1 text-[11px] text-text-faint">
+                    Leave blank to keep the existing key
+                  </p>
+                )}
               </div>
-              {isEditing && entry.key_present && (
-                <p className="mt-1 text-[11px] text-text-faint">
-                  Leave blank to keep the existing key
-                </p>
-              )}
-            </div>
+            )}
 
             {/* API Version — Azure only */}
             {form.provider === "azure_openai" && (
@@ -911,10 +892,10 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                     title={
                       !isEditing
                         ? "Save the entry first to enable testing"
-                        : !entry.key_present
+                        : !currentEntry?.key_present
                           ? "Add an API key to enable testing"
-                          : entry.last_test_passed_at
-                            ? `Last tested ${formatDate(entry.last_test_passed_at)}`
+                          : currentEntry?.last_test_passed_at
+                            ? `Last tested ${formatDate(currentEntry.last_test_passed_at)}`
                             : "Run connectivity test"
                     }
                     className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-body-default text-text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
@@ -929,7 +910,7 @@ export function LibraryForm({ entry, onClose, onSaved }: LibraryFormProps) {
                 )}
 
                 {/* Publish — only for Draft entries that have passed a test */}
-                {isEditing && entry.status === "Draft" && (
+                {isEditing && currentEntry?.status === "Draft" && (
                   <button
                     type="button"
                     onClick={handlePublish}

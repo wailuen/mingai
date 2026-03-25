@@ -1,6 +1,6 @@
 ---
 name: mingai-frontend-specialist
-description: mingai frontend specialist for Next.js 14 App Router + React Query + Tailwind. Use when implementing or debugging frontend features, understanding the Obsidian Intelligence design system, KB access control UI, admin console responsive patterns, glossary hooks, SSE streaming, data tables with infinite scroll, responsive column hiding, tab filtering, row-click interactions, LLM Profile v2 UI, Bedrock provider form, TemplateStudioPanel tab system, or PerformanceTab analytics.
+description: mingai frontend specialist for Next.js 14 App Router + React Query + Tailwind. Use when implementing or debugging frontend features, understanding the Obsidian Intelligence design system, KB access control UI, admin console responsive patterns, glossary hooks, SSE streaming, data tables with infinite scroll, responsive column hiding, tab filtering, row-click interactions, LLM Profile v2 UI, Bedrock provider form, TemplateStudioPanel tab system, PerformanceTab analytics, API response field normalization patterns, AppShell min-h-0 flex overflow fix, or Tool Catalog (useToolCatalog hook, ToolDetailPanel API Reference section, IntegrationGroupRow expandable provider pattern).
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -243,6 +243,61 @@ import { CHART_COLORS } from "@/lib/chartColors";
 <Line stroke="#4fffb0" />                 // ❌ — hardcoded hex
 ```
 
+### API Response Normalization
+
+The backend returns some field names that differ from the frontend TypeScript interface names. **Always define a `Raw` type and normalize in the queryFn** — never change the interface to match the backend raw name.
+
+Known mismatches (as of v059):
+
+| Backend field       | Frontend interface field | Affected hook           | Why different                          |
+|---------------------|--------------------------|-------------------------|----------------------------------------|
+| `is_adopted`        | `adopted`                | `usePlatformSkills`     | Backend convention: boolean prefix `is_` |
+| `actor_email`       | `actor`                  | `useTeamAuditLog`       | Interface uses display-ready field name |
+| `page_size`         | `limit`                  | `useTeamAuditLog`       | Backend paginates as `page_size`, UI as `limit` |
+| `created_at`        | `timestamp`              | `useTeamAuditLog`       | Interface uses semantic name for display |
+| `member_email`      | `member_name` (fallback) | `useTeamAuditLog`       | Display name prefers name over email   |
+
+**Normalization pattern:**
+
+```typescript
+// In the queryFn — define Raw type, map to TS interface type
+interface RawAuditLogEntry {
+  id: string;
+  created_at: string;       // backend sends created_at
+  actor_email?: string | null;
+  page_size: number;
+  ...
+}
+
+const raw = await apiGet<{ items: RawAuditLogEntry[]; total: number; page: number; page_size: number }>(url);
+return {
+  items: raw.items.map((e) => ({
+    id: e.id,
+    timestamp: e.created_at,          // normalize
+    actor: e.actor_email ?? "System", // normalize + fallback
+    ...
+  })) satisfies AuditLogEntry[],
+  total: raw.total,
+  limit: raw.page_size,               // normalize
+};
+```
+
+When adding a new hook: always check the raw API response in DevTools first. Never assume backend field names match the TS interface.
+
+### Null-Name Fallback
+
+When displaying a user's initials or avatar letter, always use a three-level fallback because `name` may be `null` from the backend:
+
+```typescript
+// CORRECT — never assume name is present
+(user.name ?? user.email ?? "?").charAt(0).toUpperCase()
+
+// WRONG — crashes when name is null
+user.name.charAt(0).toUpperCase()
+```
+
+Apply this pattern wherever user names appear in chips, avatars, lists, or dropdown options.
+
 ### React Query + useEffect Split Pattern (credential/server-state forms)
 
 When a form displays server state (e.g., `entry.last_test_passed_at`) that is refreshed after a mutation, split the `useEffect` to avoid clearing local UI state on every re-fetch:
@@ -289,6 +344,12 @@ useEffect(() => {
 - **Edit/View action button when row-click exists** — remove the button; row click IS the interaction
 - **Action button inside clickable row without `e.stopPropagation()`** — triggers row click unintentionally
 - **`meta: { hideOnMobile: true }` (old binary pattern)** — use `meta: { hideBelow: "sm"|"md"|"lg" }` instead
+- **Accessing `user.name` without null check** — backend `name` is nullable; use `user.name ?? user.email ?? "?"` before `.charAt(0)`
+- **Backend field names used directly in TS interfaces** — `is_adopted`, `actor_email`, `page_size`, `created_at` (audit) must be normalized in queryFn; see "API Response Normalization" section above
+- **Platform admin hooks using `/admin/` prefix** — platform admin routes use `/platform/` prefix (`/api/v1/platform/...`); `/admin/` is tenant-scoped only
+- **`flex-1 overflow-auto` without `min-h-0`** — `overflow-auto` is a no-op when any flex ancestor has `min-height: auto`; add `min-h-0` to the overflowing child AND all flex ancestors up to the `h-screen` root
+- **`useTools()` without `page_size=100`** — default page size is 20, which truncates the tool list silently; always pass `page_size=100`
+- **`border-b border-border` on each child row** — use `divide-y divide-border` on the wrapper instead; individual `border-b` duplicates separators and breaks first/last border consistency
 
 ### TemplateStudioPanel — 5-Tab Pattern
 
@@ -396,6 +457,13 @@ Bedrock entries are excluded from the embed path — only chat/agent/intent slot
 | Platform profile slots   | `/api/v1/platform/llm-profiles/{id}/slots`       | POST     | platform     |
 | Platform profile default | `/api/v1/platform/llm-profiles/{id}/set-default` | POST     | platform     |
 | Template analytics       | `/api/v1/platform/agent-templates/{id}/analytics`| GET      | platform     |
+| Tool catalog list        | `/api/v1/platform/tool-catalog?page_size=100`    | GET      | platform     |
+| Tool catalog register    | `/api/v1/platform/tool-catalog`                  | POST     | platform     |
+| Tool retire              | `/api/v1/platform/tool-catalog/{id}/retire`      | POST     | platform     |
+| Tool discover            | `/api/v1/platform/tool-catalog/discover`         | POST     | platform     |
+| Tool health history      | `/api/v1/platform/tool-catalog/{id}/health`      | GET      | platform     |
+| Pitchbook MCP tools list | `/api/v1/mcp/pitchbook/tools/list`               | GET      | none         |
+| Pitchbook MCP tool call  | `/api/v1/mcp/pitchbook/tools/call`               | POST     | API key (X-Api-Key) |
 
 ## Screen Coverage by Role
 
@@ -403,7 +471,7 @@ Bedrock entries are excluded from the embed path — only chat/agent/intent slot
 
 **Tenant Admin**: dashboard, agents (library), analytics, document stores (SharePoint + Google Drive + sync health), glossary (CRUD + miss signals + version history), knowledge-base (access control), teams, users (directory + bulk invite), workspace settings, SSO wizard, memory policy, issue queue, cost analytics
 
-**Platform Admin**: dashboard, tenants, LLM profiles (`/platform/llm-profiles` — 2-step wizard + slot assignment detail panel), LLM library (Bedrock provider support), agent templates (TemplateStudioPanel 5-tab: Edit/Test/Instances/Version History/Performance), tool catalog, registry, engineering issue queue, analytics, audit log
+**Platform Admin**: dashboard, tenants, LLM profiles (`/platform/llm-profiles` — 2-step wizard + slot assignment detail panel), LLM library (Bedrock provider support), agent templates (TemplateStudioPanel 5-tab: Edit/Test/Instances/Version History/Performance), tool catalog (filter bar + Built-in/MCP Integrations/Tenant Tools sections + ToolDetailPanel slide-in), registry, engineering issue queue, analytics, audit log
 
 **Not started (product-gated)**: Agent Studio (`/admin/agents/studio/`) — waiting on 5-10 persona interviews
 
@@ -417,3 +485,138 @@ Bedrock entries are excluded from the embed path — only chat/agent/intent slot
 // AppShell only queries /api/v1/admin/workspace for tenant admins:
 // (isTenantAdmin check required — viewer role → 403)
 ```
+
+### AppShell Layout — min-h-0 Flex Overflow Fix
+
+**CRITICAL**: The `AppShell` component (`src/web/components/layout/AppShell.tsx`) has a fixed Topbar (`position: fixed`). The layout requires `min-h-0` on flex children to prevent `min-height: auto` from defeating `overflow-auto`.
+
+**The bug (without fix):** In a flexbox column with `h-screen`, flex children default to `min-height: auto`. This means `flex-1 overflow-auto` on `<main>` never triggers — the element grows to content height, the body scrolls instead of main, and viewport-height-constrained scrolling breaks.
+
+**The fix:**
+```tsx
+// Content row — add min-h-0
+<div className="flex min-h-0 flex-1 pt-topbar-h">
+  // Sidebar wrapper — add overflow-hidden (clean collapse animation)
+  <div className={cn("flex-shrink-0 overflow-hidden transition-all duration-200", ...)}>
+    <Sidebar ... />
+  </div>
+  // Main — add min-h-0
+  <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+</div>
+```
+
+**Rule:** Any time you have `flex-1 overflow-auto` on a flex child, also add `min-h-0` to that child AND all its flex ancestors up to the element that has the constrained height (`h-screen`). Without `min-h-0`, `overflow-auto` is a no-op.
+
+**Verification (browser console):**
+```javascript
+// min-height must be 0px
+const main = document.querySelector('main');
+window.getComputedStyle(main).minHeight; // should be "0px"
+// Body should not scroll
+document.body.scrollHeight === document.body.clientHeight; // should be true
+```
+
+Add `min-h-0` to the Banned Patterns list: **`flex-1 overflow-auto` without `min-h-0`** — the overflow constraint is silently ignored when any flex ancestor has `min-height: auto`.
+
+### Tool Catalog — useToolCatalog.ts Patterns
+
+**File**: `src/web/lib/hooks/useToolCatalog.ts`
+
+**Tool interface** (key fields):
+```typescript
+export type AuthType = "none" | "api_key" | "oauth2";
+export type SafetyClass = "read_only" | "write" | "destructive";
+export type HealthStatus = "healthy" | "degraded" | "unavailable";
+
+export interface Tool {
+  id: string;
+  name: string;
+  description?: string;
+  provider: string;
+  mcp_endpoint: string;
+  auth_type: AuthType;
+  safety_class: SafetyClass;
+  health_status: HealthStatus;
+  last_ping: string | null;
+  invocation_count: number;
+  error_rate_pct: number;
+  p50_latency_ms: number;
+  capabilities: string[];
+  created_at: string;
+  executor_type: string;        // "builtin" | "mcp_sse" | "http_wrapper"
+  scope: "platform" | "tenant";
+  source_mcp_server_id: string | null;
+  is_active: boolean;
+  endpoint_url?: string | null; // actual upstream API URL (e.g. "https://api.pitchbook.com/calls/history")
+}
+```
+
+**`page_size=100` required:** `useTools()` must use `page_size=100` to avoid the default 20-item page truncating the tool list. Backend max is 100:
+```typescript
+const res = await apiGet<{ items: Tool[]; total: number } | Tool[]>(
+  "/api/v1/platform/tool-catalog?page_size=100",
+);
+```
+
+**`classifyTools()` helper** separates tools into three groups:
+- `builtins`: `executor_type === "builtin"`
+- `mcpIntegrations`: `Record<provider, Tool[]>` — grouped by `tool.provider`
+- `tenantTools`: `scope === "tenant"` OR `source_mcp_server_id !== null`
+
+### Tool Catalog — ToolDetailPanel API Reference Section Pattern
+
+When a tool has `endpoint_url` set, the API Reference section shows TWO rows:
+
+1. **UPSTREAM ENDPOINT** — the actual API being called:
+   - Badge: `GET` (grey/muted)
+   - URL: `tool.endpoint_url`
+
+2. **PLATFORM INVOCATION (MCP)** — how to call it through the platform:
+   - Badge: `POST` (accent)
+   - URL: `${tool.mcp_endpoint}/tools/call`
+
+When `endpoint_url` is null/empty (e.g., built-in tools), show only a single endpoint row labeled "Endpoint".
+
+This two-row pattern makes the distinction between the upstream data source and the MCP invocation protocol explicit for platform admins.
+
+### Tool Catalog — IntegrationGroupRow Expandable Provider Pattern
+
+`IntegrationGroupRow` displays a collapsible provider section:
+- Header: chevron + provider name + tool count + aggregate health badge
+- Expanded: nested sub-table with TOOL / ENDPOINT / CREDENTIAL / STATUS / ACTIONS columns
+- Aggregate health: "healthy" only if ALL tools are healthy; "unavailable" if ANY are unavailable; otherwise "degraded"
+- `is_active === false` tools show "Retired" badge and 50% opacity
+- Built-in tools with no `mcp_endpoint` show an `ExecutorBadge` (e.g., "BUILTIN") instead of an endpoint URL
+
+### Separator Pattern — `divide-y divide-border` vs `border-b border-border`
+
+**Correct pattern**: Place `divide-y divide-border` on the **wrapper** element. Child rows do NOT use `border-b border-border` individually.
+
+```tsx
+// ✅ CORRECT — wrapper owns the dividers
+<div className="divide-y divide-border rounded-control border border-border overflow-hidden">
+  <IntegrationGroupRow ... />
+  <IntegrationGroupRow ... />
+</div>
+
+// ❌ WRONG — each child adds its own bottom border
+<div>
+  <button className="... border-b border-border">...</button>
+  <button className="... border-b border-border">...</button>
+</div>
+```
+
+Applied in:
+- `ToolList.tsx` — MCP integrations wrapper: `divide-y divide-border rounded-control border border-border overflow-hidden`
+- `IntegrationGroupRow.tsx` — `border-b border-border` removed from button className; `px-4` stays for full-width hover state
+
+**Row child `px-4` rule**: Keep horizontal padding on row children (e.g., `px-4`) for full-width hover states. Do not remove `px-4` when removing `border-b`.
+
+### Tool Catalog Screen Coverage (Platform Admin)
+
+- Filter bar: safety class filter + health status filter
+- Built-in Tools section: flat list of executor_type=builtin tools
+- MCP Integrations section: `IntegrationGroupRow` per provider (expandable)
+- Tenant Tools section: aggregate count card
+- `ToolDetailPanel`: slides in from right on row-click — sections: Identity / Capabilities / API Reference / Health / Usage
+- 409 on duplicate tool name registration (not 500) — handle in mutation error handler

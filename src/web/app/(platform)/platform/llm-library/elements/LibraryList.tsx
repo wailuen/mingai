@@ -57,6 +57,8 @@ function providerLabel(provider: string): string {
       return "Anthropic";
     case "bedrock":
       return "AWS Bedrock";
+    case "ollama":
+      return "Ollama";
     default:
       return provider;
   }

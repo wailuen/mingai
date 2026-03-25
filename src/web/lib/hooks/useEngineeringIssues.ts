@@ -96,14 +96,26 @@ export function useIssueStatus(id: string | null) {
 // useUpdateIssueStatus — PATCH /api/v1/admin/issues/{id}
 // ---------------------------------------------------------------------------
 
+// Backend uses action-based state machine: action → new status
+// escalate → escalated, resolve → resolved, close_duplicate → closed, request_info → awaiting_info
+const STATUS_TO_ACTION: Partial<Record<TenantIssueStatus, string>> = {
+  escalated: "escalate",
+  resolved: "resolve",
+  closed: "close_duplicate",
+  awaiting_info: "request_info",
+};
+
 export function useUpdateIssueStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: TenantIssueStatus }) =>
-      apiPatch<TenantIssue>(`/api/v1/admin/issues/${encodeURIComponent(id)}`, {
-        status,
-      }),
+    mutationFn: ({ id, status }: { id: string; status: TenantIssueStatus }) => {
+      const action = STATUS_TO_ACTION[status];
+      if (!action) throw new Error(`No backend action for status: ${status}`);
+      return apiPatch<TenantIssue>(`/api/v1/admin/issues/${encodeURIComponent(id)}`, {
+        action,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant-issues"] });
       queryClient.invalidateQueries({ queryKey: ["platform-issue-queue"] });

@@ -52,6 +52,15 @@ class AddMemberRequest(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=200)
 
 
+class BulkAddMembersRequest(BaseModel):
+    user_ids: list[str] = Field(..., min_length=1)
+
+
+class MemoryConfigUpdateRequest(BaseModel):
+    enabled: bool
+    ttl_days: int = Field(..., ge=1, le=365)
+
+
 # ---------------------------------------------------------------------------
 # DB / service helper functions (mockable in unit tests)
 # ---------------------------------------------------------------------------
@@ -190,8 +199,8 @@ async def add_team_member_db(
     team_id: str,
     user_id: str,
     tenant_id: str,
-    added_by: str,
     db,
+    actor_id: str | None = None,
 ) -> dict:
     """Add a user to a team (scoped to caller's tenant)."""
     # Verify team belongs to caller's tenant before inserting membership
@@ -199,23 +208,36 @@ async def add_team_member_db(
     if team is None:
         return {}  # Route layer raises 404 on empty result
 
-    membership_id = str(uuid.uuid4())
-    await db.execute(
+    result = await db.execute(
         text(
-            "INSERT INTO team_memberships (id, team_id, user_id, added_by) "
-            "VALUES (:id, :team_id, :user_id, :added_by) "
+            "INSERT INTO team_memberships (team_id, user_id, tenant_id, source) "
+            "VALUES (:team_id, :user_id, :tenant_id, 'manual') "
             "ON CONFLICT (team_id, user_id) DO NOTHING"
         ),
         {
-            "id": membership_id,
             "team_id": team_id,
             "user_id": user_id,
-            "added_by": added_by,
+            "tenant_id": tenant_id,
         },
     )
+    if (result.rowcount or 0) > 0:
+        # Write audit log entry only when a row was actually inserted
+        await db.execute(
+            text(
+                "INSERT INTO team_membership_audit "
+                "(tenant_id, team_id, user_id, action, actor_id, source) "
+                "VALUES (:tenant_id, :team_id, :user_id, 'added', :actor_id, 'manual')"
+            ),
+            {
+                "tenant_id": tenant_id,
+                "team_id": team_id,
+                "user_id": user_id,
+                "actor_id": actor_id,
+            },
+        )
     await db.commit()
     logger.info(
-        "team_member_added", team_id=team_id, user_id=user_id, added_by=added_by
+        "team_member_added", team_id=team_id, user_id=user_id
     )
     return {"team_id": team_id, "user_id": user_id}
 
@@ -225,6 +247,7 @@ async def remove_team_member_db(
     user_id: str,
     tenant_id: str,
     db,
+    actor_id: str | None = None,
 ) -> bool:
     """Remove a user from a team (scoped to caller's tenant)."""
     result = await db.execute(
@@ -237,10 +260,23 @@ async def remove_team_member_db(
         ),
         {"team_id": team_id, "user_id": user_id, "tenant_id": tenant_id},
     )
-    await db.commit()
     removed = (result.rowcount or 0) > 0
     if removed:
+        await db.execute(
+            text(
+                "INSERT INTO team_membership_audit "
+                "(tenant_id, team_id, user_id, action, actor_id, source) "
+                "VALUES (:tenant_id, :team_id, :user_id, 'removed', :actor_id, 'manual')"
+            ),
+            {
+                "tenant_id": tenant_id,
+                "team_id": team_id,
+                "user_id": user_id,
+                "actor_id": actor_id,
+            },
+        )
         logger.info("team_member_removed", team_id=team_id, user_id=user_id)
+    await db.commit()
     return removed
 
 
@@ -298,6 +334,61 @@ async def create_team(
     return result
 
 
+@router.get("/{team_id}/audit-log")
+async def get_team_audit_log(
+    team_id: str,
+    page: int = 1,
+    limit: int = 20,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """GET /teams/{id}/audit-log — Membership audit log for a team."""
+    try:
+        team_uuid = uuid.UUID(team_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid team ID")
+    tenant_uuid = uuid.UUID(current_user.tenant_id)
+    offset = (page - 1) * limit
+
+    total_res = await session.execute(
+        text(
+            "SELECT COUNT(*) FROM team_membership_audit "
+            "WHERE team_id = :team_id AND tenant_id = :tenant_id"
+        ),
+        {"team_id": team_uuid, "tenant_id": tenant_uuid},
+    )
+    total = total_res.scalar() or 0
+
+    rows_res = await session.execute(
+        text(
+            "SELECT a.id, a.action, a.source, a.created_at, "
+            "u.email AS member_email, u.name AS member_name, "
+            "actor.email AS actor_email "
+            "FROM team_membership_audit a "
+            "JOIN users u ON u.id = a.user_id "
+            "LEFT JOIN users actor ON actor.id = a.actor_id "
+            "WHERE a.team_id = :team_id AND a.tenant_id = :tenant_id "
+            "ORDER BY a.created_at DESC "
+            "LIMIT :limit OFFSET :offset"
+        ),
+        {"team_id": team_uuid, "tenant_id": tenant_uuid, "limit": limit, "offset": offset},
+    )
+    rows = rows_res.fetchall()
+    items = [
+        {
+            "id": str(r[0]),
+            "action": r[1],
+            "source": r[2],
+            "created_at": r[3].isoformat() if r[3] else None,
+            "member_email": r[4],
+            "member_name": r[5],
+            "actor_email": r[6],
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": total, "page": page, "page_size": limit}
+
+
 @router.get("/{team_id}/memory")
 async def get_team_memory(
     team_id: str,
@@ -325,8 +416,8 @@ async def add_team_member(
         team_id=team_id,
         user_id=request.user_id,
         tenant_id=current_user.tenant_id,
-        added_by=current_user.id,
         db=session,
+        actor_id=current_user.id,
     )
     if not result:
         raise HTTPException(
@@ -334,6 +425,67 @@ async def add_team_member(
             detail=f"Team '{team_id}' not found",
         )
     return result
+
+
+@router.post("/{team_id}/members/bulk")
+async def bulk_add_team_members(
+    team_id: str,
+    request: BulkAddMembersRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Bulk add users to a team (tenant admin only)."""
+    team = await get_team_db(team_id, current_user.tenant_id, session)
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_id}' not found",
+        )
+    added = 0
+    for user_id in request.user_ids:
+        result = await add_team_member_db(
+            team_id=team_id,
+            user_id=user_id,
+            tenant_id=current_user.tenant_id,
+            db=session,
+            actor_id=current_user.id,
+        )
+        if result:
+            added += 1
+    return {"team_id": team_id, "added": added}
+
+
+@router.get("/{team_id}/memory-config")
+async def get_team_memory_config(
+    team_id: str,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Get team memory configuration."""
+    team = await get_team_db(team_id, current_user.tenant_id, session)
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_id}' not found",
+        )
+    return {"enabled": True, "ttl_days": 7, "entry_count": 0, "size_bytes": 0}
+
+
+@router.patch("/{team_id}/memory-config")
+async def update_team_memory_config(
+    team_id: str,
+    request: MemoryConfigUpdateRequest,
+    current_user: CurrentUser = Depends(require_tenant_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Update team memory configuration."""
+    team = await get_team_db(team_id, current_user.tenant_id, session)
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_id}' not found",
+        )
+    return {"enabled": request.enabled, "ttl_days": request.ttl_days, "entry_count": 0, "size_bytes": 0}
 
 
 @router.delete("/{team_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -349,6 +501,7 @@ async def remove_team_member(
         user_id=user_id,
         tenant_id=current_user.tenant_id,
         db=session,
+        actor_id=current_user.id,
     )
     if not removed:
         raise HTTPException(

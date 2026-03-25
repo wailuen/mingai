@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { Cpu, BookOpen, Key } from "lucide-react";
-import { useLLMLibraryOptions, type LibraryOption } from "@/lib/hooks/useLLMLibrary";
+import { useLLMLibrary } from "@/lib/hooks/useLLMLibrary";
+import type { LLMLibraryEntry } from "@/lib/hooks/useLLMLibrary";
+type LibraryOption = Pick<LLMLibraryEntry, "id" | "display_name" | "provider" | "model_name" | "best_practices_md">;
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -30,7 +32,7 @@ export function TenantLLMConfig({
   currentProfileId,
   isByollm,
 }: TenantLLMConfigProps) {
-  const { data: options, isPending, error } = useLLMLibraryOptions();
+  const { data: options, isPending, error } = useLLMLibrary("Published");
   const [hoveredProfile, setHoveredProfile] = useState<string | null>(null);
 
   const currentProfile: LibraryOption | undefined = options?.find(

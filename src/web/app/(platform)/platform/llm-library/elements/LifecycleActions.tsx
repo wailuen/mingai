@@ -74,20 +74,36 @@ export function LifecycleActions({ entry }: LifecycleActionsProps) {
       {entry.status === "Published" && (
         <>
           {!showDeprecateConfirm ? (
-            <button
-              type="button"
-              onClick={() => setShowDeprecateConfirm(true)}
-              className="inline-flex items-center gap-1 rounded-control border border-border px-2.5 py-1 text-[11px] text-alert transition-colors hover:bg-alert-dim"
-            >
-              <Archive size={12} />
-              Deprecate
-            </button>
+            <div className="flex items-center gap-2">
+              {entry.profile_usage_count > 0 && (
+                <span
+                  className="inline-block rounded-badge border border-border px-1.5 py-0.5 font-mono text-[10px] text-text-faint"
+                  title={`Used in ${entry.profile_usage_count} LLM Profile${entry.profile_usage_count !== 1 ? "s" : ""} — remove from profiles before deprecating`}
+                >
+                  {entry.profile_usage_count} profile{entry.profile_usage_count !== 1 ? "s" : ""}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowDeprecateConfirm(true)}
+                disabled={entry.profile_usage_count > 0}
+                title={
+                  entry.profile_usage_count > 0
+                    ? `Used in ${entry.profile_usage_count} profile${entry.profile_usage_count !== 1 ? "s" : ""} — remove from all profiles first`
+                    : undefined
+                }
+                className="inline-flex items-center gap-1 rounded-control border border-border px-2.5 py-1 text-[11px] text-alert transition-colors hover:bg-alert-dim disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Archive size={12} />
+                Deprecate
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-text-muted">
                 {tenantCount > 0
                   ? `${tenantCount} tenant${tenantCount !== 1 ? "s" : ""} ${tenantCount !== 1 ? "are" : "is"} using this profile. Existing assignments are preserved.`
-                  : "No tenants are using this profile. Existing assignments are preserved."}
+                  : "No tenants are using this profile. Confirm deprecation?"}
               </span>
               <button
                 type="button"

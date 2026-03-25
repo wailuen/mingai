@@ -106,9 +106,12 @@ class UpdatePlatformProfileRequest(BaseModel):
 class SlotInfo(BaseModel):
     library_entry_id: str
     model_name: str
+    display_name: Optional[str] = None
     provider: str
     health_status: str = "unknown"
     test_passed_at: Optional[str] = None
+    pricing_per_1k_tokens_in: Optional[float] = None
+    pricing_per_1k_tokens_out: Optional[float] = None
 
     model_config = {"protected_namespaces": ()}
 

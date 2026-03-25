@@ -72,6 +72,21 @@ class CredentialTestResult:
     latency_ms: Optional[int] = None
 
 
+class MissingPlatformCredentialError(Exception):
+    """Raised when one or more required platform credentials are not stored."""
+    def __init__(self, template_id: str, missing_keys: list[str]) -> None:
+        self.template_id = template_id
+        self.missing_keys = missing_keys
+        super().__init__(
+            f"Missing platform credentials for template {template_id}: {missing_keys}"
+        )
+
+
+class PlatformVaultUnavailableError(Exception):
+    """Raised when the platform credential vault backend is not configured."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Vault client abstraction
 # ---------------------------------------------------------------------------
@@ -234,6 +249,40 @@ def _build_vault_backend() -> Any:
         return _LocalEncryptedStore(encryption_key, store_path)
 
     return None
+
+
+def _build_platform_vault_backend() -> Any:
+    """Build platform vault backend from environment configuration.
+
+    Separate from the tenant vault backend:
+    - Uses PLATFORM_CREDENTIAL_ENCRYPTION_KEY (not CREDENTIAL_ENCRYPTION_KEY)
+    - Uses PLATFORM_CREDENTIAL_STORE_PATH (not CREDENTIAL_STORE_PATH)
+    - Defaults to .credentials/platform_credentials.json.enc
+
+    Returns None if neither Vault nor Fernet key is configured.
+    Callers must check — startup validation (main.py) raises if None.
+    """
+    vault_addr = os.environ.get("VAULT_ADDR")
+    vault_token = os.environ.get("VAULT_TOKEN")
+    if vault_addr and vault_token:
+        # Production: reuse HashiCorp Vault backend; platform paths are under
+        # the "platform/templates/" prefix which Vault ACLs can enforce separately.
+        return _HashiCorpVaultClient(vault_addr, vault_token)
+
+    encryption_key = os.environ.get("PLATFORM_CREDENTIAL_ENCRYPTION_KEY")
+    if encryption_key:
+        store_path = os.environ.get(
+            "PLATFORM_CREDENTIAL_STORE_PATH",
+            ".credentials/platform_credentials.json.enc",
+        )
+        return _LocalEncryptedStore(encryption_key, store_path)
+
+    return None
+
+
+def _build_platform_vault_path(template_id: str) -> str:
+    """Build the vault KV path for platform template credentials."""
+    return f"platform/templates/{template_id}"
 
 
 class CredentialManager:
@@ -573,4 +622,322 @@ async def test_credentials(
             passed=False,
             error_message=str(exc),
             latency_ms=latency_ms,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Platform credential functions (module-level, used by CRUD routes and orchestrator)
+#
+# Vault path schema: platform/templates/{template_id}/{key}
+# Values are NEVER stored in the database — only key names and metadata.
+# ---------------------------------------------------------------------------
+
+_platform_vault: Any = None
+_platform_vault_initialized: bool = False
+
+
+def _get_platform_vault() -> Any:
+    """Lazy-initialize the platform vault backend (thread-safe via GIL)."""
+    global _platform_vault, _platform_vault_initialized
+    if not _platform_vault_initialized:
+        _platform_vault = _build_platform_vault_backend()
+        _platform_vault_initialized = True
+    return _platform_vault
+
+
+def set_platform_credential(
+    template_id: str,
+    key: str,
+    value: str,
+    allowed_domains: list[str] | None = None,
+    injection_config: dict | None = None,
+    description: str | None = None,
+    actor_id: str = "unknown",
+) -> None:
+    """Store a platform credential value in the vault.
+
+    This function only writes the VALUE to the vault. The calling route
+    must separately insert/update a row in platform_credential_metadata.
+
+    Args:
+        template_id: Agent template UUID string.
+        key:         Credential key name (e.g. "PITCHBOOK_API_KEY").
+        value:       Secret value — NEVER logged.
+        allowed_domains: SSRF allowlist (stored in DB metadata, not here).
+        injection_config: How to inject at runtime (stored in DB metadata, not here).
+        description: Human-readable description (stored in DB metadata, not here).
+        actor_id:    Who is storing this credential (for audit logging).
+
+    Raises:
+        PlatformVaultUnavailableError: If vault backend is not configured.
+        RuntimeError: If vault write fails.
+    """
+    _validate_credential_key(key)
+
+    vault = _get_platform_vault()
+    if vault is None:
+        raise PlatformVaultUnavailableError(
+            "Platform credential vault is not configured. "
+            "Set PLATFORM_CREDENTIAL_ENCRYPTION_KEY or VAULT_ADDR+VAULT_TOKEN."
+        )
+
+    path = _build_platform_vault_path(template_id)
+    vault.put(path, key, value)
+    logger.info(
+        "platform_credential_stored",
+        template_id=template_id,
+        key=key,
+        actor_id=actor_id,
+        # value NEVER logged
+    )
+
+
+def get_platform_credential(template_id: str, key: str) -> Optional[str]:
+    """Retrieve a single platform credential value from the vault.
+
+    Returns None if the key is not found or vault is unavailable.
+    The returned value must NEVER be logged by callers.
+    """
+    _validate_credential_key(key)
+
+    vault = _get_platform_vault()
+    if vault is None:
+        return None
+
+    path = _build_platform_vault_path(template_id)
+    try:
+        all_creds = vault.get_all(path)
+        return all_creds.get(key)
+    except Exception as exc:
+        logger.warning(
+            "platform_credential_get_failed",
+            template_id=template_id,
+            key=key,
+            error=str(exc),
+        )
+        return None
+
+
+def delete_platform_credential(template_id: str, key: str, actor_id: str = "unknown") -> None:
+    """Delete a platform credential value from the vault.
+
+    The calling route handles soft-delete of the metadata row separately.
+    This function purges the actual value from the vault backend.
+
+    Does not raise if the key doesn't exist.
+    """
+    _validate_credential_key(key)
+
+    vault = _get_platform_vault()
+    if vault is None:
+        return  # Nothing to delete if vault not configured
+
+    path = _build_platform_vault_path(template_id)
+    try:
+        vault.delete(path, key)
+        logger.info(
+            "platform_credential_deleted",
+            template_id=template_id,
+            key=key,
+            actor_id=actor_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "platform_credential_delete_failed",
+            template_id=template_id,
+            key=key,
+            error=str(exc),
+        )
+
+
+def resolve_platform_credentials(
+    template_id: str,
+    required_keys: list[str],
+    tenant_id: str | None = None,
+    request_id: str | None = None,
+) -> dict[str, dict]:
+    """Resolve all required platform credentials for orchestration.
+
+    Called by the orchestrator at the START of each orchestration, before
+    any tool call. Fail-fast: raises MissingPlatformCredentialError if any
+    key is absent.
+
+    Returns a dict mapping key -> {"value": str, "injection_config": dict}.
+    The injection_config is read from platform_credential_metadata.
+
+    Args:
+        template_id:   Agent template UUID string.
+        required_keys: List of credential key names required by this template.
+        tenant_id:     Tenant that triggered this orchestration (for audit).
+        request_id:    Correlation ID for this request (for audit).
+
+    Returns:
+        {key: {"value": str, "injection_config": dict}} for all keys.
+
+    Raises:
+        MissingPlatformCredentialError: If any required key is not stored.
+        PlatformVaultUnavailableError:  If vault backend is not configured.
+    """
+    if not required_keys:
+        return {}
+
+    vault = _get_platform_vault()
+    if vault is None:
+        raise PlatformVaultUnavailableError(
+            "Platform credential vault is not configured."
+        )
+
+    path = _build_platform_vault_path(template_id)
+    try:
+        all_values = vault.get_all(path)
+    except Exception as exc:
+        raise PlatformVaultUnavailableError(
+            f"Platform vault read failed: {str(exc)[:200]}"
+        ) from exc
+
+    missing = [k for k in required_keys if k not in all_values or not all_values[k]]
+    if missing:
+        raise MissingPlatformCredentialError(template_id=template_id, missing_keys=missing)
+
+    # Build result with default injection_config (caller may override from DB metadata)
+    _default_injection_config = {
+        "type": "header",
+        "header_name": "Authorization",
+        "header_format": "{value}",
+    }
+
+    result = {
+        key: {
+            "value": all_values[key],
+            "injection_config": _default_injection_config.copy(),
+        }
+        for key in required_keys
+    }
+
+    logger.info(
+        "platform_credentials_resolved",
+        template_id=template_id,
+        key_count=len(required_keys),
+        tenant_id=tenant_id,
+        request_id=request_id,
+        # values NEVER logged
+    )
+    return result
+
+
+async def get_platform_credential_health(
+    template_id: str,
+    required_keys: list[str],
+) -> dict:
+    """Check completeness of platform credentials for a template.
+
+    Used by:
+    - GET /credentials/health endpoint
+    - Deploy flow pre-flight check
+    - Test harness banner
+
+    Returns:
+        {
+            "template_id": str,
+            "required_credentials": list[str],
+            "status": "complete" | "incomplete" | "not_required",
+            "keys": {key: "stored" | "missing"}
+        }
+    """
+    if not required_keys:
+        return {
+            "template_id": template_id,
+            "required_credentials": [],
+            "status": "not_required",
+            "keys": {},
+        }
+
+    vault = _get_platform_vault()
+    if vault is None:
+        # Vault unavailable — all keys appear missing
+        return {
+            "template_id": template_id,
+            "required_credentials": required_keys,
+            "status": "incomplete",
+            "keys": {k: "missing" for k in required_keys},
+        }
+
+    path = _build_platform_vault_path(template_id)
+    try:
+        stored_values = vault.get_all(path)
+    except Exception:
+        stored_values = {}
+
+    keys_status = {}
+    for key in required_keys:
+        if key in stored_values and stored_values[key]:
+            keys_status[key] = "stored"
+        else:
+            keys_status[key] = "missing"
+
+    all_stored = all(v == "stored" for v in keys_status.values())
+    status = "complete" if all_stored else "incomplete"
+
+    return {
+        "template_id": template_id,
+        "required_credentials": required_keys,
+        "status": status,
+        "keys": keys_status,
+    }
+
+
+async def purge_expired_platform_credentials(db_session) -> int:
+    """Hard-delete platform credential metadata rows past retention_until.
+
+    Called by the background scheduler daily. Does NOT attempt to delete vault
+    values — those are removed at soft-delete time in the DELETE route. This
+    function only removes the metadata row once the 30-day retention window
+    has elapsed.
+
+    Only rows where `deleted_at IS NOT NULL AND retention_until < NOW()` are
+    affected. Active credentials (deleted_at IS NULL) are never touched.
+
+    Returns: count of rows deleted.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import text
+
+    result = await db_session.execute(
+        text(
+            """
+            DELETE FROM platform_credential_metadata
+            WHERE deleted_at IS NOT NULL
+            AND retention_until < :now
+            RETURNING id, template_id, key
+            """
+        ),
+        {"now": datetime.now(timezone.utc)},
+    )
+    rows = result.fetchall()
+    await db_session.commit()
+    count = len(rows)
+    if count > 0:
+        logger.info("platform_credentials_hard_deleted", count=count)
+    return count
+
+
+def validate_platform_credential_config() -> None:
+    """Validate that the platform credential vault is properly configured.
+
+    Called at startup (see main.py lifespan). Raises RuntimeError if
+    neither PLATFORM_CREDENTIAL_ENCRYPTION_KEY nor VAULT_ADDR is set.
+
+    This prevents silent failures where platform_credentials auth_mode
+    templates appear to work but credentials can never be stored or resolved.
+    """
+    vault_addr = os.environ.get("VAULT_ADDR")
+    platform_key = os.environ.get("PLATFORM_CREDENTIAL_ENCRYPTION_KEY")
+
+    if not vault_addr and not platform_key:
+        raise RuntimeError(
+            "Platform credential vault is not configured. "
+            "Set PLATFORM_CREDENTIAL_ENCRYPTION_KEY (dev) or "
+            "VAULT_ADDR+VAULT_TOKEN (production) in environment variables. "
+            "See .env.example for details."
         )

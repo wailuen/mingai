@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   Star,
@@ -149,15 +149,15 @@ function SlotRow({ slot, profile, onAssignRequested }: SlotRowProps) {
                 {formatTestAge(assignment.test_passed_at)}
               </span>
             </div>
-            {(assignment.pricing_per_1k_tokens_in !== null ||
-              assignment.pricing_per_1k_tokens_out !== null) && (
+            {(assignment.pricing_per_1k_tokens_in != null ||
+              assignment.pricing_per_1k_tokens_out != null) && (
               <span className="ml-4 font-mono text-[10px] text-text-faint">
-                {assignment.pricing_per_1k_tokens_in !== null &&
+                {assignment.pricing_per_1k_tokens_in != null &&
                   `$${assignment.pricing_per_1k_tokens_in}/1k in`}
-                {assignment.pricing_per_1k_tokens_in !== null &&
-                  assignment.pricing_per_1k_tokens_out !== null &&
+                {assignment.pricing_per_1k_tokens_in != null &&
+                  assignment.pricing_per_1k_tokens_out != null &&
                   " · "}
-                {assignment.pricing_per_1k_tokens_out !== null &&
+                {assignment.pricing_per_1k_tokens_out != null &&
                   `$${assignment.pricing_per_1k_tokens_out}/1k out`}
               </span>
             )}
@@ -217,7 +217,17 @@ export function ProfileDetailPanel({
   const [testError, setTestError] = useState<string | null>(null);
   const [showTenants, setShowTenants] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [rollbackConfirmId, setRollbackConfirmId] = useState<string | null>(null);
+  const [rollbackConfirmId, setRollbackConfirmId] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const isDirtyName = editName !== null && editName !== (profile?.name ?? "");
   const isDirtyDesc =
@@ -226,7 +236,10 @@ export function ProfileDetailPanel({
 
   if (isPending) {
     return (
-      <aside className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-border bg-bg-surface">
+      <aside
+        className="fixed right-0 bottom-0 z-40 flex w-[480px] flex-col border-l border-border bg-bg-surface"
+        style={{ top: "var(--topbar-h)" }}
+      >
         <div className="flex h-full items-center justify-center">
           <Loader2 size={24} className="animate-spin text-text-faint" />
         </div>
@@ -236,7 +249,10 @@ export function ProfileDetailPanel({
 
   if (error || !profile) {
     return (
-      <aside className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-border bg-bg-surface">
+      <aside
+        className="fixed right-0 bottom-0 z-40 flex w-[480px] flex-col border-l border-border bg-bg-surface"
+        style={{ top: "var(--topbar-h)" }}
+      >
         <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
           <AlertTriangle size={24} className="text-alert" />
           <p className="text-body-default text-text-muted">
@@ -303,11 +319,18 @@ export function ProfileDetailPanel({
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-30 bg-bg-base/40" onClick={onClose} />
+      {/* Backdrop — covers only main content area, not sidebar or topbar */}
+      <div
+        className="fixed bottom-0 right-0 z-30 bg-bg-base/40"
+        style={{ top: "var(--topbar-h)", left: "var(--sidebar-w)" }}
+        onClick={onClose}
+      />
 
-      {/* Panel */}
-      <aside className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-border bg-bg-surface animate-slide-in-right">
+      {/* Panel — starts below topbar so close button is accessible */}
+      <aside
+        className="fixed right-0 bottom-0 z-40 flex w-[480px] flex-col border-l border-border bg-bg-surface animate-slide-in-right"
+        style={{ top: "var(--topbar-h)" }}
+      >
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
           <div className="flex items-center gap-2.5 min-w-0">

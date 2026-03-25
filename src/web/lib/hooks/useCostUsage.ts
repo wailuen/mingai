@@ -55,13 +55,36 @@ export function useTenantCostUsage(
   });
 }
 
+interface _CostAnalyticsSummaryRaw {
+  period: { from: string; to: string };
+  tenants: Array<{
+    tenant_id: string;
+    tenant_name: string;
+    tokens_in: number;
+    tokens_out: number;
+    cost_usd: number | null;
+    call_count: number;
+  }>;
+  total_cost_usd: number;
+  total_calls: number;
+}
+
 /** GET /api/v1/platform/cost-analytics/summary */
 export function useCostAnalyticsSummary() {
   return useQuery({
     queryKey: ["platform-cost-analytics-summary"],
-    queryFn: () =>
-      apiGet<CostAnalyticsSummaryEntry[]>(
+    queryFn: async () => {
+      const raw = await apiGet<_CostAnalyticsSummaryRaw>(
         "/api/v1/platform/cost-analytics/summary"
-      ),
+      );
+      return (raw.tenants ?? []).map(
+        (t): CostAnalyticsSummaryEntry => ({
+          tenant_id: t.tenant_id,
+          tenant_name: t.tenant_name,
+          total_tokens: (t.tokens_in ?? 0) + (t.tokens_out ?? 0),
+          total_cost_usd: t.cost_usd ?? 0,
+        })
+      );
+    },
   });
 }

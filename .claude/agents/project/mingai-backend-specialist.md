@@ -1,6 +1,6 @@
 ---
 name: mingai-backend-specialist
-description: mingai backend specialist with deep knowledge of the FastAPI+SQLAlchemy multi-tenant architecture. Use when implementing or debugging backend features, understanding RLS patterns, Redis key namespacing, JWT v2 auth, SSE streaming, HAR A2A protocol, glossary pipeline, issue triage pipeline, LLM Profile v2 slot routing, or AWS Bedrock provider integration.
+description: mingai backend specialist with deep knowledge of the FastAPI+SQLAlchemy multi-tenant architecture. Use when implementing or debugging backend features, understanding RLS patterns, Redis key namespacing, JWT v2 auth, SSE streaming, HAR A2A protocol, glossary pipeline, issue triage pipeline, LLM Profile v2 slot routing, AWS Bedrock provider integration, agent status lifecycle (draft/published/active), or UUID guard patterns for path parameters.
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -81,9 +81,14 @@ app/modules/
   admin/bulk_user_actions.py — Bulk suspend/role_change/kb_assignment — self-lockout protection (TA-032)
   admin/kb_sources.py        — KB source health, document search, source detach (TA-034)
   admin/kb_access_control.py — GET/PATCH /admin/knowledge-base/{index_id}/access (TA-011/007)
+  mcp_servers/
+    pitchbook/
+      router.py   — FastAPI router: /mcp/pitchbook health, tools/list, tools/call
+      tools.py    — PitchbookTool dataclass + 92 tool definitions; endpoint_url = base + tool.endpoint
+      client.py   — async HTTP client wrapper for Pitchbook REST API
 ```
 
-## Alembic Migrations (59 total, v001–v059)
+## Alembic Migrations (62 total, v001–v062)
 
 ```
 v001_initial_schema.py           — base schema (21 tables, _V001_TABLES frozen constant)
@@ -104,6 +109,13 @@ v050_llm_profile_v2.py          — LLM Profile v2 full rebuild: llm_library ext
 v051_add_bedrock_provider.py     — Expands llm_library provider CHECK from 3 to 4 values: adds 'bedrock'
 v052–v059                        — Agent studio skills, template extensions, template versions, seed data,
                                    platform A2A columns, agent_cards.last_tested_at, studio fields, tool catalog description
+v060_add_ollama_provider.py      — Adds 'ollama' to llm_library provider CHECK (5 values total)
+v061_tool_health_checks.py       — Adds tool_health_checks table for per-check health history (30-day retention);
+                                   backs GET /platform/tool-catalog/{id}/health time-series endpoint
+v062_pitchbook_skills.py         — Data migration (no schema changes): seeds 8 platform skills for the Pitchbook
+                                   MCP integration covering PE/VC/M&A workflows (Company Due Diligence, Investor
+                                   Targeting, Deal Comparable Analysis, Founder Profile, Fund Research, LP Intelligence,
+                                   Portfolio Monitor, Exit Readiness); all skill_type=tool_composing
 ```
 
 **CRITICAL**: v002 RLS policies use a frozen `_V001_TABLES` constant. When adding new tables, create a new migration that adds RLS to those tables separately — do NOT modify `_V001_TABLES`.
@@ -288,6 +300,15 @@ Error details MUST NOT disclose caller scope/roles — use generic messages only
 16. Conversation table is **`messages`** — NOT `conversation_messages`. The old name does not exist.
 17. After v050: `llm_library.status` values are **lowercase** (`'published'`, `'draft'`, `'deprecated'`, `'disabled'`). Title Case (`'Published'`) no longer matches.
 18. Bedrock SSRF guard: call `_assert_endpoint_ssrf_safe(endpoint_url)` before constructing any `AsyncOpenAI` client for Bedrock — placement is in the `try` block before client instantiation.
+19. `agent_cards.status` lifecycle is `draft → published → active`. The `deploy_from_library` action sets `status='active'`. Any query that needs to include deployed agents (tenant catalog, agent grid) MUST filter `status IN ('published', 'draft', 'active')` — filtering only `('published', 'draft')` silently drops all deployed agents.
+20. UUID guard for path params: URL path segments that flow into PostgreSQL UUID columns MUST be validated before use. Special values like `"auto"` are valid URL path segments but invalid UUIDs — passing them directly causes `asyncpg.exceptions.InvalidTextRepresentationError`. Always validate:
+    ```python
+    import uuid
+    try:
+        uuid.UUID(agent_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    ```
 
 ## Backend Startup
 
@@ -300,6 +321,25 @@ uvicorn app.main:app --host 0.0.0.0 --port 8022
 ```
 
 **CORS**: `FRONTEND_URL` in `.env` must exactly match the frontend origin. If the frontend runs on `:3022`, set `FRONTEND_URL=http://localhost:3022`. A mismatch silently blocks all browser API calls (skeleton loading states that never resolve, no visible error).
+
+**uvicorn SSE deadlock**: Open SSE connections (`/api/v1/notifications/stream`, `/api/v1/chat/stream`, `/api/v1/tenants/{id}/provision`) hold the uvicorn process open after Ctrl+C. The `--reload` flag cannot restart when connections are still alive. Always kill the process by port before restarting:
+
+```bash
+lsof -ti:8022 | xargs kill -9
+```
+
+**bcrypt hash generation**: When generating bcrypt hashes for test fixtures or seed data from the shell, always use a heredoc — never a shell one-liner. Backslash characters in bcrypt strings break shell interpolation and produce a silent wrong hash:
+
+```bash
+# CORRECT — heredoc preserves backslashes
+python3 - << 'EOF'
+import bcrypt
+print(bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode())
+EOF
+
+# WRONG — backslashes in output get eaten by shell
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'password123', bcrypt.gensalt()).decode())"
+```
 
 ## Test Structure
 
@@ -344,11 +384,90 @@ When writing integration tests that touch DB directly, these are the correct tab
 | `audit_log.metadata`        | `audit_log.details`          | JSONB column is called `details`        |
 | `llm_library.status = 'Published'` | `status = 'published'`  | v050 lowercased all status values        |
 | `PATCH /admin/llm-config`   | `POST /admin/llm-config/select-profile` | Old endpoint removed in v2   |
+| `agent_cards.status IN ('published', 'draft')` | `status IN ('published', 'draft', 'active')` | Deployed agents have `status='active'` — must include to show them |
 
 **FK chains to know** (teardown order matters):
 - `audit_log.user_id` → `users(id)` — delete `audit_log` rows BEFORE `users`
 - `conversations.user_id` → `users(id)` — test fixtures must insert a real user row
 - `agent_cards.created_by` → `users(id)` (nullable) — use NULL to avoid needing a user
+
+## Tool Catalog Patterns
+
+### endpoint_url column
+
+The `tool_catalog` table has an `endpoint_url TEXT` column (nullable). It stores the actual upstream API endpoint for tools that wrap an external API. This column was previously always NULL; it is now populated for Pitchbook tools and included in the `SELECT` query and API response for `GET /api/v1/platform/tool-catalog`.
+
+For Pitchbook tools the value is constructed as:
+```
+endpoint_url = 'https://api.pitchbook.com' + tool.endpoint
+```
+where `tool.endpoint` is the REST API path (e.g. `/calls/history`) from `PitchbookTool.endpoint` in `app/modules/mcp_servers/pitchbook/tools.py`.
+
+The frontend `Tool` type includes `endpoint_url?: string | null`.
+
+### IntegrityError → 409 for duplicate tool name
+
+`tool_catalog.name` is `VARCHAR(100) UNIQUE`. When registering a tool, if the name already exists SQLAlchemy raises `sqlalchemy.exc.IntegrityError`. The canonical pattern is:
+
+```python
+from sqlalchemy.exc import IntegrityError
+try:
+    result = await register_tool_db(...)
+except IntegrityError:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"A tool named '{body.name}' is already registered.",
+    )
+```
+
+This pattern applies to all UNIQUE constraint violations on `tool_catalog.name`.
+
+### page_size limit
+
+`GET /api/v1/platform/tool-catalog` uses `page_size: int = Query(default=20, ge=1, le=100)`. Maximum is 100 per page. The frontend hook `useTools()` uses `page_size=100` to fetch all tools in a single request.
+
+## Embedded Pitchbook MCP Server
+
+The platform includes an embedded Pitchbook MCP server mounted at `/api/v1/mcp/pitchbook` (router prefix defined in `app/modules/mcp_servers/pitchbook/router.py`).
+
+**Routes**:
+- `GET /api/v1/mcp/pitchbook/health` — health check, no auth required
+- `GET /api/v1/mcp/pitchbook/tools/list` — list all 92 Pitchbook tools in MCP format
+- `POST /api/v1/mcp/pitchbook/tools/call` — execute a tool; requires `X-Api-Key` or `Authorization: Bearer <key>` header with caller's Pitchbook API key
+
+**`PitchbookTool` dataclass** (from `app/modules/mcp_servers/pitchbook/tools.py`):
+```python
+@dataclass
+class PitchbookTool:
+    name: str          # e.g. "pitchbook_calls_history"
+    description: str
+    input_schema: dict
+    tags: list[str]
+    endpoint: str      # e.g. "/calls/history" — actual Pitchbook REST API path
+    method: str = "GET"
+```
+
+The `mcp_endpoint` stored in `tool_catalog` for all Pitchbook tools is `http://localhost:8022/api/v1/mcp/pitchbook`.
+
+## skill_tool_dependencies — FK population pattern
+
+The `skill_tool_dependencies` table has `(id UUID, skill_id UUID, tool_id UUID, required BOOL)`. To populate it from skills that have `tool_dependencies JSONB` arrays of tool names:
+
+```sql
+INSERT INTO skill_tool_dependencies (id, skill_id, tool_id, required)
+SELECT
+    gen_random_uuid(),
+    s.id,
+    tc.id,
+    true
+FROM skills s
+CROSS JOIN LATERAL jsonb_array_elements_text(s.tool_dependencies) AS dep(tool_name)
+JOIN tool_catalog tc ON tc.name = dep.tool_name
+WHERE s.id::text IN ('uuid-1', 'uuid-2', ...)
+ON CONFLICT DO NOTHING;
+```
+
+This is the canonical pattern for any migration or seed script that needs to wire skill → tool FK rows after both `skills` and `tool_catalog` rows exist.
 
 ## Security Rules
 

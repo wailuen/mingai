@@ -174,8 +174,9 @@ class TestHandleToolResult:
                 db, TOOL_ID, TOOL_NAME, "degraded", is_healthy=False
             )
         assert new_status == "unavailable"
-        # execute was called 3 times (UPDATE + check + audit), not 4 (no INSERT)
-        assert db.execute.call_count == 3
+        # execute called: UPDATE + open_issue_check + audit + tool_health_checks INSERT (4 total)
+        # CREATE_P1_ISSUE should NOT be called (issue already open)
+        assert db.execute.call_count == 4
 
     @pytest.mark.asyncio
     async def test_recovery_closes_open_p1_issue(self):
@@ -238,7 +239,7 @@ class TestRunToolHealthJob:
         )
         with patch(
             "app.modules.platform.tool_health_job._ping_tool",
-            new=AsyncMock(return_value=True),
+            new=AsyncMock(return_value=(True, 42, None)),
         ):
             summary = await run_tool_health_job(db)
         assert summary["checked"] == 1
@@ -253,7 +254,7 @@ class TestRunToolHealthJob:
         with (
             patch(
                 "app.modules.platform.tool_health_job._ping_tool",
-                new=AsyncMock(return_value=False),
+                new=AsyncMock(return_value=(False, None, "HTTP 503")),
             ),
             patch(
                 f"{_COUNTER_MODULE}._incr_failure_count",
@@ -271,10 +272,10 @@ class TestRunToolHealthJob:
         tool2 = (uuid.UUID(tool2_id), "tool-b", "healthy", "https://b.io/health")
         db = _make_db([None, None, [tool1, tool2]])
 
-        async def _flaky_ping(url: str) -> bool:
+        async def _flaky_ping(url: str) -> tuple:
             if "a.io" in url:
                 raise ConnectionError("network down")
-            return True  # tool-b succeeds
+            return (True, 55, None)  # tool-b succeeds
 
         with patch(
             "app.modules.platform.tool_health_job._ping_tool",
@@ -292,7 +293,7 @@ class TestRunToolHealthJob:
         with (
             patch(
                 "app.modules.platform.tool_health_job._ping_tool",
-                new=AsyncMock(return_value=True),
+                new=AsyncMock(return_value=(True, 30, None)),
             ),
             patch(
                 f"{_COUNTER_MODULE}._get_failure_count",

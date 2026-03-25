@@ -58,7 +58,7 @@ router = APIRouter(prefix="/platform/llm-library", tags=["platform-llm-library"]
 # Allowlists
 # ---------------------------------------------------------------------------
 
-_VALID_PROVIDERS = frozenset({"azure_openai", "openai_direct", "anthropic", "bedrock"})
+_VALID_PROVIDERS = frozenset({"azure_openai", "openai_direct", "anthropic", "bedrock", "ollama"})
 _VALID_STATUSES = frozenset({"draft", "published", "deprecated", "disabled"})
 _UPDATE_ALLOWLIST = frozenset(
     {
@@ -71,6 +71,7 @@ _UPDATE_ALLOWLIST = frozenset(
         "pricing_per_1k_tokens_out",
         "endpoint_url",
         "api_version",
+        # capabilities handled via explicit JSONB cast path in update handler
         # api_key intentionally excluded — handled via explicit encryption path in update handler
     }
 )
@@ -83,10 +84,14 @@ _SELECT_COLUMNS = (
     "is_recommended, status, best_practices_md, "
     "pricing_per_1k_tokens_in, pricing_per_1k_tokens_out, "
     "created_at, updated_at, "
-    "endpoint_url, "
+    "endpoint_url, capabilities, "
     "(api_key_encrypted IS NOT NULL) AS key_present, "
     "api_key_last4, api_version, last_test_passed_at, "
-    "health_status, health_checked_at"
+    "health_status, health_checked_at, "
+    "(SELECT COUNT(*) FROM llm_profiles WHERE "
+    "chat_library_id = llm_library.id OR intent_library_id = llm_library.id OR "
+    "vision_library_id = llm_library.id OR agent_library_id = llm_library.id"
+    ") AS profile_usage_count"
 )
 
 # api_version format: YYYY-MM-DD or YYYY-MM-DD-preview
@@ -100,7 +105,7 @@ _API_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(-preview)?$")
 
 class CreateLLMLibraryRequest(BaseModel):
     provider: str = Field(
-        ..., description="One of: azure_openai, openai_direct, anthropic, bedrock"
+        ..., description="One of: azure_openai, openai_direct, anthropic, bedrock, ollama"
     )
     model_name: str = Field(..., max_length=200)
     display_name: str = Field(..., max_length=200)
@@ -110,7 +115,7 @@ class CreateLLMLibraryRequest(BaseModel):
     pricing_per_1k_tokens_in: Optional[Decimal] = Field(None, ge=0)
     pricing_per_1k_tokens_out: Optional[Decimal] = Field(None, ge=0)
     endpoint_url: Optional[str] = Field(
-        None, max_length=500, description="Required for azure_openai and bedrock"
+        None, max_length=500, description="Required for azure_openai, bedrock, and ollama"
     )
     api_key: Optional[str] = Field(
         None,
@@ -121,6 +126,10 @@ class CreateLLMLibraryRequest(BaseModel):
         None,
         max_length=50,
         description="Required for azure_openai, e.g. 2024-12-01-preview",
+    )
+    capabilities: Optional[dict] = Field(
+        None,
+        description="eligible_slots, supports_vision, supports_function_calling, context_window",
     )
 
     model_config = {"arbitrary_types_allowed": True, "protected_namespaces": ()}
@@ -136,11 +145,16 @@ class CreateLLMLibraryRequest(BaseModel):
     def validate_endpoint_url(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        if not v.startswith("https://"):
-            raise ValueError("endpoint_url must start with https://")
         from urllib.parse import urlparse
 
         parsed = urlparse(v)
+        # Allow http:// only for localhost/loopback (Ollama local deployments)
+        _localhost_names = {"localhost", "127.0.0.1", "::1"}
+        is_localhost = parsed.hostname in _localhost_names
+        if not v.startswith("https://") and not (v.startswith("http://") and is_localhost):
+            raise ValueError(
+                "endpoint_url must start with https:// (or http:// for localhost)"
+            )
         if not parsed.hostname:
             raise ValueError("endpoint_url must have a valid hostname")
         return v
@@ -170,6 +184,7 @@ class UpdateLLMLibraryRequest(BaseModel):
         description="Plaintext API key — encrypted before storage, never returned",
     )
     api_version: Optional[str] = Field(None, max_length=50)
+    capabilities: Optional[dict] = None
 
     model_config = {"arbitrary_types_allowed": True, "protected_namespaces": ()}
 
@@ -178,11 +193,16 @@ class UpdateLLMLibraryRequest(BaseModel):
     def validate_endpoint_url(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        if not v.startswith("https://"):
-            raise ValueError("endpoint_url must start with https://")
         from urllib.parse import urlparse
 
         parsed = urlparse(v)
+        # Allow http:// only for localhost/loopback (Ollama local deployments)
+        _localhost_names = {"localhost", "127.0.0.1", "::1"}
+        is_localhost = parsed.hostname in _localhost_names
+        if not v.startswith("https://") and not (v.startswith("http://") and is_localhost):
+            raise ValueError(
+                "endpoint_url must start with https:// (or http:// for localhost)"
+            )
         if not parsed.hostname:
             raise ValueError("endpoint_url must have a valid hostname")
         return v
@@ -210,6 +230,7 @@ class LLMLibraryEntry(BaseModel):
     pricing_per_1k_tokens_out: Optional[float] = None
     # Credential metadata — api_key_encrypted is NEVER a field here
     endpoint_url: Optional[str] = None
+    capabilities: Optional[dict] = None
     api_version: Optional[str] = None
     key_present: bool = False
     api_key_last4: Optional[str] = None
@@ -218,6 +239,7 @@ class LLMLibraryEntry(BaseModel):
     health_checked_at: Optional[str] = None
     created_at: str
     updated_at: str
+    profile_usage_count: int = 0
 
     model_config = {"protected_namespaces": ()}
 
@@ -257,7 +279,7 @@ class TenantAssignment(BaseModel):
 # DB helpers
 # ---------------------------------------------------------------------------
 
-# Column index map for _SELECT_COLUMNS (19 columns, 0-indexed):
+# Column index map for _SELECT_COLUMNS (21 columns, 0-indexed):
 #   0: id
 #   1: provider
 #   2: model_name
@@ -271,12 +293,14 @@ class TenantAssignment(BaseModel):
 #  10: created_at
 #  11: updated_at
 #  12: endpoint_url
-#  13: key_present  (computed bool: api_key_encrypted IS NOT NULL)
-#  14: api_key_last4
-#  15: api_version
-#  16: last_test_passed_at
-#  17: health_status
-#  18: health_checked_at
+#  13: capabilities  (JSONB)
+#  14: key_present  (computed bool: api_key_encrypted IS NOT NULL)
+#  15: api_key_last4
+#  16: api_version
+#  17: last_test_passed_at
+#  18: health_status
+#  19: health_checked_at
+#  20: profile_usage_count  (correlated subquery: count of llm_profiles referencing this entry)
 
 
 def _row_to_entry(row) -> LLMLibraryEntry:
@@ -284,6 +308,10 @@ def _row_to_entry(row) -> LLMLibraryEntry:
 
     Row[13] is a computed bool (api_key_encrypted IS NOT NULL) — never raw bytes.
     """
+    import json as _json
+    caps = row[13]
+    if isinstance(caps, str):
+        caps = _json.loads(caps)
     return LLMLibraryEntry(
         id=str(row[0]),
         provider=row[1],
@@ -298,12 +326,14 @@ def _row_to_entry(row) -> LLMLibraryEntry:
         created_at=row[10].isoformat() if row[10] else "",
         updated_at=row[11].isoformat() if row[11] else "",
         endpoint_url=row[12],
-        key_present=bool(row[13]),
-        api_key_last4=row[14],
-        api_version=row[15],
-        last_test_passed_at=row[16].isoformat() if row[16] else None,
-        health_status=row[17],
-        health_checked_at=row[18].isoformat() if row[18] else None,
+        capabilities=caps,
+        key_present=bool(row[14]),
+        api_key_last4=row[15],
+        api_version=row[16],
+        last_test_passed_at=row[17].isoformat() if row[17] else None,
+        health_status=row[18],
+        health_checked_at=row[19].isoformat() if row[19] else None,
+        profile_usage_count=int(row[20]) if row[20] is not None else 0,
     )
 
 
@@ -418,18 +448,24 @@ async def create_llm_library_entry(
         # Clear plaintext immediately after encryption
         request.api_key = ""
 
+    import json as _json
+
+    caps_json = _json.dumps(request.capabilities) if request.capabilities is not None else None
+
     await db.execute(
         text(
             "INSERT INTO llm_library ("
             "  id, provider, model_name, display_name, plan_tier, "
             "  is_recommended, status, best_practices_md, "
             "  pricing_per_1k_tokens_in, pricing_per_1k_tokens_out, "
-            "  endpoint_url, api_key_encrypted, api_key_last4, api_version"
+            "  endpoint_url, api_key_encrypted, api_key_last4, api_version, "
+            "  capabilities"
             ") VALUES ("
             "  :id, :provider, :model_name, :display_name, :plan_tier, "
             "  :is_recommended, 'draft', :best_practices_md, "
             "  :pricing_in, :pricing_out, "
-            "  :endpoint_url, :api_key_encrypted, :api_key_last4, :api_version"
+            "  :endpoint_url, :api_key_encrypted, :api_key_last4, :api_version, "
+            "  CAST(:capabilities AS jsonb)"
             ")"
         ),
         {
@@ -454,6 +490,7 @@ async def create_llm_library_entry(
             "api_key_encrypted": encrypted_key,
             "api_key_last4": key_last4,
             "api_version": request.api_version,
+            "capabilities": caps_json,
         },
     )
     await db.commit()
@@ -612,6 +649,10 @@ async def update_llm_library_entry(
         set_parts.append("api_version = :api_version")
         params["api_version"] = updates["api_version"]
         credential_changed = True
+    if "capabilities" in updates:
+        import json as _json
+        set_parts.append("capabilities = CAST(:capabilities AS jsonb)")
+        params["capabilities"] = _json.dumps(updates["capabilities"])
 
     # Reset test result when any credential field changes — old test is no longer valid
     if credential_changed:
@@ -676,8 +717,8 @@ async def publish_llm_library_entry(
             )
         # api_version explicitly NOT required for bedrock
 
-    # All providers require an API key
-    if not entry.key_present:
+    # All providers require an API key — Ollama is exempt (no auth required)
+    if entry.provider != "ollama" and not entry.key_present:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="api_key must be set before publishing",
@@ -702,11 +743,13 @@ async def publish_llm_library_entry(
 
     # Atomic publish: WHERE clause re-checks all gate conditions so a concurrent
     # PATCH that clears credentials or last_test_passed_at is caught at DB commit time.
+    # Ollama does not store an API key, so the api_key_encrypted check is skipped for it.
+    key_check = "" if entry.provider == "ollama" else "AND api_key_encrypted IS NOT NULL "
     result = await db.execute(
         text(
             "UPDATE llm_library SET status = 'published', updated_at = NOW() "
             "WHERE id = :id AND status = 'draft' "
-            "AND api_key_encrypted IS NOT NULL "
+            + key_check +
             "AND last_test_passed_at IS NOT NULL"
         ),
         {"id": entry_id},
@@ -744,6 +787,16 @@ async def deprecate_llm_library_entry(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Only Published entries can be deprecated. Current status: {entry.status}",
+        )
+
+    if entry.profile_usage_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot deprecate: this entry is assigned to {entry.profile_usage_count} "
+                f"LLM Profile{'s' if entry.profile_usage_count != 1 else ''}. "
+                "Remove it from all profiles first."
+            ),
         )
 
     result = await db.execute(
@@ -912,8 +965,9 @@ async def _run_single_test_prompt(
         # SSRF check required before any outbound call.
         from openai import AsyncOpenAI
 
-        if endpoint_url:
-            _assert_endpoint_ssrf_safe(endpoint_url)
+        if not endpoint_url:
+            raise ValueError("Bedrock provider requires an endpoint_url (e.g. https://bedrock-runtime.ap-southeast-1.amazonaws.com)")
+        _assert_endpoint_ssrf_safe(endpoint_url)
         client = AsyncOpenAI(
             api_key=api_key,
             base_url=f"{endpoint_url.rstrip('/')}/v1",
@@ -926,7 +980,40 @@ async def _run_single_test_prompt(
         usage = resp.usage
         tokens_in = usage.prompt_tokens if usage else 0
         tokens_out = usage.completion_tokens if usage else 0
-        content = resp.choices[0].message.content or ""
+        content = (
+            resp.choices[0].message.content or ""
+            if resp.choices
+            else ""
+        )
+
+    elif provider == "ollama":
+        # OLLAMA-001: Ollama via OpenAI-compatible endpoint.
+        # base_url = {endpoint_url}/v1 — no auth required; api_key defaults to "ollama".
+        # SSRF check is intentionally skipped: Ollama is a local-only provider and
+        # localhost/loopback endpoints are valid by design. Callers should ensure
+        # the Ollama endpoint is not user-controlled in a multi-tenant context.
+        from openai import AsyncOpenAI
+
+        if not endpoint_url:
+            raise ValueError("Ollama provider requires an endpoint_url (e.g. http://localhost:11434)")
+        client = AsyncOpenAI(
+            api_key=api_key or "ollama",
+            base_url=f"{endpoint_url.rstrip('/')}/v1",
+        )
+        resp = await client.chat.completions.create(
+            model=deployment_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100,  # Cap to avoid thinking-model runaway (e.g. Qwen3.5)
+        )
+        latency_ms = int((time.time() - start) * 1000)
+        usage = resp.usage
+        tokens_in = usage.prompt_tokens if usage else 0
+        tokens_out = usage.completion_tokens if usage else 0
+        content = (
+            resp.choices[0].message.content or ""
+            if resp.choices
+            else ""
+        )
 
     else:
         raise ValueError(f"Unsupported provider for test harness: {provider!r}")
@@ -969,7 +1056,8 @@ async def test_llm_library_profile(
         )
 
     # Guard: entry has no API key (e.g. rows created before credential columns existed)
-    if not entry.key_present:
+    # Ollama is exempt — it doesn't require an API key (uses "ollama" as placeholder).
+    if entry.provider != "ollama" and not entry.key_present:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
@@ -979,8 +1067,9 @@ async def test_llm_library_profile(
         )
 
     # Fetch encrypted key bytes separately — not in _SELECT_COLUMNS for security
-    encrypted_key_bytes = await _get_encrypted_key(entry_id, db)
-    if not encrypted_key_bytes:
+    # Ollama: key may be absent; decrypted_key will fall back to "ollama" in test harness.
+    encrypted_key_bytes = None if entry.provider == "ollama" else await _get_encrypted_key(entry_id, db)
+    if entry.provider != "ollama" and not encrypted_key_bytes:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="API key not found for this entry.",
@@ -990,7 +1079,8 @@ async def test_llm_library_profile(
 
     decrypted_key = ""
     try:
-        decrypted_key = decrypt_api_key(encrypted_key_bytes)
+        # Ollama: no key stored, test harness will use "ollama" as default
+        decrypted_key = decrypt_api_key(encrypted_key_bytes) if encrypted_key_bytes else ""
         tasks = [
             _run_single_test_prompt(
                 prompt=p,

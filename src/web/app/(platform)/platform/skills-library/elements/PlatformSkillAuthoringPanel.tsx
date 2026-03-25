@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   ChevronDown,
   ChevronUp,
   Loader2,
   AlertTriangle,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -33,6 +35,7 @@ type PlanRequired = "starter" | "professional" | "enterprise" | null;
 type AccordionSection =
   | "identity"
   | "execution"
+  | "tools"
   | "prompt"
   | "publishing"
   | "governance";
@@ -133,6 +136,8 @@ export function PlatformSkillAuthoringPanel({
   const [planRequired, setPlanRequired] = useState<PlanRequired>(
     existingSkill?.plan_required ?? null,
   );
+  const [toolDependencies, setToolDependencies] = useState<string[]>([]);
+  const [toolInput, setToolInput] = useState("");
   const [promptTemplate, setPromptTemplate] = useState("");
 
   // PA-specific publishing state
@@ -144,9 +149,25 @@ export function PlatformSkillAuthoringPanel({
   // PA-specific governance state
   const [mandatory, setMandatory] = useState(existingSkill?.mandatory ?? false);
 
+  // Sync all form fields when async-loaded skill data arrives (edit mode only)
+  useEffect(() => {
+    if (!existingSkill) return;
+    setName(existingSkill.name ?? "");
+    setDescription(existingSkill.description ?? "");
+    setCategory(existingSkill.category ?? "");
+    setExecPattern(existingSkill.execution_pattern ?? "prompt");
+    setPlanRequired(existingSkill.plan_required ?? null);
+    setPromptTemplate(existingSkill.prompt_template ?? "");
+    setMandatory(existingSkill.mandatory ?? false);
+    setVersionLabel(existingSkill.version_label ?? "");
+    setToolDependencies(existingSkill.tool_dependencies ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingSkill?.id]);
+
   // Accordion state
   const [openSections, setOpenSections] = useState<Set<AccordionSection>>(
-    () => new Set<AccordionSection>(["identity", "execution", "prompt"]),
+    () =>
+      new Set<AccordionSection>(["identity", "execution", "tools", "prompt"]),
   );
 
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -171,6 +192,17 @@ export function PlatformSkillAuthoringPanel({
     });
   }
 
+  function addToolDep() {
+    const trimmed = toolInput.trim();
+    if (!trimmed || toolDependencies.includes(trimmed)) return;
+    setToolDependencies((prev) => [...prev, trimmed]);
+    setToolInput("");
+  }
+
+  function removeToolDep(name: string) {
+    setToolDependencies((prev) => prev.filter((t) => t !== name));
+  }
+
   function buildCreatePayload(): CreatePlatformSkillPayload {
     return {
       name: name.trim(),
@@ -180,6 +212,8 @@ export function PlatformSkillAuthoringPanel({
       prompt_template: promptTemplate || undefined,
       plan_required: planRequired,
       mandatory,
+      tool_dependencies:
+        toolDependencies.length > 0 ? toolDependencies : undefined,
     };
   }
 
@@ -191,6 +225,7 @@ export function PlatformSkillAuthoringPanel({
       execution_pattern: execPattern,
       prompt_template: promptTemplate || undefined,
       plan_required: planRequired,
+      tool_dependencies: toolDependencies,
     };
   }
 
@@ -253,7 +288,7 @@ export function PlatformSkillAuthoringPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
+    <div className="fixed inset-x-0 bottom-0 top-[48px] z-40 flex justify-end">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40"
@@ -383,6 +418,81 @@ export function PlatformSkillAuthoringPanel({
                   </div>
                 </label>
               ))}
+            </div>
+          </AccordionSection>
+
+          {/* Section: Tool Dependencies */}
+          <AccordionSection
+            title={`Tool Dependencies${toolDependencies.length > 0 ? ` (${toolDependencies.length})` : ""}`}
+            isOpen={openSections.has("tools")}
+            onToggle={() => toggleSection("tools")}
+          >
+            <div className="space-y-3">
+              <p className="text-body-default text-text-muted">
+                Tools this skill calls when executing. Used with{" "}
+                <span className="font-medium text-text-primary">
+                  Tool-Composing
+                </span>{" "}
+                and{" "}
+                <span className="font-medium text-text-primary">
+                  Sequential Pipeline
+                </span>{" "}
+                patterns.
+              </p>
+
+              {/* Existing tool chips */}
+              {toolDependencies.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {toolDependencies.map((dep) => (
+                    <span
+                      key={dep}
+                      className="flex items-center gap-1.5 rounded-badge border border-border bg-bg-elevated px-2.5 py-1 font-mono text-[11px] text-text-primary"
+                    >
+                      {dep}
+                      <button
+                        type="button"
+                        onClick={() => removeToolDep(dep)}
+                        className="text-text-faint transition-colors hover:text-alert"
+                        aria-label={`Remove ${dep}`}
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {toolDependencies.length === 0 && (
+                <p className="text-body-default text-text-faint italic">
+                  No tool dependencies defined.
+                </p>
+              )}
+
+              {/* Add tool input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={toolInput}
+                  onChange={(e) => setToolInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addToolDep();
+                    }
+                  }}
+                  placeholder="e.g. company_bio, investor_bio"
+                  className="flex-1 rounded-control border border-border bg-bg-elevated px-3 py-2 font-mono text-[12px] text-text-primary placeholder:font-sans placeholder:text-body-default placeholder:text-text-faint outline-none focus:border-accent-ring"
+                />
+                <button
+                  type="button"
+                  onClick={addToolDep}
+                  disabled={!toolInput.trim()}
+                  className="flex items-center gap-1.5 rounded-control border border-border px-3 py-2 text-body-default text-text-muted transition-colors hover:border-accent-ring hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Plus size={13} />
+                  Add
+                </button>
+              </div>
             </div>
           </AccordionSection>
 
